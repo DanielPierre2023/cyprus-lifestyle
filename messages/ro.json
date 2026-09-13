@@ -1,0 +1,48 @@
+{
+  "brand": { "name": "Cyprus Lifestyle", "tagline": "Insula, în culori depline" },
+  "nav": {
+    "home": "Acasă",
+    "cyprus": "Cipru",
+    "business": "Afaceri",
+    "property": "Imobiliare",
+    "culture": "Cultură",
+    "escapes": "Călătorii",
+    "table": "Masa",
+    "world": "Lume",
+    "menu": "Meniu",
+    "close": "Închide",
+    "search": "Căutare"
+  },
+  "common": {
+    "readMore": "Citește mai mult",
+    "latest": "Cele mai noi",
+    "featured": "Recomandate",
+    "mostRead": "Cele mai citite",
+    "byline": "De",
+    "minRead": "min. de citit",
+    "published": "Publicat",
+    "updated": "Actualizat",
+    "share": "Distribuie",
+    "loading": "Se încarcă…",
+    "noResults": "Încă nimic aici.",
+    "backHome": "Înapoi la pagina principală"
+  },
+  "newsletter": {
+    "title": "Scrisoarea Cyprus Lifestyle",
+    "subtitle": "Afacerile, cultura și viața bună a insulei — în inboxul tău.",
+    "placeholder": "Emailul tău",
+    "cta": "Abonează-te",
+    "success": "Aproape gata — verifică-ți emailul pentru confirmare.",
+    "error": "Ceva n-a mers. Încearcă din nou."
+  },
+  "footer": {
+    "sections": "Secțiuni",
+    "about": "Despre",
+    "advertise": "Publicitate",
+    "contact": "Contact",
+    "privacy": "Confidențialitate",
+    "rights": "Toate drepturile rezervate.",
+    "languages": "Ediții"
+  },
+  "comments": { "title": "Comentarii", "placeholder": "Intră în conversație", "name": "Numele tău", "submit": "Trimite comentariul", "pending": "Comentariul tău va apărea după aprobare." }
+}

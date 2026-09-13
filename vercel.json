@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    { "path": "/api/cron/scrape", "schedule": "0 * * * *" },
+    { "path": "/api/cron/process", "schedule": "15,45 * * * *" },
+    { "path": "/api/cron/social", "schedule": "30 * * * *" },
+    { "path": "/api/cron/newsletter-weekly", "schedule": "0 6 * * 1" }
+  ],
+  "functions": {
+    "app/api/cron/process/route.ts": { "maxDuration": 300 },
+    "app/api/cron/scrape/route.ts": { "maxDuration": 300 },
+    "app/api/admin/generate/route.ts": { "maxDuration": 300 }
+  }
+}

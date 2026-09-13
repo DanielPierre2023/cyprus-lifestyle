@@ -1,0 +1,48 @@
+{
+  "brand": { "name": "Cyprus Lifestyle", "tagline": "الجزيرة، بكامل ألوانها" },
+  "nav": {
+    "home": "الرئيسية",
+    "cyprus": "قبرص",
+    "business": "الأعمال",
+    "property": "العقارات",
+    "culture": "الثقافة",
+    "escapes": "أسفار",
+    "table": "المائدة",
+    "world": "العالم",
+    "menu": "القائمة",
+    "close": "إغلاق",
+    "search": "بحث"
+  },
+  "common": {
+    "readMore": "اقرأ المزيد",
+    "latest": "الأحدث",
+    "featured": "مختارات",
+    "mostRead": "الأكثر قراءة",
+    "byline": "بقلم",
+    "minRead": "دقائق قراءة",
+    "published": "نُشر",
+    "updated": "حُدّث",
+    "share": "مشاركة",
+    "loading": "جارٍ التحميل…",
+    "noResults": "لا شيء هنا بعد.",
+    "backHome": "العودة إلى الصفحة الرئيسية"
+  },
+  "newsletter": {
+    "title": "رسالة Cyprus Lifestyle",
+    "subtitle": "أعمال الجزيرة وثقافتها والعيش الرغيد — في بريدك.",
+    "placeholder": "بريدك الإلكتروني",
+    "cta": "اشترك",
+    "success": "أوشكنا — تحقّق من بريدك للتأكيد.",
+    "error": "حدث خطأ ما. حاول مرة أخرى."
+  },
+  "footer": {
+    "sections": "الأقسام",
+    "about": "من نحن",
+    "advertise": "أعلن معنا",
+    "contact": "اتصل بنا",
+    "privacy": "الخصوصية",
+    "rights": "جميع الحقوق محفوظة.",
+    "languages": "الإصدارات"
+  },
+  "comments": { "title": "التعليقات", "placeholder": "شارك في النقاش", "name": "اسمك", "submit": "أرسل التعليق", "pending": "سيظهر تعليقك بعد الموافقة عليه." }
+}

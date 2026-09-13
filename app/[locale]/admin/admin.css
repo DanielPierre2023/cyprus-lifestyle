@@ -1,0 +1,43 @@
+/* Cyprus Lifestyle — admin console theme (English, utilitarian, on-brand). */
+.adm { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; background: #f4f1ea; color: #1c1c1c;
+  font-family: "Jost", system-ui, sans-serif; }
+.adm-side { background: #0B0E11; color: #E4D2AC; padding: 18px 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.adm-side .brand { font-family: "Bodoni Moda", Georgia, serif; color: #C9A24C; font-size: 19px; padding: 6px 20px 16px; letter-spacing: .04em; }
+.adm-side a { display: block; padding: 9px 20px; color: #E4D2AC; text-decoration: none; font-size: 14px; border-inline-start: 3px solid transparent; }
+.adm-side a:hover { background: #14171b; color: #C9A24C; }
+.adm-side a.active { background: #14171b; color: #C9A24C; border-color: #C9A24C; }
+.adm-side .grp { text-transform: uppercase; letter-spacing: .14em; font-size: 10px; color: #6b6552; padding: 16px 20px 4px; }
+.adm-main { padding: 26px 30px; overflow-x: auto; }
+.adm-main h1 { font-family: "Bodoni Moda", Georgia, serif; font-size: 26px; margin: 0 0 4px; }
+.adm-main .sub { color: #6b6552; margin: 0 0 22px; font-size: 14px; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 26px; }
+.stat { background: #fff; border: 1px solid #e3ddcf; border-radius: 4px; padding: 16px; }
+.stat .n { font-family: "Bodoni Moda", serif; font-size: 30px; color: #0B0E11; }
+.stat .k { text-transform: uppercase; letter-spacing: .1em; font-size: 11px; color: #8a8371; margin-top: 4px; }
+
+table.adm-t { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e3ddcf; font-size: 13.5px; }
+table.adm-t th, table.adm-t td { text-align: start; padding: 9px 12px; border-bottom: 1px solid #eee6d6; vertical-align: top; }
+table.adm-t th { background: #faf7f0; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; color: #8a8371; }
+table.adm-t tr:hover td { background: #fcfaf4; }
+
+.pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; letter-spacing: .04em; }
+.pill.published, .pill.ok, .pill.processed, .pill.done, .pill.replied, .pill.confirmed { background: #dff2e3; color: #1c6b34; }
+.pill.draft, .pill.scraped, .pill.queued, .pill.unread, .pill.pending { background: #fdf0d6; color: #8a5b12; }
+.pill.error, .pill.failed { background: #f8dcdc; color: #9a2020; }
+
+.abtn { font-family: "Jost", sans-serif; font-size: 12.5px; background: #0B0E11; color: #C9A24C; border: none; padding: 7px 13px; border-radius: 3px; cursor: pointer; margin-inline-end: 6px; }
+.abtn.gold { background: #C9A24C; color: #0B0E11; font-weight: 600; }
+.abtn.ghost { background: transparent; color: #0B0E11; border: 1px solid #cfc7b3; }
+.abtn:disabled { opacity: .5; cursor: default; }
+.adm input, .adm textarea, .adm select { font-family: "Jost", sans-serif; padding: 8px 10px; border: 1px solid #cfc7b3; border-radius: 3px; background: #fff; font-size: 14px; width: 100%; margin-bottom: 10px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.toggle { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #e3ddcf; padding: 12px 16px; border-radius: 4px; margin-bottom: 10px; }
+
+.adm-login { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #0B0E11; }
+.adm-login .box { background: #14171b; border: 1px solid #26292e; padding: 36px; width: 340px; border-radius: 6px; }
+.adm-login .brand { font-family: "Bodoni Moda", serif; color: #C9A24C; font-size: 22px; text-align: center; margin-bottom: 20px; letter-spacing: .04em; }
+.adm-login input { width: 100%; }
+.adm-login .err { color: #e88; font-size: 13px; margin-top: 8px; }
+
+@media (max-width: 760px) { .adm { grid-template-columns: 1fr; } .adm-side { position: static; height: auto; } }

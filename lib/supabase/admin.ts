@@ -1,0 +1,21 @@
+// Server-only Supabase client using the SERVICE ROLE key.
+// This bypasses RLS — use it ONLY in API routes / server code that has already
+// authorised the caller (cron secret or an admin check). Never import from a
+// Client Component.
+import 'server-only';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+
+let cached: SupabaseClient | null = null;
+
+export function supabaseAdmin(): SupabaseClient {
+  if (cached) return cached;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error('Supabase admin client not configured (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).');
+  }
+  cached = createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  return cached;
+}

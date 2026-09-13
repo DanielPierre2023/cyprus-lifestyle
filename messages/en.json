@@ -1,0 +1,48 @@
+{
+  "brand": { "name": "Cyprus Lifestyle", "tagline": "The island, in full colour" },
+  "nav": {
+    "home": "Home",
+    "cyprus": "Cyprus",
+    "business": "Business",
+    "property": "Property",
+    "culture": "Culture",
+    "escapes": "Escapes",
+    "table": "The Table",
+    "world": "World",
+    "menu": "Menu",
+    "close": "Close",
+    "search": "Search"
+  },
+  "common": {
+    "readMore": "Read more",
+    "latest": "Latest",
+    "featured": "Featured",
+    "mostRead": "Most read",
+    "byline": "By",
+    "minRead": "min read",
+    "published": "Published",
+    "updated": "Updated",
+    "share": "Share",
+    "loading": "Loading…",
+    "noResults": "Nothing here yet.",
+    "backHome": "Back to the homepage"
+  },
+  "newsletter": {
+    "title": "The Cyprus Lifestyle letter",
+    "subtitle": "The island's business, culture and good living — in your inbox.",
+    "placeholder": "Your email",
+    "cta": "Subscribe",
+    "success": "Almost there — check your inbox to confirm.",
+    "error": "Something went wrong. Please try again."
+  },
+  "footer": {
+    "sections": "Sections",
+    "about": "About",
+    "advertise": "Advertise",
+    "contact": "Contact",
+    "privacy": "Privacy",
+    "rights": "All rights reserved.",
+    "languages": "Editions"
+  },
+  "comments": { "title": "Comments", "placeholder": "Join the conversation", "name": "Your name", "submit": "Post comment", "pending": "Your comment will appear once approved." }
+}
