@@ -11,11 +11,12 @@ export default function ArticleCard({
     card.author_name,
     read && readLabel ? `${read} ${readLabel}` : null,
   ].filter(Boolean).join(' · ');
+  const sizes = wide ? '(max-width: 900px) 100vw, 50vw' : '(max-width: 900px) 100vw, 33vw';
 
   return (
     <article className={`card${wide ? ' wide' : ''}`}>
       <Link href={`/article/${card.slug}`} className="ph" aria-hidden="true" tabIndex={-1}>
-        <CoverImage src={card.cover_image} seed={card.slug} alt={card.title} className="ph-img" />
+        <CoverImage src={card.cover_image} seed={card.slug} alt={card.title} className="ph-img" sizes={sizes} />
       </Link>
       {label ? <span className="kicker">{label}</span> : null}
       <h3><Link href={`/article/${card.slug}`}>{card.title}</Link></h3>
