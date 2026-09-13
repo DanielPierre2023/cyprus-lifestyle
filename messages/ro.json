@@ -1,5 +1,8 @@
 {
-  "brand": { "name": "Cyprus Lifestyle", "tagline": "Insula, în culori depline" },
+  "brand": {
+    "name": "Cyprus Lifestyle",
+    "tagline": "Insula, în culori depline"
+  },
   "nav": {
     "home": "Acasă",
     "cyprus": "Cipru",
@@ -44,5 +47,34 @@
     "rights": "Toate drepturile rezervate.",
     "languages": "Ediții"
   },
-  "comments": { "title": "Comentarii", "placeholder": "Intră în conversație", "name": "Numele tău", "submit": "Trimite comentariul", "pending": "Comentariul tău va apărea după aprobare." }
+  "comments": {
+    "title": "Comentarii",
+    "placeholder": "Intră în conversație",
+    "name": "Numele tău",
+    "submit": "Trimite comentariul",
+    "pending": "Comentariul tău va apărea după aprobare."
+  },
+  "home": {
+    "subscribe": "Abonează-te",
+    "tagline": "Insula, La Cel Mai Bun Nivel",
+    "issue": "Ediția de Toamnă",
+    "coverStory": "Articolul de Copertă",
+    "readStory": "Citește articolul",
+    "edit": "Selecția",
+    "editSub": "Săptămâna aceasta pe insulă",
+    "property": "Imobiliare & Design",
+    "propertySub": "Case, și viețile din ele",
+    "culture": "Cultură & Arte",
+    "cultureSub": "Ce creează și ce își amintește insula",
+    "escapes": "Escapade",
+    "escapesSub": "Insula, în afara itinerariului",
+    "manifestoLead": "Acoperim insula așa cum ai vrea să o trăiești —",
+    "manifestoAccent": "pe îndelete, și bine.",
+    "manifestoAttr": "Manifestul Cyprus Lifestyle",
+    "letterTitle": "Scrisoarea de Sâmbătă",
+    "letterSub": "Săptămâna pe insulă, aleasă și scrisă de redactorii noștri — imobiliare, cultură și viața bună, într-un singur email îngrijit.",
+    "letterFine": "Patru limbi · Fără zgomot · Dezabonare oricând",
+    "footerBlurb": "O revistă premium de imobiliare, cultură și viață bună din Cipru — publicată în engleză, greacă, română și arabă.",
+    "magazine": "Revista"
+  }
 }

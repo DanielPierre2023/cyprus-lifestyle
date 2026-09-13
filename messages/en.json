@@ -1,5 +1,8 @@
 {
-  "brand": { "name": "Cyprus Lifestyle", "tagline": "The island, in full colour" },
+  "brand": {
+    "name": "Cyprus Lifestyle",
+    "tagline": "The island, in full colour"
+  },
   "nav": {
     "home": "Home",
     "cyprus": "Cyprus",
@@ -44,5 +47,34 @@
     "rights": "All rights reserved.",
     "languages": "Editions"
   },
-  "comments": { "title": "Comments", "placeholder": "Join the conversation", "name": "Your name", "submit": "Post comment", "pending": "Your comment will appear once approved." }
+  "comments": {
+    "title": "Comments",
+    "placeholder": "Join the conversation",
+    "name": "Your name",
+    "submit": "Post comment",
+    "pending": "Your comment will appear once approved."
+  },
+  "home": {
+    "subscribe": "Subscribe",
+    "tagline": "The Island, At Its Best",
+    "issue": "The Autumn Issue",
+    "coverStory": "The Cover Story",
+    "readStory": "Read the story",
+    "edit": "The Edit",
+    "editSub": "This week on the island",
+    "property": "Property & Design",
+    "propertySub": "Houses, and the lives inside them",
+    "culture": "Culture & the Arts",
+    "cultureSub": "What the island is making, and remembering",
+    "escapes": "Escapes",
+    "escapesSub": "The island, off the itinerary",
+    "manifestoLead": "We cover the island the way you would want to live it —",
+    "manifestoAccent": "slowly, and well.",
+    "manifestoAttr": "The Cyprus Lifestyle Manifesto",
+    "letterTitle": "The Saturday Letter",
+    "letterSub": "The week on the island, chosen and written by our editors — property, culture and the good life, in one considered email.",
+    "letterFine": "Four languages · No noise · Unsubscribe anytime",
+    "footerBlurb": "A premium magazine of property, culture and the good life across Cyprus — published in English, Greek, Romanian and Arabic.",
+    "magazine": "The Magazine"
+  }
 }
