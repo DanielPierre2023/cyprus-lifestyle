@@ -86,5 +86,50 @@
     "escapes": "Unde să mergi și cum să ajungi — Mediterana, privită dinspre Cipru.",
     "table": "Restaurante, podgorii și masa cipriotă, de la commandaria la noua bucătărie a insulei.",
     "world": "Locul insulei într-un cadru mai larg."
+  },
+  "pages": {
+    "about": {
+      "kicker": "Despre",
+      "title": "Insula, în culori depline",
+      "dek": "O revistă premium de imobiliare, cultură și viața bună din Cipru.",
+      "body": [
+        "Cyprus Lifestyle este cronica felului în care insula trăiește, investește și se bucură de viață la cel mai înalt nivel. Ciprul se află acolo unde se întâlnesc Europa, Levantul și Golful, iar aceasta este publicația acelei răscruci — elegantă precum revistele de modă, autoritară precum marile titluri de lifestyle și multilingvă din naștere.",
+        "Publicăm în patru limbi: engleza ca ediție internațională, greaca ca ediție locală, româna pentru comunitatea de rezidenți și araba pentru Golf. Fiecare articol de referință este tradus în toate cele patru, de la dreapta la stânga pentru ediția arabă.",
+        "Redacțiile noastre acoperă Ciprul și politica, afacerile și investițiile, imobiliarele și arhitectura, cultura și patrimoniul, escapadele și marea, și masa cipriotă. Sobrietatea se citește ca lux; detaliile se citesc ca adevăr."
+      ]
+    },
+    "advertise": {
+      "kicker": "Parteneriate",
+      "title": "Publicitate în Cyprus Lifestyle",
+      "dek": "Patru ediții, un public bine ales — investitori, noi rezidenți și elita insulei.",
+      "body": [
+        "Ajungeți la investitori și noi rezidenți internaționali, la elita cipriotă, la vizitatorii din Golf și la comunitatea profesională românească — în patru ediții. Oferim plasări pe pagina principală și în articole, sponsorizarea newsletterului și materiale sponsorizate.",
+        "Spuneți-ne despre brandul dumneavoastră și vă vom trimite grila tarifară actuală."
+      ]
+    },
+    "privacy": {
+      "kicker": "Juridic",
+      "title": "Confidențialitate",
+      "dek": "",
+      "body": [
+        "Cyprus Lifestyle colectează strictul necesar pentru a funcționa: adresa de e-mail pe care ne-o oferiți pentru newsletter și date analitice anonime, agregate, despre modul în care este citit site-ul. Nu vindem date personale.",
+        "Vă puteți dezabona de la newsletter oricând, prin linkul din fiecare e-mail. Pentru a solicita ștergerea datelor, contactați-ne prin pagina de contact. Această notă este un punct de plecare; vă rugăm să o supuneți unui consilier juridic înainte de lansare și să o adaptați la GDPR și la legislația cipriotă."
+      ]
+    },
+    "contact": {
+      "kicker": "Cyprus Lifestyle",
+      "title": "Contact",
+      "dek": "Redacție, abonamente sau parteneriate — scrieți-ne."
+    }
+  },
+  "contactForm": {
+    "name": "Numele dumneavoastră",
+    "email": "E-mailul dumneavoastră",
+    "subject": "Subiect",
+    "message": "Mesaj",
+    "send": "Trimite",
+    "sending": "Se trimite…",
+    "success": "Vă mulțumim. Vă vom contacta.",
+    "error": "Ceva nu a mers. Încercați din nou."
   }
 }

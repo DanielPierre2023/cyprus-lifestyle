@@ -1,19 +1,30 @@
-export const metadata = { title: 'About' };
+import type { Metadata } from 'next';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { notFound } from 'next/navigation';
+import { isLocale } from '@/lib/locales';
 
-export default function AboutPage() {
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  if (!isLocale(locale)) return {};
+  const t = await getTranslations({ locale });
+  return { title: t('pages.about.title') };
+}
+
+export default async function AboutPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  if (!isLocale(locale)) notFound();
+  setRequestLocale(locale);
+  const t = await getTranslations();
+  const body = t.raw('pages.about.body') as string[];
   return (
     <div className="page wrap">
       <div className="page-head">
-        <span className="kicker">About</span>
-        <h1>The island, in full colour</h1>
-        <p className="dek">A premium magazine of property, culture and the good life across Cyprus.</p>
+        <span className="kicker">{t('pages.about.kicker')}</span>
+        <h1>{t('pages.about.title')}</h1>
+        <p className="dek">{t('pages.about.dek')}</p>
         <div className="rule-orn orn"><span className="diamond" /></div>
       </div>
-      <div className="prose">
-        <p>Cyprus Lifestyle is the record of how the island lives, invests and enjoys itself at the top end. Cyprus sits where Europe, the Levant and the Gulf meet, and this is the publication of that crossroads — glamorous like the fashion books, authoritative like the great living titles, and multilingual by birth.</p>
-        <p>We publish in four languages: English as the international lead, Greek as the home edition, Romanian for the resident community, and Arabic for the Gulf. Every canonical story is translated across all four, right-to-left for the Arabic edition.</p>
-        <p>Our desks cover Cyprus and politics, business and investment, property and architecture, culture and heritage, escapes and the sea, and the Cypriot table. Restraint reads as expensive; specifics read as true.</p>
-      </div>
+      <div className="prose">{body.map((p, i) => <p key={i}>{p}</p>)}</div>
     </div>
   );
 }

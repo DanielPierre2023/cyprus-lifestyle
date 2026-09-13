@@ -86,5 +86,50 @@
     "escapes": "Where to go and how to arrive — the Mediterranean, read through a Cypriot lens.",
     "table": "Restaurants, vineyards and the Cypriot table, from commandaria to the new island kitchen.",
     "world": "The island's place in a wider frame."
+  },
+  "pages": {
+    "about": {
+      "kicker": "About",
+      "title": "The island, in full colour",
+      "dek": "A premium magazine of property, culture and the good life across Cyprus.",
+      "body": [
+        "Cyprus Lifestyle is the record of how the island lives, invests and enjoys itself at the top end. Cyprus sits where Europe, the Levant and the Gulf meet, and this is the publication of that crossroads — glamorous like the fashion books, authoritative like the great living titles, and multilingual by birth.",
+        "We publish in four languages: English as the international lead, Greek as the home edition, Romanian for the resident community, and Arabic for the Gulf. Every canonical story is translated across all four, right-to-left for the Arabic edition.",
+        "Our desks cover Cyprus and politics, business and investment, property and architecture, culture and heritage, escapes and the sea, and the Cypriot table. Restraint reads as expensive; specifics read as true."
+      ]
+    },
+    "advertise": {
+      "kicker": "Partnerships",
+      "title": "Advertise with Cyprus Lifestyle",
+      "dek": "Four editions, one considered audience — investors, relocators and the island's elite.",
+      "body": [
+        "Reach international investors and relocators, the Cypriot elite, the Gulf's visitors and the Romanian professional community — across four editions. We offer homepage and in-article placements, newsletter sponsorship, and sponsored features.",
+        "Tell us about your brand and we will send our current rate card."
+      ]
+    },
+    "privacy": {
+      "kicker": "Legal",
+      "title": "Privacy",
+      "dek": "",
+      "body": [
+        "Cyprus Lifestyle collects the minimum necessary to run the publication: the email address you give us to receive the newsletter, and anonymous, aggregated analytics about how the site is read. We do not sell personal data.",
+        "You can unsubscribe from the newsletter at any time using the link in every email. To request deletion of your data, contact us through the contact page. This notice is a starting point; please have it reviewed by counsel before launch and adapt it to GDPR and Cypriot law."
+      ]
+    },
+    "contact": {
+      "kicker": "Cyprus Lifestyle",
+      "title": "Contact",
+      "dek": "Editorial, membership, or partnerships — write to us."
+    }
+  },
+  "contactForm": {
+    "name": "Your name",
+    "email": "Your email",
+    "subject": "Subject",
+    "message": "Message",
+    "send": "Send",
+    "sending": "Sending…",
+    "success": "Thank you. We will be in touch.",
+    "error": "Something went wrong. Please try again."
   }
 }

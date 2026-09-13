@@ -1,21 +1,32 @@
+import type { Metadata } from 'next';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { notFound } from 'next/navigation';
+import { isLocale } from '@/lib/locales';
 import ContactForm from '@/components/ContactForm';
 
-export const metadata = { title: 'Advertise' };
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  if (!isLocale(locale)) return {};
+  const t = await getTranslations({ locale });
+  return { title: t('pages.advertise.title') };
+}
 
-export default function AdvertisePage() {
+export default async function AdvertisePage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  if (!isLocale(locale)) notFound();
+  setRequestLocale(locale);
+  const t = await getTranslations();
+  const body = t.raw('pages.advertise.body') as string[];
   return (
     <div className="page wrap">
       <div className="page-head">
-        <span className="kicker">Partnerships</span>
-        <h1>Advertise with Cyprus Lifestyle</h1>
-        <p className="dek">Four editions, one considered audience — investors, relocators and the island&apos;s elite.</p>
+        <span className="kicker">{t('pages.advertise.kicker')}</span>
+        <h1>{t('pages.advertise.title')}</h1>
+        <p className="dek">{t('pages.advertise.dek')}</p>
         <div className="rule-orn orn"><span className="diamond" /></div>
       </div>
-      <div className="prose">
-        <p>Reach international investors and relocators, the Cypriot elite, the Gulf&apos;s visitors and the Romanian professional community — across four editions. We offer homepage and in-article placements, newsletter sponsorship, and sponsored features.</p>
-        <p>Tell us about your brand and we will send our current rate card.</p>
-      </div>
-      <ContactForm />
+      <div className="prose">{body.map((p, i) => <p key={i}>{p}</p>)}</div>
+      <div style={{ marginTop: 32 }}><ContactForm /></div>
     </div>
   );
 }
