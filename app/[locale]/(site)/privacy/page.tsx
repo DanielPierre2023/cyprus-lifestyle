@@ -2,12 +2,13 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locales';
+import { pageMetadata } from '@/lib/seo';
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const t = await getTranslations({ locale });
-  return { title: t('pages.privacy.title') };
+  return pageMetadata({ locale, path: '/privacy', title: t('pages.privacy.title') });
 }
 
 export default async function PrivacyPage({ params }: { params: Promise<{ locale: string }> }) {

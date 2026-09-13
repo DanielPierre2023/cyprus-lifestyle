@@ -18,11 +18,11 @@
   --line: #e3d9c4;
   --line-dark: #2a2e35;
 
-  --sans: "Jost", "Futura", system-ui, sans-serif;
-  --disp: "Bodoni Moda", "Didot", Georgia, serif;
-  --body: "Lora", Georgia, "Times New Roman", serif;
-  --arabic-display: "Aref Ruqaa", "Amiri", serif;
-  --arabic-body: "Amiri", "Noto Naskh Arabic", serif;
+  --sans: var(--font-jost), "Jost", "Futura", system-ui, sans-serif;
+  --disp: var(--font-bodoni), "Bodoni Moda", "Didot", Georgia, serif;
+  --body: var(--font-lora), "Lora", Georgia, "Times New Roman", serif;
+  --arabic-display: var(--font-aref), "Aref Ruqaa", "Amiri", serif;
+  --arabic-body: var(--font-amiri), "Amiri", "Noto Naskh Arabic", serif;
 
   --maxw: 1280px;
 }

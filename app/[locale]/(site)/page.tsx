@@ -1,14 +1,27 @@
+import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
 import { getFeatured, getLatest, getByCategory, getBanner, type Card } from '@/lib/queries';
+import { pageMetadata, SITE_NAME } from '@/lib/seo';
 import ArticleCard from '@/components/ArticleCard';
 import CoverImage from '@/components/CoverImage';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import SponsorBanner from '@/components/SponsorBanner';
 
-export const dynamic = 'force-dynamic';
+// ISR: served static and fast, refreshed every 5 minutes (and on-demand via /api/revalidate).
+export const revalidate = 300;
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  if (!isLocale(locale)) return {};
+  const t = await getTranslations({ locale });
+  return pageMetadata({
+    locale: locale as Locale, path: '/', title: SITE_NAME, absoluteTitle: true,
+    description: t('brand.tagline'),
+  });
+}
 
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -61,7 +74,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
     <>
       {hero ? (
         <section className="hero">
-          <CoverImage src={hero.cover_image} seed={hero.slug} alt={hero.title} className="hero-media" />
+          <CoverImage src={hero.cover_image} seed={hero.slug} alt={hero.title} className="hero-media" sizes="100vw" priority />
           <div className="hero-scrim" />
           <span className="badge">{t('home.issue')}</span>
           <div className="wrap inner">
@@ -86,7 +99,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           <div className="edit">
             <article className="lead">
               <Link className="ph" href={`/article/${editLead.slug}`} aria-hidden="true" tabIndex={-1}>
-                <CoverImage src={editLead.cover_image} seed={editLead.slug} alt={editLead.title} className="ph-img" />
+                <CoverImage src={editLead.cover_image} seed={editLead.slug} alt={editLead.title} className="ph-img" sizes="(max-width: 900px) 100vw, 60vw" />
               </Link>
               <span className="kicker">{catLabel(editLead.category)}</span>
               <h3><Link href={`/article/${editLead.slug}`}>{editLead.title}</Link></h3>

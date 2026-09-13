@@ -4,23 +4,24 @@ import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
 import { getArticle, getByCategory, getLatest, type Card } from '@/lib/queries';
+import { pageMetadata, articleJsonLd, breadcrumbJsonLd, ld } from '@/lib/seo';
 import ArticleCard from '@/components/ArticleCard';
 import CommentSection from '@/components/CommentSection';
 import CoverImage from '@/components/CoverImage';
 import NewsletterSignup from '@/components/NewsletterSignup';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }): Promise<Metadata> {
   const { locale, slug } = await params;
   if (!isLocale(locale)) return {};
   const a = await getArticle(locale as Locale, slug);
   if (!a) return {};
-  return {
-    title: a.seo_title,
-    description: a.seo_description,
-    openGraph: { title: a.seo_title, description: a.seo_description, images: a.cover_image ? [a.cover_image] : [], type: 'article' },
-  };
+  return pageMetadata({
+    locale: locale as Locale, path: `/article/${slug}`,
+    title: a.seo_title, description: a.seo_description,
+    images: a.cover_image ? [a.cover_image] : undefined, type: 'article',
+  });
 }
 
 export default async function ArticlePage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
@@ -53,11 +54,23 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
   }
   more = more.slice(0, 3);
 
+  const artLd = articleJsonLd({
+    locale: l, slug: a.slug, title: a.title, description: a.excerpt,
+    image: a.cover_image, author: a.author_name, publishedAt: a.published_at, section: catLabel || a.category,
+  });
+  const crumbLd = breadcrumbJsonLd(l, [
+    { name: t('brand.name'), path: '/' },
+    ...(a.category ? [{ name: catLabel, path: `/${a.category}` }] : []),
+    { name: a.title, path: `/article/${a.slug}` },
+  ]);
+
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(artLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(crumbLd) }} />
       <article>
         <header className="article-hero">
-          <CoverImage src={a.cover_image} seed={a.slug} alt="" className="hero-media" />
+          <CoverImage src={a.cover_image} seed={a.slug} alt="" className="hero-media" sizes="100vw" priority />
           <div className="hero-scrim" />
           {a.cover_image_credit ? <span className="credit">{a.cover_image_credit}</span> : null}
           <div className="inner">

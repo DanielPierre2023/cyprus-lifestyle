@@ -2,13 +2,14 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locales';
+import { pageMetadata } from '@/lib/seo';
 import ContactForm from '@/components/ContactForm';
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const t = await getTranslations({ locale });
-  return { title: t('pages.contact.title') };
+  return pageMetadata({ locale, path: '/contact', title: t('pages.contact.title'), description: t('pages.contact.dek') });
 }
 
 export default async function ContactPage({ params }: { params: Promise<{ locale: string }> }) {

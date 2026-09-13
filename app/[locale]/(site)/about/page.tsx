@@ -2,12 +2,13 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locales';
+import { pageMetadata } from '@/lib/seo';
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const t = await getTranslations({ locale });
-  return { title: t('pages.about.title') };
+  return pageMetadata({ locale, path: '/about', title: t('pages.about.title'), description: t('pages.about.dek') });
 }
 
 export default async function AboutPage({ params }: { params: Promise<{ locale: string }> }) {

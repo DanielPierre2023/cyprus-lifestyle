@@ -2,16 +2,30 @@ import type { Metadata } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
+import { Bodoni_Moda, Jost, Lora, Amiri, Aref_Ruqaa } from 'next/font/google';
 import { LOCALES, isLocale, dir, type Locale } from '@/lib/locales';
+import { SITE_URL, SITE_NAME, orgJsonLd, ld } from '@/lib/seo';
 import '../globals.css';
+
+// Self-hosted at build time by next/font — no runtime request to Google (faster, no CLS, GDPR-safe).
+const bodoni = Bodoni_Moda({ subsets: ['latin'], weight: ['400', '500', '600', '700'], style: ['normal', 'italic'], variable: '--font-bodoni', display: 'swap' });
+const jost = Jost({ subsets: ['latin'], weight: ['300', '400', '500', '600'], variable: '--font-jost', display: 'swap' });
+const lora = Lora({ subsets: ['latin'], weight: ['400', '500', '600'], style: ['normal', 'italic'], variable: '--font-lora', display: 'swap' });
+const amiri = Amiri({ subsets: ['arabic', 'latin'], weight: ['400', '700'], variable: '--font-amiri', display: 'swap' });
+const arefRuqaa = Aref_Ruqaa({ subsets: ['arabic', 'latin'], weight: ['400', '700'], variable: '--font-aref', display: 'swap' });
+
+const fontVars = `${bodoni.variable} ${jost.variable} ${lora.variable} ${amiri.variable} ${arefRuqaa.variable}`;
 
 export function generateStaticParams() {
   return LOCALES.map((locale) => ({ locale }));
 }
 
 export const metadata: Metadata = {
-  title: { default: 'Cyprus Lifestyle', template: '%s · Cyprus Lifestyle' },
+  metadataBase: new URL(SITE_URL),
+  title: { default: SITE_NAME, template: `%s · ${SITE_NAME}` },
   description: 'The island, in full colour — Cyprus business, property, culture and good living, in four languages.',
+  openGraph: { siteName: SITE_NAME, type: 'website' },
+  robots: { index: true, follow: true },
 };
 
 export default async function LocaleLayout({
@@ -23,16 +37,9 @@ export default async function LocaleLayout({
   const messages = await getMessages();
 
   return (
-    <html lang={locale} dir={dir(locale as Locale)}>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;0,6..96,600;0,6..96,700;1,6..96,400;1,6..96,500;1,6..96,600&family=Jost:wght@300;400;500;600&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Amiri:ital,wght@0,400;0,700;1,400&family=Aref+Ruqaa:wght@400;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang={locale} dir={dir(locale as Locale)} className={fontVars}>
       <body>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(orgJsonLd()) }} />
         <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>
       </body>
     </html>
