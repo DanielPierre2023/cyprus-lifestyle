@@ -13,6 +13,11 @@ export const revalidate = 300;
 
 const CATS = ['cyprus', 'business', 'property', 'culture', 'escapes', 'table', 'world'];
 
+// Prerender all sections so they are cache HITs from the first click, per locale.
+export function generateStaticParams() {
+  return CATS.map((category) => ({ category }));
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ locale: string; category: string }> }): Promise<Metadata> {
   const { locale, category } = await params;
   if (!isLocale(locale) || !CATS.includes(category)) return {};

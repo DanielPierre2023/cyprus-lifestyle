@@ -269,6 +269,12 @@ html[lang="ar"] .article .prose p:first-of-type::first-letter { font-size: inher
 .foot .fine { border-top: 1px solid var(--line-dark); margin-top: 46px; padding-top: 22px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-family: var(--sans); text-transform: uppercase; letter-spacing: .14em; font-size: 10.5px; color: #8b8371; }
 
 /* ── Responsive ────────────────────────────────────────────────────────────── */
+/* ── Loading skeletons (instant nav feedback) ──────────────────────────────── */
+.sk { position: relative; overflow: hidden; background: var(--line); border-radius: 3px; }
+.sk::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent); animation: sk 1.3s ease-in-out infinite; }
+@keyframes sk { 100% { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .sk::after { animation: none; } }
+
 @media (max-width: 900px) {
   .wrap { padding-inline: 22px; }
   .hero .inner { padding: 0 22px 54px; }
