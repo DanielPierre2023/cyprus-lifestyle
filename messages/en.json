@@ -77,5 +77,14 @@
     "footerBlurb": "A premium magazine of property, culture and the good life across Cyprus — published in English, Greek, Romanian and Arabic.",
     "magazine": "The Magazine",
     "more": "More from the island"
+  },
+  "sections": {
+    "cyprus": "Governance, the economy and the stories shaping the Republic.",
+    "business": "Markets, funds, shipping and the money moving through Limassol and Nicosia.",
+    "property": "Villas, marinas and the new architecture of the coast — the island as an address.",
+    "culture": "Art, heritage, music and the social calendar, from ancient Paphos to opening night.",
+    "escapes": "Where to go and how to arrive — the Mediterranean, read through a Cypriot lens.",
+    "table": "Restaurants, vineyards and the Cypriot table, from commandaria to the new island kitchen.",
+    "world": "The island's place in a wider frame."
   }
 }
