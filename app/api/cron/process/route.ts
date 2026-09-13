@@ -7,7 +7,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { processBatch } from '@/lib/desk/queue';
 
 export const runtime = 'nodejs';
-export const maxDuration = 300;
+export const maxDuration = 60; // Hobby cap; raise to 300 on Vercel Pro
 
 export async function GET(req: NextRequest) {
   if (!isCronAuthorized(req)) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });

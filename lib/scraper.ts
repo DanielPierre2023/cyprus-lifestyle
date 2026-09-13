@@ -186,16 +186,18 @@ export async function ingestSource(supabase: SupabaseClient, source: SourceRow):
 const SRC_COLS = 'id, name, url, category, source_language, county, scope, source_type, target_category, region, tier, output_limit';
 
 // Batch over active sources. Used by the cron and the admin "Scrape all" button.
-export async function scrapeAllActive(supabase: SupabaseClient) {
+export async function scrapeAllActive(supabase: SupabaseClient, opts?: { deadlineMs?: number }) {
+  const deadline = opts?.deadlineMs ? Date.now() + opts.deadlineMs : Infinity;
   const { data: sources } = await supabase.from('rss_sources').select(SRC_COLS).eq('is_active', true).order('name');
   const list = (sources || []) as SourceRow[];
   const results: IngestResult[] = [];
-  let totalInserted = 0, totalDuplicates = 0;
+  let totalInserted = 0, totalDuplicates = 0, processed = 0;
   for (const s of list) {
+    if (Date.now() > deadline) break;               // stay within the (Hobby) time budget
     const r = await ingestSource(supabase, s);
-    results.push(r); totalInserted += r.inserted; totalDuplicates += r.skipped_duplicates;
+    results.push(r); processed++; totalInserted += r.inserted; totalDuplicates += r.skipped_duplicates;
   }
-  return { sources_processed: list.length, total_scraped: totalInserted, total_duplicates_skipped: totalDuplicates, results };
+  return { sources_processed: processed, sources_total: list.length, total_scraped: totalInserted, total_duplicates_skipped: totalDuplicates, results };
 }
 
 export async function scrapeOne(supabase: SupabaseClient, sourceId: string) {

@@ -7,7 +7,7 @@ import { translateHtml, translateText } from '@/lib/translate';
 import { isLocale } from '@/lib/locales';
 
 export const runtime = 'nodejs';
-export const maxDuration = 120;
+export const maxDuration = 60; // Hobby cap; raise to 300 on Vercel Pro
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });

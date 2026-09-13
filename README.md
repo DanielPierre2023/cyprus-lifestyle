@@ -27,9 +27,13 @@ Deploy. `vercel.json` registers the cron jobs automatically.
 the SQL Editor: `insert into public.user_roles (user_id, role) values ('<that-user-id>','admin');`
 Sign in at `/admin`.
 
-> Vercel Cron requires the **Pro** plan to run more than once a day; Supabase can
-> start on Free and move to **Pro** for a live site (no pausing). See the cost note
-> you were given.
+> **Hobby-safe by default.** `vercel.json` ships with a **single daily cron**
+> (`/api/cron/tick`) and every function capped at **60s**, so it deploys and runs on
+> Vercel's free **Hobby** plan while you get to production. During this phase, use
+> the admin **Scrape now** / **Generate** buttons for hands-on testing. When you go
+> live, switch to **Vercel Pro** and follow *Going to production* below to restore
+> frequent crons and longer timeouts. (Supabase can start on Free and move to Pro —
+> no pausing — for a live site.)
 
 ---
 
@@ -53,8 +57,34 @@ right-to-left. UI strings live in `messages/{en,el,ro,ar}.json`.
 3. **Distribute** — `/api/cron/social` auto-posts new articles; the weekly
    **Dispatch** goes out Mondays via `/api/cron/newsletter-weekly`.
 
+On **Hobby**, all of the above run once a day, best-effort, through the single
+`/api/cron/tick` job (scrape then process, time-boxed to 60s); the dedicated
+per-task crons above are used on **Pro** (see *Going to production*). Every route
+also works on demand from the admin.
+
 Nothing publishes without editorial sign-off unless you switch on auto-publish.
 The voice, desks and franchises are documented in `docs/EDITORIAL-CONCEPT.md`.
+
+### Going to production (Vercel Pro)
+When you upgrade to Vercel Pro, restore the full cadence in two edits:
+
+1. Replace the `crons` array in `vercel.json` with the per-task schedule:
+   ```json
+   {
+     "$schema": "https://openapi.vercel.sh/vercel.json",
+     "crons": [
+       { "path": "/api/cron/scrape",            "schedule": "0 * * * *" },
+       { "path": "/api/cron/process",           "schedule": "15,45 * * * *" },
+       { "path": "/api/cron/social",            "schedule": "30 * * * *" },
+       { "path": "/api/cron/newsletter-weekly", "schedule": "0 6 * * 1" }
+     ]
+   }
+   ```
+2. Raise the timeout on the heavy routes so a full 4-language article has room:
+   in `app/api/cron/{process,scrape,social,newsletter-weekly}/route.ts` and
+   `app/api/admin/{generate,translate,social,newsletter,proof}/route.ts`, change
+   `export const maxDuration = 60` to `300`. (Each line is already marked
+   "raise to 300 on Vercel Pro".) `/api/cron/tick` can then be removed.
 
 ### The admin console (`/admin`) — 13 tabs
 Dashboard · Editor · AI · Social · Articles (Articole) · Scraper RSS · Comments

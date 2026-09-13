@@ -6,7 +6,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { scrapeAllActive } from '@/lib/scraper';
 
 export const runtime = 'nodejs';
-export const maxDuration = 300; // Vercel Pro: up to 5 min
+export const maxDuration = 60; // Hobby cap; raise to 300 on Vercel Pro
 
 export async function GET(req: NextRequest) {
   if (!isCronAuthorized(req)) {

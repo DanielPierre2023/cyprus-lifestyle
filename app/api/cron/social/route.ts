@@ -6,7 +6,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { publishToPlatforms, type Platform, type PostForSocial } from '@/lib/social';
 
 export const runtime = 'nodejs';
-export const maxDuration = 180;
+export const maxDuration = 60; // Hobby cap; raise to 300 on Vercel Pro
 
 const ALL: Platform[] = ['facebook', 'instagram', 'x', 'linkedin'];
 

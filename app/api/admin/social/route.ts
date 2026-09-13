@@ -7,7 +7,7 @@ import { publishToPlatforms, type Platform, type PostForSocial } from '@/lib/soc
 import { isLocale, type Locale } from '@/lib/locales';
 
 export const runtime = 'nodejs';
-export const maxDuration = 120;
+export const maxDuration = 60; // Hobby cap; raise to 300 on Vercel Pro
 
 const ALL: Platform[] = ['facebook', 'instagram', 'x', 'linkedin'];
 
