@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { isLocale, type Locale } from '@/lib/locales';
 import { getArticle } from '@/lib/queries';
 import CommentSection from '@/components/CommentSection';
+import CoverImage from '@/components/CoverImage';
 import NewsletterSignup from '@/components/NewsletterSignup';
 
 export const dynamic = 'force-dynamic';
@@ -41,12 +42,10 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
           {a.author_name ? `${t('common.byline')} ${a.author_name}` : 'Cyprus Lifestyle'}
           {date ? ` · ${date}` : ''}{a.reading_time_min ? ` · ${a.reading_time_min} ${t('common.minRead')}` : ''}
         </div>
-        {a.cover_image ? (
-          <figure className="cover">
-            <img src={a.cover_image} alt="" />
-            {a.cover_image_credit ? <figcaption>{a.cover_image_credit}</figcaption> : null}
-          </figure>
-        ) : null}
+        <figure className="cover">
+          <CoverImage src={a.cover_image} seed={a.slug} alt={a.title} />
+          {a.cover_image_credit ? <figcaption>{a.cover_image_credit}</figcaption> : null}
+        </figure>
         <div className="prose" dangerouslySetInnerHTML={{ __html: a.content }} />
         {a.source_url ? (
           <p style={{ fontFamily: 'var(--sans)', fontSize: 13, color: 'var(--ink-soft)', marginTop: 30 }}>

@@ -20,7 +20,7 @@ export default function SponsorBanner({ banner }: { banner: Banner }) {
       {banner.image_url ? <img src={banner.image_url} alt="" width={96} height={96} style={{ objectFit: 'cover' }} /> : null}
       <span>
         <span className="tag" style={{ color: banner.accent_color }}>Advertisement · {banner.advertiser_name}</span>
-        <strong style={{ display: 'block', fontFamily: 'var(--serif-display)', fontSize: 18, margin: '4px 0' }}>{banner.headline}</strong>
+        <strong style={{ display: 'block', fontFamily: 'var(--disp)', fontSize: 18, margin: '4px 0' }}>{banner.headline}</strong>
         <span style={{ fontSize: 14, opacity: 0.85 }}>{banner.body}</span>
         <span style={{ display: 'block', marginTop: 6, color: banner.accent_color, fontWeight: 700 }}>{banner.cta}</span>
       </span>

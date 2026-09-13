@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 
 export default function NewsletterSignup() {
-  const t = useTranslations('newsletter');
+  const tn = useTranslations('newsletter');
+  const th = useTranslations('home');
   const locale = useLocale();
   const [email, setEmail] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
@@ -21,20 +22,24 @@ export default function NewsletterSignup() {
   }
 
   return (
-    <section className="letter">
+    <section className="letter" id="letter">
       <div className="wrap">
-        <h2 className="display">{t('title')}</h2>
-        <p>{t('subtitle')}</p>
-        {state === 'done' ? (
-          <p className="gold">{t('success')}</p>
-        ) : (
-          <form className="field" onSubmit={submit}>
-            <input type="email" required placeholder={t('placeholder')} value={email}
-              onChange={(e) => setEmail(e.target.value)} aria-label={t('placeholder')} />
-            <button className="btn" type="submit" disabled={state === 'sending'}>{t('cta')}</button>
-          </form>
-        )}
-        {state === 'error' ? <p style={{ color: '#e0a', marginTop: 10 }}>{t('error')}</p> : null}
+        <div className="frame">
+          <div className="rule-orn"><span className="diamond" /></div>
+          <h2 className="display">{th('letterTitle')}</h2>
+          <p>{th('letterSub')}</p>
+          {state === 'done' ? (
+            <p className="gold">{tn('success')}</p>
+          ) : (
+            <form className="field" onSubmit={submit}>
+              <input type="email" required placeholder={tn('placeholder')} value={email}
+                onChange={(e) => setEmail(e.target.value)} aria-label={tn('placeholder')} />
+              <button className="btn" type="submit" disabled={state === 'sending'}>{tn('cta')}</button>
+            </form>
+          )}
+          {state === 'error' ? <p style={{ color: '#e0a0a0', marginTop: 12 }}>{tn('error')}</p> : null}
+          <div className="fine">{th('letterFine')}</div>
+        </div>
       </div>
     </section>
   );
