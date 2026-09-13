@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
+import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { getArticle } from '@/lib/queries';
+import { getArticle, getByCategory, getLatest, type Card } from '@/lib/queries';
+import ArticleCard from '@/components/ArticleCard';
 import CommentSection from '@/components/CommentSection';
 import CoverImage from '@/components/CoverImage';
 import NewsletterSignup from '@/components/NewsletterSignup';
@@ -30,29 +32,76 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
   const a = await getArticle(l, slug);
   if (!a) notFound();
 
-  const date = a.published_at ? new Date(a.published_at).toLocaleDateString(l === 'ar' ? 'ar' : l, { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+  const date = a.published_at
+    ? new Date(a.published_at).toLocaleDateString(l === 'ar' ? 'ar' : l, { year: 'numeric', month: 'long', day: 'numeric' })
+    : '';
+  const catLabel = a.category ? (t.has(`nav.${a.category}`) ? t(`nav.${a.category}`) : a.category) : '';
+  const bylineParts = [
+    a.author_name ? `${t('common.byline')} ${a.author_name}` : 'Cyprus Lifestyle',
+    date,
+    a.reading_time_min ? `${a.reading_time_min} ${t('common.minRead')}` : '',
+  ].filter(Boolean);
+
+  // "More from the island": same section first, topped up with the latest.
+  let more: Card[] = a.category ? (await getByCategory(l, a.category, 4)).filter((r) => r.slug !== a.slug) : [];
+  if (more.length < 3) {
+    const latest = await getLatest(l, 8);
+    for (const c of latest) {
+      if (more.length >= 3) break;
+      if (c.slug !== a.slug && !more.some((m) => m.slug === c.slug)) more.push(c);
+    }
+  }
+  more = more.slice(0, 3);
 
   return (
     <>
-      <article className="article wrap">
-        {a.category ? <span className="kicker">{t.has(`nav.${a.category}`) ? t(`nav.${a.category}`) : a.category}</span> : null}
-        <h1>{a.title}</h1>
-        {a.excerpt ? <p className="dek">{a.excerpt}</p> : null}
-        <div className="byline">
-          {a.author_name ? `${t('common.byline')} ${a.author_name}` : 'Cyprus Lifestyle'}
-          {date ? ` · ${date}` : ''}{a.reading_time_min ? ` · ${a.reading_time_min} ${t('common.minRead')}` : ''}
+      <article>
+        <header className="article-hero">
+          <CoverImage src={a.cover_image} seed={a.slug} alt="" className="hero-media" />
+          <div className="hero-scrim" />
+          {a.cover_image_credit ? <span className="credit">{a.cover_image_credit}</span> : null}
+          <div className="inner">
+            {catLabel ? <span className="kicker">{catLabel}</span> : null}
+            <h1>{a.title}</h1>
+            {a.excerpt ? <p className="dek">{a.excerpt}</p> : null}
+            <div className="byline">{bylineParts.join(' · ')}</div>
+          </div>
+        </header>
+
+        <div className="article wrap">
+          <div className="rule-orn lead-orn"><span className="diamond" /></div>
+          <div className="prose" dangerouslySetInnerHTML={{ __html: a.content }} />
+
+          {a.tags?.length ? (
+            <div className="tags">
+              {a.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}
+            </div>
+          ) : null}
+
+          {a.source_url ? (
+            <p className="source">
+              {t('common.published')}: <a href={a.source_url} target="_blank" rel="noopener nofollow">{a.source_url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}</a>
+            </p>
+          ) : null}
         </div>
-        <figure className="cover">
-          <CoverImage src={a.cover_image} seed={a.slug} alt={a.title} />
-          {a.cover_image_credit ? <figcaption>{a.cover_image_credit}</figcaption> : null}
-        </figure>
-        <div className="prose" dangerouslySetInnerHTML={{ __html: a.content }} />
-        {a.source_url ? (
-          <p style={{ fontFamily: 'var(--sans)', fontSize: 13, color: 'var(--ink-soft)', marginTop: 30 }}>
-            {t('common.published')}: <a href={a.source_url} target="_blank" rel="noopener nofollow">source</a>
-          </p>
-        ) : null}
       </article>
+
+      {more.length ? (
+        <section className="related wrap section">
+          <div className="sec-head">
+            <div className="rule-orn"><span className="diamond" /></div>
+            <div className="lbl">{t('home.more')}</div>
+          </div>
+          <div className="grid g3">
+            {more.map((c) => (
+              <ArticleCard key={c.id} card={c}
+                kicker={c.category && t.has(`nav.${c.category}`) ? t(`nav.${c.category}`) : c.category || ''}
+                readLabel={t('common.minRead')} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <CommentSection postId={a.id} />
       <NewsletterSignup />
     </>
