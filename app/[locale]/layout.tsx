@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { Bodoni_Moda, Jost, Lora, Amiri, Aref_Ruqaa } from 'next/font/google';
 import { LOCALES, isLocale, dir, type Locale } from '@/lib/locales';
 import { SITE_URL, SITE_NAME, orgJsonLd, ld } from '@/lib/seo';
+import ConsentAnalytics from '@/components/ConsentAnalytics';
 import '../globals.css';
 
 // Self-hosted at build time by next/font — no runtime request to Google (faster, no CLS, GDPR-safe).
@@ -40,7 +41,10 @@ export default async function LocaleLayout({
     <html lang={locale} dir={dir(locale as Locale)} className={fontVars}>
       <body>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(orgJsonLd()) }} />
-        <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>
+        <NextIntlClientProvider messages={messages}>
+          {children}
+          <ConsentAnalytics />
+        </NextIntlClientProvider>
       </body>
     </html>
   );

@@ -17,10 +17,12 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   if (!isLocale(locale)) return {};
   const a = await getArticle(locale as Locale, slug);
   if (!a) return {};
+  const t = await getTranslations({ locale });
+  const kicker = a.category ? (t.has(`nav.${a.category}`) ? t(`nav.${a.category}`) : a.category) : undefined;
   return pageMetadata({
     locale: locale as Locale, path: `/article/${slug}`,
-    title: a.seo_title, description: a.seo_description,
-    images: a.cover_image ? [a.cover_image] : undefined, type: 'article',
+    title: a.seo_title, description: a.seo_description, type: 'article',
+    ogTitle: a.title, kicker, cover: a.cover_image,
   });
 }
 

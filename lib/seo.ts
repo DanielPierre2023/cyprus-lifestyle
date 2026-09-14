@@ -27,24 +27,33 @@ export function alternatesFor(locale: Locale, path: string) {
 
 const OG_LOCALE: Record<Locale, string> = { en: 'en_US', el: 'el_GR', ro: 'ro_RO', ar: 'ar_AR' };
 
-/** A complete Metadata fragment for a page: title, description, alternates, Open Graph. */
+/** Absolute URL of a generated branded social card. */
+export function ogImageUrl(o: { title: string; kicker?: string; locale: Locale; cover?: string | null }): string {
+  const p = new URLSearchParams();
+  p.set('t', o.title.slice(0, 200));
+  if (o.kicker) p.set('k', o.kicker.slice(0, 60));
+  p.set('l', o.locale);
+  if (o.cover) p.set('c', o.cover);
+  return `${SITE_URL}/api/og?${p.toString()}`;
+}
+
+/** A complete Metadata fragment for a page: title, description, alternates, Open Graph + branded social card. */
 export function pageMetadata(opts: {
   locale: Locale; path: string; title: string; description?: string;
-  images?: string[]; type?: 'website' | 'article'; absoluteTitle?: boolean;
+  type?: 'website' | 'article'; absoluteTitle?: boolean;
+  ogTitle?: string; kicker?: string; cover?: string | null;
 }) {
-  const { locale, path, title, description, images, type = 'website', absoluteTitle } = opts;
+  const { locale, path, title, description, type = 'website', absoluteTitle, ogTitle, kicker, cover } = opts;
+  const images = [ogImageUrl({ title: ogTitle || title, kicker, locale, cover })];
   return {
     title: absoluteTitle ? { absolute: title } : title,
     description,
     alternates: alternatesFor(locale, path),
     openGraph: {
       title, description, type, url: urlFor(locale, path), siteName: SITE_NAME,
-      locale: OG_LOCALE[locale], images: images && images.length ? images : undefined,
+      locale: OG_LOCALE[locale], images,
     },
-    twitter: {
-      card: (images && images.length ? 'summary_large_image' : 'summary') as 'summary_large_image' | 'summary',
-      title, description, images,
-    },
+    twitter: { card: 'summary_large_image' as const, title, description, images },
   };
 }
 

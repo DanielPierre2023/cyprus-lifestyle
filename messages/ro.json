@@ -131,5 +131,12 @@
     "sending": "Se trimite…",
     "success": "Vă mulțumim. Vă vom contacta.",
     "error": "Ceva nu a mers. Încercați din nou."
+  },
+  "consent": {
+    "title": "Confidențialitatea ta",
+    "body": "Folosim analize prietenoase cu confidențialitatea, fără cookie-uri, pentru a vedea ce se citește pe Cyprus Lifestyle — niciodată urmăritoare publicitare.",
+    "accept": "Accept",
+    "decline": "Refuz",
+    "learnMore": "Confidențialitate"
   }
 }

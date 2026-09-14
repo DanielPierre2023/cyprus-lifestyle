@@ -15,6 +15,10 @@ const nextConfig = {
   experimental: {
     serverActions: { bodySizeLimit: '4mb' },
   },
+  // Ensure the OG-image fonts are bundled into the serverless function that renders them.
+  outputFileTracingIncludes: {
+    '/api/og': ['./lib/og/*.ttf'],
+  },
 };
 
 export default withNextIntl(nextConfig);

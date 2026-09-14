@@ -131,5 +131,12 @@
     "sending": "Sending…",
     "success": "Thank you. We will be in touch.",
     "error": "Something went wrong. Please try again."
+  },
+  "consent": {
+    "title": "Your privacy",
+    "body": "We use privacy-friendly, cookieless analytics to see what's read on Cyprus Lifestyle — never advertising trackers.",
+    "accept": "Accept",
+    "decline": "Decline",
+    "learnMore": "Privacy"
   }
 }

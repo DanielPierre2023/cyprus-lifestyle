@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const t = await getTranslations({ locale });
   const label = t.has(`nav.${category}`) ? t(`nav.${category}`) : category;
   const desc = t.has(`sections.${category}`) ? t(`sections.${category}`) : undefined;
-  return pageMetadata({ locale: locale as Locale, path: `/${category}`, title: label, description: desc });
+  return pageMetadata({ locale: locale as Locale, path: `/${category}`, title: label, description: desc, kicker: 'Cyprus Lifestyle' });
 }
 
 export default async function CategoryPage({ params }: { params: Promise<{ locale: string; category: string }> }) {

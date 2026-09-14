@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const t = await getTranslations({ locale });
   return pageMetadata({
     locale: locale as Locale, path: '/', title: SITE_NAME, absoluteTitle: true,
-    description: t('brand.tagline'),
+    description: t('brand.tagline'), ogTitle: t('brand.tagline'), kicker: 'Cyprus Lifestyle',
   });
 }
 
