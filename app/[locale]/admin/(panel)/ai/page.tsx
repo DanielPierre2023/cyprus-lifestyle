@@ -9,6 +9,7 @@ export default function AiTab() {
   const [logs, setLogs] = useState<any[]>([]);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
+  const [report, setReport] = useState<any>(null);
 
   const load = useCallback(async () => {
     const [{ data: s }, { data: q }, { data: l }] = await Promise.all([
@@ -44,10 +45,46 @@ export default function AiTab() {
     setBusy(''); load();
   }
 
+  // Diagnostic: ask the edge function which models this key actually serves.
+  async function selfTest() {
+    setBusy('selftest'); setMsg('Testing which AI models your key serves…'); setReport(null);
+    try {
+      const { data, error } = await sb.functions.invoke('process-scraped-article', { body: { action: 'selftest' } });
+      if (error) { setMsg('Self-test failed: ' + (error.message || 'edge function error')); }
+      else {
+        const d = data as any;
+        setReport(d);
+        setMsg((d?.ok ? '✓ ' : '✗ ') + (d?.verdict || 'Self-test complete.'));
+      }
+    } catch (e) {
+      setMsg('Self-test error: ' + (e as Error).message);
+    }
+    setBusy('');
+  }
+
   return (
     <>
       <h1>AI newsroom</h1>
       <p className="sub">Automation switches, the rewrite queue and desk telemetry.</p>
+
+      <div className="row" style={{ marginBottom: 14 }}>
+        <button className="abtn ghost" disabled={busy === 'selftest'} onClick={selfTest}>
+          {busy === 'selftest' ? 'Testing models…' : 'Run model self-test'}
+        </button>
+        <span style={{ fontSize: 12, color: '#8a8371' }}>Checks which AI models your key serves, before you generate.</span>
+      </div>
+      {report ? (
+        <pre style={{ background: '#0B0E11', color: '#E4D2AC', padding: 12, borderRadius: 4, fontSize: 12, overflowX: 'auto', margin: '0 0 14px', whiteSpace: 'pre-wrap' }}>
+{`writer (primary):  ${report.writer_primary?.model}
+  structured:      ${report.writer_primary?.structured_output}
+  prefill:         ${report.writer_primary?.prefill}
+writer (fallback): ${report.writer_fallback?.model}
+  structured:      ${report.writer_fallback?.structured_output}
+  prefill:         ${report.writer_fallback?.prefill}
+gemini (research): ${report.gemini}
+secrets present:   ${Object.entries(report.secrets_present || {}).map(([k, v]) => `${k}=${v ? 'yes' : 'NO'}`).join('  ')}`}
+        </pre>
+      ) : null}
 
       {(['scraper_enabled', 'processor_enabled', 'auto_publish'] as const).map((k) => (
         <div className="toggle" key={k}>

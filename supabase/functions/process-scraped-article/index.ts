@@ -53,9 +53,21 @@ const CORS = {
 // can be set/changed in the dashboard WITHOUT redeploying code. Defaults below.
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
 const SONNET_MODEL = Deno.env.get("SONNET_MODEL") || "claude-sonnet-5";
+// If the primary Sonnet ID is not served by this key (your usage showed
+// claude-sonnet-5 = 0 requests while Sonnet 4.x served fine), the writer
+// automatically retries on this model so Sonnet-grade prose is still produced.
+// Fallback writer: Opus 5 — higher quality than Sonnet and long-lived (retires
+// no sooner than 2027-07-24). Deliberately NOT claude-sonnet-4-5, which retires
+// 2026-09-29. Both writer models are Claude; change either via Supabase secrets.
+const OPUS_MODEL = Deno.env.get("OPUS_MODEL") || "claude-opus-5";
 const GPT_MODEL = Deno.env.get("GPT_MODEL") || "gpt-4o";
-const CALL_TIMEOUT_MS = 60000;
-const TOTAL_SOFT_LIMIT_MS = 220000; // Supabase edge functions allow long runs; 4 native desks per article
+// GPT-4o writes flat prose, so it is OFF by default: the writer is Claude-only.
+// Set the secret USE_GPT_FALLBACK="true" to re-enable it as a last resort.
+const USE_GPT_FALLBACK = (Deno.env.get("USE_GPT_FALLBACK") || "false").toLowerCase() === "true";
+const CALL_TIMEOUT_MS = 45000; // per-call abort (matches TT; a prefill retry can follow)
+// Kept UNDER Supabase's ~200s edge-function wall-clock kill (TT documents this).
+// The four editions compose in parallel, so wall-clock ≈ one edition's time, not 4×.
+const TOTAL_SOFT_LIMIT_MS = 180000;
 const BATCH_MAX = 3;
 
 // ── taxonomy (Cyprus) ────────────────────────────────────────────────────────
@@ -1241,13 +1253,14 @@ async function callSonnet(
   temperature = 0.6,
   jsonSchema?: Record<string, unknown>,
   fn = "sonnet",
+  model = SONNET_MODEL,
 ): Promise<{ text: string; error?: string }> {
   const apiKey = Deno.env.get("CLAUDE_API_KEY");
   if (!apiKey) return { text: "", error: "CLAUDE_API_KEY not set" };
   try {
     const useStructured = !!jsonSchema;
     const body: Record<string, unknown> = {
-      model: SONNET_MODEL,
+      model,
       max_tokens: maxTokens,
       temperature,
       system,
@@ -1262,10 +1275,10 @@ async function callSonnet(
       body: JSON.stringify(body),
     }, "sonnet");
     const raw = await res.text();
-    if (!res.ok) return { text: "", error: `Sonnet ${res.status}: ${raw.substring(0, 200)}` };
+    if (!res.ok) return { text: "", error: `Sonnet ${res.status} (${model}): ${raw.substring(0, 180)}` };
     const data = JSON.parse(raw);
     const cont = data?.content?.[0]?.text || "";
-    logSpend("anthropic", SONNET_MODEL, fn, system.length + user.length, cont.length);
+    logSpend("anthropic", model, fn, system.length + user.length, cont.length);
     return { text: useStructured ? cont : "{" + cont };
   } catch (e) {
     return { text: "", error: `Sonnet: ${(e as Error).message}` };
@@ -1278,22 +1291,144 @@ async function callPolishModel(
   temperature: number,
   label: string,
   jsonSchema?: Record<string, unknown>,
-): Promise<{ text: string; provider: "sonnet" | "gpt4o" | null; error?: string }> {
-  const sonnet = await callSonnet(system, user, maxTokens, temperature, jsonSchema, label);
-  let err = sonnet.error || "";
-  if (!sonnet.error && sonnet.text && sonnet.text.length > 50) {
-    if (parseJsonSafe(sonnet.text)) return { text: sonnet.text, provider: "sonnet" };
-    err = `json_invalid (${sonnet.text.length} chars)`;
-  } else if (!sonnet.error) err = "empty";
-  console.warn(`[${label}] Sonnet failed (${err.substring(0, 100)}) — GPT-4o fallback`);
-  const gpt = await callGPT4o(system, user, Math.min(maxTokens, 14000), label);
-  if (!gpt.error && gpt.text && gpt.text.length > 50) return { text: gpt.text, provider: "gpt4o" };
+): Promise<
+  { text: string; provider: "sonnet" | "opus" | "gpt4o" | null; error?: string; sonnetError?: string }
+> {
+  // Claude-only writer chain (GPT-4o writes flat prose and is OFF by default).
+  // The article is tried THREE ways before giving up, so neither a rejected
+  // output_config nor a single unavailable model can knock it out of the pipeline:
+  //   (1) SONNET_MODEL, structured output — guaranteed-valid JSON where supported;
+  //   (2) SONNET_MODEL, prefill ("{" continuation) — universal, no beta feature;
+  //   (3) OPUS_MODEL, prefill — higher-quality fallback if Sonnet is unavailable.
+  // Both models are long-lived Claude (Sonnet 5 → ~Jun 2027, Opus 5 → ~Jul 2027).
+  // Only if ALL THREE fail is GPT-4o considered, and only when explicitly enabled
+  // via the USE_GPT_FALLBACK secret; otherwise the edition fails loudly (a clean
+  // failure beats flat text).
+  const tryPrefill = async (model: string) => {
+    const r = await callSonnet(system, user, maxTokens, temperature, undefined, label, model);
+    const ok = !r.error && !!r.text && r.text.length > 50 && !!parseJsonSafe(r.text);
+    return { ok, err: r.error || (r.text ? `json_invalid(${r.text.length})` : "empty"), text: r.text };
+  };
+
+  // (1) primary model, structured output
+  let structuredErr = "";
+  if (jsonSchema) {
+    const s = await callSonnet(system, user, maxTokens, temperature, jsonSchema, label, SONNET_MODEL);
+    if (!s.error && s.text && s.text.length > 50 && parseJsonSafe(s.text)) {
+      return { text: s.text, provider: "sonnet" };
+    }
+    structuredErr = s.error || (s.text ? `structured_json_invalid(${s.text.length})` : "structured_empty");
+    console.warn(
+      `[${label}] ${SONNET_MODEL} structured failed (${structuredErr.substring(0, 110)}) — prefill`,
+    );
+  }
+
+  // (2) primary model, prefill
+  const p1 = await tryPrefill(SONNET_MODEL);
+  if (p1.ok) {
+    return {
+      text: p1.text,
+      provider: "sonnet",
+      sonnetError: structuredErr ? `structured:${structuredErr}`.substring(0, 160) : undefined,
+    };
+  }
+
+  // (3) fallback writer — Opus 5 (higher quality), prefill
+  let fbNote = "";
+  if (OPUS_MODEL && OPUS_MODEL !== SONNET_MODEL) {
+    console.warn(
+      `[${label}] ${SONNET_MODEL} prefill failed (${p1.err.substring(0, 80)}) — trying ${OPUS_MODEL}`,
+    );
+    const p2 = await tryPrefill(OPUS_MODEL);
+    if (p2.ok) {
+      return {
+        text: p2.text,
+        provider: "opus",
+        sonnetError: `${SONNET_MODEL} down (structured:${
+          structuredErr || "n/a"
+        } prefill:${p1.err}) — used ${OPUS_MODEL}`
+          .substring(0, 160),
+      };
+    }
+    fbNote = ` | ${OPUS_MODEL}:${p2.err}`;
+  }
+
+  const sonnetErr = `${SONNET_MODEL}(structured:${structuredErr || "n/a"} prefill:${p1.err})${fbNote}`;
+  console.warn(`[${label}] all Sonnet attempts failed — ${sonnetErr.substring(0, 160)}`);
+
+  // (4) GPT-4o — only if explicitly re-enabled
+  if (USE_GPT_FALLBACK) {
+    const gpt = await callGPT4o(system, user, Math.min(maxTokens, 14000), label);
+    if (!gpt.error && gpt.text && gpt.text.length > 50) {
+      return { text: gpt.text, provider: "gpt4o", sonnetError: sonnetErr.substring(0, 160) };
+    }
+    return {
+      text: "",
+      provider: null,
+      error: `All failed — Sonnet(${sonnetErr.substring(0, 80)}) GPT-4o:${
+        (gpt.error || "empty").substring(0, 50)
+      }`,
+    };
+  }
+  return { text: "", provider: null, error: `Sonnet unavailable — ${sonnetErr.substring(0, 150)}` };
+}
+
+// ── SELF-TEST ────────────────────────────────────────────────────────────────
+// Admin-triggered diagnostic ({ action:"selftest" }). Calls each configured model
+// with a tiny prompt and reports exactly which ones this key serves and why any
+// fail — so model availability is a FACT in the response, never a guess. Makes no
+// database writes and costs a few tokens.
+async function runSelfTest(): Promise<Record<string, unknown>> {
+  const tinySchema = {
+    type: "object",
+    properties: { ok: { type: "boolean" } },
+    required: ["ok"],
+    additionalProperties: false,
+  } as const;
+  const sys = "You are a connectivity test. Output only the requested JSON.";
+  const usr = 'Return exactly {"ok":true} and nothing else.';
+
+  const testClaude = async (model: string) => {
+    const t0 = Date.now();
+    const structured = await callSonnet(sys, usr, 64, 0, tinySchema, "selftest", model);
+    const sOk = !structured.error && !!parseJsonSafe(structured.text);
+    const t1 = Date.now();
+    const prefill = await callSonnet(sys, usr, 64, 0, undefined, "selftest", model);
+    const pOk = !prefill.error && !!parseJsonSafe(prefill.text);
+    return {
+      model,
+      structured_output: sOk
+        ? `ok (${t1 - t0}ms)`
+        : `FAIL: ${(structured.error || "unparseable").substring(0, 160)}`,
+      prefill: pOk
+        ? `ok (${Date.now() - t1}ms)`
+        : `FAIL: ${(prefill.error || "unparseable").substring(0, 160)}`,
+      usable: sOk || pOk,
+    };
+  };
+
+  const [primary, fallback] = await Promise.all([testClaude(SONNET_MODEL), testClaude(OPUS_MODEL)]);
+  const gem = await callGemini("You are a connectivity test.", "Return the word OK.", 16, "selftest");
+  const geminiOk = !gem.error && (gem.text || "").trim().length > 0;
+  const writerOk = primary.usable || fallback.usable;
+
   return {
-    text: "",
-    provider: null,
-    error: `Both failed — Sonnet: ${err.substring(0, 70)} | GPT-4o: ${
-      (gpt.error || "empty").substring(0, 70)
-    }`,
+    ok: writerOk && geminiOk,
+    verdict: !writerOk
+      ? "NO writer model works — articles cannot be composed. See writer errors below."
+      : primary.usable
+      ? `Primary writer ${SONNET_MODEL} works — prose quality will be full.`
+      : `Primary ${SONNET_MODEL} is DOWN; higher-quality fallback ${OPUS_MODEL} works, so articles still compose.`,
+    writer_primary: primary,
+    writer_fallback: fallback,
+    gemini: geminiOk ? "ok" : `FAIL: ${(gem.error || "empty").substring(0, 160)}`,
+    secrets_present: {
+      CLAUDE_API_KEY: !!Deno.env.get("CLAUDE_API_KEY"),
+      GEMINI_API_KEY: !!Deno.env.get("GEMINI_API_KEY"),
+      OPENAI_API_KEY: !!Deno.env.get("OPENAI_API_KEY"),
+      UNSPLASH_ACCESS_KEY: !!Deno.env.get("UNSPLASH_ACCESS_KEY"),
+    },
+    config: { SONNET_MODEL, OPUS_MODEL, GEMINI_MODEL, USE_GPT_FALLBACK },
   };
 }
 async function callSonnetForRevision(
@@ -1303,31 +1438,47 @@ async function callSonnetForRevision(
 ): Promise<{ text: string; error?: string }> {
   const apiKey = Deno.env.get("CLAUDE_API_KEY");
   if (!apiKey) return { text: "", error: "CLAUDE_API_KEY not set" };
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30000);
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({
-        model: SONNET_MODEL,
-        max_tokens: maxTokens,
-        temperature: 0.55,
-        system,
-        messages: [{ role: "user", content: user }],
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    const raw = await res.text();
-    if (!res.ok) return { text: "", error: `Sonnet revision ${res.status}` };
-    const data = JSON.parse(raw);
-    const text = data?.content?.[0]?.text || "";
-    logSpend("anthropic", SONNET_MODEL, "humanness", system.length + user.length, text.length);
-    return { text };
-  } catch (e) {
-    return { text: "", error: `Sonnet revision: ${(e as Error).message}` };
+  const once = async (model: string): Promise<{ text: string; error?: string }> => {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30000);
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: maxTokens,
+          temperature: 0.55,
+          system,
+          messages: [{ role: "user", content: user }],
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      const raw = await res.text();
+      if (!res.ok) return { text: "", error: `Sonnet revision ${res.status} (${model})` };
+      const data = JSON.parse(raw);
+      const text = data?.content?.[0]?.text || "";
+      logSpend("anthropic", model, "humanness", system.length + user.length, text.length);
+      return { text };
+    } catch (e) {
+      return { text: "", error: `Sonnet revision (${model}): ${(e as Error).message}` };
+    }
+  };
+  // Same model resilience as the writer: if the primary Sonnet ID is not served
+  // by this key, fall back so the humanising pass still runs.
+  const primary = await once(SONNET_MODEL);
+  if (primary.text) return primary;
+  if (OPUS_MODEL && OPUS_MODEL !== SONNET_MODEL) {
+    const fb = await once(OPUS_MODEL);
+    if (fb.text) return fb;
+    return { text: "", error: `${primary.error || "empty"} | ${fb.error || "empty"}` };
   }
+  return primary;
 }
 function buildHumannessRevisionPrompt(flags: string[]): string {
   const out: string[] = [];
@@ -1667,6 +1818,7 @@ interface LangBundle {
   humanness: number;
   reason?: string; // why this edition failed (empty on success)
   provider?: string; // which model actually wrote it: "sonnet" | "gpt4o"
+  sonnetError?: string; // if Sonnet fell back to GPT-4o, the Sonnet API error
 }
 
 // Native composition desk — writes the article in `lang` from the English facts.
@@ -1794,6 +1946,7 @@ OUTPUT — JSON only, no preamble: {"title":"...","excerpt":"...","summary":"...
     wc: countWords(content),
     humanness: 0,
     provider: result.provider || undefined,
+    sonnetError: result.sonnetError,
   };
 }
 
@@ -1993,23 +2146,31 @@ async function processOne(
       const detail = failedLangs
         .map((l) => `${l.toUpperCase()}=${byLang[l].reason || "unknown"}`)
         .join(" · ");
+      // Surface the underlying Sonnet API error if Sonnet fell back to GPT-4o for
+      // any edition — that is the real cause (short GPT-4o output → fragment).
+      const sonnetDown = LANGS.map((l) => byLang[l].sonnetError).find((e) => e) || "";
+      const sonnetNote = sonnetDown
+        ? ` Sonnet is not running (${sonnetDown}) — GPT-4o alone is producing short/flat text.`
+        : "";
       Object.assign(log, {
         status: "error",
         error_stage: `compose_${failedLangs.join("+")}`,
-        error_msg: `Non-English editions failed — ${detail}`,
+        error_msg: `Non-English editions failed — ${detail}.${sonnetNote}`.substring(0, 500),
         total_ms: Date.now() - t0,
       });
       await supabase.from("generation_logs").insert(log).then(() => {}, () => {});
       await supabase.from("scraped_articles").update({
         status: "failed",
-        error_message: `Non-English composition failed — ${detail}`,
+        error_message: `Non-English composition failed — ${detail}.${sonnetNote}`.substring(0, 500),
       }).eq("id", row.id);
       console.warn(
-        `[writer] ABORT ${row.id}: ${detail} | EN via ${byLang.en.provider || "?"}`,
+        `[writer] ABORT ${row.id}: ${detail} | EN via ${byLang.en.provider || "?"} | sonnet: ${
+          sonnetDown || "ok"
+        }`,
       );
       return {
         ok: false,
-        reason: `Non-English composition failed — ${detail}. (English wrote via ${
+        reason: `Non-English composition failed — ${detail}.${sonnetNote} (English wrote via ${
           byLang.en.provider || "?"
         }.)`,
       };
@@ -2155,14 +2316,24 @@ async function processOne(
     // read flat because the Sonnet humanising pass never happened. Flag it in the
     // log's error_msg (harmless on an ok row) so it is visible without digging.
     const allGpt = LANGS.every((l) => byLang[l].provider === "gpt4o");
+    const sonnetDown = LANGS.map((l) => byLang[l].sonnetError).find((e) => e) || "";
     Object.assign(log, {
       status: "ok",
       total_ms: Date.now() - t0,
-      ...(allGpt ? { error_msg: "quality-warning: all editions via gpt4o (Sonnet did not run)" } : {}),
+      ...(allGpt
+        ? {
+          error_msg: `quality-warning: all editions via gpt4o (Sonnet: ${sonnetDown || "?"})`.substring(
+            0,
+            500,
+          ),
+        }
+        : {}),
     });
     await supabase.from("generation_logs").insert(log).then(() => {}, () => {});
     console.log(
-      `[writer] DONE ${row.id} → ${postId} | providers ${providers} | EN ${byLang.en.wc}w h${byLang.en.humanness} EL ${byLang.el.humanness} RO ${byLang.ro.humanness} AR ${byLang.ar.humanness} | ${
+      `[writer] DONE ${row.id} → ${postId} | providers ${providers} | sonnet: ${
+        sonnetDown || "ok"
+      } | EN ${byLang.en.wc}w h${byLang.en.humanness} EL ${byLang.el.humanness} RO ${byLang.ro.humanness} AR ${byLang.ar.humanness} | ${
         ((Date.now() - t0) / 1000).toFixed(1)
       }s`,
     );
@@ -2171,7 +2342,9 @@ async function processOne(
       post_id: postId,
       providers,
       quality_warning: allGpt
-        ? "All editions written by GPT-4o — Sonnet did not run, so the text will read flat. Check SONNET_MODEL / CLAUDE_API_KEY."
+        ? `All editions written by GPT-4o — Sonnet did not run${
+          sonnetDown ? ` (${sonnetDown})` : ""
+        }, so the text reads flat. Fix the Sonnet call, then regenerate.`
         : undefined,
     };
   } catch (e) {
@@ -2255,7 +2428,19 @@ serve(async (req: Request) => {
       scraped_article_id?: string;
       source?: string;
       auto_publish?: boolean;
+      action?: string;
+      selftest?: boolean;
     };
+
+    // Diagnostic: which models does this key actually serve? No DB writes.
+    if (body.action === "selftest" || body.selftest === true) {
+      const report = await runSelfTest();
+      return new Response(JSON.stringify(report), {
+        status: 200,
+        headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
     const supabase = adminClient();
     const fromCron = body.source === "cron";
     try {
