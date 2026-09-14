@@ -27,6 +27,7 @@ export default async function Footer() {
           <div>
             <h4>{t('footer.about')}</h4>
             <Link href="/about">{t('footer.about')}</Link>
+            <Link href="/standards">{t('footer.standards')}</Link>
             <Link href="/contact">{t('footer.contact')}</Link>
             <Link href="/privacy">{t('footer.privacy')}</Link>
           </div>
