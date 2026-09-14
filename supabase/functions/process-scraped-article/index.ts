@@ -49,8 +49,11 @@ const CORS = {
 };
 
 // ── models & budgets ─────────────────────────────────────────────────────────
-const GEMINI_MODEL = "gemini-2.5-flash";
-const SONNET_MODEL = "claude-sonnet-5"; // match TT's current, working Sonnet id
+// Model IDs are read from Supabase secrets so the exact ID your account supports
+// can be set/changed in the dashboard WITHOUT redeploying code. Defaults below.
+const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
+const SONNET_MODEL = Deno.env.get("SONNET_MODEL") || "claude-sonnet-5";
+const GPT_MODEL = Deno.env.get("GPT_MODEL") || "gpt-4o";
 const CALL_TIMEOUT_MS = 60000;
 const TOTAL_SOFT_LIMIT_MS = 220000; // Supabase edge functions allow long runs; 4 native desks per article
 const BATCH_MAX = 3;
@@ -1214,7 +1217,7 @@ async function callGPT4o(
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: GPT_MODEL,
         response_format: { type: "json_object" },
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         temperature: 0.55,
@@ -1225,7 +1228,7 @@ async function callGPT4o(
     if (!res.ok) return { text: "", error: `GPT-4o ${res.status}: ${raw.substring(0, 200)}` };
     const data = JSON.parse(raw);
     const text = data.choices?.[0]?.message?.content || "";
-    logSpend("openai", "gpt-4o", fn, system.length + user.length, text.length);
+    logSpend("openai", GPT_MODEL, fn, system.length + user.length, text.length);
     return { text };
   } catch (e) {
     return { text: "", error: `GPT-4o: ${(e as Error).message}` };
@@ -1662,6 +1665,8 @@ interface LangBundle {
   ok: boolean;
   wc: number;
   humanness: number;
+  reason?: string; // why this edition failed (empty on success)
+  provider?: string; // which model actually wrote it: "sonnet" | "gpt4o"
 }
 
 // Native composition desk — writes the article in `lang` from the English facts.
@@ -1674,7 +1679,7 @@ async function composeNatively(
   articleType: string,
   arch: ArchetypeBudget,
 ): Promise<LangBundle> {
-  const fail: LangBundle = {
+  const failWith = (reason: string): LangBundle => ({
     lang,
     title: "",
     excerpt: "",
@@ -1686,7 +1691,8 @@ async function composeNatively(
     ok: false,
     wc: 0,
     humanness: 0,
-  };
+    reason,
+  });
   const catDepth = CATEGORY_DEPTH[category] || CATEGORY_DEPTH.news;
   const firstPerson = voiceAllowsFirstPerson(articleType) ? "" : "\n\n" + FIRST_PERSON_BAN;
   const langDirective = lang === "en"
@@ -1759,14 +1765,21 @@ OUTPUT — JSON only, no preamble: {"title":"...","excerpt":"...","summary":"...
   );
   if (result.error) {
     console.warn(`[compose-${lang}] failed: ${result.error}`);
-    return fail;
+    return failWith(result.error);
   }
   const parsed = parseJsonSafe(result.text);
-  if (!parsed) return fail;
+  if (!parsed) {
+    console.warn(`[compose-${lang}] failed: json_parse (provider=${result.provider})`);
+    return failWith(`json_parse (provider=${result.provider})`);
+  }
   const content = ensureParagraphs(
     sanitizeHtml(toHtml((parsed.content_html as string) || (parsed.content as string) || ""), lang),
   );
-  if (!content || countWords(content) < FRAGMENT_FLOOR) return fail;
+  if (!content || countWords(content) < FRAGMENT_FLOOR) {
+    const wc = content ? countWords(content) : 0;
+    console.warn(`[compose-${lang}] failed: fragment ${wc}w (provider=${result.provider})`);
+    return failWith(`fragment_${wc}w`);
+  }
   const tags = normalizeTags(parsed.tags);
   return {
     lang,
@@ -1780,6 +1793,7 @@ OUTPUT — JSON only, no preamble: {"title":"...","excerpt":"...","summary":"...
     ok: true,
     wc: countWords(content),
     humanness: 0,
+    provider: result.provider || undefined,
   };
 }
 
@@ -1876,7 +1890,9 @@ async function processOne(
   supabase: SupaClient,
   row: ScrapedRow,
   autoPublish: boolean,
-): Promise<{ ok: boolean; reason?: string; post_id?: string }> {
+): Promise<
+  { ok: boolean; reason?: string; post_id?: string; providers?: string; quality_warning?: string }
+> {
   const t0 = Date.now();
   const title = row.original_title || "";
   const content = row.original_content_full || row.original_content || "";
@@ -1965,6 +1981,40 @@ async function processOne(
       });
     }
 
+    // No silent English fallback. If a non-English edition still failed after the
+    // retry, DO NOT copy the English text into it — that is exactly what produced
+    // the "all four editions in English" bug, and it hid the real failure. Abort
+    // loudly with the exact per-language reason (e.g. the Sonnet/GPT-4o API error)
+    // and leave the item in the queue for a clean retry, so we never again ship
+    // English disguised as a translation.
+    const failedLangs = (["el", "ro", "ar"] as Lang[]).filter((l) => !byLang[l].ok);
+    if (failedLangs.length) {
+      for (const l of failedLangs) log[`desk2b_${l}_ok`] = false;
+      const detail = failedLangs
+        .map((l) => `${l.toUpperCase()}=${byLang[l].reason || "unknown"}`)
+        .join(" · ");
+      Object.assign(log, {
+        status: "error",
+        error_stage: `compose_${failedLangs.join("+")}`,
+        error_msg: `Non-English editions failed — ${detail}`,
+        total_ms: Date.now() - t0,
+      });
+      await supabase.from("generation_logs").insert(log).then(() => {}, () => {});
+      await supabase.from("scraped_articles").update({
+        status: "failed",
+        error_message: `Non-English composition failed — ${detail}`,
+      }).eq("id", row.id);
+      console.warn(
+        `[writer] ABORT ${row.id}: ${detail} | EN via ${byLang.en.provider || "?"}`,
+      );
+      return {
+        ok: false,
+        reason: `Non-English composition failed — ${detail}. (English wrote via ${
+          byLang.en.provider || "?"
+        }.)`,
+      };
+    }
+
     // Desk 2C — regenerate a generic English title
     if (Date.now() - t0 < TOTAL_SOFT_LIMIT_MS - 30000) {
       const nt = await regenerateTitleIfGeneric(byLang.en.title, enrich.research, editor, "en");
@@ -1999,15 +2049,6 @@ async function processOne(
       log[`${l}_humanness`] = b.humanness;
       log[`words_${l}`] = b.wc;
     }));
-
-    // Fallback: any edition still not ok → use the English edition for that column
-    for (const l of ["el", "ro", "ar"] as Lang[]) {
-      if (!byLang[l].ok) {
-        console.warn(`[writer] ${l} failed twice — using EN for that edition`);
-        byLang[l] = { ...byLang.en, lang: l };
-        log[`desk2b_${l}_ok`] = false;
-      }
-    }
 
     // cover + author
     const authorId = await getAuthorId(supabase, editor);
@@ -2108,14 +2149,31 @@ async function processOne(
     });
     if (rpcErr || !rpc) throw new Error(`commit_scraper_blog_post RPC failed: ${rpcErr?.message || "no id"}`);
     const postId = rpc as string;
-    Object.assign(log, { status: "ok", total_ms: Date.now() - t0 });
+    const providers =
+      `en=${byLang.en.provider} el=${byLang.el.provider} ro=${byLang.ro.provider} ar=${byLang.ar.provider}`;
+    // If every edition wrote via gpt4o, Sonnet is not running — the article will
+    // read flat because the Sonnet humanising pass never happened. Flag it in the
+    // log's error_msg (harmless on an ok row) so it is visible without digging.
+    const allGpt = LANGS.every((l) => byLang[l].provider === "gpt4o");
+    Object.assign(log, {
+      status: "ok",
+      total_ms: Date.now() - t0,
+      ...(allGpt ? { error_msg: "quality-warning: all editions via gpt4o (Sonnet did not run)" } : {}),
+    });
     await supabase.from("generation_logs").insert(log).then(() => {}, () => {});
     console.log(
-      `[writer] DONE ${row.id} → ${postId} | EN ${byLang.en.wc}w h${byLang.en.humanness} EL ${byLang.el.humanness} RO ${byLang.ro.humanness} AR ${byLang.ar.humanness} | ${
+      `[writer] DONE ${row.id} → ${postId} | providers ${providers} | EN ${byLang.en.wc}w h${byLang.en.humanness} EL ${byLang.el.humanness} RO ${byLang.ro.humanness} AR ${byLang.ar.humanness} | ${
         ((Date.now() - t0) / 1000).toFixed(1)
       }s`,
     );
-    return { ok: true, post_id: postId };
+    return {
+      ok: true,
+      post_id: postId,
+      providers,
+      quality_warning: allGpt
+        ? "All editions written by GPT-4o — Sonnet did not run, so the text will read flat. Check SONNET_MODEL / CLAUDE_API_KEY."
+        : undefined,
+    };
   } catch (e) {
     const msg = (e as Error).message;
     console.error(`[writer] EXCEPTION ${row.id}: ${msg}`);
@@ -2237,7 +2295,16 @@ serve(async (req: Request) => {
       "id, original_title, original_url, original_content, original_content_full, category, scope, source_word_count, status",
     ).eq("status", "scraped").eq("is_used", false).order("created_at", { ascending: true }).limit(BATCH_MAX);
     const list = (rows || []) as ScrapedRow[];
-    const results: Array<{ id: string; ok: boolean; reason?: string; post_id?: string }> = [];
+    const results: Array<
+      {
+        id: string;
+        ok: boolean;
+        reason?: string;
+        post_id?: string;
+        providers?: string;
+        quality_warning?: string;
+      }
+    > = [];
     const start = Date.now();
     for (const r of list) {
       if (Date.now() - start > TOTAL_SOFT_LIMIT_MS - 30000) break;

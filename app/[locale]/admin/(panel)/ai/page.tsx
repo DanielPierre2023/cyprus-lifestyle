@@ -33,9 +33,11 @@ export default function AiTab() {
     setBusy(id); setMsg('Composing four editions natively — this takes a minute or two…');
     try {
       const { data, error } = await sb.functions.invoke('process-scraped-article', { body: { scraped_article_id: id } });
+      const d = data as any;
       if (error) setMsg('Generation failed: ' + (error.message || 'edge function error'));
-      else if (data && (data as any).ok === false) setMsg('Generation failed: ' + ((data as any).reason || 'unknown'));
-      else setMsg('Article drafted. See it in Articles (status: draft).');
+      else if (d && d.ok === false) setMsg('Generation failed — ' + (d.reason || 'unknown'));
+      else if (d && d.quality_warning) setMsg('Article drafted, but ⚠ ' + d.quality_warning);
+      else setMsg('Article drafted' + (d?.providers ? ` (${d.providers})` : '') + '. See it in Articles (status: draft).');
     } catch (e) {
       setMsg('Generation error: ' + (e as Error).message);
     }
