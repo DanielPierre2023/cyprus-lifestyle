@@ -8,6 +8,7 @@ export default function AiTab() {
   const [queue, setQueue] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState('');
 
   const load = useCallback(async () => {
     const [{ data: s }, { data: q }, { data: l }] = await Promise.all([
@@ -26,8 +27,18 @@ export default function AiTab() {
     await sb.from('automation_settings').update({ [key]: next[key], updated_at: new Date().toISOString() }).eq('id', 1);
   }
   async function generate(id: string) {
-    setBusy(id);
-    await fetch('/api/admin/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scraped_article_id: id }) });
+    // Invoke the Supabase Edge Function directly (the admin's session JWT authorises it).
+    // This runs the AI desk on Supabase — where the model keys live and the runtime is
+    // long enough — instead of the Vercel route, which has no keys and a 60s limit.
+    setBusy(id); setMsg('Composing four editions natively — this takes a minute or two…');
+    try {
+      const { data, error } = await sb.functions.invoke('process-scraped-article', { body: { scraped_article_id: id } });
+      if (error) setMsg('Generation failed: ' + (error.message || 'edge function error'));
+      else if (data && (data as any).ok === false) setMsg('Generation failed: ' + ((data as any).reason || 'unknown'));
+      else setMsg('Article drafted. See it in Articles (status: draft).');
+    } catch (e) {
+      setMsg('Generation error: ' + (e as Error).message);
+    }
     setBusy(''); load();
   }
 
@@ -49,6 +60,7 @@ export default function AiTab() {
       ))}
 
       <h1 style={{ fontSize: 20, marginTop: 22 }}>Scrape queue ({queue.length})</h1>
+      {msg ? <p style={{ fontSize: 13, color: msg.startsWith('Generation') ? '#b00020' : '#8a8371', margin: '0 0 10px' }}>{msg}</p> : null}
       <table className="adm-t">
         <thead><tr><th>Headline</th><th>Category</th><th>District</th><th></th></tr></thead>
         <tbody>
