@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { LOCALES, LOCALE_LABEL, type Locale } from '@/lib/locales';
 import { slugify } from '@/lib/util';
+import CoverImagePicker from '@/components/admin/CoverImagePicker';
 
 const CATS = ['cyprus', 'business', 'property', 'culture', 'escapes', 'table', 'world'];
 const DISTRICTS = ['', 'nicosia', 'limassol', 'larnaca', 'famagusta', 'paphos', 'kyrenia'];
@@ -20,7 +21,7 @@ export default function EditorTab() {
 
   const load = useCallback(async (pid: string) => {
     const l = LOCALES.map((x) => LANG_FIELDS.map((k) => `${k}_${x}`)).flat().join(', ');
-    const { data } = await sb.from('blog_posts').select(`id, slug, category, county, status, ai_editor, author_name, cover_image, tags_en, ${l}`).eq('id', pid).maybeSingle();
+    const { data } = await sb.from('blog_posts').select(`id, slug, category, county, status, ai_editor, author_name, cover_image, cover_image_credit, tags_en, ${l}`).eq('id', pid).maybeSingle();
     if (data) setF(data as F);
   }, [sb]);
 
@@ -67,7 +68,7 @@ export default function EditorTab() {
     const status = publish ? 'published' : f.status;
     const row: F = {
       category: f.category, county: f.county || null, ai_editor: f.ai_editor, author_name: f.author_name,
-      cover_image: f.cover_image || null, status,
+      cover_image: f.cover_image || null, cover_image_credit: f.cover_image_credit || null, status,
       published_at: status === 'published' ? new Date().toISOString() : null,
       tags_en: (f.tags_en_str ?? (Array.isArray(f.tags_en) ? f.tags_en.join(', ') : '')).split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean),
     };
@@ -95,13 +96,24 @@ export default function EditorTab() {
       <div className="row" style={{ marginBottom: 12 }}>
         <select value={f.category} onChange={(e) => set('category', e.target.value)} style={{ width: 150 }}>{CATS.map((c) => <option key={c}>{c}</option>)}</select>
         <select value={f.county || ''} onChange={(e) => set('county', e.target.value)} style={{ width: 150 }}>{DISTRICTS.map((d) => <option key={d} value={d}>{d || '— district —'}</option>)}</select>
-        <input placeholder="Author name" value={f.author_name || ''} onChange={(e) => set('author_name', e.target.value)} style={{ width: 180 }} />
-        <input placeholder="Cover image URL" value={f.cover_image || ''} onChange={(e) => set('cover_image', e.target.value)} style={{ flex: '1 1 240px' }} />
+        <input placeholder="Author name" value={f.author_name || ''} onChange={(e) => set('author_name', e.target.value)} style={{ flex: '1 1 180px' }} />
       </div>
       <div className="row" style={{ marginBottom: 12 }}>
         <input placeholder="Tags (comma separated, EN)" value={f.tags_en_str ?? (Array.isArray(f.tags_en) ? f.tags_en.join(', ') : '')} onChange={(e) => set('tags_en_str', e.target.value)} style={{ flex: '1 1 300px' }} />
         <button className="abtn" disabled={!!busy} onClick={autoTranslate}>{busy === 'translate' ? 'Translating…' : 'Auto-translate EN → EL/RO/AR'}</button>
       </div>
+
+      <CoverImagePicker
+        supabase={sb}
+        title={f.title_en || ''}
+        summary={f.summary_en || f.excerpt_en || ''}
+        category={f.category}
+        district={f.county || null}
+        value={f.cover_image || ''}
+        credit={f.cover_image_credit || ''}
+        onChange={(url) => set('cover_image', url)}
+        onCreditChange={(c) => set('cover_image_credit', c)}
+      />
 
       <div className="row" style={{ gap: 4, marginBottom: 8 }}>
         {LOCALES.map((l) => <button key={l} className={`abtn ${tab === l ? 'gold' : 'ghost'}`} onClick={() => setTab(l)}>{LOCALE_LABEL[l]}</button>)}

@@ -8,7 +8,7 @@ export default function ArticlesTab() {
   const [filter, setFilter] = useState<'all' | 'published' | 'draft'>('all');
 
   const load = useCallback(async () => {
-    let q = sb.from('blog_posts').select('id, slug, title_en, category, county, status, ai_editor, published_at, created_at').order('created_at', { ascending: false }).limit(80);
+    let q = sb.from('blog_posts').select('id, slug, title_en, cover_image, category, county, status, ai_editor, published_at, created_at').order('created_at', { ascending: false }).limit(80);
     if (filter !== 'all') q = q.eq('status', filter);
     const { data } = await q;
     setRows(data || []);
@@ -34,10 +34,15 @@ export default function ArticlesTab() {
         ))}
       </div>
       <table className="adm-t">
-        <thead><tr><th>Title (EN)</th><th>Category</th><th>Editor</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th style={{ width: 64 }}></th><th>Title (EN)</th><th>Category</th><th>Editor</th><th>Status</th><th></th></tr></thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.id}>
+              <td>
+                {r.cover_image
+                  ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={r.cover_image} alt="" style={{ width: 56, height: 34, objectFit: 'cover', borderRadius: 2, display: 'block', border: '1px solid #e3ddcf' }} />
+                  : <span title="No cover" style={{ display: 'inline-block', width: 56, height: 34, background: '#faf7f0', border: '1px dashed #cfc7b3', borderRadius: 2 }} />}
+              </td>
               <td>{r.title_en || <em>untitled</em>}</td>
               <td>{r.category || '—'}{r.county ? ` · ${r.county}` : ''}</td>
               <td>{r.ai_editor || '—'}</td>
@@ -51,7 +56,7 @@ export default function ArticlesTab() {
               </td>
             </tr>
           ))}
-          {rows.length === 0 ? <tr><td colSpan={5}>No articles.</td></tr> : null}
+          {rows.length === 0 ? <tr><td colSpan={6}>No articles.</td></tr> : null}
         </tbody>
       </table>
     </>
