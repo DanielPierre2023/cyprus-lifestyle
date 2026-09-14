@@ -39,11 +39,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
     ? new Date(a.published_at).toLocaleDateString(l === 'ar' ? 'ar' : l, { year: 'numeric', month: 'long', day: 'numeric' })
     : '';
   const catLabel = a.category ? (t.has(`nav.${a.category}`) ? t(`nav.${a.category}`) : a.category) : '';
-  const bylineParts = [
-    a.author_name ? `${t('common.byline')} ${a.author_name}` : 'Cyprus Lifestyle',
-    date,
-    a.reading_time_min ? `${a.reading_time_min} ${t('common.minRead')}` : '',
-  ].filter(Boolean);
+  const metaTail = [date, a.reading_time_min ? `${a.reading_time_min} ${t('common.minRead')}` : ''].filter(Boolean);
 
   // "More from the island": same section first, topped up with the latest.
   let more: Card[] = a.category ? (await getByCategory(l, a.category, 4)).filter((r) => r.slug !== a.slug) : [];
@@ -79,7 +75,14 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
             {catLabel ? <span className="kicker">{catLabel}</span> : null}
             <h1>{a.title}</h1>
             {a.excerpt ? <p className="dek">{a.excerpt}</p> : null}
-            <div className="byline">{bylineParts.join(' · ')}</div>
+            <div className="byline">
+              {a.author_name ? (
+                a.author_slug
+                  ? <Link href={`/author/${a.author_slug}`}>{t('common.byline')} {a.author_name}</Link>
+                  : `${t('common.byline')} ${a.author_name}`
+              ) : 'Cyprus Lifestyle'}
+              {metaTail.map((s) => ` · ${s}`).join('')}
+            </div>
           </div>
         </header>
 

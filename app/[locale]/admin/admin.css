@@ -1,19 +1,19 @@
 /* Cyprus Lifestyle — admin console theme (English, utilitarian, on-brand). */
 .adm { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; background: #f4f1ea; color: #1c1c1c;
-  font-family: "Jost", system-ui, sans-serif; }
+  font-family: var(--font-jost), "Jost", system-ui, sans-serif; }
 .adm-side { background: #0B0E11; color: #E4D2AC; padding: 18px 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-.adm-side .brand { font-family: "Bodoni Moda", Georgia, serif; color: #C9A24C; font-size: 19px; padding: 6px 20px 16px; letter-spacing: .04em; }
+.adm-side .brand { font-family: var(--font-bodoni), "Bodoni Moda", Georgia, serif; color: #C9A24C; font-size: 19px; padding: 6px 20px 16px; letter-spacing: .04em; }
 .adm-side a { display: block; padding: 9px 20px; color: #E4D2AC; text-decoration: none; font-size: 14px; border-inline-start: 3px solid transparent; }
 .adm-side a:hover { background: #14171b; color: #C9A24C; }
 .adm-side a.active { background: #14171b; color: #C9A24C; border-color: #C9A24C; }
 .adm-side .grp { text-transform: uppercase; letter-spacing: .14em; font-size: 10px; color: #6b6552; padding: 16px 20px 4px; }
 .adm-main { padding: 26px 30px; overflow-x: auto; }
-.adm-main h1 { font-family: "Bodoni Moda", Georgia, serif; font-size: 26px; margin: 0 0 4px; }
+.adm-main h1 { font-family: var(--font-bodoni), "Bodoni Moda", Georgia, serif; font-size: 26px; margin: 0 0 4px; }
 .adm-main .sub { color: #6b6552; margin: 0 0 22px; font-size: 14px; }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 26px; }
 .stat { background: #fff; border: 1px solid #e3ddcf; border-radius: 4px; padding: 16px; }
-.stat .n { font-family: "Bodoni Moda", serif; font-size: 30px; color: #0B0E11; }
+.stat .n { font-family: var(--font-bodoni), "Bodoni Moda", serif; font-size: 30px; color: #0B0E11; }
 .stat .k { text-transform: uppercase; letter-spacing: .1em; font-size: 11px; color: #8a8371; margin-top: 4px; }
 
 table.adm-t { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e3ddcf; font-size: 13.5px; }
@@ -26,18 +26,25 @@ table.adm-t tr:hover td { background: #fcfaf4; }
 .pill.draft, .pill.scraped, .pill.queued, .pill.unread, .pill.pending { background: #fdf0d6; color: #8a5b12; }
 .pill.error, .pill.failed { background: #f8dcdc; color: #9a2020; }
 
-.abtn { font-family: "Jost", sans-serif; font-size: 12.5px; background: #0B0E11; color: #C9A24C; border: none; padding: 7px 13px; border-radius: 3px; cursor: pointer; margin-inline-end: 6px; }
+.abtn { font-family: var(--font-jost), "Jost", sans-serif; font-size: 12.5px; background: #0B0E11; color: #C9A24C; border: none; padding: 7px 13px; border-radius: 3px; cursor: pointer; margin-inline-end: 6px; }
 .abtn.gold { background: #C9A24C; color: #0B0E11; font-weight: 600; }
 .abtn.ghost { background: transparent; color: #0B0E11; border: 1px solid #cfc7b3; }
 .abtn:disabled { opacity: .5; cursor: default; }
-.adm input, .adm textarea, .adm select { font-family: "Jost", sans-serif; padding: 8px 10px; border: 1px solid #cfc7b3; border-radius: 3px; background: #fff; font-size: 14px; width: 100%; margin-bottom: 10px; }
+.adm input, .adm textarea, .adm select { font-family: var(--font-jost), "Jost", sans-serif; padding: 8px 10px; border: 1px solid #cfc7b3; border-radius: 3px; background: #fff; font-size: 14px; width: 100%; margin-bottom: 10px; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .toggle { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #e3ddcf; padding: 12px 16px; border-radius: 4px; margin-bottom: 10px; }
 
-.adm-login { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #0B0E11; }
-.adm-login .box { background: #14171b; border: 1px solid #26292e; padding: 36px; width: 340px; border-radius: 6px; }
-.adm-login .brand { font-family: "Bodoni Moda", serif; color: #C9A24C; font-size: 22px; text-align: center; margin-bottom: 20px; letter-spacing: .04em; }
-.adm-login input { width: 100%; }
-.adm-login .err { color: #e88; font-size: 13px; margin-top: 8px; }
+.adm-login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: radial-gradient(120% 120% at 50% 0%, #17222a, #0B0E11 70%); }
+.adm-login .box { background: #12161b; border: 1px solid #26292e; border-top: 2px solid #C9A24C; padding: 44px 40px 40px; width: 380px; max-width: 100%; border-radius: 4px; box-shadow: 0 30px 80px rgba(0,0,0,.5); text-align: center; }
+.adm-login .mono { width: 52px; height: 52px; margin: 0 auto 18px; display: block; }
+.adm-login .brand { font-family: var(--font-bodoni), "Bodoni Moda", serif; color: #F4EFE6; font-size: 26px; letter-spacing: .12em; text-transform: uppercase; }
+.adm-login .tag { font-family: var(--font-jost), "Jost", sans-serif; text-transform: uppercase; letter-spacing: .28em; font-size: 10px; color: #C9A24C; margin: 10px 0 30px; }
+.adm-login .box input { width: 100%; background: #0e1216; border: 1px solid #2a2e35; color: #F4EFE6; padding: 12px 14px; border-radius: 3px; margin-bottom: 12px; font-size: 15px; }
+.adm-login .box input::placeholder { color: #7d7768; }
+.adm-login .box input:focus { outline: none; border-color: #C9A24C; }
+.adm-login .box .abtn.gold { margin-top: 6px; padding: 12px; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
+.adm-login .err { color: #e0a0a0; font-size: 13px; margin-top: 12px; }
+.adm-login .hint { color: #6b6552; font-size: 11px; margin-top: 18px; letter-spacing: .04em; }
 
 @media (max-width: 760px) { .adm { grid-template-columns: 1fr; } .adm-side { position: static; height: auto; } }

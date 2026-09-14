@@ -20,11 +20,14 @@ export default function AdminLogin() {
   return (
     <div className="adm-login">
       <form className="box" onSubmit={submit}>
-        <div className="brand">CYPRUS LIFESTYLE</div>
-        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <img src="/brand/monogram.svg" alt="" width={52} height={52} className="mono" aria-hidden="true" />
+        <div className="brand">Cyprus Lifestyle</div>
+        <div className="tag">Editorial Console</div>
+        <input type="email" placeholder="Email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <input type="password" placeholder="Password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         <button className="abtn gold" style={{ width: '100%' }} disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
         {err ? <div className="err">{err}</div> : null}
+        <div className="hint">Authorised editors only</div>
       </form>
     </div>
   );

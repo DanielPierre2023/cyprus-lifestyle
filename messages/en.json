@@ -45,7 +45,8 @@
     "contact": "Contact",
     "privacy": "Privacy",
     "rights": "All rights reserved.",
-    "languages": "Editions"
+    "languages": "Editions",
+    "standards": "Editorial Standards"
   },
   "comments": {
     "title": "Comments",
@@ -120,6 +121,21 @@
       "kicker": "Cyprus Lifestyle",
       "title": "Contact",
       "dek": "Editorial, membership, or partnerships — write to us."
+    },
+    "standards": {
+      "kicker": "Editorial",
+      "title": "Editorial Standards",
+      "dek": "How Cyprus Lifestyle is reported, written, translated and corrected.",
+      "body": [
+        "Cyprus Lifestyle is editorially independent. Our coverage is not for sale; sponsored features are always labelled as such, and commercial relationships never determine what we cover or how.",
+        "We report from named desks and value specifics over adjectives. Where a story draws on another publication or a primary document, we say so and link to the source.",
+        "We use AI tools to help gather, draft and translate — but every canonical story is edited by a person before it publishes, and each of our four editions (English, Greek, Romanian and Arabic) is reviewed for accuracy and tone, right-to-left for the Arabic edition.",
+        "We correct mistakes promptly and visibly. If something is wrong, write to us through the contact page and we will put it right."
+      ]
+    },
+    "author": {
+      "desk": "Editorial Desk",
+      "recent": "Recent dispatches"
     }
   },
   "contactForm": {

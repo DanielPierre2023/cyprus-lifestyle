@@ -45,7 +45,8 @@
     "contact": "Contact",
     "privacy": "Confidențialitate",
     "rights": "Toate drepturile rezervate.",
-    "languages": "Ediții"
+    "languages": "Ediții",
+    "standards": "Principii Editoriale"
   },
   "comments": {
     "title": "Comentarii",
@@ -120,6 +121,21 @@
       "kicker": "Cyprus Lifestyle",
       "title": "Contact",
       "dek": "Redacție, abonamente sau parteneriate — scrieți-ne."
+    },
+    "standards": {
+      "kicker": "Redacție",
+      "title": "Principii Editoriale",
+      "dek": "Cum documentează, scrie, traduce și corectează Cyprus Lifestyle.",
+      "body": [
+        "Cyprus Lifestyle este independent editorial. Acoperirea noastră nu este de vânzare; materialele sponsorizate sunt întotdeauna semnalate ca atare, iar relațiile comerciale nu decid niciodată ce acoperim sau cum.",
+        "Scriem din redacții cu nume și preferăm faptele concrete în locul adjectivelor. Când un articol se bazează pe o altă publicație sau pe un document primar, o spunem și trimitem la sursă.",
+        "Folosim instrumente AI pentru documentare, redactare și traducere — dar fiecare articol de referință este editat de un om înainte de publicare, iar fiecare dintre cele patru ediții (engleză, greacă, română și arabă) este verificată pentru acuratețe și ton, de la dreapta la stânga pentru ediția arabă.",
+        "Corectăm greșelile prompt și vizibil. Dacă ceva este greșit, scrieți-ne prin pagina de contact și vom îndrepta lucrurile."
+      ]
+    },
+    "author": {
+      "desk": "Redacția",
+      "recent": "Articole recente"
     }
   },
   "contactForm": {

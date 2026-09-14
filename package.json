@@ -2,13 +2,14 @@
   "name": "cyprus-lifestyle",
   "version": "1.0.0",
   "private": true,
-  "description": "Cyprus Lifestyle — a four-language luxury newspaper-magazine (EN·EL·RO·AR) on Next.js + Supabase, deployed on Vercel. AI newsroom pipeline ported from Transilvania Times.",
+  "description": "Cyprus Lifestyle \u2014 a four-language luxury newspaper-magazine (EN\u00b7EL\u00b7RO\u00b7AR) on Next.js + Supabase, deployed on Vercel. AI newsroom pipeline ported from Transilvania Times.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "eval:antiai": "tsx scripts/eval-antiai.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
