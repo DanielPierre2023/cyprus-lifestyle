@@ -176,6 +176,19 @@ const LEX_AR: Array<[RegExp, string]> = [
   [/في (?:عصرنا الحالي|عالم اليوم|وقتنا الحالي)/g, 'اليوم'],
   [/مما لا شك فيه/g, 'بالتأكيد'],
   [/لا يمكن إنكار أن/g, 'من الواضح أن'],
+  // testament / tapestry / seamless / fast-paced world / delve / cornerstone …
+  [/شهادة[ً]? على/g, 'دليل على'],
+  [/نسيج[ًٍ]? (?:غني[ًٍّ]* )?من/g, 'مجموعة من'],
+  [/في عالم[ٍ]? (?:سريع التغير|سريع الخطى|دائم التطور|دائم التغير)/g, 'اليوم'],
+  [/تجربة سلسة/g, 'تجربة سهلة'],
+  [/تجارب سلسة/g, 'تجارب سهلة'],
+  [/الغوص في/g, 'استكشاف'],
+  [/الخوض في/g, 'البحث في'],
+  [/حجر الزاوية/g, 'الأساس'],
+  [/نقلة نوعية/g, 'تغيير كبير'],
+  [/كنز دفين من/g, 'ثروة من'],
+  [/مجموعة متنوعة من/g, 'العديد من'],
+  [/طائفة واسعة من/g, 'العديد من'],
 ];
 
 const FILLERS_EN =
@@ -271,7 +284,11 @@ function bodyDefs(lang: Lang): Array<{ key: string; label: string; severity: 'hi
     { key: 'ar_range', label: '«مجموعة واسعة / طيف واسع»', severity: 'low', re: /مجموعة واسعة من|طيف واسع من|عدد كبير من/g },
     { key: 'ar_not_only', label: 'بنية «ليس فقط … بل أيضا»', severity: 'medium', re: /ليس فقط[^.?!؟]{0,80}بل أيضا/g },
     { key: 'ar_conclusion', label: 'فقرة ختامية', severity: 'medium', re: /(^|\n)\s*(?:في الختام|وفي الختام|وختاما|في نهاية المطاف|باختصار)/g },
-    { key: 'ar_filler', label: 'روابط «علاوة على ذلك / بالإضافة»', severity: 'low', re: /(^|\n|[.!?؟]\s+)(?:علاوة على ذلك|بالإضافة إلى ذلك|فضلا عن ذلك)/g }];
+    { key: 'ar_filler', label: 'روابط «علاوة على ذلك / بالإضافة»', severity: 'low', re: /(^|\n|[.!?؟]\s+)(?:علاوة على ذلك|بالإضافة إلى ذلك|فضلا عن ذلك)/g },
+    { key: 'ar_lexicon', label: 'قاموس الذكاء الاصطناعي (شهادة على، نسيج، الغوص، حجر الزاوية…)', severity: 'medium', re: /شهادة[ً]? على|نسيج[ًٍ]? (?:غني[ًٍّ]* )?من|الغوص في|الخوض في|حجر الزاوية|نقلة نوعية|كنز دفين|منارة|يزخر ب|يعج ب|مجموعة متنوعة من|طائفة واسعة من/g },
+    { key: 'ar_seamless', label: '«سلس / بسلاسة» (seamless)', severity: 'low', re: /سلس(?:ة|ًا)?(?![\p{L}])|بسلاسة/gu },
+    { key: 'ar_worldpace', label: '«في عالم سريع التغير»', severity: 'medium', re: /في عالم[ٍ]? (?:سريع التغير|سريع الخطى|دائم التطور|دائم التغير)/g },
+    { key: 'ar_undeniable', label: '«مما لا شك فيه / لا يمكن إنكار»', severity: 'low', re: /مما لا شك فيه|لا يمكن إنكار/g }];
   return [...common,
     { key: 'en_worth', label: '“It’s worth noting / important to note”', severity: 'medium', re: /\bit(?:'|’)?s (?:worth noting|important to note)\b|\bit is (?:worth noting|important to note)\b/gi },
     { key: 'en_lexicon', label: 'AI lexicon (delve, boasts, nestled, tapestry…)', severity: 'medium', re: /\b(?:delve|delving|boasts?|nestled|tapestry|testament to|underscore[sd]?|showcas(?:e|es|ing)|myriad|plethora|seamless(?:ly)?|meticulous(?:ly)?|cutting-edge|state-of-the-art)\b/gi },

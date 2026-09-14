@@ -7,6 +7,7 @@ export default function NewsletterSignup() {
   const th = useTranslations('home');
   const locale = useLocale();
   const [email, setEmail] = useState('');
+  const [company, setCompany] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
 
   async function submit(e: React.FormEvent) {
@@ -15,7 +16,7 @@ export default function NewsletterSignup() {
     try {
       const res = await fetch('/api/newsletter/subscribe', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, language: locale }),
+        body: JSON.stringify({ email, language: locale, company }),
       });
       setState(res.ok ? 'done' : 'error');
     } catch { setState('error'); }
@@ -32,6 +33,9 @@ export default function NewsletterSignup() {
             <p className="gold">{tn('success')}</p>
           ) : (
             <form className="field" onSubmit={submit}>
+              <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, overflow: 'hidden' }}>
+                <label>Company<input type="text" tabIndex={-1} autoComplete="off" value={company} onChange={(e) => setCompany(e.target.value)} /></label>
+              </div>
               <input type="email" required placeholder={tn('placeholder')} value={email}
                 onChange={(e) => setEmail(e.target.value)} aria-label={tn('placeholder')} />
               <button className="btn" type="submit" disabled={state === 'sending'}>{tn('cta')}</button>

@@ -25,8 +25,8 @@ const GOLDEN: Sample[] = [
     content: 'Într-o lume în continuă schimbare, acest proiect este o dovadă a inovației — o tapiserie bogată de experiențe impecabile.' },
   { lang: 'ro', label: 'clean', expect: 'clean', title: 'Turnurile marinei din Limassol',
     content: 'Acum zece ani, faleza era o coastă de lucru. Astăzi este un șir de turnuri de sticlă.' },
-  { lang: 'ar', label: 'AI-heavy', expect: 'ai', title: 'شهادة سلسة',
-    content: 'في عالمٍ سريع التغير، يُعدّ هذا المشروع شهادةً على الابتكار — نسيجٌ غنيٌّ من التجارب السلسة.' },
+  { lang: 'ar', label: 'AI-heavy', expect: 'ai', title: 'شهادة سلسة على الابتكار',
+    content: 'في عالم سريع التغير، يعد هذا المشروع شهادة على الابتكار — نسيج غني من التجارب السلسة، ويمثل نقلة نوعية وحجر الزاوية في هذا المجال.' },
   { lang: 'ar', label: 'clean', expect: 'clean', title: 'أبراج مارينا ليماسول',
     content: 'قبل عشر سنوات كانت الواجهة ساحلاً عاملاً. اليوم هي صفٌّ من الأبراج الزجاجية.' },
 ];
