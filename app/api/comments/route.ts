@@ -2,6 +2,7 @@
 // GET ?post_id=... → approved comments for an article.
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { rateLimit, isHoneypot } from '@/lib/ratelimit';
 
 export const runtime = 'nodejs';
 
@@ -16,6 +17,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
+  if (isHoneypot(body)) return NextResponse.json({ ok: true, pending: true }); // silently drop bots
+  if (!(await rateLimit(req, 'comments'))) {
+    return NextResponse.json({ ok: false, error: 'Too many requests — please wait a moment.' }, { status: 429 });
+  }
   const post_id = String(body.post_id || '');
   const author_name = String(body.author_name || '').trim().slice(0, 80);
   const content = String(body.content || '').trim().slice(0, 4000);
