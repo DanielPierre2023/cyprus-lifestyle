@@ -14,7 +14,7 @@ export default function ContactForm() {
   if (state === 'done') return <p className="gold cform" style={{ textAlign: 'center' }}>{t('success')}</p>;
   return (
     <form className="cform" onSubmit={submit}>
-      <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, overflow: 'hidden' }}>
+      <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}>
         <label>Company<input type="text" tabIndex={-1} autoComplete="off" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} /></label>
       </div>
       <input placeholder={t('name')} required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />

@@ -33,7 +33,7 @@ export default function NewsletterSignup() {
             <p className="gold">{tn('success')}</p>
           ) : (
             <form className="field" onSubmit={submit}>
-              <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, overflow: 'hidden' }}>
+              <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}>
                 <label>Company<input type="text" tabIndex={-1} autoComplete="off" value={company} onChange={(e) => setCompany(e.target.value)} /></label>
               </div>
               <input type="email" required placeholder={tn('placeholder')} value={email}
