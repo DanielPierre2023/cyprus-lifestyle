@@ -51,7 +51,9 @@ const CORS = {
 // ── models & budgets ─────────────────────────────────────────────────────────
 // Model IDs are read from Supabase secrets so the exact ID your account supports
 // can be set/changed in the dashboard WITHOUT redeploying code. Defaults below.
-const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
+// gemini-2.5-flash was retired ("no longer available"). Use the auto-tracking
+// alias so a retired snapshot can't 404 the pipeline again; overridable via secret.
+const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-flash-latest";
 const SONNET_MODEL = Deno.env.get("SONNET_MODEL") || "claude-sonnet-5";
 // If the primary Sonnet ID is not served by this key (your usage showed
 // claude-sonnet-5 = 0 requests while Sonnet 4.x served fine), the writer
@@ -1191,30 +1193,51 @@ async function callGemini(
   fn = "gemini",
 ): Promise<{ text: string; error?: string }> {
   const apiKey = Deno.env.get("GEMINI_API_KEY");
-  if (!apiKey) return { text: "", error: "GEMINI_API_KEY not set" };
-  try {
-    const res = await fetchWithRetry(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: system }] },
-          contents: [{ role: "user", parts: [{ text: user }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: maxTokens },
-        }),
-      },
-      "gemini",
-    );
-    const raw = await res.text();
-    if (!res.ok) return { text: "", error: `Gemini ${res.status}: ${raw.substring(0, 200)}` };
-    const data = JSON.parse(raw);
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    logSpend("gemini", GEMINI_MODEL, fn, system.length + user.length, text.length);
-    return { text };
-  } catch (e) {
-    return { text: "", error: `Gemini: ${(e as Error).message}` };
+  let geminiErr = "";
+  if (apiKey) {
+    try {
+      const res = await fetchWithRetry(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: system }] },
+            contents: [{ role: "user", parts: [{ text: user }] }],
+            generationConfig: { temperature: 0.4, maxOutputTokens: maxTokens },
+          }),
+        },
+        "gemini",
+      );
+      const raw = await res.text();
+      if (res.ok) {
+        const data = JSON.parse(raw);
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        if (text) {
+          logSpend("gemini", GEMINI_MODEL, fn, system.length + user.length, text.length);
+          return { text };
+        }
+        geminiErr = "empty";
+      } else {
+        geminiErr = `${res.status}: ${raw.substring(0, 160)}`;
+      }
+    } catch (e) {
+      geminiErr = (e as Error).message;
+    }
+  } else {
+    geminiErr = "GEMINI_API_KEY not set";
   }
+  // Resilience: if Gemini is unavailable (retired model, outage, quota, bad key),
+  // Claude does the same task so Desk 1 / the visual brief never dies. The prompt
+  // already specifies the exact output format, which Claude follows. This is the
+  // enterprise guarantee: no single provider outage can break article generation.
+  console.warn(`[${fn}] Gemini failed (${geminiErr.substring(0, 120)}) — Claude fallback`);
+  const c = await callSonnetForRevision(system, user, Math.min(maxTokens, 8000));
+  if (c.text) return { text: c.text };
+  return {
+    text: "",
+    error: `Gemini(${geminiErr.substring(0, 80)}) + Claude(${(c.error || "empty").substring(0, 80)})`,
+  };
 }
 async function callGPT4o(
   system: string,
@@ -1250,7 +1273,7 @@ async function callSonnet(
   system: string,
   user: string,
   maxTokens = 4096,
-  temperature = 0.6,
+  _temperature = 0.6, // deprecated on newer Claude models (sonnet-5/opus-5) — NOT sent
   jsonSchema?: Record<string, unknown>,
   fn = "sonnet",
   model = SONNET_MODEL,
@@ -1259,10 +1282,12 @@ async function callSonnet(
   if (!apiKey) return { text: "", error: "CLAUDE_API_KEY not set" };
   try {
     const useStructured = !!jsonSchema;
+    // NOTE: `temperature` is intentionally omitted. claude-sonnet-5 / claude-opus-5
+    // return HTTP 400 ("`temperature` is deprecated for this model") if it is sent,
+    // which was failing every composition. The model default is used instead.
     const body: Record<string, unknown> = {
       model,
       max_tokens: maxTokens,
-      temperature,
       system,
       messages: useStructured
         ? [{ role: "user", content: user }]
@@ -1408,20 +1433,49 @@ async function runSelfTest(): Promise<Record<string, unknown>> {
   };
 
   const [primary, fallback] = await Promise.all([testClaude(SONNET_MODEL), testClaude(OPUS_MODEL)]);
-  const gem = await callGemini("You are a connectivity test.", "Return the word OK.", 16, "selftest");
-  const geminiOk = !gem.error && (gem.text || "").trim().length > 0;
+
+  // Raw Gemini health (Desk 1 fact-extraction). Tested directly — NOT through
+  // callGemini — so we see Gemini's TRUE status, since Desk 1 now falls back to
+  // Claude if Gemini is down.
+  let geminiStatus = "";
+  const gkey = Deno.env.get("GEMINI_API_KEY");
+  if (!gkey) geminiStatus = "FAIL: GEMINI_API_KEY not set";
+  else {
+    try {
+      const gr = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${gkey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: "Return the word OK." }] }],
+            generationConfig: { maxOutputTokens: 16 },
+          }),
+        },
+      );
+      const rawg = await gr.text();
+      geminiStatus = gr.ok ? `ok (${GEMINI_MODEL})` : `FAIL: ${gr.status} ${rawg.substring(0, 120)}`;
+    } catch (e) {
+      geminiStatus = `FAIL: ${(e as Error).message}`;
+    }
+  }
+  const geminiOk = geminiStatus.startsWith("ok");
   const writerOk = primary.usable || fallback.usable;
 
   return {
-    ok: writerOk && geminiOk,
+    // Pipeline is OK as long as a writer works — Desk 1 falls back to Claude if
+    // Gemini is down, so a dead Gemini alone no longer blocks generation.
+    ok: writerOk,
     verdict: !writerOk
       ? "NO writer model works — articles cannot be composed. See writer errors below."
       : primary.usable
-      ? `Primary writer ${SONNET_MODEL} works — prose quality will be full.`
-      : `Primary ${SONNET_MODEL} is DOWN; higher-quality fallback ${OPUS_MODEL} works, so articles still compose.`,
+      ? `Primary writer ${SONNET_MODEL} works — prose quality will be full.${
+        geminiOk ? "" : " (Gemini is down; Desk 1 will use Claude.)"
+      }`
+      : `Primary ${SONNET_MODEL} is DOWN; fallback ${OPUS_MODEL} works, so articles still compose.`,
     writer_primary: primary,
     writer_fallback: fallback,
-    gemini: geminiOk ? "ok" : `FAIL: ${(gem.error || "empty").substring(0, 160)}`,
+    gemini: geminiOk ? geminiStatus : `${geminiStatus.substring(0, 160)}  (Desk 1 will fall back to Claude)`,
     secrets_present: {
       CLAUDE_API_KEY: !!Deno.env.get("CLAUDE_API_KEY"),
       GEMINI_API_KEY: !!Deno.env.get("GEMINI_API_KEY"),
@@ -1450,9 +1504,9 @@ async function callSonnetForRevision(
           "content-type": "application/json",
         },
         body: JSON.stringify({
+          // `temperature` omitted — deprecated on sonnet-5/opus-5 (returns 400).
           model,
           max_tokens: maxTokens,
-          temperature: 0.55,
           system,
           messages: [{ role: "user", content: user }],
         }),
@@ -1460,7 +1514,9 @@ async function callSonnetForRevision(
       });
       clearTimeout(timer);
       const raw = await res.text();
-      if (!res.ok) return { text: "", error: `Sonnet revision ${res.status} (${model})` };
+      if (!res.ok) {
+        return { text: "", error: `Sonnet revision ${res.status} (${model}): ${raw.substring(0, 120)}` };
+      }
       const data = JSON.parse(raw);
       const text = data?.content?.[0]?.text || "";
       logSpend("anthropic", model, "humanness", system.length + user.length, text.length);
