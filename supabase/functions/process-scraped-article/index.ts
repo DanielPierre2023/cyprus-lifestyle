@@ -87,6 +87,13 @@ const CALL_TIMEOUT_MS = 90000; // structured-output composition of a full articl
 const TOTAL_SOFT_LIMIT_MS = 180000;
 const BATCH_MAX = 3;
 
+// Optional instant-publish ISR: when the desk AUTO-publishes, ping the site so the
+// reader pages refresh immediately. Both must be set or the ping is skipped; it is
+// always best-effort and never affects generation. (Manual publishes from the admin
+// editor revalidate themselves via /api/admin/revalidate.)
+const SITE_URL = (Deno.env.get("SITE_URL") || "").replace(/\/+$/, "");
+const REVALIDATE_SECRET = Deno.env.get("REVALIDATE_SECRET") || "";
+
 // ── taxonomy (Cyprus) ────────────────────────────────────────────────────────
 type Lang = "en" | "el" | "ro" | "ar";
 const LANGS: Lang[] = ["en", "el", "ro", "ar"];
@@ -1014,6 +1021,19 @@ function toHtml(text: string): string {
     `<p>${p.replace(/\n+/g, " ")}</p>`
   ).join("\n");
 }
+// Paragraph texts from HTML block structure. stripTags() collapses newlines to
+// spaces, so paragraph-level checks must split on the block tags FIRST, before
+// the text is flattened. Falls back to blank-line splitting for tagless input.
+function htmlParagraphs(html: string): string[] {
+  const h = html || "";
+  const byTag = h.split(/<\/(?:p|h2|h3|h4|blockquote|li|ul|ol)>/i)
+    .map((p) => stripTags(p).trim()).filter((p) => p.length > 0);
+  if (byTag.length >= 2) return byTag;
+  const byBlank = h.split(/\n\s*\n/).map((p) => stripTags(p).trim()).filter((p) => p.length > 0);
+  if (byBlank.length >= 2) return byBlank;
+  const flat = stripTags(h);
+  return flat ? [flat] : [];
+}
 
 // AI-tell / humanness scorer (multi-language)
 interface HumannessReport {
@@ -1022,6 +1042,7 @@ interface HumannessReport {
 }
 function measureHumanness(html: string, lang: Lang): HumannessReport {
   const text = stripTags(html || "");
+  const paraTexts = htmlParagraphs(html || "");
   const flags: string[] = [];
   let score = 100;
   const sentences = text.replace(/\n+/g, " ").split(/(?<=[.!?؟])\s+/).filter((s) => s.length > 5);
@@ -1043,7 +1064,7 @@ function measureHumanness(html: string, lang: Lang): HumannessReport {
     flags.push("UNIFORM_LENGTHS");
     score -= 15;
   }
-  const paras = text.split(/\n\n+/).filter((p) => p.trim().length > 20);
+  const paras = paraTexts.filter((p) => p.trim().length > 20);
   if (paras.length > 2) {
     const pl = paras.map((p) => p.split(/\s+/).length);
     const pm = pl.reduce((a, b) => a + b, 0) / pl.length;
@@ -1059,7 +1080,7 @@ function measureHumanness(html: string, lang: Lang): HumannessReport {
         /,\s+(?:[a-zăâîșț]+\s+){0,3}(?:oferind|subliniind|evidențiind|marcând|demonstrând|permițând|asigurând|reflectând|consolidând)\b/gi,
       ) || []).length
       : (text.match(/,\s+(?:\w+\s+){0,3}\w+ing\b[^.!?]*[.!?]/g) || []).length;
-    const paraN = text.split(/\n\n+/).filter((p) => p.trim().length > 40).length || 1;
+    const paraN = paraTexts.filter((p) => p.trim().length > 40).length || 1;
     if (partic >= 2 && partic / paraN > 0.34) {
       flags.push(`PARTICIPIAL_CLOSERS:${partic}`);
       score -= 15;
@@ -1093,7 +1114,7 @@ function measureHumanness(html: string, lang: Lang): HumannessReport {
     : lang === "el"
     ? ["μένει να φανεί", "το μέλλον θα"]
     : ["يبقى أن نرى", "المستقبل سوف"];
-  const lastParas = text.split(/\n\n+/).slice(-2).join(" ").toLowerCase();
+  const lastParas = paraTexts.slice(-2).join(" ").toLowerCase();
   if (spec.some((p) => lastParas.includes(p))) {
     flags.push("SPECULATIVE_ENDING");
     score -= 15;
@@ -1669,12 +1690,16 @@ async function externalHumanness(html: string): Promise<number | null> {
 }
 
 // Humanness score: the real detector when configured, else the internal heuristic.
+// The external detectors (Originality/GPTZero) are English-trained and give noisy
+// results on Greek/Romanian/Arabic, so they only override the score for English;
+// the other editions use the language-aware internal heuristic. Flags always come
+// from the internal scorer, since they drive the targeted revision prompt.
 async function scoreHumanness(
   html: string,
   lang: Lang,
 ): Promise<{ score: number; flags: string[] }> {
   const internal = measureHumanness(html, lang);
-  const ext = await externalHumanness(html);
+  const ext = lang === "en" ? await externalHumanness(html) : null;
   return { score: ext ?? internal.score, flags: internal.flags };
 }
 
@@ -1725,7 +1750,7 @@ OUTPUT: JSON only, no preamble: {"content_html":"..."}`;
   const parsed = parseJsonSafe(result.text);
   let revised = (parsed?.content_html as string) || (parsed?.content as string) || "";
   if (!revised || revised.length < 100) return html;
-  revised = ensureParagraphs(sanitizeHtml(revised, lang));
+  revised = ensureParagraphs(sanitizeHtml(toHtml(revised), lang));
   const ratio = revised.length / html.length;
   if (ratio < 0.7 || ratio > 1.4) return html;
   return revised;
@@ -1773,7 +1798,7 @@ OUTPUT: JSON only, no preamble: {"content_html":"..."}`;
     const parsed = parseJsonSafe(result.text);
     let revised = (parsed?.content_html as string) || (parsed?.content as string) || "";
     if (!revised || revised.length < 100) break;
-    revised = ensureParagraphs(sanitizeHtml(revised, lang));
+    revised = ensureParagraphs(sanitizeHtml(toHtml(revised), lang));
     const ratio = revised.length / bestHtml.length;
     if (ratio < 0.75 || ratio > 1.3) continue;
     const sc = await scoreHumanness(revised, lang);
@@ -2505,8 +2530,9 @@ async function processOne(
       }
       b.overlap = overlap;
 
-      // Optional REAL plagiarism API as a publish gate (env-gated; advisory unless high).
-      b.plag = remain() > 20000 ? await externalPlagiarism(b.content) : null;
+      // Optional REAL plagiarism API as a publish gate (English only — the API is
+      // English-centric; the deterministic 5-gram overlap above covers every edition).
+      b.plag = (l === "en" && remain() > 20000) ? await externalPlagiarism(b.content) : null;
 
       // Refuse the edition if it still borrows too much wording, or the API flags it.
       const plagFail = overlap > OVERLAP_MAX || (b.plag !== null && b.plag > 0.15);
@@ -2663,6 +2689,21 @@ async function processOne(
     });
     if (rpcErr || !rpc) throw new Error(`commit_scraper_blog_post RPC failed: ${rpcErr?.message || "no id"}`);
     const postId = rpc as string;
+    // Optional instant-publish ISR: when the desk auto-publishes, refresh the reader
+    // pages immediately. Best-effort — a failed ping never fails the article; the
+    // time-based window still catches up. Manual admin publishes revalidate via the
+    // admin route instead.
+    if (publishNow && SITE_URL && REVALIDATE_SECRET) {
+      try {
+        await fetch(`${SITE_URL}/api/revalidate`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-revalidate-secret": REVALIDATE_SECRET },
+          body: JSON.stringify({ slug, category }),
+        });
+      } catch (e) {
+        console.warn(`[writer] revalidate ping failed: ${(e as Error).message}`);
+      }
+    }
     const providers =
       `en=${byLang.en.provider} el=${byLang.el.provider} ro=${byLang.ro.provider} ar=${byLang.ar.provider}`;
     // If every edition wrote via gpt4o, Sonnet is not running — the article will
@@ -2793,6 +2834,34 @@ async function requireAdmin(req: Request): Promise<Response | null> {
   }
 }
 
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...CORS, "Content-Type": "application/json" },
+  });
+}
+// Supabase Edge Runtime exposes EdgeRuntime.waitUntil for background work that
+// outlives the HTTP response — used so a caller with a short timeout (the Vercel
+// cron, 60s) can trigger a ~3-min batch and get an immediate ACK while Supabase
+// runs it to completion. Typed loosely so it also compiles/runs where absent.
+const EDGE_BG = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
+async function dispatchOrRun(
+  wantBackground: boolean,
+  label: string,
+  worker: () => Promise<Record<string, unknown>>,
+): Promise<Response> {
+  if (wantBackground && EDGE_BG?.waitUntil) {
+    EDGE_BG.waitUntil(
+      worker().then(
+        (r) => console.log(`[bg:${label}] done ${JSON.stringify(r).slice(0, 160)}`),
+        (e) => console.error(`[bg:${label}] failed: ${(e as Error).message}`),
+      ),
+    );
+    return jsonResponse({ ok: true, dispatched: true });
+  }
+  return jsonResponse(await worker());
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   const denied = await requireAdmin(req);
@@ -2804,7 +2873,9 @@ serve(async (req: Request) => {
       auto_publish?: boolean;
       action?: string;
       selftest?: boolean;
+      background?: boolean;
     };
+    const wantBackground = body.background === true;
 
     // Diagnostic: which models does this key actually serve? No DB writes.
     if (body.action === "selftest" || body.selftest === true) {
@@ -2835,50 +2906,55 @@ serve(async (req: Request) => {
           headers: { ...CORS, "Content-Type": "application/json" },
         });
       }
-      const out = await processOne(supabase, data as ScrapedRow, body.auto_publish === true);
       // Always 200 so the reason reaches the browser (supabase.functions.invoke
       // hides the body on a non-2xx status). The admin UI reads out.ok/out.reason.
-      return new Response(JSON.stringify(out), {
-        status: 200,
-        headers: { ...CORS, "Content-Type": "application/json" },
-      });
+      // background:true (a drainer firing one article) gets an immediate ACK.
+      return await dispatchOrRun(
+        wantBackground,
+        `one:${body.scraped_article_id}`,
+        () => processOne(supabase, data as ScrapedRow, body.auto_publish === true),
+      );
     }
     if (fromCron && !s?.processor_enabled) {
-      return new Response(JSON.stringify({ ok: true, skipped: "processor_disabled" }), {
-        headers: { ...CORS, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ ok: true, skipped: "processor_disabled" });
     }
 
+    // Batch / drain mode. The Vercel cron calls this with { source:"cron",
+    // background:true }: it ACKs at once and the batch runs to completion on
+    // Supabase (full runtime + all quality gates), instead of the old, weaker
+    // translate-based Vercel pipeline. auto_publish + enabled come from settings.
     const autoPublish = (s?.auto_publish === true) && (fromCron || body.auto_publish === true);
-    const { data: rows } = await supabase.from("scraped_articles").select(
-      "id, original_title, original_url, original_content, original_content_full, category, scope, source_word_count, status",
-    ).eq("status", "scraped").eq("is_used", false).order("created_at", { ascending: true }).limit(BATCH_MAX);
-    const list = (rows || []) as ScrapedRow[];
-    const results: Array<
-      {
-        id: string;
-        ok: boolean;
-        reason?: string;
-        post_id?: string;
-        providers?: string;
-        quality_warning?: string;
+    const runBatch = async (): Promise<Record<string, unknown>> => {
+      const { data: rows } = await supabase.from("scraped_articles").select(
+        "id, original_title, original_url, original_content, original_content_full, category, scope, source_word_count, status",
+      ).eq("status", "scraped").eq("is_used", false).order("created_at", { ascending: true }).limit(
+        BATCH_MAX,
+      );
+      const list = (rows || []) as ScrapedRow[];
+      const results: Array<
+        {
+          id: string;
+          ok: boolean;
+          reason?: string;
+          post_id?: string;
+          providers?: string;
+          quality_warning?: string;
+        }
+      > = [];
+      const start = Date.now();
+      for (const r of list) {
+        if (Date.now() - start > TOTAL_SOFT_LIMIT_MS - 30000) break;
+        const out = await processOne(supabase, r, autoPublish);
+        results.push({ id: r.id, ...out });
       }
-    > = [];
-    const start = Date.now();
-    for (const r of list) {
-      if (Date.now() - start > TOTAL_SOFT_LIMIT_MS - 30000) break;
-      const out = await processOne(supabase, r, autoPublish);
-      results.push({ id: r.id, ...out });
-    }
-    return new Response(
-      JSON.stringify({
+      return {
         ok: true,
         processed: results.length,
         published: results.filter((r) => r.ok).length,
         results,
-      }),
-      { headers: { ...CORS, "Content-Type": "application/json" } },
-    );
+      };
+    };
+    return await dispatchOrRun(wantBackground, "batch", runBatch);
   } catch (e) {
     return new Response(JSON.stringify({ ok: false, error: (e as Error).message }), {
       status: 500,
