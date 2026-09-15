@@ -1180,16 +1180,48 @@ function adminClient(): SupaClient {
   }
   return _admin;
 }
+// USD per 1,000,000 tokens. MUST stay keyed to the model IDs actually used above.
+// Verified Sept 2026 against docs.claude.com and ai.google.dev. Standard rates
+// (no Fast mode, which for opus-5 / opus-4-8 would be $10 / $50).
 const PRICE: Record<string, { in: number; out: number }> = {
-  "gemini-2.5-flash": { in: 0.3, out: 2.5 },
-  "gpt-4o": { in: 2.5, out: 10 },
+  // Anthropic
+  "claude-sonnet-5": { in: 2, out: 10 },
+  "claude-opus-5": { in: 5, out: 25 },
+  "claude-opus-4-8": { in: 5, out: 25 },
   "claude-sonnet-4-6": { in: 3, out: 15 },
+  "claude-sonnet-4-5": { in: 3, out: 15 },
+  "claude-haiku-4-5": { in: 1, out: 5 },
+  // OpenAI
+  "gpt-4o": { in: 2.5, out: 10 },
+  // Google — gemini-flash-latest resolves to the current standard Flash.
+  "gemini-flash-latest": { in: 0.75, out: 3.75 },
+  "gemini-2.5-flash": { in: 0.3, out: 2.5 },
 };
-async function logSpend(provider: string, model: string, fn: string, inChars: number, outChars: number) {
+// Unknown model: assume the most expensive writer we run, so a mispriced model is
+// over-reported, never silently understated.
+const DEFAULT_PRICE = { in: 5, out: 25 };
+
+// Admin surcharge added on top of the raw provider cost of every logged call —
+// the admin cost for the provided LLM. Default 25% (multiplier 1.25); change the
+// percentage via the ADMIN_MARKUP_PCT secret. base_usd (pre-markup) is kept in
+// meta so the raw provider cost is always auditable.
+const ADMIN_MARKUP_PCT = Number(Deno.env.get("ADMIN_MARKUP_PCT") || "25");
+const COST_MULTIPLIER = 1 + (ADMIN_MARKUP_PCT / 100);
+
+// Chars→tokens fallback for the rare response that omits a usage block. Inflated
+// ~30% for the Claude 4.7+ tokenizer and non-Latin scripts (EL/AR), so an
+// estimate errs high rather than under-reporting. Real usage is preferred always.
+function estTok(chars: number): number {
+  return Math.ceil((chars / 4) * 1.3);
+}
+
+// inTok/outTok are ACTUAL token counts from the provider's usage block (captures
+// reasoning/thinking output tokens too), not character estimates.
+async function logSpend(provider: string, model: string, fn: string, inTok: number, outTok: number) {
   try {
-    const p = PRICE[model] ?? { in: 2, out: 8 };
-    const inTok = Math.ceil(inChars / 4), outTok = Math.ceil(outChars / 4);
-    const usd = +(((inTok * p.in) + (outTok * p.out)) / 1_000_000).toFixed(6);
+    const p = PRICE[model] ?? DEFAULT_PRICE;
+    const base = ((inTok * p.in) + (outTok * p.out)) / 1_000_000;
+    const usd = +(base * COST_MULTIPLIER).toFixed(6); // raw provider cost + admin markup
     await adminClient().from("ai_spend_log").insert({
       provider,
       model,
@@ -1198,7 +1230,13 @@ async function logSpend(provider: string, model: string, fn: string, inChars: nu
       unit_kind: "tokens",
       usd,
       caller: "process-scraped-article",
-      meta: {},
+      meta: {
+        in_tokens: inTok,
+        out_tokens: outTok,
+        priced: PRICE[model] ? "table" : "default",
+        base_usd: +base.toFixed(6),
+        admin_markup_pct: ADMIN_MARKUP_PCT,
+      },
     });
   } catch { /* telemetry */ }
 }
@@ -1293,7 +1331,12 @@ async function callGemini(
         const data = JSON.parse(raw);
         const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
         if (text) {
-          logSpend("gemini", GEMINI_MODEL, fn, system.length + user.length, text.length);
+          const um = data?.usageMetadata ?? {};
+          const inTok = um.promptTokenCount ?? estTok(system.length + user.length);
+          const outTok = um.candidatesTokenCount != null
+            ? um.candidatesTokenCount + (um.thoughtsTokenCount ?? 0)
+            : estTok(text.length);
+          logSpend("gemini", GEMINI_MODEL, fn, inTok, outTok);
           return { text };
         }
         geminiErr = "empty";
@@ -1342,7 +1385,13 @@ async function callGPT4o(
     if (!res.ok) return { text: "", error: `GPT-4o ${res.status}: ${raw.substring(0, 200)}` };
     const data = JSON.parse(raw);
     const text = data.choices?.[0]?.message?.content || "";
-    logSpend("openai", GPT_MODEL, fn, system.length + user.length, text.length);
+    logSpend(
+      "openai",
+      GPT_MODEL,
+      fn,
+      data?.usage?.prompt_tokens ?? estTok(system.length + user.length),
+      data?.usage?.completion_tokens ?? estTok(text.length),
+    );
     return { text };
   } catch (e) {
     return { text: "", error: `GPT-4o: ${(e as Error).message}` };
@@ -1390,7 +1439,13 @@ async function callSonnet(
         .map((b: { type?: string }) => b?.type || "?").join(",") || "none";
       return { text: "", error: `empty (stop=${data?.stop_reason ?? "?"}; blocks=[${types}])` };
     }
-    logSpend("anthropic", model, fn, system.length + user.length, cont.length);
+    logSpend(
+      "anthropic",
+      model,
+      fn,
+      data?.usage?.input_tokens ?? estTok(system.length + user.length),
+      data?.usage?.output_tokens ?? estTok(cont.length),
+    );
     return { text: cont };
   } catch (e) {
     return { text: "", error: `Sonnet (${model}): ${(e as Error).message}` };
@@ -1593,7 +1648,13 @@ async function callSonnetForRevision(
       }
       const data = JSON.parse(raw);
       const text = extractText(data); // all text blocks (skip any leading reasoning block)
-      logSpend("anthropic", model, "humanness", system.length + user.length, text.length);
+      logSpend(
+        "anthropic",
+        model,
+        "humanness",
+        data?.usage?.input_tokens ?? estTok(system.length + user.length),
+        data?.usage?.output_tokens ?? estTok(text.length),
+      );
       return { text };
     } catch (e) {
       return { text: "", error: `Sonnet revision (${model}): ${(e as Error).message}` };
