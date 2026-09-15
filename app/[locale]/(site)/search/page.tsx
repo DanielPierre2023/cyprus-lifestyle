@@ -40,7 +40,7 @@ export default async function SearchPage(
       <div className="wrap dept">
         <span className="kicker">{t('brand.name')}</span>
         <h1>{t('nav.search')}</h1>
-        <form className="searchbox row" method="get" role="search" style={{ gap: 8, margin: '10px 0 0', maxWidth: 560 }}>
+        <form className="searchbox" method="get" role="search">
           <input
             type="search"
             name="q"
@@ -49,7 +49,7 @@ export default async function SearchPage(
             aria-label={t('search.placeholder')}
             style={{ flex: '1 1 auto' }}
           />
-          <button type="submit" className="abtn gold">{t('search.button')}</button>
+          <button type="submit" className="btn">{t('search.button')}</button>
         </form>
         <div className="rule-orn orn"><span className="diamond" /></div>
       </div>

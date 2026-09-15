@@ -18,6 +18,14 @@
   --line: #e3d9c4;
   --line-dark: #2a2e35;
 
+  /* Directory category accents (match DirectoryMap TYPE_COLORS). */
+  --dir-restaurant: #C0492E;
+  --dir-winery: #7B2D42;
+  --dir-hotel: #1F6F78;
+  --dir-beach: #2F86C4;
+  --dir-development: #8A6D3B;
+  --dir-vendor: #4E7A46;
+
   --sans: var(--font-jost), "Jost", "Futura", system-ui, sans-serif;
   --disp: var(--font-bodoni), "Bodoni Moda", "Didot", Georgia, serif;
   --body: var(--font-lora), "Lora", Georgia, "Times New Roman", serif;
@@ -237,7 +245,7 @@ html[lang="ar"] .article .prose p:first-of-type::first-letter { font-size: inher
 .field input { flex: 1; padding: 15px 18px; border: none; background: transparent; color: var(--ivory); font-family: var(--body); font-size: 16px; }
 .field input::placeholder { color: #9a927f; }
 .field .btn { border: none; }
-.btn { font-family: var(--sans); text-transform: uppercase; letter-spacing: .16em; font-size: 12px; font-weight: 600; background: var(--gold); color: var(--obsidian); border: none; padding: 0 24px; cursor: pointer; display: inline-flex; align-items: center; }
+.btn { font-family: var(--sans); text-transform: uppercase; letter-spacing: .16em; font-size: 12px; font-weight: 600; background: var(--gold); color: var(--obsidian); border: none; padding: 12px 24px; cursor: pointer; display: inline-flex; align-items: center; text-decoration: none; }
 .field .btn { padding: 0 24px; }
 .btn:hover { background: var(--champagne); }
 .btn.ghost { background: transparent; color: var(--gold); border: 1px solid var(--gold); padding: 12px 22px; }
@@ -301,3 +309,26 @@ html[lang="ar"] .article .prose p:first-of-type::first-letter { font-size: inher
 @media (max-width: 520px) {
   .foot .top { grid-template-columns: 1fr; }
 }
+
+/* ── Directory: category chips + grouped sections ──────────────────────────── */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+.chip { font-family: var(--sans); text-transform: uppercase; letter-spacing: .14em; font-size: 11px; font-weight: 600;
+  color: var(--gold-deep); border: 1px solid var(--line); background: #fff; padding: 7px 13px; border-radius: 2px;
+  display: inline-flex; align-items: center; gap: 6px; transition: border-color .2s, color .2s, background .2s; }
+.chip:hover { border-color: var(--gold); color: var(--obsidian); background: var(--paper-2); }
+.chip .chip-n { font-size: 10px; color: var(--ink-soft); font-weight: 400; }
+
+.dir-group { scroll-margin-top: 90px; }
+.dir-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+  border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 18px; }
+.dir-group-head h2 { font-family: var(--disp); font-size: 26px; margin: 0; display: flex; align-items: center; gap: 10px; }
+.dir-group-head h2 .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
+.dir-group-head .see-all { font-family: var(--sans); text-transform: uppercase; letter-spacing: .14em; font-size: 11px;
+  font-weight: 600; color: var(--gold-deep); white-space: nowrap; }
+.dir-group-head .see-all:hover { color: var(--obsidian); }
+
+/* ── Search box ────────────────────────────────────────────────────────────── */
+.searchbox { display: flex; gap: 8px; align-items: stretch; max-width: 560px; margin: 12px auto 0; }
+.searchbox input { flex: 1 1 auto; font-family: var(--body); font-size: 16px; padding: 12px 14px; border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 2px; }
+.searchbox input:focus { outline: none; border-color: var(--gold); }
+.searchbox .btn { flex: 0 0 auto; }

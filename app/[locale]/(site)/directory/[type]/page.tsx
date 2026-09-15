@@ -30,7 +30,7 @@ export default async function DirectoryType({ params }: { params: Promise<{ loca
   const listings = await getListings(l, type);
   const label = t(`directory.${type}`);
   const points = listings.filter((x) => x.lat != null && x.lng != null)
-    .map((x) => ({ lat: x.lat as number, lng: x.lng as number, name: x.name, href: `/${l}/directory/${x.type}/${x.slug}` }));
+    .map((x) => ({ lat: x.lat as number, lng: x.lng as number, name: x.name, type: x.type, href: `/${l}/directory/${x.type}/${x.slug}` }));
   const crumbLd = breadcrumbJsonLd(l, [
     { name: t('brand.name'), path: '/' },
     { name: t('directory.title'), path: '/directory' },
@@ -47,7 +47,7 @@ export default async function DirectoryType({ params }: { params: Promise<{ loca
         <div className="rule-orn orn"><span className="diamond" /></div>
       </div>
 
-      {points.length ? <div className="wrap section"><DirectoryMap points={points} /></div> : null}
+      {points.length ? <div className="wrap section"><DirectoryMap points={points} locale={l} /></div> : null}
 
       <div className="wrap section">
         {listings.length ? (

@@ -41,7 +41,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
     { name: label, path: `/directory/${x.type}` },
     { name: x.name, path: `/directory/${x.type}/${x.slug}` },
   ]);
-  const points = (x.lat != null && x.lng != null) ? [{ lat: x.lat, lng: x.lng, name: x.name }] : [];
+  const points = (x.lat != null && x.lng != null) ? [{ lat: x.lat, lng: x.lng, name: x.name, type: x.type }] : [];
 
   return (
     <>
@@ -59,13 +59,13 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
           </div>
           {x.url ? (
             <p style={{ marginTop: 10 }}>
-              <a className="abtn gold" href={x.url} target="_blank" rel="noopener nofollow">{t('directory.visit')}</a>
+              <a className="btn" href={x.url} target="_blank" rel="noopener nofollow">{t('directory.visit')}</a>
             </p>
           ) : null}
           <div className="rule-orn orn"><span className="diamond" /></div>
         </div>
 
-        {points.length ? <DirectoryMap points={points} height={320} /> : null}
+        {points.length ? <DirectoryMap points={points} height={320} locale={l} /> : null}
       </div>
     </>
   );
