@@ -93,7 +93,9 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
 
           {a.tags?.length ? (
             <div className="tags">
-              {a.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}
+              {a.tags.map((tag) => (
+                <Link className="tag" key={tag} href={`/search?q=${encodeURIComponent(tag)}`}>{tag}</Link>
+              ))}
             </div>
           ) : null}
 

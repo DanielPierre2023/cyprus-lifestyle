@@ -40,9 +40,7 @@ export default function Header() {
                   className={l === locale ? 'active' : ''}>{langLabel(l)}</Link>
               ))}
             </div>
-            <Link className="sub" href="/directory">{t('directory')}</Link>
-            <Link className="sub hide" href="/search" aria-label={t('search')}>{t('search')}</Link>
-            <Link className="sub" href="/membership">{t('membership')}</Link>
+            <Link className="sub" href="/search" aria-label={t('search')}>{t('search')}</Link>
             <Link className="sub" href="/#letter">{th('subscribe')}</Link>
           </div>
         </div>
