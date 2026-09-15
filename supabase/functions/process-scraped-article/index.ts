@@ -66,7 +66,22 @@ const GPT_MODEL = Deno.env.get("GPT_MODEL") || "gpt-4o";
 // GPT-4o writes flat prose, so it is OFF by default: the writer is Claude-only.
 // Set the secret USE_GPT_FALLBACK="true" to re-enable it as a last resort.
 const USE_GPT_FALLBACK = (Deno.env.get("USE_GPT_FALLBACK") || "false").toLowerCase() === "true";
-const CALL_TIMEOUT_MS = 45000; // per-call abort (matches TT; a prefill retry can follow)
+
+// P1 — quality gates. Tunable via secrets; sensible defaults baked in.
+const HUMANNESS_TARGET = Number(Deno.env.get("HUMANNESS_TARGET") || "82"); // loop until >= this
+// 2 passes keeps four parallel editions safely under the edge wall-clock kill;
+// raise via secret only if your Supabase tier allows longer function runs.
+const HUMANNESS_MAX_PASSES = Number(Deno.env.get("HUMANNESS_MAX_PASSES") || "2");
+const OVERLAP_MAX = Number(Deno.env.get("OVERLAP_MAX") || "0.12"); // reject an edition above this
+// Optional REAL detectors — OFF unless the matching secret is set (then they gate).
+// AI_DETECTOR: "originality" | "gptzero". Endpoints/response shapes are wrapped in
+// try/catch and return null on any mismatch, so a wrong plan/shape simply falls
+// back to the internal heuristic — it can never break generation.
+const AI_DETECTOR = (Deno.env.get("AI_DETECTOR") || "").toLowerCase();
+const AI_DETECTOR_KEY = Deno.env.get("AI_DETECTOR_API_KEY") || "";
+const PLAGIARISM_API_KEY = Deno.env.get("PLAGIARISM_API_KEY") || "";
+
+const CALL_TIMEOUT_MS = 90000; // structured-output composition of a full article can be slow
 // Kept UNDER Supabase's ~200s edge-function wall-clock kill (TT documents this).
 // The four editions compose in parallel, so wall-clock ≈ one edition's time, not 4×.
 const TOTAL_SOFT_LIMIT_MS = 180000;
@@ -495,9 +510,18 @@ function scrubLexicon(s: string, lang: Lang): string {
   r = dropFillers(r, lang);
   return r.replace(/[ \t]{2,}/g, " ").replace(/\s+،/g, "،").replace(/\s+,/g, ",").replace(/,\s*,/g, ",");
 }
+// P0-3 proof backstop: collapse an accidental immediate word repetition
+// ("shows shows" -> "shows"). Latin-script only and 4+ letters, so it spares
+// rare legitimate short doublings ("had had") and is a safe no-op on Greek /
+// Arabic text (which the model self-proofs via PROOF_CRAFT).
+const _DUP_L = "A-Za-zÀ-ɏ";
+const _DUP_RE = new RegExp(`(^|[^${_DUP_L}])([${_DUP_L}]{4,})(\\s+)\\2(?![${_DUP_L}])`, "gi");
+function dedupeAdjacentWords(s: string): string {
+  return s ? s.replace(_DUP_RE, "$1$2") : s;
+}
 function humanizeText(s: string, lang: Lang): string {
   if (!s) return s;
-  return scrubLexicon(stripDashes(s, lang), lang).trim();
+  return dedupeAdjacentWords(scrubLexicon(stripDashes(s, lang), lang)).trim();
 }
 // HTML-preserving: transform ONLY text nodes, never tags/attributes.
 function humanizeHtml(html: string, lang: Lang): string {
@@ -508,7 +532,7 @@ function humanizeHtml(html: string, lang: Lang): string {
     let core = seg.slice(lead.length, seg.length - trail.length);
     if (!core) return seg;
     if (/[\p{Lu}]{4,}/u.test(core)) core = deShoutTitle(core);
-    core = scrubLexicon(stripDashes(core, lang), lang);
+    core = dedupeAdjacentWords(scrubLexicon(stripDashes(core, lang), lang));
     return lead + core + trail;
   }).join("");
 }
@@ -571,6 +595,23 @@ const FIRST_PERSON_BAN =
 function voiceAllowsFirstPerson(t: string): boolean {
   return t === "editorial" || t === "opinion" || t === "opinie";
 }
+
+// P0-2 — CROSS-EDITION FACT LOCK. Stops one language edition (e.g. Greek) adding
+// a real-world-true name the others don't have (the "Coach/Celine" drift).
+const CONSISTENCY_LOCK =
+  `CROSS-EDITION FACT LOCK — every language edition must carry the SAME facts, no more, no fewer. Every named person, company, brand, product, place, title, date and number in your article MUST already appear in the EXTRACTED FACTS below. If a name or figure is not in the facts, DO NOT write it — not even if you are certain it is true in the real world (do not "helpfully" add the brand behind a designer, the company behind a person, or a figure from memory). A reader comparing the English and non-English editions must find identical facts.`;
+
+// P0-1 — DEPTH earned from the facts (never padding; anti-fabrication still wins).
+const DEPTH_CRAFT =
+  `DEPTH — use EVERY fact in the telegrams; leave none unused. Give each its context (who exactly, how much, compared to what, over what period, why it matters to this reader). Include at least one sentence of genuine analysis the facts support — what the evidence signals or what changes next — framed as reading the evidence, never as unsourced speculation. Always prefer the named specific (person + title, the place, the object, the exact figure) over the general. If the facts are genuinely thin, write a tight, complete short piece — a real 250 words beats a padded 600. Never invent to reach a length.`;
+
+// P0-3 — a short self-proof the model runs before returning.
+const PROOF_CRAFT =
+  `FINAL PROOF before you output: reread once and fix accidental duplicated words ("the the", "shows shows"), agreement/tense slips, and any attribution phrase used more than twice. The opening sentence is under 35 words and does not start with a date.`;
+
+// P1-5 — the anti-detector rewrite instruction (used by the humanness loop).
+const PERPLEXITY_CRAFT =
+  `vary sentence length hard (some under 8 words, some over 25; never two similar-length sentences in a row; allow one verbless fragment); vary how each paragraph opens; KEEP the concrete, specific, slightly unexpected details already in the text rather than smoothing them into generic phrasing; use at most one "according to"-type attribution and delete any repeated hedge; remove discourse-marker openers (Moreover / Furthermore / Notably / Indeed / Ultimately and their equivalents in this language); no summary or "raises questions" closer — end on a concrete fact.`;
 
 const CATEGORY_DEPTH: Record<string, string> = {
   cyprus:
@@ -848,14 +889,18 @@ function sanitizeContentEnCore(text: string): string {
 }
 // language-dispatched sanitizers
 function sanitizeHtml(html: string, lang: Lang): string {
-  const s = lang === "en" ? scrubLexicon(sanitizeContentEnCore(html), "en") : humanizeHtml(html, lang);
+  const s = lang === "en"
+    ? dedupeAdjacentWords(scrubLexicon(sanitizeContentEnCore(html), "en"))
+    : humanizeHtml(html, lang);
   return s;
 }
 function sanitizeField(text: string, lang: Lang): string {
   if (text == null) return "";
   if (typeof text !== "string") text = coerceToString(text);
   if (!text) return "";
-  return lang === "en" ? scrubLexicon(sanitizeContentEnCore(text), "en") : humanizeText(text, lang);
+  return lang === "en"
+    ? dedupeAdjacentWords(scrubLexicon(sanitizeContentEnCore(text), "en"))
+    : humanizeText(text, lang);
 }
 function sanitizeTitle(text: string, lang: Lang): string {
   if (text == null) return "";
@@ -1178,6 +1223,12 @@ async function fetchWithRetry(
     } catch (e) {
       clearTimeout(timer);
       lastErr = e as Error;
+      // A timeout (AbortError) means the call was already slow — retrying just
+      // burns another full timeout window, so fail fast and let the caller move
+      // to its next model/method. Only retry genuine transient network errors.
+      if ((e as Error)?.name === "AbortError") {
+        throw new Error(`${label}: timed out after ${CALL_TIMEOUT_MS}ms`);
+      }
       if (attempt < maxRetries) {
         await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
         continue;
@@ -1185,6 +1236,13 @@ async function fetchWithRetry(
     }
   }
   throw lastErr || new Error(`${label}: retries exhausted`);
+}
+// Concatenate all text-type blocks from an Anthropic Messages response. sonnet-5
+// / opus-5 can emit a non-text (reasoning) block first, so content[0].text alone
+// misses the real output and returns "" — the cause of every "empty" compose.
+function extractText(data: { content?: Array<{ type?: string; text?: string }> }): string {
+  const blocks = Array.isArray(data?.content) ? data.content : [];
+  return blocks.filter((b) => b?.type === "text").map((b) => b?.text || "").join("").trim();
 }
 async function callGemini(
   system: string,
@@ -1282,16 +1340,16 @@ async function callSonnet(
   if (!apiKey) return { text: "", error: "CLAUDE_API_KEY not set" };
   try {
     const useStructured = !!jsonSchema;
-    // NOTE: `temperature` is intentionally omitted. claude-sonnet-5 / claude-opus-5
-    // return HTTP 400 ("`temperature` is deprecated for this model") if it is sent,
-    // which was failing every composition. The model default is used instead.
+    // Two modes, both verified against sonnet-5/opus-5 via the self-test:
+    //   • structured (jsonSchema present): output_config enforces valid JSON.
+    //   • plain (no schema): a normal message; the prompt asks for JSON-only and
+    //     parseJsonSafe extracts it. These models reject assistant-message PREFILL
+    //     and the `temperature` field (both 400), so neither is sent.
     const body: Record<string, unknown> = {
       model,
       max_tokens: maxTokens,
       system,
-      messages: useStructured
-        ? [{ role: "user", content: user }]
-        : [{ role: "user", content: user }, { role: "assistant", content: "{" }],
+      messages: [{ role: "user", content: user }],
     };
     if (useStructured) body.output_config = { format: { type: "json_schema", schema: jsonSchema } };
     const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
@@ -1302,11 +1360,19 @@ async function callSonnet(
     const raw = await res.text();
     if (!res.ok) return { text: "", error: `Sonnet ${res.status} (${model}): ${raw.substring(0, 180)}` };
     const data = JSON.parse(raw);
-    const cont = data?.content?.[0]?.text || "";
+    // Read ALL text blocks, not content[0]: sonnet-5 / opus-5 can return a
+    // non-text block FIRST (e.g. a reasoning/thinking block), which left
+    // content[0].text undefined and made every composition come back "empty".
+    const cont = extractText(data);
+    if (!cont) {
+      const types = (Array.isArray(data?.content) ? data.content : [])
+        .map((b: { type?: string }) => b?.type || "?").join(",") || "none";
+      return { text: "", error: `empty (stop=${data?.stop_reason ?? "?"}; blocks=[${types}])` };
+    }
     logSpend("anthropic", model, fn, system.length + user.length, cont.length);
-    return { text: useStructured ? cont : "{" + cont };
+    return { text: cont };
   } catch (e) {
-    return { text: "", error: `Sonnet: ${(e as Error).message}` };
+    return { text: "", error: `Sonnet (${model}): ${(e as Error).message}` };
   }
 }
 async function callPolishModel(
@@ -1319,83 +1385,69 @@ async function callPolishModel(
 ): Promise<
   { text: string; provider: "sonnet" | "opus" | "gpt4o" | null; error?: string; sonnetError?: string }
 > {
-  // Claude-only writer chain (GPT-4o writes flat prose and is OFF by default).
-  // The article is tried THREE ways before giving up, so neither a rejected
-  // output_config nor a single unavailable model can knock it out of the pipeline:
-  //   (1) SONNET_MODEL, structured output — guaranteed-valid JSON where supported;
-  //   (2) SONNET_MODEL, prefill ("{" continuation) — universal, no beta feature;
-  //   (3) OPUS_MODEL, prefill — higher-quality fallback if Sonnet is unavailable.
-  // Both models are long-lived Claude (Sonnet 5 → ~Jun 2027, Opus 5 → ~Jul 2027).
-  // Only if ALL THREE fail is GPT-4o considered, and only when explicitly enabled
-  // via the USE_GPT_FALLBACK secret; otherwise the edition fails loudly (a clean
-  // failure beats flat text).
-  const tryPrefill = async (model: string) => {
-    const r = await callSonnet(system, user, maxTokens, temperature, undefined, label, model);
+  // Claude-only writer chain. sonnet-5/opus-5 accept two JSON methods (self-test
+  // verified): PLAIN (fast — a normal message, JSON parsed from the text) and
+  // STRUCTURED (output_config — guaranteed-valid JSON, but slower for a long
+  // article, which was timing out). So each model is tried PLAIN first (fast
+  // path), then STRUCTURED (safe path for any escaping issue in long HTML), then
+  // the same on the higher-quality Opus. GPT-4o (flat) stays OFF unless
+  // USE_GPT_FALLBACK is set; otherwise a clean, loud failure beats flat text.
+  const attempt = async (model: string, structured: boolean) => {
+    const r = await callSonnet(
+      system,
+      user,
+      maxTokens,
+      temperature,
+      structured ? jsonSchema : undefined,
+      label,
+      model,
+    );
     const ok = !r.error && !!r.text && r.text.length > 50 && !!parseJsonSafe(r.text);
-    return { ok, err: r.error || (r.text ? `json_invalid(${r.text.length})` : "empty"), text: r.text };
+    const mode = structured ? "structured" : "plain";
+    return {
+      ok,
+      text: r.text,
+      err: `${mode}:${r.error || (r.text ? `unparseable(${r.text.length})` : "empty")}`,
+    };
   };
 
-  // (1) primary model, structured output
-  let structuredErr = "";
-  if (jsonSchema) {
-    const s = await callSonnet(system, user, maxTokens, temperature, jsonSchema, label, SONNET_MODEL);
-    if (!s.error && s.text && s.text.length > 50 && parseJsonSafe(s.text)) {
-      return { text: s.text, provider: "sonnet" };
-    }
-    structuredErr = s.error || (s.text ? `structured_json_invalid(${s.text.length})` : "structured_empty");
-    console.warn(
-      `[${label}] ${SONNET_MODEL} structured failed (${structuredErr.substring(0, 110)}) — prefill`,
-    );
-  }
-
-  // (2) primary model, prefill
-  const p1 = await tryPrefill(SONNET_MODEL);
-  if (p1.ok) {
-    return {
-      text: p1.text,
-      provider: "sonnet",
-      sonnetError: structuredErr ? `structured:${structuredErr}`.substring(0, 160) : undefined,
-    };
-  }
-
-  // (3) fallback writer — Opus 5 (higher quality), prefill
-  let fbNote = "";
+  const errs: string[] = [];
+  const ladder: Array<[string, boolean, "sonnet" | "opus"]> = [
+    [SONNET_MODEL, false, "sonnet"], // plain, fast
+    [SONNET_MODEL, true, "sonnet"], // structured, safe
+  ];
   if (OPUS_MODEL && OPUS_MODEL !== SONNET_MODEL) {
-    console.warn(
-      `[${label}] ${SONNET_MODEL} prefill failed (${p1.err.substring(0, 80)}) — trying ${OPUS_MODEL}`,
-    );
-    const p2 = await tryPrefill(OPUS_MODEL);
-    if (p2.ok) {
+    ladder.push([OPUS_MODEL, false, "opus"], [OPUS_MODEL, true, "opus"]);
+  }
+  for (const [model, structured, provider] of ladder) {
+    const a = await attempt(model, structured);
+    if (a.ok) {
       return {
-        text: p2.text,
-        provider: "opus",
-        sonnetError: `${SONNET_MODEL} down (structured:${
-          structuredErr || "n/a"
-        } prefill:${p1.err}) — used ${OPUS_MODEL}`
-          .substring(0, 160),
+        text: a.text,
+        provider,
+        sonnetError: errs.length ? errs.join(" | ").substring(0, 160) : undefined,
       };
     }
-    fbNote = ` | ${OPUS_MODEL}:${p2.err}`;
+    errs.push(`${model}/${a.err}`);
+    console.warn(
+      `[${label}] ${model} ${structured ? "structured" : "plain"} failed (${a.err.substring(0, 90)})`,
+    );
   }
 
-  const sonnetErr = `${SONNET_MODEL}(structured:${structuredErr || "n/a"} prefill:${p1.err})${fbNote}`;
-  console.warn(`[${label}] all Sonnet attempts failed — ${sonnetErr.substring(0, 160)}`);
-
-  // (4) GPT-4o — only if explicitly re-enabled
+  const allErr = errs.join(" | ");
+  console.warn(`[${label}] all Claude writer attempts failed — ${allErr.substring(0, 200)}`);
   if (USE_GPT_FALLBACK) {
     const gpt = await callGPT4o(system, user, Math.min(maxTokens, 14000), label);
     if (!gpt.error && gpt.text && gpt.text.length > 50) {
-      return { text: gpt.text, provider: "gpt4o", sonnetError: sonnetErr.substring(0, 160) };
+      return { text: gpt.text, provider: "gpt4o", sonnetError: allErr.substring(0, 160) };
     }
     return {
       text: "",
       provider: null,
-      error: `All failed — Sonnet(${sonnetErr.substring(0, 80)}) GPT-4o:${
-        (gpt.error || "empty").substring(0, 50)
-      }`,
+      error: `All failed — ${allErr.substring(0, 120)} | gpt4o:${(gpt.error || "empty").substring(0, 40)}`,
     };
   }
-  return { text: "", provider: null, error: `Sonnet unavailable — ${sonnetErr.substring(0, 150)}` };
+  return { text: "", provider: null, error: `Claude writers unavailable — ${allErr.substring(0, 160)}` };
 }
 
 // ── SELF-TEST ────────────────────────────────────────────────────────────────
@@ -1415,20 +1467,21 @@ async function runSelfTest(): Promise<Record<string, unknown>> {
 
   const testClaude = async (model: string) => {
     const t0 = Date.now();
+    const plain = await callSonnet(sys, usr, 64, 0, undefined, "selftest", model);
+    const pOk = !plain.error && !!parseJsonSafe(plain.text);
+    const t1 = Date.now();
     const structured = await callSonnet(sys, usr, 64, 0, tinySchema, "selftest", model);
     const sOk = !structured.error && !!parseJsonSafe(structured.text);
-    const t1 = Date.now();
-    const prefill = await callSonnet(sys, usr, 64, 0, undefined, "selftest", model);
-    const pOk = !prefill.error && !!parseJsonSafe(prefill.text);
     return {
       model,
       structured_output: sOk
-        ? `ok (${t1 - t0}ms)`
-        : `FAIL: ${(structured.error || "unparseable").substring(0, 160)}`,
-      prefill: pOk
         ? `ok (${Date.now() - t1}ms)`
-        : `FAIL: ${(prefill.error || "unparseable").substring(0, 160)}`,
-      usable: sOk || pOk,
+        : `FAIL: ${(structured.error || "unparseable").substring(0, 140)}`,
+      // "prefill" row now reports the PLAIN method (the fast primary path).
+      prefill: pOk
+        ? `plain ok (${t1 - t0}ms)`
+        : `plain FAIL: ${(plain.error || "unparseable").substring(0, 140)}`,
+      usable: pOk || sOk,
     };
   };
 
@@ -1518,7 +1571,7 @@ async function callSonnetForRevision(
         return { text: "", error: `Sonnet revision ${res.status} (${model}): ${raw.substring(0, 120)}` };
       }
       const data = JSON.parse(raw);
-      const text = data?.content?.[0]?.text || "";
+      const text = extractText(data); // all text blocks (skip any leading reasoning block)
       logSpend("anthropic", model, "humanness", system.length + user.length, text.length);
       return { text };
     } catch (e) {
@@ -1575,47 +1628,203 @@ function buildHumannessRevisionPrompt(flags: string[]): string {
     ? out.join("\n\n")
     : "General naturalness: vary sentence rhythm and paragraph structure; remove AI-signature vocabulary.";
 }
-async function humannessEnforceLoop(
+// P1-5 — optional REAL AI-detector. Returns humanness 0-100 (100 = most human)
+// or null when not configured / on any mismatch (caller then uses the internal
+// heuristic). Wrapped in try/catch so it can never break generation.
+async function externalHumanness(html: string): Promise<number | null> {
+  if (!AI_DETECTOR_KEY || !html) return null;
+  const body = stripTags(html).replace(/\s+/g, " ").trim().slice(0, 12000);
+  if (body.length < 120) return null;
+  try {
+    if (AI_DETECTOR === "originality") {
+      const res = await fetch("https://api.originality.ai/api/v1/scan/ai", {
+        method: "POST",
+        headers: { "X-OAI-API-KEY": AI_DETECTOR_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ content: body, aiModelVersion: "1" }),
+      });
+      if (!res.ok) return null;
+      const d = await res.json();
+      const original = d?.score?.original; // probability the text is human (0-1)
+      return typeof original === "number" ? Math.round(original * 100) : null;
+    }
+    if (AI_DETECTOR === "gptzero") {
+      const res = await fetch("https://api.gptzero.me/v2/predict/text", {
+        method: "POST",
+        headers: { "x-api-key": AI_DETECTOR_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ document: body }),
+      });
+      if (!res.ok) return null;
+      const d = await res.json();
+      const doc = d?.documents?.[0];
+      if (typeof doc?.class_probabilities?.human === "number") {
+        return Math.round(doc.class_probabilities.human * 100);
+      }
+      if (typeof doc?.completely_generated_prob === "number") {
+        return Math.round((1 - doc.completely_generated_prob) * 100);
+      }
+      return null;
+    }
+  } catch { /* fall back to internal heuristic */ }
+  return null;
+}
+
+// Humanness score: the real detector when configured, else the internal heuristic.
+async function scoreHumanness(
   html: string,
   lang: Lang,
-  budgetMs: number,
-): Promise<{ html: string; before: number; after: number; applied: boolean }> {
-  const before = measureHumanness(html, lang);
-  if (before.score >= 90 || budgetMs < 20000) {
-    return { html, before: before.score, after: before.score, applied: false };
+): Promise<{ score: number; flags: string[] }> {
+  const internal = measureHumanness(html, lang);
+  const ext = await externalHumanness(html);
+  return { score: ext ?? internal.score, flags: internal.flags };
+}
+
+// P1-4 — optional REAL plagiarism API. Returns matched fraction 0-1, or null.
+async function externalPlagiarism(html: string): Promise<number | null> {
+  if (!PLAGIARISM_API_KEY || !html) return null;
+  const body = stripTags(html).replace(/\s+/g, " ").trim().slice(0, 12000);
+  if (body.length < 120) return null;
+  try {
+    const res = await fetch("https://api.originality.ai/api/v1/scan/plag", {
+      method: "POST",
+      headers: { "X-OAI-API-KEY": PLAGIARISM_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ content: body }),
+    });
+    if (!res.ok) return null;
+    const d = await res.json();
+    const s = d?.total_text_score ?? d?.score ?? d?.results?.score;
+    if (typeof s !== "number") return null;
+    return s > 1 ? s / 100 : s; // accept either a 0-100 or 0-1 scale
+  } catch {
+    return null;
   }
-  const targeted = buildHumannessRevisionPrompt(before.flags);
-  const system = `You are a senior editor at Cyprus Lifestyle editing a ${
+}
+
+// P1-4 — rewrite an edition to share NO wording with its source (keeps facts).
+async function deOverlapRewrite(
+  html: string,
+  lang: Lang,
+  source: string,
+  budgetMs: number,
+): Promise<string> {
+  if (budgetMs < 25000) return html;
+  const system = `You are a senior editor at Cyprus Lifestyle. The ${
     LANG_NAME[lang]
-  } article (HTML). It failed the naturalness check on the SPECIFIC PATTERNS below. Fix ONLY these patterns, changing nothing else. Keep the article in ${
-    LANG_NAME[lang]
-  }.
-UNTOUCHABLE: do not change any fact, name, number, date, quote or institution; do not add information; keep the same paragraph count and roughly the same length; keep the HTML tags; no em/en dashes.
-PATTERNS TO FIX:
-${targeted}
+  } article below still echoes wording from its source and must be rewritten to share NO phrasing with it.
+KEEP EXACTLY: every fact, name, number, date, quote and the meaning. KEEP the HTML tags and roughly the same length. No em/en dashes.
+REWRITE: re-express every sentence in different words and a different order, so that NO run of 5 or more consecutive words matches the source anywhere.
 OUTPUT: JSON only, no preamble: {"content_html":"..."}`;
-  const user = `ARTICLE (${
-    LANG_NAME[lang]
-  }, fix ONLY the patterns; keep HTML):\n\n${html}\n\nCorrected version (JSON):`;
+  const user = `SOURCE (do NOT reuse its wording):\n${
+    stripTags(source).slice(0, 6000)
+  }\n\nARTICLE TO REWRITE (${LANG_NAME[lang]}):\n${html}\n\nRewritten (JSON):`;
   const result = await callSonnetForRevision(
     system,
     user,
     Math.min(12000, Math.max(4000, Math.ceil(html.length / 1.5))),
   );
-  if (result.error || !result.text) {
-    return { html, before: before.score, after: before.score, applied: false };
-  }
+  if (result.error || !result.text) return html;
   const parsed = parseJsonSafe(result.text);
   let revised = (parsed?.content_html as string) || (parsed?.content as string) || "";
-  if (!revised || revised.length < 100) {
-    return { html, before: before.score, after: before.score, applied: false };
-  }
+  if (!revised || revised.length < 100) return html;
   revised = ensureParagraphs(sanitizeHtml(revised, lang));
   const ratio = revised.length / html.length;
-  if (ratio < 0.8 || ratio > 1.2) return { html, before: before.score, after: before.score, applied: false };
-  const after = measureHumanness(revised, lang);
-  if (after.score <= before.score) return { html, before: before.score, after: before.score, applied: false };
-  return { html: revised, before: before.score, after: after.score, applied: true };
+  if (ratio < 0.7 || ratio > 1.4) return html;
+  return revised;
+}
+
+// P1-5 — humanness loop: revise repeatedly until the (real or heuristic) score
+// clears HUMANNESS_TARGET or the budget/passes run out. Stops early on no gain.
+async function humannessEnforceLoop(
+  html: string,
+  lang: Lang,
+  budgetMs: number,
+  target = HUMANNESS_TARGET,
+  maxPasses = HUMANNESS_MAX_PASSES,
+): Promise<{ html: string; before: number; after: number; applied: boolean }> {
+  const start = Date.now();
+  const first = await scoreHumanness(html, lang);
+  const before = first.score;
+  let bestHtml = html, bestScore = before, flags = first.flags, applied = false;
+  if (before >= target || budgetMs < 25000) {
+    return { html: bestHtml, before, after: bestScore, applied };
+  }
+  for (let pass = 0; pass < maxPasses; pass++) {
+    if (bestScore >= target) break;
+    if (budgetMs - (Date.now() - start) < 24000) break; // margin under the edge kill
+    const targeted = buildHumannessRevisionPrompt(flags);
+    const system = `You are a senior editor at Cyprus Lifestyle editing a ${
+      LANG_NAME[lang]
+    } article (HTML) so it reads unmistakably human and passes AI detectors. Rewrite for naturalness ONLY.
+UNTOUCHABLE: change no fact, name, number, date, quote or institution; add no information; keep the HTML tags and roughly the same length and paragraph count; no em/en dashes; keep it in ${
+      LANG_NAME[lang]
+    }.
+RAISE HUMANNESS (attack the AI fingerprint): ${PERPLEXITY_CRAFT}
+TARGETED PATTERNS TO FIX:
+${targeted}
+OUTPUT: JSON only, no preamble: {"content_html":"..."}`;
+    const user = `ARTICLE (${
+      LANG_NAME[lang]
+    }, raise naturalness; keep HTML and every fact):\n\n${bestHtml}\n\nRewritten (JSON):`;
+    const result = await callSonnetForRevision(
+      system,
+      user,
+      Math.min(12000, Math.max(4000, Math.ceil(bestHtml.length / 1.5))),
+    );
+    if (result.error || !result.text) break;
+    const parsed = parseJsonSafe(result.text);
+    let revised = (parsed?.content_html as string) || (parsed?.content as string) || "";
+    if (!revised || revised.length < 100) break;
+    revised = ensureParagraphs(sanitizeHtml(revised, lang));
+    const ratio = revised.length / bestHtml.length;
+    if (ratio < 0.75 || ratio > 1.3) continue;
+    const sc = await scoreHumanness(revised, lang);
+    if (sc.score > bestScore) {
+      bestHtml = revised;
+      bestScore = sc.score;
+      flags = sc.flags;
+      applied = true;
+    } else {
+      break; // no improvement — stop spending budget
+    }
+  }
+  return { html: bestHtml, before, after: bestScore, applied };
+}
+
+// P0-1 — one grounded expansion pass when an edition lands under its archetype
+// floor. Deepens with context/analysis from the SAME facts; invents nothing, and
+// is discarded unless it actually adds words without ballooning.
+async function expandToDepth(
+  b: LangBundle,
+  research: string,
+  arch: ArchetypeBudget,
+  editor: EditorKey,
+  budgetMs: number,
+): Promise<void> {
+  if (!b.ok || budgetMs < 25000 || b.wc >= arch.minWords) return;
+  const target = Math.min(arch.minWords + 150, Math.round(arch.minWords * 1.4));
+  const system = `You are a senior editor at ${deskBrief(editor)}, deepening a ${
+    LANG_NAME[b.lang]
+  } ${arch.label} that came in short (${b.wc} words; aim for about ${target}).
+GROUNDING: use ONLY the facts, names, numbers, dates and quotes already in the RESEARCH or the current article. Introduce NO new named entity, statistic or quote that is not already present. If the material genuinely will not support more, return the article unchanged.
+DEEPEN BY: ${DEPTH_CRAFT}
+UNTOUCHABLE: keep every existing fact exact; keep it in ${
+    LANG_NAME[b.lang]
+  }; clean semantic HTML (<p>, and <h2>/<h3>/<blockquote>/<ul><li> only where needed; no inline styles, no images); no em/en dashes; no padding or filler closers.
+OUTPUT: JSON only, no preamble: {"content_html":"..."}`;
+  const user = `RESEARCH (the only permitted facts):\n${research.substring(0, 3000)}\n\nCURRENT ${
+    LANG_NAME[b.lang]
+  } ARTICLE (${b.wc} words) — deepen to about ${target} words without inventing anything:\n${b.content}\n\nDeepened article (JSON):`;
+  const result = await callSonnetForRevision(system, user, arch.tokenBudget);
+  if (result.error || !result.text) return;
+  const parsed = parseJsonSafe(result.text);
+  const revised = (parsed?.content_html as string) || (parsed?.content as string) || "";
+  if (!revised || revised.length < 100) return;
+  const html = ensureParagraphs(sanitizeHtml(toHtml(revised), b.lang));
+  const wc = countWords(html);
+  // Accept only a real, grounded deepening: clearly longer, not ballooned.
+  if (wc > b.wc + 40 && wc <= arch.minWords * 2.2) {
+    b.content = html;
+    b.wc = wc;
+  }
 }
 
 interface SourceCheck {
@@ -1872,6 +2081,8 @@ interface LangBundle {
   ok: boolean;
   wc: number;
   humanness: number;
+  overlap?: number; // 5-gram fraction shared with the source (0-1), after the de-overlap gate
+  plag?: number | null; // external plagiarism-API fraction (0-1) when configured, else null
   reason?: string; // why this edition failed (empty on success)
   provider?: string; // which model actually wrote it: "sonnet" | "gpt4o"
   sonnetError?: string; // if Sonnet fell back to GPT-4o, the Sonnet API error
@@ -1934,6 +2145,9 @@ ${FABRICATION_BAN}
 ── ANTI-HALLUCINATION ──
 ${ANTI_HALLUCINATION}
 
+── CROSS-EDITION FACT LOCK ──
+${CONSISTENCY_LOCK}
+
 ── ANTI-PADDING + LOCAL AUDIENCE ──
 ${ANTI_PADDING}
 
@@ -1941,6 +2155,9 @@ ${LOCAL_AUDIENCE_CY}
 
 ── CATEGORY DEPTH (${category.toUpperCase()}) ──
 ${catDepth}
+
+── DEPTH CRAFT ──
+${DEPTH_CRAFT}
 
 ── MASTER HUMANISING ──
 ${MASTER_HUMANIZING}
@@ -1954,6 +2171,9 @@ ${HUMANIZATION[lang]}${firstPerson}
 ${TITLE_CRAFT[lang]}
 
 ${arch.hint}
+
+── FINAL PROOF ──
+${PROOF_CRAFT}
 
 Write EVERYTHING (title, excerpt, summary, body, tags, SEO) in ${
     LANG_NAME[lang]
@@ -2158,16 +2378,27 @@ async function processOne(
       ar: composed[3],
     };
 
-    // English is the anchor + fallback — must succeed
-    if (!byLang.en.ok) {
+    // English is the anchor — must succeed. Retry once, but only if enough of the
+    // runtime budget remains (the compose ladder already tries plain+structured on
+    // both models, so this is just a transient-failure safety net).
+    if (!byLang.en.ok && (Date.now() - t0) < TOTAL_SOFT_LIMIT_MS - 60000) {
       byLang.en = await composeNatively("en", title, enrich.research, category, editor, articleType, arch);
     }
     if (!byLang.en.ok) {
+      const why = byLang.en.reason || "unknown";
+      Object.assign(log, {
+        status: "error",
+        error_stage: "compose_en",
+        error_msg: `EN composition failed — ${why}`.substring(0, 500),
+        total_ms: Date.now() - t0,
+      });
+      await supabase.from("generation_logs").insert(log).then(() => {}, () => {});
       await supabase.from("scraped_articles").update({
         status: "failed",
-        error_message: "EN composition failed",
+        error_message: `EN composition failed — ${why}`.substring(0, 500),
       }).eq("id", row.id);
-      return { ok: false, reason: "EN composition failed" };
+      console.warn(`[writer] ABORT ${row.id}: EN failed — ${why.substring(0, 200)}`);
+      return { ok: false, reason: `EN composition failed — ${why}` };
     }
     if (judgeLength(byLang.en.wc, arch.minWords).isFragment) {
       await supabase.from("scraped_articles").update({
@@ -2232,40 +2463,106 @@ async function processOne(
       };
     }
 
+    // P0-1 — deepen any edition that came in under its archetype floor. Grounded
+    // in the same facts, run in parallel, and each pass self-discards if it can't
+    // add real substance, so a genuinely thin story stays a tight short piece.
+    if (Date.now() - t0 < TOTAL_SOFT_LIMIT_MS - 40000) {
+      const depthBudget = TOTAL_SOFT_LIMIT_MS - (Date.now() - t0);
+      await Promise.all(
+        LANGS.map((l) => expandToDepth(byLang[l], enrich.research, arch, editor, depthBudget)),
+      );
+    }
+
     // Desk 2C — regenerate a generic English title
     if (Date.now() - t0 < TOTAL_SOFT_LIMIT_MS - 30000) {
       const nt = await regenerateTitleIfGeneric(byLang.en.title, enrich.research, editor, "en");
       if (nt) byLang.en.title = nt;
     }
 
-    // Per-edition: plagiarism gate (vs source) + humanness loop, run in PARALLEL
-    // so four editions don't stack their revision passes back-to-back (keeps a
-    // single article safely within the edge runtime).
-    const humBudget = TOTAL_SOFT_LIMIT_MS - (Date.now() - t0);
+    // Per-edition finishing, run in PARALLEL so four editions don't stack their
+    // revision passes back-to-back (keeps a single article safely within the edge
+    // runtime). Each edition: (P1-4) plagiarism gate vs the source — rewrite to
+    // shed borrowed wording, re-check, and FAIL the edition if it still echoes the
+    // source; then (P1-5) the humanness loop up to HUMANNESS_TARGET.
+    const remain = () => TOTAL_SOFT_LIMIT_MS - (Date.now() - t0);
     await Promise.all(LANGS.map(async (l) => {
       const b = byLang[l];
       if (!b.ok) return;
-      const overlap = checkSourceOverlap(b.content, content, 5);
-      if (overlap > 0.18) {
-        console.warn(
-          `[writer] ${l} overlap ${
-            (overlap * 100).toFixed(1)
-          }% vs source (src=${sourceLang}) — flagged for editor`,
-        );
+
+      // --- P1-4: plagiarism gate (deterministic 5-gram overlap vs source) ---
+      let overlap = checkSourceOverlap(b.content, content, 5);
+      if (overlap > OVERLAP_MAX && remain() > 30000) {
+        const rewritten = await deOverlapRewrite(b.content, l, content, remain());
+        if (rewritten !== b.content) {
+          const after = checkSourceOverlap(rewritten, content, 5);
+          if (after < overlap) {
+            b.content = rewritten;
+            b.wc = countWords(b.content);
+            overlap = after;
+            console.log(`[writer] ${l} de-overlap → ${(overlap * 100).toFixed(1)}%`);
+          }
+        }
       }
-      b.humanness = measureHumanness(b.content, l).score;
-      if (b.humanness < 90 && humBudget > 25000) {
-        const loop = await humannessEnforceLoop(b.content, l, humBudget);
+      b.overlap = overlap;
+
+      // Optional REAL plagiarism API as a publish gate (env-gated; advisory unless high).
+      b.plag = remain() > 20000 ? await externalPlagiarism(b.content) : null;
+
+      // Refuse the edition if it still borrows too much wording, or the API flags it.
+      const plagFail = overlap > OVERLAP_MAX || (b.plag !== null && b.plag > 0.15);
+      if (plagFail) {
+        b.ok = false;
+        b.reason = `plagiarism gate: ${(overlap * 100).toFixed(1)}% source overlap` +
+          (b.plag !== null ? `, API ${(b.plag * 100).toFixed(1)}%` : "");
+        log[`desk2b_${l}_ok`] = false;
+        console.warn(`[writer] ${l} FAILED plagiarism gate — ${b.reason}`);
+        return;
+      }
+
+      // --- P1-5: humanness loop (real detector when configured, else heuristic) ---
+      const hb = remain();
+      if (hb > 25000) {
+        const loop = await humannessEnforceLoop(b.content, l, hb);
+        b.humanness = loop.applied ? loop.after : loop.before;
         if (loop.applied) {
           b.content = loop.html;
-          b.humanness = loop.after;
           b.wc = countWords(b.content);
         }
+      } else {
+        b.humanness = measureHumanness(b.content, l).score; // no budget: cheap heuristic only
       }
       log[`desk2b_${l}_ok`] = true;
       log[`${l}_humanness`] = b.humanness;
       log[`words_${l}`] = b.wc;
     }));
+
+    // P1-4 abort — if any edition failed the plagiarism gate, refuse the whole
+    // article (loud + logged) rather than commit a partial or borrowed edition.
+    const plagFailed = LANGS.filter((l) => !byLang[l].ok);
+    if (plagFailed.length) {
+      const detail = plagFailed
+        .map((l) => `${l.toUpperCase()}=${byLang[l].reason || "plagiarism"}`)
+        .join("; ");
+      Object.assign(log, {
+        status: "error",
+        error_stage: `plagiarism_${plagFailed.join("+")}`,
+        error_msg: detail.substring(0, 500),
+        total_ms: Date.now() - t0,
+      });
+      await supabase.from("generation_logs").insert(log).then(() => {}, () => {});
+      await supabase.from("scraped_articles").update({
+        status: "failed",
+        error_message: `plagiarism gate: ${detail}`.substring(0, 500),
+        rewrite_error: `plagiarism gate: ${detail}`.substring(0, 500),
+        rewrite_finished_at: new Date().toISOString(),
+      }).eq("id", row.id);
+      console.error(`[writer] ABORT ${row.id} — plagiarism gate failed: ${detail}`);
+      return {
+        ok: false,
+        reason:
+          `Plagiarism gate failed after rewrite (${detail}). The source is likely too thin to paraphrase safely — pick a richer source or edit by hand.`,
+      };
+    }
 
     // cover + author
     const authorId = await getAuthorId(supabase, editor);
@@ -2393,15 +2690,36 @@ async function processOne(
         ((Date.now() - t0) / 1000).toFixed(1)
       }s`,
     );
+    // Soft quality flags for the editor (the article still committed as a draft).
+    const warns: string[] = [];
+    if (allGpt) {
+      warns.push(
+        `All editions written by GPT-4o — Sonnet did not run${
+          sonnetDown ? ` (${sonnetDown})` : ""
+        }, so the text reads flat. Fix the Sonnet call, then regenerate.`,
+      );
+    }
+    const lowHum = LANGS.filter((l) => byLang[l].humanness < HUMANNESS_TARGET);
+    if (lowHum.length) {
+      warns.push(
+        `Humanness below ${HUMANNESS_TARGET} on ${
+          lowHum.map((l) => `${l.toUpperCase()} ${byLang[l].humanness}`).join(", ")
+        } — a manual polish pass would help.`,
+      );
+    }
+    const echoy = LANGS.filter((l) => (byLang[l].overlap ?? 0) > OVERLAP_MAX * 0.75);
+    if (echoy.length) {
+      warns.push(
+        `Source overlap near the limit on ${
+          echoy.map((l) => `${l.toUpperCase()} ${((byLang[l].overlap ?? 0) * 100).toFixed(0)}%`).join(", ")
+        }.`,
+      );
+    }
     return {
       ok: true,
       post_id: postId,
       providers,
-      quality_warning: allGpt
-        ? `All editions written by GPT-4o — Sonnet did not run${
-          sonnetDown ? ` (${sonnetDown})` : ""
-        }, so the text reads flat. Fix the Sonnet call, then regenerate.`
-        : undefined,
+      quality_warning: warns.length ? warns.join(" · ") : undefined,
     };
   } catch (e) {
     const msg = (e as Error).message;
