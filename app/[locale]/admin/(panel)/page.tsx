@@ -12,14 +12,18 @@ async function count(table: string, filter?: (q: any) => any): Promise<number> {
 
 export default async function Dashboard() {
   const sb = await supabaseServer();
-  const [analyticsRes, spendRes] = await Promise.all([
+  const [analyticsRes, spendTodayRes, spendMonthRes, spendTotalRes] = await Promise.all([
     sb.rpc('get_analytics_data_admin', { p_period: '7d' }),
     sb.rpc('ai_spend_today'),
+    sb.rpc('ai_spend_month'),
+    sb.rpc('ai_spend_total_usd'),
   ]);
   const a = (analyticsRes.data as any) || {};
   const overview = a.overview || {};
   const pages = (a.pages || []) as { label: string; value: number }[];
-  const spendToday = Number(spendRes.data || 0);
+  const spendToday = Number(spendTodayRes.data || 0);
+  const spendMonth = Number(spendMonthRes.data || 0);
+  const spendTotal = Number(spendTotalRes.data || 0);
 
   const [published, drafts, scraped, pendingComments, subscribers, unread] = await Promise.all([
     count('blog_posts', (q) => q.eq('status', 'published')),
@@ -38,7 +42,11 @@ export default async function Dashboard() {
         <div className="stat"><div className="n">{overview.views_7d ?? 0}</div><div className="k">Views · 7d</div></div>
         <div className="stat"><div className="n">{overview.visitors_7d ?? 0}</div><div className="k">Visitors · 7d</div></div>
         <div className="stat"><div className="n">{overview.live_5min ?? 0}</div><div className="k">Live now</div></div>
+      </div>
+      <div className="cards">
         <div className="stat"><div className="n">${spendToday.toFixed(2)}</div><div className="k">AI spend · today (USD)</div></div>
+        <div className="stat"><div className="n">${spendMonth.toFixed(2)}</div><div className="k">AI spend · this month (USD)</div></div>
+        <div className="stat"><div className="n">${spendTotal.toFixed(2)}</div><div className="k">AI spend · total (USD)</div></div>
       </div>
       <div className="cards">
         <div className="stat"><div className="n">{published}</div><div className="k">Published</div></div>
