@@ -94,6 +94,11 @@ const BATCH_MAX = 3;
 const SITE_URL = (Deno.env.get("SITE_URL") || "").replace(/\/+$/, "");
 const REVALIDATE_SECRET = Deno.env.get("REVALIDATE_SECRET") || "";
 
+// P0 — Cyprus relevance gate. Nothing publishes without a genuine island angle,
+// so "World" becomes "the world, from Cyprus" and off-island wire copy is skipped.
+// Set the secret RELEVANCE_GATE="off" to disable (e.g. for a one-off global piece).
+const RELEVANCE_GATE = (Deno.env.get("RELEVANCE_GATE") || "on").toLowerCase() !== "off";
+
 // ── taxonomy (Cyprus) ────────────────────────────────────────────────────────
 type Lang = "en" | "el" | "ro" | "ar";
 const LANGS: Lang[] = ["en", "el", "ro", "ar"];
@@ -1214,6 +1219,69 @@ function estTok(chars: number): number {
   return Math.ceil((chars / 4) * 1.3);
 }
 
+// Deterministic Cyprus-relevance backstop: does the text name Cyprus, its people,
+// districts, towns or unmistakable local institutions? Covers Latin, Greek and
+// Arabic forms. Used with the model's own angle judgement by the relevance gate.
+const CYPRUS_TERMS = [
+  "cyprus",
+  "cypriot",
+  "cipru",
+  "cipriot",
+  "chypre",
+  "chypriote",
+  "zypern",
+  "kıbrıs",
+  "kibris",
+  "κύπρ",
+  "κυπρι",
+  "قبرص",
+  "nicosia",
+  "lefkosia",
+  "λευκωσ",
+  "limassol",
+  "lemesos",
+  "λεμεσ",
+  "larnaca",
+  "larnaka",
+  "λάρνακ",
+  "paphos",
+  "pafos",
+  "πάφο",
+  "famagusta",
+  "ammochostos",
+  "αμμόχωστ",
+  "kyrenia",
+  "keryneia",
+  "κερύνει",
+  "ayia napa",
+  "agia napa",
+  "protaras",
+  "paralimni",
+  "aradippou",
+  "strovolos",
+  "troodos",
+  "τρόοδ",
+  "akamas",
+  "ακάμα",
+  "akrotiri",
+  "dhekelia",
+  "commandaria",
+  "halloumi",
+  "haloumi",
+  "xynisteri",
+  "maratheftiko",
+  "bank of cyprus",
+  "hellenic bank",
+  "cyprus mail",
+  "cyprus stock exchange",
+  "akel",
+  "disy",
+];
+function hasCyprusTerms(text: string): boolean {
+  const s = (text || "").toLowerCase();
+  return CYPRUS_TERMS.some((t) => s.includes(t));
+}
+
 // Remove any LLM / vendor name from a string before it is stored or returned, so
 // nothing an admin can read (an error, a reason, a warning) reveals which model
 // was used. Raw provider API errors can embed model IDs, so scrub free text too.
@@ -2104,6 +2172,8 @@ interface EnrichResult {
   district: string | null;
   editor: EditorKey;
   sourceLang: string;
+  cyprusAngle: boolean; // does the SOURCE genuinely connect to Cyprus?
+  cyprusHook: string; // one-line description of that connection, or ""
   ok: boolean;
 }
 async function enrichSource(
@@ -2117,17 +2187,20 @@ async function enrichSource(
 2. CLASSIFY into ONE subcategory: ${VALID_SUBCATEGORIES.join(", ")}.
 3. DETECT the Cyprus district if local: ${DISTRICTS.join(", ")}. Otherwise "national".
 4. DETECT the source language (en/el/ro/ar/fr/de/other).
-5. ATOMISE the facts into ENGLISH TELEGRAMS (numbered, one fact per line, max 15 words each). English only, never echo the source's phrasing.
+5. JUDGE the Cyprus angle: does the SOURCE genuinely connect to Cyprus — its people, places, companies, institutions, or a development that directly affects Cyprus? Answer yes ONLY if the connection is real and in the source. NEVER invent a connection. A generic foreign story with no Cyprus tie is "no".
+6. ATOMISE the facts into ENGLISH TELEGRAMS (numbered, one fact per line, max 15 words each). English only, never echo the source's phrasing.
 OUTPUT (exact order, CAPS headers, one per line):
 CATEGORY: <${VALID_CATEGORIES.join("|")}>
 SUBCATEGORY: <${VALID_SUBCATEGORIES.join("|")}>
 DISTRICT: <district slug or national>
 SOURCE_LANG: <en|el|ro|ar|fr|de|other>
+CYPRUS_ANGLE: <yes|no>
+CYPRUS_HOOK: <one sentence naming the specific Cyprus connection, or "none">
 FACTS:
 1. WHO: ... | ACTION: ... | WHEN: ... | WHERE: ...
 2. QUOTE: "..." — SPEAKER: ...
 [continue as needed]
-STRICT: English telegrams only, max 15 words each, facts only.`;
+STRICT: English telegrams only, max 15 words each, facts only. Be honest about CYPRUS_ANGLE.`;
   const user = `SOURCE TITLE: ${sourceTitle}\n\nSOURCE ARTICLE:\n${
     sourceContent.slice(0, 16000)
   }\n\nClassify, detect district and language, atomise the facts.`;
@@ -2144,6 +2217,8 @@ STRICT: English telegrams only, max 15 words each, facts only.`;
       district: null,
       editor: editorForCategory(cat),
       sourceLang: "other",
+      cyprusAngle: false, // unknown on enrich failure — the deterministic gate decides
+      cyprusHook: "",
       ok: false,
     };
   }
@@ -2157,6 +2232,8 @@ STRICT: English telegrams only, max 15 words each, facts only.`;
   let district: string | null = (txt.match(/DISTRICT:\s*([a-z_-]+)/i)?.[1] || "").toLowerCase();
   if (!DISTRICTS.includes(district)) district = null;
   const sourceLang = (txt.match(/SOURCE_LANG:\s*([a-z]+)/i)?.[1] || "other").toLowerCase();
+  const cyprusAngle = /CYPRUS_ANGLE:\s*(yes|true)/i.test(txt);
+  const cyprusHook = (txt.match(/CYPRUS_HOOK:\s*(.+)/i)?.[1] || "").trim().replace(/^["']|["']$/g, "");
   const research = txt.match(/FACTS:\s*\n([\s\S]+)$/i)?.[1]?.trim() || txt;
   return {
     research,
@@ -2165,6 +2242,8 @@ STRICT: English telegrams only, max 15 words each, facts only.`;
     district,
     editor: editorForCategory(category),
     sourceLang,
+    cyprusAngle,
+    cyprusHook: /^none$/i.test(cyprusHook) ? "" : cyprusHook,
     ok: true,
   };
 }
@@ -2466,6 +2545,34 @@ async function processOne(
         district || "national"
       } src=${sourceLang} archetype=${arch.label} facts=${countDigestFacts(enrich.research)}`,
     );
+
+    // P0 — Cyprus relevance gate. A story publishes only with a genuine island
+    // angle: the model judged one, OR the source names Cyprus/its places, OR a
+    // Cyprus district was detected. Everything else is skipped (not an error), so
+    // the magazine stays about Cyprus and "World" means "the world, from Cyprus".
+    const relevant = enrich.cyprusAngle ||
+      district !== null ||
+      hasCyprusTerms(`${title}\n${content}\n${enrich.research}`);
+    if (RELEVANCE_GATE && !relevant) {
+      Object.assign(log, {
+        status: "skipped",
+        error_stage: "relevance",
+        error_msg: "OFF_TOPIC: no Cyprus angle",
+        total_ms: Date.now() - t0,
+      });
+      await supabase.from("generation_logs").insert(log).then(() => {}, () => {});
+      await supabase.from("scraped_articles").update({
+        status: "skipped",
+        is_used: true,
+        error_message: "OFF_TOPIC: no genuine Cyprus angle — skipped by the relevance gate",
+        rewrite_finished_at: new Date().toISOString(),
+      }).eq("id", row.id);
+      console.log(`[writer] SKIP ${row.id} — off-topic (no Cyprus angle) cat=${category}`);
+      return {
+        ok: false,
+        reason: "Off-topic for Cyprus Lifestyle — no genuine Cyprus angle, so it was not published.",
+      };
+    }
 
     // Desk 2 — compose all four editions natively, in parallel
     const composed = await Promise.all(

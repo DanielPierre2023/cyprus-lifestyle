@@ -36,7 +36,10 @@ export default function AiTab() {
       const { data, error } = await sb.functions.invoke('process-scraped-article', { body: { scraped_article_id: id } });
       const d = data as any;
       if (error) setMsg('Generation failed: ' + (error.message || 'edge function error'));
-      else if (d && d.ok === false) setMsg('Generation failed — ' + (d.reason || 'unknown'));
+      else if (d && d.ok === false) {
+        const r = d.reason || 'unknown';
+        setMsg(/off-topic/i.test(r) ? 'Skipped — ' + r : 'Generation failed — ' + r);
+      }
       else if (d && d.quality_warning) setMsg('Article drafted, but ⚠ ' + d.quality_warning);
       else setMsg('Article drafted. See it in Articles (status: draft).');
     } catch (e) {
