@@ -104,8 +104,29 @@ type Lang = "en" | "el" | "ro" | "ar";
 const LANGS: Lang[] = ["en", "el", "ro", "ar"];
 const LANG_NAME: Record<Lang, string> = { en: "English", el: "Greek", ro: "Romanian", ar: "Arabic" };
 
-type EditorKey = "cyprus" | "business" | "property" | "culture" | "escapes" | "table" | "world";
-const VALID_CATEGORIES: string[] = ["cyprus", "business", "property", "culture", "escapes", "table", "world"];
+type EditorKey =
+  | "cyprus"
+  | "business"
+  | "property"
+  | "relocation"
+  | "culture"
+  | "escapes"
+  | "table"
+  | "agenda"
+  | "people"
+  | "world";
+const VALID_CATEGORIES: string[] = [
+  "cyprus",
+  "business",
+  "property",
+  "relocation",
+  "culture",
+  "escapes",
+  "table",
+  "agenda",
+  "people",
+  "world",
+];
 const VALID_SUBCATEGORIES = ["regional", "national", "international"];
 const DISTRICTS = ["nicosia", "limassol", "larnaca", "famagusta", "paphos", "kyrenia"];
 const CAT_ALIASES: Record<string, string> = {
@@ -117,6 +138,15 @@ const CAT_ALIASES: Record<string, string> = {
   "real-estate": "property",
   realestate: "property",
   homes: "property",
+  developers: "property",
+  residency: "relocation",
+  relocation: "relocation",
+  immigration: "relocation",
+  visa: "relocation",
+  "golden-visa": "relocation",
+  expat: "relocation",
+  "moving-to-cyprus": "relocation",
+  tax: "relocation",
   arts: "culture",
   art: "culture",
   heritage: "culture",
@@ -130,6 +160,21 @@ const CAT_ALIASES: Record<string, string> = {
   gastronomy: "table",
   dining: "table",
   restaurants: "table",
+  events: "agenda",
+  event: "agenda",
+  "whats-on": "agenda",
+  whatson: "agenda",
+  entertainment: "agenda",
+  festival: "agenda",
+  festivals: "agenda",
+  calendar: "agenda",
+  agenda: "agenda",
+  interview: "people",
+  interviews: "people",
+  profile: "people",
+  profiles: "people",
+  people: "people",
+  obituary: "people",
   greece: "world",
   gulf: "world",
   europe: "world",
@@ -146,7 +191,16 @@ const SUB_ALIASES: Record<string, string> = {
 function editorForCategory(category?: string | null): EditorKey {
   const c = (category || "").toLowerCase();
   if (VALID_CATEGORIES.includes(c) && c !== "world") return c as EditorKey;
+  if (
+    c.includes("residen") || c.includes("relocat") || c.includes("immigrat") || c.includes("visa") ||
+    c.includes("expat")
+  ) return "relocation";
   if (c.includes("propert") || c.includes("real")) return "property";
+  if (
+    c.includes("event") || c.includes("whats") || c.includes("agenda") || c.includes("festival") ||
+    c.includes("entertain")
+  ) return "agenda";
+  if (c.includes("interview") || c.includes("profile") || c.includes("people")) return "people";
   if (c.includes("business") || c.includes("econom") || c.includes("financ") || c.includes("market")) {
     return "business";
   }
@@ -172,18 +226,24 @@ function editorForCategory(category?: string | null): EditorKey {
 const AUTHOR_NAME: Record<EditorKey, string> = {
   cyprus: "Elena Georgiou",
   world: "Elena Georgiou",
+  people: "Elena Georgiou",
   business: "Andreas Constantinou",
   property: "Andreas Constantinou",
+  relocation: "Andreas Constantinou",
   culture: "Christiana Pavlou",
+  agenda: "Christiana Pavlou",
   escapes: "Maria Ioannou",
   table: "Maria Ioannou",
 };
 const AUTHOR_SLUG: Record<EditorKey, string> = {
   cyprus: "elena-georgiou",
   world: "elena-georgiou",
+  people: "elena-georgiou",
   business: "andreas-constantinou",
   property: "andreas-constantinou",
+  relocation: "andreas-constantinou",
   culture: "christiana-pavlou",
+  agenda: "christiana-pavlou",
   escapes: "maria-ioannou",
   table: "maria-ioannou",
 };
@@ -200,12 +260,18 @@ const DESK_BRIEF: Record<EditorKey, string> = {
     "The Business Desk — markets, funds, shipping, tech, tax residency and the money moving through Limassol and Nicosia. Numbers first; one figure that matters.",
   property:
     "The Property Desk — villas, the marina, new coastal architecture, interiors, residency by investment. The island as an address; honest appraisal over sales copy.",
+  relocation:
+    "The Relocation Desk — moving to Cyprus: residency and the investor route, tax and non-dom status, schools, healthcare, banking and the practicalities of the move. Practical, precise, current; explain the rule and what it means for the reader.",
   culture:
     "The Culture Desk — antiquity and Byzantine gold, contemporary art, music, the Aphrodite myth, society and patronage. One artefact, one story.",
   escapes:
     "The Escapes Desk — Akamas, Troodos, the coast, marina life, where to go and how to arrive. One place, done properly.",
   table:
     "The Table — chefs, growers, the Cypriot kitchen and Commandaria, the oldest named wine. Where we are eating, and why.",
+  agenda:
+    "The Agenda — what's on across the island: festivals, exhibitions, concerts, openings and markets. The concrete details — what, where, when, how much — for a reader deciding where to go.",
+  people:
+    "People — the Cypriots and residents shaping the island: chefs, founders, designers, winemakers, artists. Profiles and interviews that let a real person and their work come through.",
   world:
     "The World Desk — the region read through a Cypriot lens: Greece, the Levant, the Gulf, Europe. Why it matters here.",
 };
@@ -636,6 +702,12 @@ const CATEGORY_DEPTH: Record<string, string> = {
     "DEPTH: specific figures (€, revenue, market cap, growth %); name companies, funds, executives and titles; market impact in numbers; institutional reaction (CSE, finance ministry, Central Bank).",
   property:
     "DEPTH: name the development, district, architect/developer, price band per m², yield or residency angle; honest appraisal over sales copy; comparable schemes for context.",
+  relocation:
+    "DEPTH: name the exact scheme, permit or status and the authority; the concrete numbers (thresholds, timelines, fees, tax rates, holding periods) and the eligibility conditions; what it means in practice for a mover; note when a rule changed and the source.",
+  agenda:
+    "DEPTH: name the event, venue, town and dates precisely; the times, ticket price and how to book/attend; who is performing or exhibiting; one line on why it is worth going.",
+  people:
+    "DEPTH: name the person, role and what they have actually done; let their own words carry (attributed, from the source, never invented); concrete detail — a place, a dish, a building, a number — over adjectives.",
   culture:
     "DEPTH: name the artefact, artist, period, institution or venue; one object, one story; provenance and precedent; avoid catalogue-speak.",
   escapes:

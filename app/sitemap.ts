@@ -4,7 +4,7 @@ import { urlFor } from '@/lib/seo';
 
 export const revalidate = 3600;
 
-const STATIC = ['/', '/property', '/culture', '/cyprus', '/business', '/escapes', '/table', '/world', '/about', '/advertise', '/contact', '/privacy'];
+const STATIC = ['/', '/property', '/relocation', '/culture', '/cyprus', '/business', '/escapes', '/table', '/agenda', '/people', '/world', '/about', '/advertise', '/contact', '/privacy'];
 
 function entry(path: string, lastModified?: Date): MetadataRoute.Sitemap[number] {
   return {

@@ -12,6 +12,9 @@
     "escapes": "Călătorii",
     "table": "Masa",
     "world": "Lume",
+    "relocation": "Relocare",
+    "agenda": "Agendă",
+    "people": "Oameni",
     "menu": "Meniu",
     "close": "Închide",
     "search": "Căutare"
@@ -24,6 +27,7 @@
     "byline": "De",
     "minRead": "min. de citit",
     "published": "Publicat",
+    "source": "Sursă",
     "updated": "Actualizat",
     "share": "Distribuie",
     "loading": "Se încarcă…",
@@ -86,7 +90,10 @@
     "culture": "Artă, patrimoniu, muzică și calendarul monden, de la Paphos antic la seara de premieră.",
     "escapes": "Unde să mergi și cum să ajungi — Mediterana, privită dinspre Cipru.",
     "table": "Restaurante, podgorii și masa cipriotă, de la commandaria la noua bucătărie a insulei.",
-    "world": "Locul insulei într-un cadru mai larg."
+    "world": "Locul insulei într-un cadru mai larg.",
+    "relocation": "Mutarea în Cipru — rezidență, taxe, școli și aspectele practice ale relocării.",
+    "agenda": "Ce se întâmplă pe insulă — festivaluri, expoziții, concerte și vernisaje.",
+    "people": "Ciprioții și rezidenții care modelează insula — portrete și interviuri."
   },
   "pages": {
     "about": {

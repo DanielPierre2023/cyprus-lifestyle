@@ -11,7 +11,7 @@ import NewsletterSignup from '@/components/NewsletterSignup';
 
 export const revalidate = 300;
 
-const CATS = ['cyprus', 'business', 'property', 'culture', 'escapes', 'table', 'world'];
+const CATS = ['cyprus', 'business', 'property', 'relocation', 'culture', 'escapes', 'table', 'agenda', 'people', 'world'];
 
 // Prerender all sections so they are cache HITs from the first click, per locale.
 export function generateStaticParams() {

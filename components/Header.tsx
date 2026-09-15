@@ -5,7 +5,7 @@ import { Link, usePathname } from '@/lib/i18n/routing';
 import { LOCALES, type Locale } from '@/lib/locales';
 
 // Order echoes the print masthead: lead with the marquee sections.
-const CATS = ['property', 'culture', 'cyprus', 'business', 'escapes', 'table', 'world'] as const;
+const CATS = ['property', 'relocation', 'culture', 'cyprus', 'business', 'escapes', 'table', 'agenda', 'people', 'world'] as const;
 
 function langLabel(l: Locale) {
   return l === 'el' ? 'ΕΛ' : l === 'ar' ? 'ع' : l.toUpperCase();

@@ -12,6 +12,9 @@
     "escapes": "Escapes",
     "table": "The Table",
     "world": "World",
+    "relocation": "Relocation",
+    "agenda": "Agenda",
+    "people": "People",
     "menu": "Menu",
     "close": "Close",
     "search": "Search"
@@ -24,6 +27,7 @@
     "byline": "By",
     "minRead": "min read",
     "published": "Published",
+    "source": "Source",
     "updated": "Updated",
     "share": "Share",
     "loading": "Loading…",
@@ -86,7 +90,10 @@
     "culture": "Art, heritage, music and the social calendar, from ancient Paphos to opening night.",
     "escapes": "Where to go and how to arrive — the Mediterranean, read through a Cypriot lens.",
     "table": "Restaurants, vineyards and the Cypriot table, from commandaria to the new island kitchen.",
-    "world": "The island's place in a wider frame."
+    "world": "The island's place in a wider frame.",
+    "relocation": "Moving to Cyprus — residency, tax, schools and the practicalities of the island move.",
+    "agenda": "What's on across the island — festivals, exhibitions, concerts and openings.",
+    "people": "The Cypriots and residents shaping the island — profiles and interviews."
   },
   "pages": {
     "about": {

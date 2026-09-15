@@ -5,7 +5,7 @@ import { LOCALES, LOCALE_LABEL, type Locale } from '@/lib/locales';
 import { slugify } from '@/lib/util';
 import CoverImagePicker from '@/components/admin/CoverImagePicker';
 
-const CATS = ['cyprus', 'business', 'property', 'culture', 'escapes', 'table', 'world'];
+const CATS = ['cyprus', 'business', 'property', 'relocation', 'culture', 'escapes', 'table', 'agenda', 'people', 'world'];
 const DISTRICTS = ['', 'nicosia', 'limassol', 'larnaca', 'famagusta', 'paphos', 'kyrenia'];
 const LANG_FIELDS = ['title', 'excerpt', 'summary', 'content', 'seo_title', 'seo_description'];
 
@@ -75,14 +75,32 @@ export default function EditorTab() {
     for (const x of LOCALES) for (const k of LANG_FIELDS) row[`${k}_${x}`] = f[`${k}_${x}`] ?? null;
     if (!row.title_en) { setBusy(''); setMsg('English title is required.'); return; }
 
+    let ok = false;
+    let savedSlug = f.slug as string | undefined;
     if (id) {
       const { error } = await sb.from('blog_posts').update(row).eq('id', id);
+      ok = !error;
       setMsg(error ? error.message : 'Saved.');
     } else {
       row.slug = `${slugify(row.title_en)}-${Math.random().toString(36).slice(2, 7)}`;
+      savedSlug = row.slug;
       const { data, error } = await sb.from('blog_posts').insert(row).select('id').single();
       if (!error && data) { setId((data as any).id); window.history.replaceState(null, '', `/admin/editor?id=${(data as any).id}`); }
+      ok = !error;
       setMsg(error ? error.message : 'Created.');
+    }
+
+    // Instant on-demand ISR: refresh the reader pages the moment we publish, so a
+    // published article appears immediately instead of after the 5-minute window.
+    if (ok && status === 'published') {
+      try {
+        const rr = await fetch('/api/admin/revalidate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: savedSlug, category: row.category }),
+        }).then((r) => r.json());
+        if (rr?.ok) setMsg('Published and live now.');
+      } catch { /* non-fatal: the time-based window still refreshes it */ }
     }
     setBusy('');
   }

@@ -1,7 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/i18n/routing';
 
-const CATS = ['property', 'culture', 'cyprus', 'business', 'escapes', 'table', 'world'] as const;
+const CATS = ['property', 'relocation', 'culture', 'cyprus', 'business', 'escapes', 'table', 'agenda', 'people', 'world'] as const;
 
 export default async function Footer() {
   const t = await getTranslations();
