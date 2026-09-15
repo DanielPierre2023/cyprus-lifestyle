@@ -54,7 +54,8 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
 
   const artLd = articleJsonLd({
     locale: l, slug: a.slug, title: a.title, description: a.excerpt,
-    image: a.cover_image, author: a.author_name, publishedAt: a.published_at, section: catLabel || a.category,
+    image: a.cover_image, author: a.author_name, authorSlug: a.author_slug,
+    publishedAt: a.published_at, updatedAt: a.updated_at, section: catLabel || a.category,
   });
   const crumbLd = breadcrumbJsonLd(l, [
     { name: t('brand.name'), path: '/' },
@@ -98,7 +99,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
 
           {a.source_url ? (
             <p className="source">
-              {t('common.published')}: <a href={a.source_url} target="_blank" rel="noopener nofollow">{a.source_url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}</a>
+              {t('common.source')}: <a href={a.source_url} target="_blank" rel="noopener nofollow">{a.source_url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}</a>
             </p>
           ) : null}
         </div>

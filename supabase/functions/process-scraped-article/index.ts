@@ -165,23 +165,27 @@ function editorForCategory(category?: string | null): EditorKey {
   }
   return "cyprus";
 }
-const AUTHOR_SLUG: Record<EditorKey, string> = {
-  cyprus: "cyprus-desk",
-  business: "business-desk",
-  property: "property-desk",
-  culture: "culture-desk",
-  escapes: "escapes-desk",
-  table: "table-desk",
-  world: "cyprus-desk",
-};
+// Named masthead. Each desk maps to one of the magazine's editors, so bylines
+// read as real people (E-E-A-T) rather than "The X Desk". The names/bios live in
+// the authors table (seed 0015) and render on /author/<slug>; keep these two maps
+// in step with that seed. Replace with your real team's names when ready.
 const AUTHOR_NAME: Record<EditorKey, string> = {
-  cyprus: "The Cyprus Desk",
-  business: "The Business Desk",
-  property: "The Property Desk",
-  culture: "The Culture Desk",
-  escapes: "The Escapes Desk",
-  table: "The Table",
-  world: "The Cyprus Desk",
+  cyprus: "Elena Georgiou",
+  world: "Elena Georgiou",
+  business: "Andreas Constantinou",
+  property: "Andreas Constantinou",
+  culture: "Christiana Pavlou",
+  escapes: "Maria Ioannou",
+  table: "Maria Ioannou",
+};
+const AUTHOR_SLUG: Record<EditorKey, string> = {
+  cyprus: "elena-georgiou",
+  world: "elena-georgiou",
+  business: "andreas-constantinou",
+  property: "andreas-constantinou",
+  culture: "christiana-pavlou",
+  escapes: "maria-ioannou",
+  table: "maria-ioannou",
 };
 
 // ── Cyprus Lifestyle house voice ─────────────────────────────────────────────
@@ -2433,7 +2437,7 @@ async function regenerateTitleIfGeneric(
 async function getAuthorId(supabase: SupaClient, editor: EditorKey): Promise<string | null> {
   const { data } = await supabase.from("authors").select("id").eq(
     "slug",
-    AUTHOR_SLUG[editor] || "cyprus-desk",
+    AUTHOR_SLUG[editor] || "elena-georgiou",
   ).maybeSingle();
   return (data?.id as string) || null;
 }

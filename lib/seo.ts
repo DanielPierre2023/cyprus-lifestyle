@@ -87,8 +87,13 @@ export function orgJsonLd() {
 /** NewsArticle JSON-LD for an article page. */
 export function articleJsonLd(a: {
   locale: Locale; slug: string; title: string; description?: string;
-  image?: string | null; author?: string | null; publishedAt?: string | null; section?: string | null;
+  image?: string | null; author?: string | null; authorSlug?: string | null;
+  publishedAt?: string | null; updatedAt?: string | null; section?: string | null;
 }) {
+  // A named editor → Person (E-E-A-T); otherwise fall back to the Organization.
+  const author = a.author && a.authorSlug
+    ? { '@type': 'Person', name: a.author, url: urlFor(a.locale, `/author/${a.authorSlug}`) }
+    : { '@type': 'Organization', name: a.author || SITE_NAME, url: SITE_URL };
   return {
     '@context': 'https://schema.org',
     '@type': 'NewsArticle',
@@ -98,9 +103,9 @@ export function articleJsonLd(a: {
     image: a.image ? [a.image] : undefined,
     inLanguage: a.locale,
     datePublished: a.publishedAt || undefined,
-    dateModified: a.publishedAt || undefined,
+    dateModified: a.updatedAt || a.publishedAt || undefined,
     articleSection: a.section || undefined,
-    author: { '@type': 'Organization', name: a.author || SITE_NAME, url: SITE_URL },
+    author,
     publisher: { '@id': `${SITE_URL}/#organization` },
   };
 }

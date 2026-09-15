@@ -7,7 +7,47 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 const FETCH_TIMEOUT_MS = 20000;
 const ARTICLE_TIMEOUT_MS = 15000;
-const UA = 'Mozilla/5.0 (compatible; CyprusLifestyle/1.0; +https://cypruslifestyle.com)';
+// A realistic desktop-browser UA. The old bot UA ("CyprusLifestyle/1.0") was
+// rejected by Cloudflare on most Cyprus outlets, which is why "no Cyprus scraper
+// worked" — the fetch 403'd and the error was swallowed as "empty feed".
+const UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+const FEED_HEADERS: Record<string, string> = {
+  'User-Agent': UA,
+  'Accept': 'application/rss+xml, application/atom+xml, application/xml;q=0.9, text/html;q=0.8, */*;q=0.7',
+  'Accept-Language': 'en-GB,en;q=0.9,el;q=0.8,ar;q=0.7,ro;q=0.7',
+};
+const PAGE_HEADERS: Record<string, string> = {
+  'User-Agent': UA,
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-GB,en;q=0.9',
+};
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Fetch with one retry on network error / 429 / 5xx, following redirects.
+async function fetchWithRetry(
+  url: string,
+  headers: Record<string, string>,
+  timeoutMs: number,
+  attempts = 2,
+): Promise<Response> {
+  let lastErr: Error | null = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), headers, redirect: 'follow' });
+      if ((res.status === 429 || res.status >= 500) && i < attempts - 1) {
+        await sleep(800 * (i + 1));
+        continue;
+      }
+      return res;
+    } catch (e) {
+      lastErr = e as Error;
+      if (i < attempts - 1) await sleep(500 * (i + 1));
+    }
+  }
+  throw lastErr ?? new Error('fetch failed');
+}
 
 function extractText(xml: string, tag: string): string {
   const cdata = xml.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tag}>`, 'i'));
@@ -47,11 +87,7 @@ function looksLikeProse(text: string): boolean {
 
 async function fetchFullArticle(url: string): Promise<{ body: string; wordCount: number }> {
   try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(ARTICLE_TIMEOUT_MS),
-      headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml' },
-      redirect: 'follow',
-    });
+    const res = await fetchWithRetry(url, PAGE_HEADERS, ARTICLE_TIMEOUT_MS);
     if (!res.ok) return { body: '', wordCount: 0 };
     const html = stripNonProse(await res.text());
     let content = '';
@@ -92,36 +128,82 @@ async function fetchFullArticle(url: string): Promise<{ body: string; wordCount:
 
 export interface FeedItem { title: string; url: string; contentSnippet: string; contentFull: string; sourceWordCount: number }
 
-export async function fetchFeed(feedUrl: string, limit: number): Promise<FeedItem[]> {
+export interface FeedResult {
+  items: FeedItem[];
+  error?: string; // the REAL reason a feed yielded nothing (surfaced to the admin)
+}
+
+export async function fetchFeed(feedUrl: string, limit: number): Promise<FeedResult> {
+  let xml = '';
   try {
-    const res = await fetch(feedUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), headers: { 'User-Agent': UA } });
-    if (!res.ok) return [];
-    const xml = await res.text();
-    const items: FeedItem[] = [];
-    const itemRegex = /<(item|entry)[\s>]([\s\S]*?)<\/\1>/gi;
-    let match: RegExpExecArray | null;
-    while ((match = itemRegex.exec(xml)) !== null && items.length < limit) {
-      const block = match[2];
-      const title = stripHtml(extractText(block, 'title'));
-      const link = block.match(/<link[^>]*href="([^"]+)"/)?.[1] || extractText(block, 'link');
-      const rawContent = extractText(block, 'content:encoded') || extractText(block, 'description')
-        || extractText(block, 'summary') || extractText(block, 'content');
-      const snippet = stripHtml(rawContent);
-      if (title && link) {
-        const { body: fullBody, wordCount } = await fetchFullArticle(link);
-        const full = fullBody || snippet.slice(0, 25000);
-        items.push({
-          title, url: link,
-          contentSnippet: snippet.slice(0, 8000),
-          contentFull: full,
-          sourceWordCount: wordCount || snippet.split(/\s+/).filter(Boolean).length,
-        });
+    const res = await fetchWithRetry(feedUrl, FEED_HEADERS, FETCH_TIMEOUT_MS);
+    if (!res.ok) {
+      const hint = res.status === 403
+        ? ' (blocked — bot protection)'
+        : res.status === 404
+        ? ' (feed URL not found)'
+        : '';
+      return { items: [], error: `HTTP ${res.status}${hint}` };
+    }
+    xml = await res.text();
+  } catch (e) {
+    const m = (e as Error).message || 'fetch failed';
+    return { items: [], error: /timeout|abort/i.test(m) ? 'timeout' : m.slice(0, 140) };
+  }
+
+  // If the URL served an HTML page instead of a feed, try to discover the feed
+  // link once (common when a homepage URL was entered instead of the feed URL).
+  if (!/<(rss|feed|rdf:RDF)[\s>]/i.test(xml) && /<html[\s>]/i.test(xml)) {
+    const disc = xml.match(
+      /<link[^>]+type=["']application\/(?:rss|atom)\+xml["'][^>]*href=["']([^"']+)["']/i,
+    )?.[1];
+    if (disc) {
+      try {
+        const abs = new URL(disc, feedUrl).toString();
+        const r2 = await fetchWithRetry(abs, FEED_HEADERS, FETCH_TIMEOUT_MS);
+        if (r2.ok) xml = await r2.text();
+      } catch { /* keep the original response */ }
+    }
+  }
+
+  if (!/<(item|entry)[\s>]/i.test(xml)) {
+    const blocked = /cloudflare|attention required|captcha|access denied|enable javascript/i.test(xml);
+    return { items: [], error: blocked ? 'blocked (bot-protection page)' : 'no feed items (not RSS/Atom?)' };
+  }
+
+  const items: FeedItem[] = [];
+  const itemRegex = /<(item|entry)[\s>]([\s\S]*?)<\/\1>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = itemRegex.exec(xml)) !== null && items.length < limit) {
+    const block = match[2];
+    const title = stripHtml(extractText(block, 'title'));
+    const link = block.match(/<link[^>]*href="([^"]+)"/)?.[1] || extractText(block, 'link');
+    if (!title || !link) continue;
+    const rawContent = extractText(block, 'content:encoded') || extractText(block, 'description') ||
+      extractText(block, 'summary') || extractText(block, 'content');
+    const snippet = stripHtml(rawContent);
+    // RSS-first: WordPress content:encoded is usually the full article, so when the
+    // feed body is already substantial we use it directly — faster, and it avoids
+    // the per-article page fetch that Cloudflare most often blocks. Only when the
+    // feed body is thin do we fetch the page.
+    let full = snippet;
+    let wc = snippet.split(/\s+/).filter(Boolean).length;
+    if (wc < 120) {
+      const art = await fetchFullArticle(link);
+      if (art.wordCount > wc) {
+        full = art.body;
+        wc = art.wordCount;
       }
     }
-    return items;
-  } catch {
-    return [];
+    items.push({
+      title,
+      url: link,
+      contentSnippet: snippet.slice(0, 8000),
+      contentFull: full.slice(0, 25000),
+      sourceWordCount: wc,
+    });
   }
+  return { items, error: items.length === 0 ? 'no usable items' : undefined };
 }
 
 export interface SourceRow {
@@ -137,12 +219,16 @@ export interface IngestResult {
 export async function ingestSource(supabase: SupabaseClient, source: SourceRow): Promise<IngestResult> {
   const result: IngestResult = { sourceId: source.id, sourceName: source.name, fetched: 0, inserted: 0, skipped_duplicates: 0, errors: 0 };
   const limit = Math.max(1, Math.min(50, source.output_limit ?? 10));
-  const items = await fetchFeed(source.url, limit);
+  const { items, error: feedError } = await fetchFeed(source.url, limit);
   result.fetched = items.length;
 
   if (items.length === 0) {
-    result.error_message = 'No items fetched from feed';
-    await supabase.from('rss_sources').update({ last_scraped_at: new Date().toISOString(), error_count: 1, error_message: 'Empty feed or fetch error' }).eq('id', source.id);
+    result.error_message = feedError || 'No items fetched from feed';
+    await supabase.from('rss_sources').update({
+      last_scraped_at: new Date().toISOString(),
+      error_count: 1,
+      error_message: (feedError || 'Empty feed or fetch error').slice(0, 200),
+    }).eq('id', source.id);
     return result;
   }
 

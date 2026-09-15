@@ -12,7 +12,7 @@ export interface Card {
 }
 export interface Article extends Card {
   content: string; summary: string; tags: string[]; county: string | null;
-  seo_title: string; seo_description: string; source_url: string | null;
+  seo_title: string; seo_description: string; source_url: string | null; updated_at: string | null;
 }
 
 function pick(r: Record<string, unknown>, base: string, locale: Locale): string {
@@ -57,7 +57,7 @@ export async function getByCategory(locale: Locale, category: string, limit = 18
 
 export async function getArticle(locale: Locale, slug: string): Promise<Article | null> {
   const l = locale;
-  const cols = `id, slug, category, county, cover_image, cover_image_credit, author_name, published_at, reading_time_min, source_url,
+  const cols = `id, slug, category, county, cover_image, cover_image_credit, author_name, published_at, updated_at, reading_time_min, source_url,
     title_${l}, title_en, excerpt_${l}, excerpt_en, summary_${l}, summary_en, content_${l}, content_en,
     seo_title_${l}, seo_title_en, seo_description_${l}, seo_description_en, tags_${l}, tags_en, author:authors(slug)`;
   const { data } = await supabaseAdmin().from('blog_posts').select(cols)
@@ -73,6 +73,7 @@ export async function getArticle(locale: Locale, slug: string): Promise<Article 
     seo_title: pick(r, 'seo_title', l) || pick(r, 'title', l),
     seo_description: pick(r, 'seo_description', l) || pick(r, 'excerpt', l),
     source_url: (r.source_url as string) ?? null,
+    updated_at: (r.updated_at as string) ?? null,
     tags: Array.isArray(tags) ? tags : [],
   };
 }
