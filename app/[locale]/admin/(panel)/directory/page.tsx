@@ -5,13 +5,23 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 // Directory CRUD — manage restaurants, wineries, developments, hotels, beaches
 // and vendors without touching SQL. Writes are authorised by the admin's JWT
 // against the "directory admin write" RLS policy (has_role admin).
+//
+// The list is fetched SERVER-SIDE (filtered + paginated). Supabase/PostgREST
+// returns at most 1000 rows per request, so an all-rows-then-filter-in-JS
+// approach silently hid whatever sorted last (wineries) once the table grew
+// past 1000. Here every filter is pushed to the database and results are
+// paged, so any type is always reachable no matter how large the table is.
 
 const TYPES = ['restaurant', 'winery', 'development', 'hotel', 'beach', 'vendor'] as const;
 const DISTRICTS = ['', 'nicosia', 'limassol', 'larnaca', 'famagusta', 'paphos', 'kyrenia'];
 const PRICE_BANDS = ['', '€', '€€', '€€€', '€€€€'];
 const LANGS = ['en', 'el', 'ro', 'ar'] as const;
+const PAGE = 100; // rows per page
 
 type Row = Record<string, any>;
+type Counts = { total: number; published: number; draft: number; byType: Record<string, number> };
+
+const ZERO_COUNTS: Counts = { total: 0, published: 0, draft: 0, byType: {} };
 
 const BLANK: Row = {
   id: null, slug: '', type: 'restaurant', district: '',
@@ -33,17 +43,58 @@ function slugify(s: string) {
 export default function DirectoryAdmin() {
   const sb = supabaseBrowser();
   const [rows, setRows] = useState<Row[]>([]);
+  const [counts, setCounts] = useState<Counts>(ZERO_COUNTS);
   const [form, setForm] = useState<Row>(BLANK);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-  const [filter, setFilter] = useState('all');
+  const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    const { data, error } = await sb.from('directory_listings').select('*').order('type').order('name_en');
-    if (error) setMsg(error.message);
-    setRows((data as Row[]) || []);
+  // View controls (all pushed to the server)
+  const [filter, setFilter] = useState('all');       // type
+  const [statusFilter, setStatusFilter] = useState('all'); // published | draft | all
+  const [search, setSearch] = useState('');          // applied search term
+  const [searchInput, setSearchInput] = useState(''); // the text box
+  const [page, setPage] = useState(0);
+  const [filteredCount, setFilteredCount] = useState(0);
+
+  // ── accurate counts, straight from the database (not capped by the 1000 window) ──
+  const loadCounts = useCallback(async () => {
+    const head = (build: (q: any) => any) =>
+      build(sb.from('directory_listings').select('*', { count: 'exact', head: true }));
+    const [total, published, draft, ...byTypeRes] = await Promise.all([
+      head((q) => q),
+      head((q) => q.eq('status', 'published')),
+      head((q) => q.eq('status', 'draft')),
+      ...TYPES.map((t) => head((q) => q.eq('type', t))),
+    ]);
+    const byType: Record<string, number> = {};
+    TYPES.forEach((t, i) => { byType[t] = byTypeRes[i]?.count || 0; });
+    setCounts({ total: total.count || 0, published: published.count || 0, draft: draft.count || 0, byType });
   }, [sb]);
+
+  // ── the visible page of rows, filtered + ordered + paged on the server ──
+  const load = useCallback(async () => {
+    setLoading(true);
+    let q = sb.from('directory_listings').select('*', { count: 'exact' }).order('type').order('name_en');
+    if (filter !== 'all') q = q.eq('type', filter);
+    if (statusFilter !== 'all') q = q.eq('status', statusFilter);
+    const term = search.trim().replace(/[,()*%]/g, ' ').trim();
+    if (term) q = q.or(`name_en.ilike.*${term}*,slug.ilike.*${term}*,name_el.ilike.*${term}*`);
+    q = q.range(page * PAGE, page * PAGE + PAGE - 1);
+    const { data, count, error } = await q;
+    setLoading(false);
+    if (error) { setMsg(error.message); return; }
+    setRows((data as Row[]) || []);
+    setFilteredCount(count || 0);
+  }, [sb, filter, statusFilter, search, page]);
+
+  useEffect(() => { loadCounts(); }, [loadCounts]);
   useEffect(() => { load(); }, [load]);
+
+  // Reset to the first page whenever the filters change.
+  useEffect(() => { setPage(0); }, [filter, statusFilter, search]);
+
+  async function refresh() { await Promise.all([load(), loadCounts()]); }
 
   function edit(r: Row) {
     setForm({ ...BLANK, ...r, tags: Array.isArray(r.tags) ? r.tags.join(', ') : '' });
@@ -70,28 +121,34 @@ export default function DirectoryAdmin() {
       : await sb.from('directory_listings').insert(payload);
     setBusy(false);
     if (res.error) { setMsg(res.error.message); return; }
-    setMsg(form.id ? 'Saved.' : 'Added.'); reset(); load();
+    setMsg(form.id ? 'Saved.' : 'Added.'); reset(); refresh();
   }
 
   async function remove(r: Row) {
-    if (!confirm(`Delete “${r.name_en || r.slug}” permanently? This cannot be undone.`)) return;
+    if (!confirm(`Delete "${r.name_en || r.slug}" permanently? This cannot be undone.`)) return;
     const { error } = await sb.from('directory_listings').delete().eq('id', r.id);
     if (error) { setMsg(error.message); return; }
     if (form.id === r.id) reset();
-    load();
+    refresh();
   }
   async function toggle(r: Row, field: 'featured' | 'status') {
     const patch = field === 'featured' ? { featured: !r.featured } : { status: r.status === 'published' ? 'draft' : 'published' };
-    await sb.from('directory_listings').update(patch).eq('id', r.id); load();
+    await sb.from('directory_listings').update(patch).eq('id', r.id);
+    refresh();
   }
 
-  const shown = filter === 'all' ? rows : rows.filter((r) => r.type === filter);
   const set = (k: string, v: any) => setForm((f) => ({ ...f, [k]: v }));
+  const pages = Math.max(1, Math.ceil(filteredCount / PAGE));
+  const from = filteredCount === 0 ? 0 : page * PAGE + 1;
+  const to = Math.min(page * PAGE + PAGE, filteredCount);
 
   return (
     <>
       <h1>Directory · listings</h1>
-      <p className="sub">{rows.length} listings. Add or edit restaurants, wineries, developments, hotels, beaches and services. Coordinates power the map on each directory page.</p>
+      <p className="sub">
+        <strong>{counts.total}</strong> listings in total — {counts.published} published, {counts.draft} draft.
+        Add or edit restaurants, wineries, developments, hotels, beaches and services. Coordinates power the map on each directory page.
+      </p>
 
       <form onSubmit={save} style={{ background: '#fff', border: '1px solid #e3ddcf', borderRadius: 4, padding: 18, marginBottom: 22 }}>
         <h1 style={{ fontSize: 18 }}>{form.id ? 'Edit listing' : 'New listing'}</h1>
@@ -173,17 +230,51 @@ export default function DirectoryAdmin() {
         </div>
       </form>
 
-      <div className="row" style={{ marginBottom: 12 }}>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)} style={{ width: 180 }}>
-          <option value="all">All types ({rows.length})</option>
-          {TYPES.map((t) => <option key={t} value={t}>{t} ({rows.filter((r) => r.type === t).length})</option>)}
-        </select>
+      {/* ── Filters: type · status · search (all server-side) ── */}
+      <div className="row" style={{ marginBottom: 12, alignItems: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          <label className="fl">Type</label>
+          <select value={filter} onChange={(e) => setFilter(e.target.value)} style={{ width: 200 }}>
+            <option value="all">All types ({counts.total})</option>
+            {TYPES.map((t) => <option key={t} value={t}>{t} ({counts.byType[t] ?? 0})</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="fl">Status</label>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ width: 170 }}>
+            <option value="all">All ({counts.total})</option>
+            <option value="published">published ({counts.published})</option>
+            <option value="draft">draft ({counts.draft})</option>
+          </select>
+        </div>
+        <form
+          onSubmit={(e) => { e.preventDefault(); setSearch(searchInput); }}
+          style={{ display: 'flex', gap: 6, alignItems: 'flex-end', flex: '1 1 260px' }}
+        >
+          <div style={{ flex: '1 1 auto' }}>
+            <label className="fl">Search name or slug</label>
+            <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="e.g. tsiakkas, winery, kyrenia…" />
+          </div>
+          <button className="abtn" type="submit">Search</button>
+          {search ? <button className="abtn ghost" type="button" onClick={() => { setSearchInput(''); setSearch(''); }}>Clear</button> : null}
+        </form>
+      </div>
+
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ color: '#8a8371', fontSize: 13 }}>
+          {loading ? 'Loading…' : `Showing ${from}–${to} of ${filteredCount}`}
+        </span>
+        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button className="abtn ghost" type="button" disabled={page <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>← Prev</button>
+          <span style={{ fontSize: 13, color: '#8a8371' }}>Page {page + 1} / {pages}</span>
+          <button className="abtn ghost" type="button" disabled={page + 1 >= pages} onClick={() => setPage((p) => p + 1)}>Next →</button>
+        </span>
       </div>
 
       <table className="adm-t">
         <thead><tr><th>Name</th><th>Type</th><th>District</th><th>Coords</th><th>Status</th><th>Featured</th><th></th></tr></thead>
         <tbody>
-          {shown.map((r) => (
+          {rows.map((r) => (
             <tr key={r.id} style={{ opacity: r.status === 'published' ? 1 : 0.55 }}>
               <td>{r.name_en || r.slug}<br /><span style={{ color: '#8a8371', fontSize: 12 }}>{r.slug}</span></td>
               <td>{r.type}</td>
@@ -197,9 +288,17 @@ export default function DirectoryAdmin() {
               </td>
             </tr>
           ))}
-          {shown.length === 0 ? <tr><td colSpan={7}>No listings.</td></tr> : null}
+          {!loading && rows.length === 0 ? <tr><td colSpan={7}>No listings match these filters.</td></tr> : null}
         </tbody>
       </table>
+
+      {pages > 1 ? (
+        <div className="row" style={{ justifyContent: 'center', gap: 6, marginTop: 12 }}>
+          <button className="abtn ghost" type="button" disabled={page <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>← Prev</button>
+          <span style={{ fontSize: 13, color: '#8a8371' }}>Page {page + 1} / {pages}</span>
+          <button className="abtn ghost" type="button" disabled={page + 1 >= pages} onClick={() => setPage((p) => p + 1)}>Next →</button>
+        </div>
+      ) : null}
     </>
   );
 }
