@@ -38,7 +38,7 @@ export default async function Dashboard() {
         <div className="stat"><div className="n">{overview.views_7d ?? 0}</div><div className="k">Views · 7d</div></div>
         <div className="stat"><div className="n">{overview.visitors_7d ?? 0}</div><div className="k">Visitors · 7d</div></div>
         <div className="stat"><div className="n">{overview.live_5min ?? 0}</div><div className="k">Live now</div></div>
-        <div className="stat"><div className="n">${spendToday.toFixed(2)}</div><div className="k">AI spend · today (USD, incl. admin)</div></div>
+        <div className="stat"><div className="n">${spendToday.toFixed(2)}</div><div className="k">AI spend · today (USD)</div></div>
       </div>
       <div className="cards">
         <div className="stat"><div className="n">{published}</div><div className="k">Published</div></div>

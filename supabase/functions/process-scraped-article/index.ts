@@ -1201,12 +1201,11 @@ const PRICE: Record<string, { in: number; out: number }> = {
 // over-reported, never silently understated.
 const DEFAULT_PRICE = { in: 5, out: 25 };
 
-// Admin surcharge added on top of the raw provider cost of every logged call —
-// the admin cost for the provided LLM. Default 25% (multiplier 1.25); change the
-// percentage via the ADMIN_MARKUP_PCT secret. base_usd (pre-markup) is kept in
-// meta so the raw provider cost is always auditable.
-const ADMIN_MARKUP_PCT = Number(Deno.env.get("ADMIN_MARKUP_PCT") || "25");
-const COST_MULTIPLIER = 1 + (ADMIN_MARKUP_PCT / 100);
+// Markup added on top of the raw provider cost of every logged call. Default 25%
+// (multiplier 1.25); change the percentage via the COST_MARKUP_PCT secret.
+// base_usd (pre-markup) is kept in meta so the raw provider cost stays auditable.
+const COST_MARKUP_PCT = Number(Deno.env.get("COST_MARKUP_PCT") || "25");
+const COST_MULTIPLIER = 1 + (COST_MARKUP_PCT / 100);
 
 // Chars→tokens fallback for the rare response that omits a usage block. Inflated
 // ~30% for the Claude 4.7+ tokenizer and non-Latin scripts (EL/AR), so an
@@ -1221,7 +1220,7 @@ async function logSpend(provider: string, model: string, fn: string, inTok: numb
   try {
     const p = PRICE[model] ?? DEFAULT_PRICE;
     const base = ((inTok * p.in) + (outTok * p.out)) / 1_000_000;
-    const usd = +(base * COST_MULTIPLIER).toFixed(6); // raw provider cost + admin markup
+    const usd = +(base * COST_MULTIPLIER).toFixed(6); // raw provider cost + markup
     await adminClient().from("ai_spend_log").insert({
       provider,
       model,
@@ -1235,7 +1234,7 @@ async function logSpend(provider: string, model: string, fn: string, inTok: numb
         out_tokens: outTok,
         priced: PRICE[model] ? "table" : "default",
         base_usd: +base.toFixed(6),
-        admin_markup_pct: ADMIN_MARKUP_PCT,
+        markup_pct: COST_MARKUP_PCT,
       },
     });
   } catch { /* telemetry */ }

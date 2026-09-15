@@ -34,11 +34,11 @@ const PRICE_PER_MTOK: Record<string, { in: number; out: number }> = {
   [GEMINI_MODEL]: { in: 0.3, out: 2.5 },
 };
 
-// Admin surcharge on the raw provider cost — the admin cost for the provided LLM.
-// Default 25% (1.25x); change via the ADMIN_MARKUP_PCT env var. Kept in step with
-// the edge function so every ai_spend_log row, from either side, carries the markup.
-const ADMIN_MARKUP_PCT = Number(process.env.ADMIN_MARKUP_PCT || '25');
-const COST_MULTIPLIER = 1 + (ADMIN_MARKUP_PCT / 100);
+// Markup on the raw provider cost. Default 25% (1.25x); change via the
+// COST_MARKUP_PCT env var. Kept in step with the edge function so every
+// ai_spend_log row, from either side, carries the same markup.
+const COST_MARKUP_PCT = Number(process.env.COST_MARKUP_PCT || '25');
+const COST_MULTIPLIER = 1 + (COST_MARKUP_PCT / 100);
 
 // Raw provider cost (no markup). Callers apply COST_MULTIPLIER for the logged usd.
 function estimateUsd(model: string, inTok: number, outTok: number): number {
@@ -104,8 +104,8 @@ export async function callClaude(req: AiRequest & { fn?: string }): Promise<AiRe
     const inTok = data.usage?.input_tokens ?? 0;
     const outTok = data.usage?.output_tokens ?? 0;
     const base = estimateUsd(model, inTok, outTok);
-    const usd = +(base * COST_MULTIPLIER).toFixed(6); // raw provider cost + admin markup
-    await logSpend({ provider: 'anthropic', model, function_name: fn, units: inTok + outTok, usd, meta: { in: inTok, out: outTok, base_usd: base, admin_markup_pct: ADMIN_MARKUP_PCT } });
+    const usd = +(base * COST_MULTIPLIER).toFixed(6); // raw provider cost + markup
+    await logSpend({ provider: 'anthropic', model, function_name: fn, units: inTok + outTok, usd, meta: { in: inTok, out: outTok, base_usd: base, markup_pct: COST_MARKUP_PCT } });
     return { text, usd, inputTokens: inTok, outputTokens: outTok };
   } catch (e) {
     return { text: '', error: (e as Error).message };
@@ -137,8 +137,8 @@ export async function callOpenAI(req: AiRequest & { fn?: string }): Promise<AiRe
     const inTok = data.usage?.prompt_tokens ?? 0;
     const outTok = data.usage?.completion_tokens ?? 0;
     const base = estimateUsd(model, inTok, outTok);
-    const usd = +(base * COST_MULTIPLIER).toFixed(6); // raw provider cost + admin markup
-    await logSpend({ provider: 'openai', model, function_name: fn, units: inTok + outTok, usd, meta: { in: inTok, out: outTok, base_usd: base, admin_markup_pct: ADMIN_MARKUP_PCT } });
+    const usd = +(base * COST_MULTIPLIER).toFixed(6); // raw provider cost + markup
+    await logSpend({ provider: 'openai', model, function_name: fn, units: inTok + outTok, usd, meta: { in: inTok, out: outTok, base_usd: base, markup_pct: COST_MARKUP_PCT } });
     return { text, usd, inputTokens: inTok, outputTokens: outTok };
   } catch (e) {
     return { text: '', error: (e as Error).message };
@@ -171,8 +171,8 @@ export async function callGemini(req: AiRequest & { fn?: string }): Promise<AiRe
     const inTok = data.usageMetadata?.promptTokenCount ?? 0;
     const outTok = data.usageMetadata?.candidatesTokenCount ?? 0;
     const base = estimateUsd(model, inTok, outTok);
-    const usd = +(base * COST_MULTIPLIER).toFixed(6); // raw provider cost + admin markup
-    await logSpend({ provider: 'google', model, function_name: fn, units: inTok + outTok, usd, meta: { in: inTok, out: outTok, base_usd: base, admin_markup_pct: ADMIN_MARKUP_PCT } });
+    const usd = +(base * COST_MULTIPLIER).toFixed(6); // raw provider cost + markup
+    await logSpend({ provider: 'google', model, function_name: fn, units: inTok + outTok, usd, meta: { in: inTok, out: outTok, base_usd: base, markup_pct: COST_MARKUP_PCT } });
     return { text, usd, inputTokens: inTok, outputTokens: outTok };
   } catch (e) {
     return { text: '', error: (e as Error).message };
