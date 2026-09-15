@@ -17,7 +17,9 @@
     "people": "People",
     "menu": "Menu",
     "close": "Close",
-    "search": "Search"
+    "search": "Search",
+    "directory": "Directory",
+    "membership": "Membership"
   },
   "common": {
     "readMore": "Read more",
@@ -168,5 +170,46 @@
     "resultsFor": "Results for",
     "none": "Nothing found for",
     "prompt": "Type a word or two to search the magazine."
+  },
+  "directory": {
+    "title": "Directory",
+    "intro": "The island, listed — where to eat, taste, stay and buy.",
+    "all": "All",
+    "visit": "Visit website",
+    "none": "Nothing listed here yet.",
+    "restaurant": "Restaurants",
+    "winery": "Wineries",
+    "development": "Developments",
+    "hotel": "Hotels",
+    "beach": "Beaches",
+    "vendor": "Services"
+  },
+  "membership": {
+    "kicker": "Membership",
+    "title": "Become a member",
+    "dek": "Join the Cyprus Lifestyle readership — the island's business, culture and good living, in four languages.",
+    "intro": "Membership begins free, and always will. Every reader gets the Saturday Letter, all four editions, and the full run of the magazine and its directory. A paid tier — with member evenings, the print edition and partner privileges — is on the way.",
+    "free": {
+      "name": "Reader",
+      "price": "Free",
+      "cta": "Join free",
+      "features": [
+        "The Saturday Letter, every week",
+        "All four editions — English, Greek, Romanian and Arabic",
+        "Every article, and the full island directory"
+      ]
+    },
+    "patron": {
+      "name": "Patron",
+      "price": "Coming soon",
+      "features": [
+        "Everything in Reader",
+        "Invitations to member evenings and tastings",
+        "The seasonal print edition, posted to you",
+        "Privileges with selected names in our directory"
+      ]
+    },
+    "soon": "Paid membership isn't open yet. Join free as a Reader and you'll be the first to hear when Patron opens.",
+    "note": "Questions about membership or corporate subscriptions? Write to us via"
   }
 }

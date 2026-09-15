@@ -88,6 +88,68 @@ export async function getArticle(locale: Locale, slug: string): Promise<Article 
   };
 }
 
+// ── Directory / listings ─────────────────────────────────────────────────────
+export const DIRECTORY_TYPES = ['restaurant', 'winery', 'development', 'hotel', 'beach', 'vendor'] as const;
+export type DirectoryType = typeof DIRECTORY_TYPES[number];
+export interface Listing {
+  id: string; slug: string; type: string; district: string | null;
+  name: string; summary: string; address: string | null;
+  lat: number | null; lng: number | null; price_band: string | null;
+  url: string | null; phone: string | null; image: string | null;
+  tags: string[]; featured: boolean;
+}
+const LISTING_COLS = (l: Locale) =>
+  `id, slug, type, district, address, lat, lng, price_band, url, phone, image, tags, featured, name_${l}, name_en, summary_${l}, summary_en`;
+function toListing(r: Record<string, unknown>, l: Locale): Listing {
+  return {
+    id: String(r.id), slug: String(r.slug), type: String(r.type), district: (r.district as string) ?? null,
+    name: pick(r, 'name', l), summary: pick(r, 'summary', l),
+    address: (r.address as string) ?? null,
+    lat: (r.lat as number) ?? null, lng: (r.lng as number) ?? null,
+    price_band: (r.price_band as string) ?? null, url: (r.url as string) ?? null,
+    phone: (r.phone as string) ?? null, image: (r.image as string) ?? null,
+    tags: (r.tags as string[]) ?? [], featured: Boolean(r.featured),
+  };
+}
+export async function getListings(locale: Locale, type?: string, limit = 200): Promise<Listing[]> {
+  let q = supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale)).eq('status', 'published');
+  if (type) q = q.eq('type', type);
+  const { data } = await q.order('featured', { ascending: false }).order('name_en', { ascending: true }).limit(limit);
+  return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale)).filter((x) => x.name);
+}
+export async function getListing(locale: Locale, slug: string): Promise<Listing | null> {
+  const { data } = await supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale))
+    .eq('status', 'published').eq('slug', slug).maybeSingle();
+  return data ? toListing(data as unknown as Record<string, unknown>, locale) : null;
+}
+
+// ── Events / Agenda ──────────────────────────────────────────────────────────
+export interface EventItem {
+  id: string; slug: string; district: string | null;
+  title: string; summary: string; venue: string | null;
+  starts_at: string; ends_at: string | null; price: string | null;
+  url: string | null; image: string | null; lat: number | null; lng: number | null; tags: string[];
+}
+const EVENT_COLS = (l: Locale) =>
+  `id, slug, district, venue, starts_at, ends_at, price, url, image, lat, lng, tags, title_${l}, title_en, summary_${l}, summary_en`;
+function toEvent(r: Record<string, unknown>, l: Locale): EventItem {
+  return {
+    id: String(r.id), slug: String(r.slug), district: (r.district as string) ?? null,
+    title: pick(r, 'title', l), summary: pick(r, 'summary', l), venue: (r.venue as string) ?? null,
+    starts_at: String(r.starts_at), ends_at: (r.ends_at as string) ?? null, price: (r.price as string) ?? null,
+    url: (r.url as string) ?? null, image: (r.image as string) ?? null,
+    lat: (r.lat as number) ?? null, lng: (r.lng as number) ?? null, tags: (r.tags as string[]) ?? [],
+  };
+}
+export async function getUpcomingEvents(locale: Locale, limit = 60): Promise<EventItem[]> {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const { data } = await supabaseAdmin().from('events').select(EVENT_COLS(locale))
+    .eq('status', 'published').gte('starts_at', start.toISOString())
+    .order('starts_at', { ascending: true }).limit(limit);
+  return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toEvent(r, locale)).filter((e) => e.title);
+}
+
 export interface Banner { id: string; advertiser_name: string; headline: string; body: string; cta: string; url: string; image_url: string | null; bg_color: string; accent_color: string }
 export async function getBanner(locale: Locale, slot = 'sidebar-homepage'): Promise<Banner | null> {
   const l = locale;
