@@ -17,7 +17,9 @@
     "people": "Oameni",
     "menu": "Meniu",
     "close": "Închide",
-    "search": "Căutare"
+    "search": "Căutare",
+    "directory": "Ghid",
+    "membership": "Membri"
   },
   "common": {
     "readMore": "Citește mai mult",
@@ -161,5 +163,53 @@
     "accept": "Accept",
     "decline": "Refuz",
     "learnMore": "Confidențialitate"
+  },
+  "search": {
+    "placeholder": "Caută în Cyprus Lifestyle",
+    "button": "Caută",
+    "resultsFor": "Rezultate pentru",
+    "none": "Nu s-a găsit nimic pentru",
+    "prompt": "Scrie unul-două cuvinte pentru a căuta."
+  },
+  "directory": {
+    "title": "Ghid",
+    "intro": "Insula, în listă — unde să mănânci, să deguști, să stai și să cumperi.",
+    "all": "Toate",
+    "visit": "Vizitează site-ul",
+    "none": "Încă nimic listat aici.",
+    "restaurant": "Restaurante",
+    "winery": "Crame",
+    "development": "Dezvoltări",
+    "hotel": "Hoteluri",
+    "beach": "Plaje",
+    "vendor": "Servicii"
+  },
+  "membership": {
+    "kicker": "Membri",
+    "title": "Deveniți membru",
+    "dek": "Alăturați-vă comunității Cyprus Lifestyle — afacerile, cultura și viața bună a insulei, în patru limbi.",
+    "intro": "Calitatea de membru începe gratuit și așa va rămâne. Fiecare cititor primește Scrisoarea de sâmbătă, toate cele patru ediții și întreaga colecție a revistei și a ghidului său. Un nivel cu plată — cu seri pentru membri, ediția tipărită și privilegii de la parteneri — este pe cale să apară.",
+    "free": {
+      "name": "Cititor",
+      "price": "Gratuit",
+      "cta": "Înscrieți-vă gratuit",
+      "features": [
+        "Scrisoarea de sâmbătă, în fiecare săptămână",
+        "Toate cele patru ediții — engleză, greacă, română și arabă",
+        "Fiecare articol și întregul ghid al insulei"
+      ]
+    },
+    "patron": {
+      "name": "Patron",
+      "price": "În curând",
+      "features": [
+        "Tot ce include nivelul Cititor",
+        "Invitații la seri pentru membri și degustări",
+        "Ediția tipărită de sezon, trimisă prin poștă",
+        "Privilegii cu nume selectate din ghidul nostru"
+      ]
+    },
+    "soon": "Abonamentul cu plată nu este încă disponibil. Înscrieți-vă gratuit ca Cititor și veți fi primii care află când se deschide nivelul Patron.",
+    "note": "Întrebări despre calitatea de membru sau abonamente corporative? Scrieți-ne prin"
   }
 }

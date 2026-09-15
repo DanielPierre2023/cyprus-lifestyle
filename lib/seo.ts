@@ -121,6 +121,117 @@ export function breadcrumbJsonLd(locale: Locale, items: { name: string; path: st
   };
 }
 
+const LISTING_SCHEMA_TYPE: Record<string, string> = {
+  restaurant: 'Restaurant',
+  winery: 'Winery',
+  hotel: 'Hotel',
+  development: 'ApartmentComplex',
+  beach: 'Beach',
+  vendor: 'LocalBusiness',
+};
+
+/** LocalBusiness (or a more specific subtype) JSON-LD for a directory listing. */
+export function listingJsonLd(a: {
+  locale: Locale; slug: string; type: string; name: string; description?: string;
+  url?: string | null; image?: string | null; address?: string | null;
+  lat?: number | null; lng?: number | null; district?: string | null; priceRange?: string | null;
+}) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': LISTING_SCHEMA_TYPE[a.type] || 'LocalBusiness',
+    '@id': urlFor(a.locale, `/directory/${a.type}/${a.slug}`),
+    name: a.name,
+    description: a.description || undefined,
+    url: urlFor(a.locale, `/directory/${a.type}/${a.slug}`),
+    sameAs: a.url ? [a.url] : undefined,
+    image: a.image ? [a.image] : undefined,
+    priceRange: a.priceRange || undefined,
+    address: (a.address || a.district)
+      ? {
+        '@type': 'PostalAddress',
+        streetAddress: a.address || undefined,
+        addressRegion: a.district ? a.district[0].toUpperCase() + a.district.slice(1) : undefined,
+        addressCountry: 'CY',
+      }
+      : undefined,
+    geo: (typeof a.lat === 'number' && typeof a.lng === 'number')
+      ? { '@type': 'GeoCoordinates', latitude: a.lat, longitude: a.lng }
+      : undefined,
+    areaServed: 'CY',
+  };
+}
+
+/** ItemList JSON-LD for a directory listing page. */
+export function itemListJsonLd(locale: Locale, items: { name: string; type: string; slug: string }[]) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    itemListElement: items.map((it, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: it.name,
+      url: urlFor(locale, `/directory/${it.type}/${it.slug}`),
+    })),
+  };
+}
+
+/** Event JSON-LD for an agenda entry. */
+export function eventJsonLd(a: {
+  locale: Locale; name: string; description?: string; startsAt: string; endsAt?: string | null;
+  venue?: string | null; district?: string | null; url?: string | null; image?: string | null;
+  lat?: number | null; lng?: number | null; price?: string | null;
+}) {
+  const placeName = a.venue || (a.district ? a.district[0].toUpperCase() + a.district.slice(1) : 'Cyprus');
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Event',
+    name: a.name,
+    description: a.description || undefined,
+    startDate: a.startsAt,
+    endDate: a.endsAt || undefined,
+    eventStatus: 'https://schema.org/EventScheduled',
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+    image: a.image ? [a.image] : undefined,
+    url: a.url || undefined,
+    location: {
+      '@type': 'Place',
+      name: placeName,
+      address: { '@type': 'PostalAddress', addressRegion: a.district || undefined, addressCountry: 'CY' },
+      geo: (typeof a.lat === 'number' && typeof a.lng === 'number')
+        ? { '@type': 'GeoCoordinates', latitude: a.lat, longitude: a.lng }
+        : undefined,
+    },
+    offers: a.price
+      ? { '@type': 'Offer', price: a.price, priceCurrency: 'EUR', url: a.url || undefined }
+      : undefined,
+    organizer: { '@id': `${SITE_URL}/#organization` },
+  };
+}
+
+/** FAQPage JSON-LD. items: [{q, a}]. */
+export function faqJsonLd(items: { q: string; a: string }[]) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: items.map((it) => ({
+      '@type': 'Question',
+      name: it.q,
+      acceptedAnswer: { '@type': 'Answer', text: it.a },
+    })),
+  };
+}
+
+/** HowTo JSON-LD. steps: ordered strings. */
+export function howToJsonLd(name: string, steps: string[], description?: string) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'HowTo',
+    name,
+    description,
+    step: steps.map((s, i) => ({ '@type': 'HowToStep', position: i + 1, text: s })),
+  };
+}
+
 /** Small helper component data: stringify + guard for dangerouslySetInnerHTML. */
 export function ld(obj: unknown): string {
   return JSON.stringify(obj).replace(/</g, '\\u003c');

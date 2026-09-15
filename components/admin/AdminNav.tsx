@@ -2,7 +2,7 @@
 import { usePathname } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
-// The 13 admin tabs (Romanian originals in parentheses for parity with TT).
+// The admin tabs (Romanian originals in parentheses for parity with TT).
 const TABS = [
   { href: '/admin', label: 'Dashboard' },
   { grp: 'Newsroom' },
@@ -11,6 +11,9 @@ const TABS = [
   { href: '/admin/articles', label: 'Articles (Articole)' },
   { href: '/admin/scraper', label: 'Scraper RSS' },
   { href: '/admin/comments', label: 'Comments (Comentarii)' },
+  { grp: 'Listings' },
+  { href: '/admin/directory', label: 'Directory' },
+  { href: '/admin/agenda', label: 'Agenda / events' },
   { grp: 'Audience' },
   { href: '/admin/social', label: 'Social' },
   { href: '/admin/newsletter', label: 'Newsletter' },

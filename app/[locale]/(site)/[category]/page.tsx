@@ -11,7 +11,9 @@ import NewsletterSignup from '@/components/NewsletterSignup';
 
 export const revalidate = 300;
 
-const CATS = ['cyprus', 'business', 'property', 'relocation', 'culture', 'escapes', 'table', 'agenda', 'people', 'world'];
+// 'agenda' is handled by the dedicated /agenda events page (static route), so it
+// is intentionally excluded here to avoid a route conflict.
+const CATS = ['cyprus', 'business', 'property', 'relocation', 'culture', 'escapes', 'table', 'people', 'world'];
 
 // Prerender all sections so they are cache HITs from the first click, per locale.
 export function generateStaticParams() {

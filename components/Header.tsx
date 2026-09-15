@@ -34,12 +34,15 @@ export default function Header() {
             <span className="hide" suppressHydrationWarning>{date}</span>
           </div>
           <div className="r">
-            <div className="langs" aria-label={t('search') /* editions */}>
+            <div className="langs" aria-label="editions">
               {LOCALES.map((l: Locale) => (
                 <Link key={l} href={pathname} locale={l} hrefLang={l}
                   className={l === locale ? 'active' : ''}>{langLabel(l)}</Link>
               ))}
             </div>
+            <Link className="sub" href="/directory">{t('directory')}</Link>
+            <Link className="sub hide" href="/search" aria-label={t('search')}>{t('search')}</Link>
+            <Link className="sub" href="/membership">{t('membership')}</Link>
             <Link className="sub" href="/#letter">{th('subscribe')}</Link>
           </div>
         </div>

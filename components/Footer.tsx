@@ -20,8 +20,10 @@ export default async function Footer() {
           </div>
           <div>
             <h4>{t('home.magazine')}</h4>
+            <Link href="/directory">{t('directory.title')}</Link>
+            <Link href="/search">{t('nav.search')}</Link>
+            <Link href="/membership">{t('nav.membership')}</Link>
             <Link href="/#letter">{t('home.letterTitle')}</Link>
-            <Link href="/#letter">{t('home.subscribe')}</Link>
             <Link href="/advertise">{t('footer.advertise')}</Link>
           </div>
           <div>

@@ -4,7 +4,8 @@ import { urlFor } from '@/lib/seo';
 
 export const revalidate = 3600;
 
-const STATIC = ['/', '/property', '/relocation', '/culture', '/cyprus', '/business', '/escapes', '/table', '/agenda', '/people', '/world', '/about', '/advertise', '/contact', '/privacy'];
+const STATIC = ['/', '/property', '/relocation', '/culture', '/cyprus', '/business', '/escapes', '/table', '/agenda', '/people', '/world', '/directory', '/membership', '/about', '/advertise', '/contact', '/standards', '/privacy'];
+const DIRECTORY_TYPES = ['restaurant', 'winery', 'development', 'hotel', 'beach', 'vendor'];
 
 function entry(path: string, lastModified?: Date): MetadataRoute.Sitemap[number] {
   return {
@@ -16,19 +17,23 @@ function entry(path: string, lastModified?: Date): MetadataRoute.Sitemap[number]
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = STATIC.map((p) => entry(p));
+  entries.push(...DIRECTORY_TYPES.map((tp) => entry(`/directory/${tp}`)));
   try {
     const { supabaseAdmin } = await import('@/lib/supabase/admin');
-    const { data } = await supabaseAdmin()
-      .from('blog_posts')
-      .select('slug, published_at')
-      .eq('status', 'published')
-      .order('published_at', { ascending: false })
-      .limit(2000);
-    for (const r of (data || []) as { slug: string; published_at: string | null }[]) {
+    const sb = supabaseAdmin();
+    const [{ data: posts }, { data: listings }] = await Promise.all([
+      sb.from('blog_posts').select('slug, published_at').eq('status', 'published')
+        .order('published_at', { ascending: false }).limit(2000),
+      sb.from('directory_listings').select('slug, type, updated_at').eq('status', 'published').limit(2000),
+    ]);
+    for (const r of (posts || []) as { slug: string; published_at: string | null }[]) {
       entries.push(entry(`/article/${r.slug}`, r.published_at ? new Date(r.published_at) : undefined));
     }
+    for (const r of (listings || []) as { slug: string; type: string; updated_at: string | null }[]) {
+      entries.push(entry(`/directory/${r.type}/${r.slug}`, r.updated_at ? new Date(r.updated_at) : undefined));
+    }
   } catch {
-    /* a sitemap of the static routes is still valid without the article list */
+    /* a sitemap of the static routes is still valid without the dynamic lists */
   }
   return entries;
 }
