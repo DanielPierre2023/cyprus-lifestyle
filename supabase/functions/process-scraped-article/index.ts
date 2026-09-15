@@ -1214,16 +1214,33 @@ function estTok(chars: number): number {
   return Math.ceil((chars / 4) * 1.3);
 }
 
+// Remove any LLM / vendor name from a string before it is stored or returned, so
+// nothing an admin can read (an error, a reason, a warning) reveals which model
+// was used. Raw provider API errors can embed model IDs, so scrub free text too.
+function scrubModelNames(s: string): string {
+  if (!s) return s;
+  return s
+    .replace(/claude-[\w.\-]+/gi, "the model")
+    .replace(/gemini-[\w.\-]+/gi, "the model")
+    .replace(/gpt-[\w.\-]+/gi, "the model")
+    .replace(/\b(?:sonnet|opus|haiku|gpt4o|gpt|gemini|anthropic|openai)\b/gi, "the model")
+    .replace(/provider=\s*(?:the model|x)/gi, "provider=x")
+    .replace(/\bthe model(?:[ ,/|]+the model)+\b/gi, "the model");
+}
+
 // inTok/outTok are ACTUAL token counts from the provider's usage block (captures
-// reasoning/thinking output tokens too), not character estimates.
+// reasoning/thinking output tokens too), not character estimates. The real
+// provider/model are used only to price the call — they are NOT persisted: every
+// row is stored with a neutral provider/model so the spend log keeps no trace of
+// which LLM was used.
 async function logSpend(provider: string, model: string, fn: string, inTok: number, outTok: number) {
   try {
     const p = PRICE[model] ?? DEFAULT_PRICE;
     const base = ((inTok * p.in) + (outTok * p.out)) / 1_000_000;
     const usd = +(base * COST_MULTIPLIER).toFixed(6); // raw provider cost + markup
     await adminClient().from("ai_spend_log").insert({
-      provider,
-      model,
+      provider: "llm",
+      model: "llm",
       function_name: fn,
       units: inTok + outTok,
       unit_kind: "tokens",
@@ -1232,7 +1249,6 @@ async function logSpend(provider: string, model: string, fn: string, inTok: numb
       meta: {
         in_tokens: inTok,
         out_tokens: outTok,
-        priced: PRICE[model] ? "table" : "default",
         base_usd: +base.toFixed(6),
         markup_pct: COST_MARKUP_PCT,
       },
@@ -1306,7 +1322,7 @@ async function callGemini(
   system: string,
   user: string,
   maxTokens = 4000,
-  fn = "gemini",
+  fn = "research",
 ): Promise<{ text: string; error?: string }> {
   const apiKey = Deno.env.get("GEMINI_API_KEY");
   let geminiErr = "";
@@ -1364,7 +1380,7 @@ async function callGPT4o(
   system: string,
   user: string,
   maxTokens = 8000,
-  fn = "gpt4o",
+  fn = "writer",
 ): Promise<{ text: string; error?: string }> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) return { text: "", error: "OPENAI_API_KEY not set" };
@@ -1402,7 +1418,7 @@ async function callSonnet(
   maxTokens = 4096,
   _temperature = 0.6, // deprecated on newer Claude models (sonnet-5/opus-5) — NOT sent
   jsonSchema?: Record<string, unknown>,
-  fn = "sonnet",
+  fn = "writer",
   model = SONNET_MODEL,
 ): Promise<{ text: string; error?: string }> {
   const apiKey = Deno.env.get("CLAUDE_API_KEY");
@@ -1548,14 +1564,14 @@ async function runSelfTest(): Promise<Record<string, unknown>> {
     const structured = await callSonnet(sys, usr, 64, 0, tinySchema, "selftest", model);
     const sOk = !structured.error && !!parseJsonSafe(structured.text);
     return {
-      model,
+      // model intentionally NOT returned — the self-test reveals no LLM names.
       structured_output: sOk
         ? `ok (${Date.now() - t1}ms)`
-        : `FAIL: ${(structured.error || "unparseable").substring(0, 140)}`,
+        : `FAIL: ${scrubModelNames((structured.error || "unparseable").substring(0, 140))}`,
       // "prefill" row now reports the PLAIN method (the fast primary path).
       prefill: pOk
         ? `plain ok (${t1 - t0}ms)`
-        : `plain FAIL: ${(plain.error || "unparseable").substring(0, 140)}`,
+        : `plain FAIL: ${scrubModelNames((plain.error || "unparseable").substring(0, 140))}`,
       usable: pOk || sOk,
     };
   };
@@ -1590,27 +1606,26 @@ async function runSelfTest(): Promise<Record<string, unknown>> {
   const geminiOk = geminiStatus.startsWith("ok");
   const writerOk = primary.usable || fallback.usable;
 
+  // Health only — deliberately no model names, vendor names or key names, so the
+  // diagnostic leaves no trace of which LLMs power the desk.
   return {
-    // Pipeline is OK as long as a writer works — Desk 1 falls back to Claude if
-    // Gemini is down, so a dead Gemini alone no longer blocks generation.
     ok: writerOk,
     verdict: !writerOk
-      ? "NO writer model works — articles cannot be composed. See writer errors below."
+      ? "The AI service is not reachable — articles cannot be composed right now."
       : primary.usable
-      ? `Primary writer ${SONNET_MODEL} works — prose quality will be full.${
-        geminiOk ? "" : " (Gemini is down; Desk 1 will use Claude.)"
+      ? `AI service reachable — full quality.${
+        geminiOk ? "" : " (Research helper degraded; the writer covers it.)"
       }`
-      : `Primary ${SONNET_MODEL} is DOWN; fallback ${OPUS_MODEL} works, so articles still compose.`,
+      : "Primary path degraded; the fallback is working, so articles still compose.",
     writer_primary: primary,
     writer_fallback: fallback,
-    gemini: geminiOk ? geminiStatus : `${geminiStatus.substring(0, 160)}  (Desk 1 will fall back to Claude)`,
-    secrets_present: {
-      CLAUDE_API_KEY: !!Deno.env.get("CLAUDE_API_KEY"),
-      GEMINI_API_KEY: !!Deno.env.get("GEMINI_API_KEY"),
-      OPENAI_API_KEY: !!Deno.env.get("OPENAI_API_KEY"),
-      UNSPLASH_ACCESS_KEY: !!Deno.env.get("UNSPLASH_ACCESS_KEY"),
+    research: geminiOk ? "ok" : "degraded (writer will cover it)",
+    keys_present: {
+      writer_key: !!Deno.env.get("CLAUDE_API_KEY"),
+      research_key: !!Deno.env.get("GEMINI_API_KEY"),
+      fallback_key: !!Deno.env.get("OPENAI_API_KEY"),
+      images_key: !!Deno.env.get("UNSPLASH_ACCESS_KEY"),
     },
-    config: { SONNET_MODEL, OPUS_MODEL, GEMINI_MODEL, USE_GPT_FALLBACK },
   };
 }
 async function callSonnetForRevision(
@@ -2470,7 +2485,7 @@ async function processOne(
       byLang.en = await composeNatively("en", title, enrich.research, category, editor, articleType, arch);
     }
     if (!byLang.en.ok) {
-      const why = byLang.en.reason || "unknown";
+      const why = scrubModelNames(byLang.en.reason || "unknown");
       Object.assign(log, {
         status: "error",
         error_stage: "compose_en",
@@ -2515,36 +2530,24 @@ async function processOne(
     const failedLangs = (["el", "ro", "ar"] as Lang[]).filter((l) => !byLang[l].ok);
     if (failedLangs.length) {
       for (const l of failedLangs) log[`desk2b_${l}_ok`] = false;
-      const detail = failedLangs
-        .map((l) => `${l.toUpperCase()}=${byLang[l].reason || "unknown"}`)
-        .join(" · ");
-      // Surface the underlying Sonnet API error if Sonnet fell back to GPT-4o for
-      // any edition — that is the real cause (short GPT-4o output → fragment).
-      const sonnetDown = LANGS.map((l) => byLang[l].sonnetError).find((e) => e) || "";
-      const sonnetNote = sonnetDown
-        ? ` Sonnet is not running (${sonnetDown}) — GPT-4o alone is producing short/flat text.`
-        : "";
+      const detail = scrubModelNames(
+        failedLangs.map((l) => `${l.toUpperCase()}=${byLang[l].reason || "unknown"}`).join(" · "),
+      );
       Object.assign(log, {
         status: "error",
         error_stage: `compose_${failedLangs.join("+")}`,
-        error_msg: `Non-English editions failed — ${detail}.${sonnetNote}`.substring(0, 500),
+        error_msg: `Non-English editions failed — ${detail}.`.substring(0, 500),
         total_ms: Date.now() - t0,
       });
       await supabase.from("generation_logs").insert(log).then(() => {}, () => {});
       await supabase.from("scraped_articles").update({
         status: "failed",
-        error_message: `Non-English composition failed — ${detail}.${sonnetNote}`.substring(0, 500),
+        error_message: `Non-English composition failed — ${detail}.`.substring(0, 500),
       }).eq("id", row.id);
-      console.warn(
-        `[writer] ABORT ${row.id}: ${detail} | EN via ${byLang.en.provider || "?"} | sonnet: ${
-          sonnetDown || "ok"
-        }`,
-      );
+      console.warn(`[writer] ABORT ${row.id}: ${detail}`);
       return {
         ok: false,
-        reason: `Non-English composition failed — ${detail}.${sonnetNote} (English wrote via ${
-          byLang.en.provider || "?"
-        }.)`,
+        reason: `Non-English composition failed — ${detail}.`,
       };
     }
 
@@ -2774,14 +2777,7 @@ async function processOne(
     Object.assign(log, {
       status: "ok",
       total_ms: Date.now() - t0,
-      ...(allGpt
-        ? {
-          error_msg: `quality-warning: all editions via gpt4o (Sonnet: ${sonnetDown || "?"})`.substring(
-            0,
-            500,
-          ),
-        }
-        : {}),
+      ...(allGpt ? { error_msg: "quality-warning: all editions used the fallback writer" } : {}),
     });
     await supabase.from("generation_logs").insert(log).then(() => {}, () => {});
     console.log(
@@ -2795,9 +2791,7 @@ async function processOne(
     const warns: string[] = [];
     if (allGpt) {
       warns.push(
-        `All editions written by GPT-4o — Sonnet did not run${
-          sonnetDown ? ` (${sonnetDown})` : ""
-        }, so the text reads flat. Fix the Sonnet call, then regenerate.`,
+        "All editions were written by the fallback model, so the text may read flat. Please regenerate.",
       );
     }
     const lowHum = LANGS.filter((l) => byLang[l].humanness < HUMANNESS_TARGET);
@@ -2819,12 +2813,11 @@ async function processOne(
     return {
       ok: true,
       post_id: postId,
-      providers,
       quality_warning: warns.length ? warns.join(" · ") : undefined,
     };
   } catch (e) {
-    const msg = (e as Error).message;
-    console.error(`[writer] EXCEPTION ${row.id}: ${msg}`);
+    const msg = scrubModelNames((e as Error).message);
+    console.error(`[writer] EXCEPTION ${row.id}: ${(e as Error).message}`);
     await supabase.from("generation_logs").insert({
       ...log,
       status: "error",

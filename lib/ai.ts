@@ -52,9 +52,11 @@ export async function logSpend(row: {
   units?: number; unit_kind?: string; usd?: number; caller?: string; meta?: unknown;
 }) {
   try {
+    // provider/model are intentionally NOT persisted — every row is stored with a
+    // neutral 'llm' so the spend log keeps no trace of which model was used.
     await supabaseAdmin().from('ai_spend_log').insert({
-      provider: row.provider,
-      model: row.model,
+      provider: 'llm',
+      model: 'llm',
       function_name: row.function_name,
       units: row.units ?? null,
       unit_kind: row.unit_kind ?? 'tokens',
@@ -82,7 +84,7 @@ async function fetchWithRetry(url: string, init: RequestInit, attempt = 0): Prom
 export async function callClaude(req: AiRequest & { fn?: string }): Promise<AiResponse> {
   const {
     systemInstruction, userMessage, temperature = 0.7, maxTokens = 4096,
-    jsonMode = false, model = CLAUDE_HAIKU, fn = 'claude',
+    jsonMode = false, model = CLAUDE_HAIKU, fn = 'writer',
   } = req;
   const apiKey = process.env.CLAUDE_API_KEY;
   if (!apiKey) return { text: '', error: 'CLAUDE_API_KEY not configured' };
@@ -116,7 +118,7 @@ export async function callClaude(req: AiRequest & { fn?: string }): Promise<AiRe
 export async function callOpenAI(req: AiRequest & { fn?: string }): Promise<AiResponse> {
   const {
     systemInstruction, userMessage, temperature = 0.7, maxTokens = 4096,
-    jsonMode = false, model = OPENAI_MODEL, fn = 'openai',
+    jsonMode = false, model = OPENAI_MODEL, fn = 'writer',
   } = req;
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return { text: '', error: 'OPENAI_API_KEY not configured' };
@@ -149,7 +151,7 @@ export async function callOpenAI(req: AiRequest & { fn?: string }): Promise<AiRe
 export async function callGemini(req: AiRequest & { fn?: string }): Promise<AiResponse> {
   const {
     systemInstruction, userMessage, temperature = 0.7, maxTokens = 2000,
-    jsonMode = false, model = GEMINI_MODEL, fn = 'gemini',
+    jsonMode = false, model = GEMINI_MODEL, fn = 'research',
   } = req;
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return { text: '', error: 'GEMINI_API_KEY not configured' };

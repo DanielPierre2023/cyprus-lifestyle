@@ -60,12 +60,12 @@ export default async function AnalyticsTab() {
 
       <h1 style={{ fontSize: 18 }}>AI spend by function (recent)</h1>
       <table className="adm-t">
-        <thead><tr><th>Day</th><th>Function</th><th>Provider</th><th>Calls</th><th>USD</th></tr></thead>
+        <thead><tr><th>Day</th><th>Function</th><th>Calls</th><th>USD</th></tr></thead>
         <tbody>
           {((spend as any[]) || []).map((s, i) => (
-            <tr key={i}><td>{s.day}</td><td>{s.function_name}</td><td>{s.provider}</td><td>{s.calls}</td><td>${Number(s.usd || 0).toFixed(4)}</td></tr>
+            <tr key={i}><td>{s.day}</td><td>{s.function_name}</td><td>{s.calls}</td><td>${Number(s.usd || 0).toFixed(4)}</td></tr>
           ))}
-          {(!spend || spend.length === 0) ? <tr><td colSpan={5}>No spend logged yet.</td></tr> : null}
+          {(!spend || spend.length === 0) ? <tr><td colSpan={4}>No spend logged yet.</td></tr> : null}
         </tbody>
       </table>
     </>

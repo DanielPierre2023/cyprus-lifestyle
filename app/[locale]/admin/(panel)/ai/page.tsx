@@ -38,16 +38,16 @@ export default function AiTab() {
       if (error) setMsg('Generation failed: ' + (error.message || 'edge function error'));
       else if (d && d.ok === false) setMsg('Generation failed — ' + (d.reason || 'unknown'));
       else if (d && d.quality_warning) setMsg('Article drafted, but ⚠ ' + d.quality_warning);
-      else setMsg('Article drafted' + (d?.providers ? ` (${d.providers})` : '') + '. See it in Articles (status: draft).');
+      else setMsg('Article drafted. See it in Articles (status: draft).');
     } catch (e) {
       setMsg('Generation error: ' + (e as Error).message);
     }
     setBusy(''); load();
   }
 
-  // Diagnostic: ask the edge function which models this key actually serves.
+  // Diagnostic: check the AI service is reachable (health only — no model names).
   async function selfTest() {
-    setBusy('selftest'); setMsg('Testing which AI models your key serves…'); setReport(null);
+    setBusy('selftest'); setMsg('Checking the AI service…'); setReport(null);
     try {
       const { data, error } = await sb.functions.invoke('process-scraped-article', { body: { action: 'selftest' } });
       if (error) { setMsg('Self-test failed: ' + (error.message || 'edge function error')); }
@@ -69,20 +69,17 @@ export default function AiTab() {
 
       <div className="row" style={{ marginBottom: 14 }}>
         <button className="abtn ghost" disabled={busy === 'selftest'} onClick={selfTest}>
-          {busy === 'selftest' ? 'Testing models…' : 'Run model self-test'}
+          {busy === 'selftest' ? 'Checking…' : 'Run AI health check'}
         </button>
-        <span style={{ fontSize: 12, color: '#8a8371' }}>Checks which AI models your key serves, before you generate.</span>
+        <span style={{ fontSize: 12, color: '#8a8371' }}>Checks that the AI service is reachable, before you generate.</span>
       </div>
       {report ? (
         <pre style={{ background: '#0B0E11', color: '#E4D2AC', padding: 12, borderRadius: 4, fontSize: 12, overflowX: 'auto', margin: '0 0 14px', whiteSpace: 'pre-wrap' }}>
-{`writer (primary):  ${report.writer_primary?.model}
-  structured:      ${report.writer_primary?.structured_output}
-  prefill:         ${report.writer_primary?.prefill}
-writer (fallback): ${report.writer_fallback?.model}
-  structured:      ${report.writer_fallback?.structured_output}
-  prefill:         ${report.writer_fallback?.prefill}
-gemini (research): ${report.gemini}
-secrets present:   ${Object.entries(report.secrets_present || {}).map(([k, v]) => `${k}=${v ? 'yes' : 'NO'}`).join('  ')}`}
+{`AI service:       ${report.ok ? 'reachable' : 'NOT reachable'}
+primary writer:   ${report.writer_primary?.usable ? 'ok' : 'FAIL'} (${report.writer_primary?.prefill ?? ''})
+fallback writer:  ${report.writer_fallback?.usable ? 'ok' : 'FAIL'}
+research helper:  ${report.research ?? ''}
+keys present:     ${Object.entries(report.keys_present || {}).map(([k, v]) => `${k}=${v ? 'yes' : 'NO'}`).join('  ')}`}
         </pre>
       ) : null}
 
