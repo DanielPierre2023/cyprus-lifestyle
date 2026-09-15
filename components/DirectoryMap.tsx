@@ -21,13 +21,17 @@ export const TYPE_COLORS: Record<string, string> = {
 };
 const GOLD = '#C9A24C';
 
-// Base map. Default is a clean, label-free basemap so the map is language-neutral
-// across all four editions (our own pins carry the localized names). To use a
-// labelled / per-language provider, set NEXT_PUBLIC_MAP_TILE_URL (a Leaflet tile
-// URL; the token {lang} is replaced with the current locale) and, if needed,
-// NEXT_PUBLIC_MAP_TILE_ATTR. Any https tile host is allowed by the CSP.
-const DEFAULT_TILES = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png';
-const DEFAULT_ATTR = '&copy; OpenStreetMap contributors &copy; CARTO';
+// Base map resolution (NEXT_PUBLIC_* are inlined at build time — set them in
+// Vercel and redeploy):
+//   1) NEXT_PUBLIC_MAP_TILE_URL  — full Leaflet tile URL override; the tokens
+//      {lang} (current locale) and {key} (NEXT_PUBLIC_CARTO_KEY) are substituted.
+//      A full street map with cities, roads and labels (labels in local language).
+//   2) NEXT_PUBLIC_CARTO_KEY     — CARTO basemaps now REQUIRE a key. Style is
+//      NEXT_PUBLIC_MAP_TILE_STYLE (default 'voyager' = full labelled street map;
+//      set 'voyager_nolabels' if you ever want a clean label-free base instead).
+//   3) fallback — keyless OpenStreetMap (always works; full labelled street map).
+const CARTO_ATTR = '&copy; OpenStreetMap contributors &copy; CARTO';
+const OSM_ATTR = '&copy; OpenStreetMap contributors';
 
 export default function DirectoryMap({
   points, height = 440, typeLabels, locale = 'en',
@@ -50,9 +54,21 @@ export default function DirectoryMap({
       const pts = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
       map = L.map(el, { scrollWheelZoom: false });
 
-      const tileUrl = (process.env.NEXT_PUBLIC_MAP_TILE_URL || DEFAULT_TILES).replace('{lang}', locale);
-      const attr = process.env.NEXT_PUBLIC_MAP_TILE_ATTR || DEFAULT_ATTR;
-      L.tileLayer(tileUrl, { attribution: attr, subdomains: 'abcd', maxZoom: 18 }).addTo(map);
+      const cartoKey = process.env.NEXT_PUBLIC_CARTO_KEY;
+      const style = process.env.NEXT_PUBLIC_MAP_TILE_STYLE || 'voyager';
+      let tileUrl: string;
+      let attr: string;
+      if (process.env.NEXT_PUBLIC_MAP_TILE_URL) {
+        tileUrl = process.env.NEXT_PUBLIC_MAP_TILE_URL.replace('{lang}', locale).replace('{key}', cartoKey || '');
+        attr = process.env.NEXT_PUBLIC_MAP_TILE_ATTR || CARTO_ATTR;
+      } else if (cartoKey) {
+        tileUrl = `https://{s}.basemaps.cartocdn.com/rastertiles/${style}/{z}/{x}/{y}.png?key=${cartoKey}`;
+        attr = process.env.NEXT_PUBLIC_MAP_TILE_ATTR || CARTO_ATTR;
+      } else {
+        tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+        attr = OSM_ATTR;
+      }
+      L.tileLayer(tileUrl, { attribution: attr, subdomains: 'abc', maxZoom: 19 }).addTo(map);
 
       if (pts.length) {
         const markers = pts.map((p) => {
