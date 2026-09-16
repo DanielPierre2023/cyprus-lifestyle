@@ -16,6 +16,9 @@ const CONFIRM_COPY: Record<Locale, { subject: string; heading: string; body: str
   el: { subject: 'Επιβεβαιώστε την εγγραφή σας στο Cyprus Lifestyle', heading: 'Ένα κλικ για επιβεβαίωση', body: 'Επιβεβαιώστε το email σας για να λαμβάνετε το εβδομαδιαίο δελτίο του νησιού κάθε Παρασκευή.', cta: 'Επιβεβαίωση' },
   ro: { subject: 'Confirmă abonarea la Cyprus Lifestyle', heading: 'Un click pentru confirmare', body: 'Confirmă-ți adresa de email pentru a primi buletinul săptămânal al insulei, în fiecare vineri.', cta: 'Confirmă abonarea' },
   ar: { subject: 'أكّد اشتراكك في Cyprus Lifestyle', heading: 'أكّد بنقرة واحدة', body: 'أكّد بريدك الإلكتروني لتصلك النشرة الأسبوعية للجزيرة كل يوم جمعة.', cta: 'تأكيد الاشتراك' },
+  de: { subject: 'Bestätigen Sie Ihr Cyprus-Lifestyle-Abonnement', heading: 'Mit einem Klick bestätigen', body: 'Bestätigen Sie Ihre E-Mail-Adresse, um den wöchentlichen Newsletter der Insel jeden Freitag zu erhalten.', cta: 'Abonnement bestätigen' },
+  pl: { subject: 'Potwierdź subskrypcję Cyprus Lifestyle', heading: 'Potwierdź jednym kliknięciem', body: 'Potwierdź swój adres e-mail, aby co piątek otrzymywać cotygodniowy przegląd z wyspy.', cta: 'Potwierdź subskrypcję' },
+  ru: { subject: 'Подтвердите подписку на Cyprus Lifestyle', heading: 'Подтвердите одним нажатием', body: 'Подтвердите ваш адрес электронной почты, чтобы каждую пятницу получать еженедельную рассылку с острова.', cta: 'Подтвердить подписку' },
 };
 
 export async function subscribe(sb: SupabaseClient, email: string, language: string): Promise<{ ok: boolean; error?: string }> {
@@ -76,6 +79,9 @@ const DIGEST_SUBJECT: Record<Locale, string> = {
   el: 'Το εβδομαδιαίο δελτίο από την Κύπρο',
   ro: 'Buletinul săptămânal din Cipru',
   ar: 'نشرة الأسبوع من قبرص',
+  de: 'Der wöchentliche Newsletter aus Zypern',
+  pl: 'Cotygodniowy przegląd z Cypru',
+  ru: 'Еженедельная рассылка с Кипра',
 };
 
 // Compose + send the weekly digest for one locale (or all). Records a campaign row.

@@ -27,7 +27,7 @@
   --dir-vendor: #4E7A46;
 
   --sans: var(--font-jost), "Jost", "Futura", system-ui, sans-serif;
-  --disp: var(--font-bodoni), "Bodoni Moda", "Didot", Georgia, serif;
+  --disp: var(--font-bodoni), "Bodoni Moda", "Didot", var(--font-lora), Georgia, serif;
   --body: var(--font-lora), "Lora", Georgia, "Times New Roman", serif;
   --arabic-display: var(--font-aref), "Aref Ruqaa", "Amiri", serif;
   --arabic-body: var(--font-amiri), "Amiri", "Noto Naskh Arabic", serif;

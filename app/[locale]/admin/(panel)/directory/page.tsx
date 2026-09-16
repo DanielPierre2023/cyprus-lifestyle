@@ -15,7 +15,7 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 const TYPES = ['restaurant', 'winery', 'development', 'hotel', 'beach', 'vendor'] as const;
 const DISTRICTS = ['', 'nicosia', 'limassol', 'larnaca', 'famagusta', 'paphos', 'kyrenia'];
 const PRICE_BANDS = ['', '€', '€€', '€€€', '€€€€'];
-const LANGS = ['en', 'el', 'ro', 'ar'] as const;
+const LANGS = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'] as const;
 const PAGE = 100; // rows per page
 
 type Row = Record<string, any>;
@@ -25,8 +25,8 @@ const ZERO_COUNTS: Counts = { total: 0, published: 0, draft: 0, byType: {} };
 
 const BLANK: Row = {
   id: null, slug: '', type: 'restaurant', district: '',
-  name_en: '', name_el: '', name_ro: '', name_ar: '',
-  summary_en: '', summary_el: '', summary_ro: '', summary_ar: '',
+  name_en: '', name_el: '', name_ro: '', name_ar: '', name_de: '', name_pl: '', name_ru: '',
+  summary_en: '', summary_el: '', summary_ro: '', summary_ar: '', summary_de: '', summary_pl: '', summary_ru: '',
   address: '', lat: '', lng: '', price_band: '', url: '', phone: '', image: '',
   tags: '', featured: false, status: 'published',
 };
@@ -111,7 +111,9 @@ export default function DirectoryAdmin() {
     const payload: Row = {
       slug, type: form.type, district: form.district || null,
       name_en: form.name_en || null, name_el: form.name_el || null, name_ro: form.name_ro || null, name_ar: form.name_ar || null,
+      name_de: form.name_de || null, name_pl: form.name_pl || null, name_ru: form.name_ru || null,
       summary_en: form.summary_en || null, summary_el: form.summary_el || null, summary_ro: form.summary_ro || null, summary_ar: form.summary_ar || null,
+      summary_de: form.summary_de || null, summary_pl: form.summary_pl || null, summary_ru: form.summary_ru || null,
       address: form.address || null, lat: num(form.lat), lng: num(form.lng),
       price_band: form.price_band || null, url: form.url || null, phone: form.phone || null, image: form.image || null,
       tags: parseTags(form.tags || ''), featured: !!form.featured, status: form.status || 'published',
@@ -185,9 +187,9 @@ export default function DirectoryAdmin() {
           ))}
         </div>
         <details style={{ marginBottom: 10 }}>
-          <summary style={{ cursor: 'pointer', color: '#8a5b12', fontSize: 13 }}>Localised names (EL / RO / AR) — optional</summary>
+          <summary style={{ cursor: 'pointer', color: '#8a5b12', fontSize: 13 }}>Localised names (EL / RO / AR / DE / PL / RU) — optional</summary>
           <div className="row" style={{ marginTop: 8, alignItems: 'flex-start' }}>
-            {(['el', 'ro', 'ar'] as const).map((l) => (
+            {(['el', 'ro', 'ar', 'de', 'pl', 'ru'] as const).map((l) => (
               <div key={l} style={{ flex: '1 1 200px' }}>
                 <label className="fl">Name ({l.toUpperCase()})</label>
                 <input value={form[`name_${l}`]} onChange={(e) => set(`name_${l}`, e.target.value)} />

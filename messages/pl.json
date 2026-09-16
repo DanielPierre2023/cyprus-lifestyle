@@ -1,0 +1,215 @@
+{
+  "brand": {
+    "name": "Cyprus Lifestyle",
+    "tagline": "Wyspa w pełnej barwie"
+  },
+  "nav": {
+    "home": "Start",
+    "cyprus": "Cypr",
+    "business": "Biznes",
+    "property": "Nieruchomości",
+    "culture": "Kultura",
+    "escapes": "Podróże",
+    "table": "Przy stole",
+    "world": "Świat",
+    "relocation": "Przeprowadzka",
+    "agenda": "Wydarzenia",
+    "people": "Ludzie",
+    "menu": "Menu",
+    "close": "Zamknij",
+    "search": "Szukaj",
+    "directory": "Katalog",
+    "membership": "Członkostwo"
+  },
+  "common": {
+    "readMore": "Czytaj dalej",
+    "latest": "Najnowsze",
+    "featured": "Polecane",
+    "mostRead": "Najczęściej czytane",
+    "byline": "Autor",
+    "minRead": "min czytania",
+    "published": "Opublikowano",
+    "source": "Źródło",
+    "updated": "Zaktualizowano",
+    "share": "Udostępnij",
+    "loading": "Ładowanie…",
+    "noResults": "Jeszcze nic tu nie ma.",
+    "backHome": "Powrót na stronę główną"
+  },
+  "newsletter": {
+    "title": "List Cyprus Lifestyle",
+    "subtitle": "Biznes, kultura i dobre życie wyspy — w Twojej skrzynce.",
+    "placeholder": "Twój e-mail",
+    "cta": "Subskrybuj",
+    "success": "Już prawie — sprawdź skrzynkę, aby potwierdzić.",
+    "error": "Coś poszło nie tak. Spróbuj ponownie."
+  },
+  "footer": {
+    "sections": "Działy",
+    "about": "O nas",
+    "advertise": "Reklama",
+    "contact": "Kontakt",
+    "privacy": "Prywatność",
+    "rights": "Wszelkie prawa zastrzeżone.",
+    "languages": "Wydania",
+    "standards": "Zasady redakcyjne"
+  },
+  "comments": {
+    "title": "Komentarze",
+    "placeholder": "Dołącz do rozmowy",
+    "name": "Twoje imię",
+    "submit": "Opublikuj komentarz",
+    "pending": "Twój komentarz pojawi się po zatwierdzeniu."
+  },
+  "home": {
+    "subscribe": "Subskrybuj",
+    "tagline": "Wyspa w najlepszym wydaniu",
+    "issue": "Wydanie jesienne",
+    "coverStory": "Temat z okładki",
+    "readStory": "Przeczytaj",
+    "edit": "Wybór redakcji",
+    "editSub": "W tym tygodniu na wyspie",
+    "property": "Nieruchomości i design",
+    "propertySub": "Domy i życie, które się w nich toczy",
+    "culture": "Kultura i sztuka",
+    "cultureSub": "Co wyspa tworzy i co pamięta",
+    "escapes": "Podróże",
+    "escapesSub": "Wyspa poza utartym szlakiem",
+    "manifestoLead": "Pokazujemy wyspę tak, jak chcielibyście ją przeżywać —",
+    "manifestoAccent": "powoli i dobrze.",
+    "manifestoAttr": "Manifest Cyprus Lifestyle",
+    "letterTitle": "Sobotni list",
+    "letterSub": "Tydzień na wyspie, wybrany i napisany przez naszą redakcję — nieruchomości, kultura i dobre życie w jednym przemyślanym e-mailu.",
+    "letterFine": "Siedem języków · Bez szumu · Rezygnacja w każdej chwili",
+    "footerBlurb": "Ekskluzywny magazyn o nieruchomościach, kulturze i dobrym życiu na Cyprze — w siedmiu językach.",
+    "magazine": "Magazyn",
+    "more": "Więcej z wyspy"
+  },
+  "sections": {
+    "cyprus": "Polityka, gospodarka i historie, które kształtują Republikę.",
+    "business": "Rynki, fundusze, żegluga i kapitał przepływający przez Limassol i Nikozję.",
+    "property": "Wille, mariny i nowa architektura wybrzeża — wyspa jako adres.",
+    "culture": "Sztuka, dziedzictwo, muzyka i kalendarz towarzyski, od antycznego Pafos po wieczór premiery.",
+    "escapes": "Dokąd jechać i jak dotrzeć — Morze Śródziemne widziane przez cypryjski pryzmat.",
+    "table": "Restauracje, winnice i cypryjski stół, od commandarii po nową kuchnię wyspy.",
+    "world": "Miejsce wyspy w szerszej perspektywie.",
+    "relocation": "Przeprowadzka na Cypr — pobyt, podatki, szkoły i praktyczna strona życia na wyspie.",
+    "agenda": "Co się dzieje na wyspie — festiwale, wystawy, koncerty i otwarcia.",
+    "people": "Cypryjczycy i mieszkańcy, którzy kształtują wyspę — sylwetki i wywiady."
+  },
+  "pages": {
+    "about": {
+      "kicker": "O nas",
+      "title": "Wyspa w pełnej barwie",
+      "dek": "Ekskluzywny magazyn o nieruchomościach, kulturze i dobrym życiu na Cyprze.",
+      "body": [
+        "Cyprus Lifestyle to zapis tego, jak wyspa żyje, inwestuje i cieszy się życiem na najwyższym poziomie. Cypr leży tam, gdzie spotykają się Europa, Lewant i Zatoka, i jest to publikacja tego skrzyżowania — olśniewająca jak wielkie tytuły mody, autorytatywna jak najważniejsze magazyny lifestyle'owe i wielojęzyczna od urodzenia.",
+        "Publikujemy w siedmiu językach: angielskim jako wydaniu międzynarodowym, greckim jako wydaniu krajowym, arabskim dla Zatoki oraz rumuńskim, rosyjskim, niemieckim i polskim dla społeczności mieszkańców i inwestorów, które tworzą Cypr. Każdy kanoniczny tekst trafia do wszystkich siedmiu wydań, w wydaniu arabskim od prawej do lewej.",
+        "Nasze działy obejmują Cypr i politykę, biznes i inwestycje, nieruchomości i architekturę, kulturę i dziedzictwo, podróże i morze oraz cypryjski stół. Powściągliwość brzmi ekskluzywnie; konkret brzmi prawdziwie."
+      ]
+    },
+    "advertise": {
+      "kicker": "Współpraca",
+      "title": "Reklama w Cyprus Lifestyle",
+      "dek": "Siedem wydań, jedna wymagająca publiczność — inwestorzy, przeprowadzający się i elita wyspy.",
+      "body": [
+        "Dotrzyj do międzynarodowych inwestorów i osób przeprowadzających się, cypryjskiej elity, gości z Zatoki i środowisk zawodowych — w siedmiu wydaniach. Oferujemy miejsca na stronie głównej i w artykułach, sponsoring newslettera oraz materiały sponsorowane.",
+        "Opowiedz nam o swojej marce, a prześlemy aktualny cennik."
+      ]
+    },
+    "privacy": {
+      "kicker": "Informacje prawne",
+      "title": "Prywatność",
+      "dek": "",
+      "body": [
+        "Cyprus Lifestyle zbiera tylko to, co niezbędne do prowadzenia publikacji: adres e-mail podany do newslettera oraz anonimowe, zbiorcze statystyki dotyczące czytania strony. Nie sprzedajemy danych osobowych.",
+        "Z newslettera możesz zrezygnować w każdej chwili, korzystając z linku w każdym e-mailu. Aby zażądać usunięcia danych, skontaktuj się z nami przez stronę kontaktu. Niniejsza informacja jest punktem wyjścia; przed startem prosimy o jej weryfikację przez prawnika oraz dostosowanie do RODO i prawa cypryjskiego."
+      ]
+    },
+    "contact": {
+      "kicker": "Cyprus Lifestyle",
+      "title": "Kontakt",
+      "dek": "Redakcja, członkostwo lub współpraca — napisz do nas."
+    },
+    "standards": {
+      "kicker": "Redakcja",
+      "title": "Zasady redakcyjne",
+      "dek": "Jak powstaje Cyprus Lifestyle — jak zbieramy materiały, piszemy, tłumaczymy i poprawiamy.",
+      "body": [
+        "Cyprus Lifestyle jest niezależny redakcyjnie. Nasze treści nie są na sprzedaż; materiały sponsorowane są zawsze oznaczone, a relacje handlowe nigdy nie decydują o tym, o czym i jak piszemy.",
+        "Piszemy z imiennie wskazanych działów i cenimy konkret ponad przymiotniki. Gdy tekst opiera się na innej publikacji lub dokumencie źródłowym, mówimy o tym i podajemy link do źródła.",
+        "Korzystamy z narzędzi AI przy zbieraniu materiałów, redagowaniu i tłumaczeniu — ale każdy kanoniczny tekst przed publikacją redaguje człowiek, a każde z naszych siedmiu wydań (angielskie, greckie, rumuńskie, arabskie, niemieckie, polskie i rosyjskie) jest sprawdzane pod kątem rzetelności i tonu, w wydaniu arabskim od prawej do lewej.",
+        "Błędy poprawiamy szybko i w sposób widoczny. Jeśli coś jest nie tak, napisz do nas przez stronę kontaktu, a naprawimy to."
+      ]
+    },
+    "author": {
+      "desk": "Redakcja",
+      "recent": "Ostatnie teksty"
+    }
+  },
+  "contactForm": {
+    "name": "Twoje imię",
+    "email": "Twój e-mail",
+    "subject": "Temat",
+    "message": "Wiadomość",
+    "send": "Wyślij",
+    "sending": "Wysyłanie…",
+    "success": "Dziękujemy. Odezwiemy się.",
+    "error": "Coś poszło nie tak. Spróbuj ponownie."
+  },
+  "consent": {
+    "title": "Twoja prywatność",
+    "body": "Korzystamy z przyjaznych prywatności statystyk bez plików cookie, aby wiedzieć, co czyta się w Cyprus Lifestyle — nigdy z trackerów reklamowych.",
+    "accept": "Akceptuję",
+    "decline": "Odrzucam",
+    "learnMore": "Prywatność"
+  },
+  "search": {
+    "placeholder": "Szukaj w Cyprus Lifestyle",
+    "button": "Szukaj",
+    "resultsFor": "Wyniki dla",
+    "none": "Nic nie znaleziono dla",
+    "prompt": "Wpisz słowo lub dwa, aby przeszukać magazyn."
+  },
+  "directory": {
+    "title": "Katalog",
+    "intro": "Wyspa na liście — gdzie zjeść, degustować, przenocować i kupować.",
+    "all": "Wszystko",
+    "visit": "Odwiedź stronę",
+    "none": "Nic tu jeszcze nie ma na liście.",
+    "restaurant": "Restauracje",
+    "winery": "Winnice",
+    "development": "Inwestycje",
+    "hotel": "Hotele",
+    "beach": "Plaże",
+    "vendor": "Usługi"
+  },
+  "membership": {
+    "kicker": "Członkostwo",
+    "title": "Zostań członkiem",
+    "dek": "Dołącz do czytelników Cyprus Lifestyle — biznes, kultura i dobre życie wyspy, w siedmiu językach.",
+    "intro": "Członkostwo zaczyna się bezpłatnie i takie pozostanie. Każdy czytelnik otrzymuje Sobotni list, wszystkie siedem wydań oraz pełny magazyn wraz z katalogiem. Płatny poziom — z wieczorami dla członków, wydaniem drukowanym i przywilejami partnerskimi — jest w przygotowaniu.",
+    "free": {
+      "name": "Czytelnik",
+      "price": "Bezpłatnie",
+      "cta": "Dołącz za darmo",
+      "features": [
+        "Sobotni list, co tydzień",
+        "Wszystkie siedem wydań — angielskie, greckie, rumuńskie, arabskie, niemieckie, polskie i rosyjskie",
+        "Każdy artykuł i pełny katalog wyspy"
+      ]
+    },
+    "patron": {
+      "name": "Patron",
+      "price": "Wkrótce",
+      "features": [
+        "Wszystko z poziomu Czytelnik",
+        "Zaproszenia na wieczory dla członków i degustacje",
+        "Sezonowe wydanie drukowane, wysyłane do Ciebie",
+        "Przywileje u wybranych marek z naszego katalogu"
+      ]
+    },
+    "soon": "Płatne członkostwo nie jest jeszcze dostępne. Dołącz bezpłatnie jako Czytelnik, a jako pierwszy dowiesz się, gdy ruszy poziom Patron.",
+    "note": "Pytania o członkostwo lub prenumeratę firmową? Napisz do nas przez"
+  }
+}

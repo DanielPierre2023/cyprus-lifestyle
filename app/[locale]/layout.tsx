@@ -9,9 +9,12 @@ import ConsentAnalytics from '@/components/ConsentAnalytics';
 import '../globals.css';
 
 // Self-hosted at build time by next/font — no runtime request to Google (faster, no CLS, GDPR-safe).
-const bodoni = Bodoni_Moda({ subsets: ['latin'], weight: ['400', '500', '600', '700'], style: ['normal', 'italic'], variable: '--font-bodoni', display: 'swap' });
-const jost = Jost({ subsets: ['latin'], weight: ['300', '400', '500', '600'], variable: '--font-jost', display: 'swap' });
-const lora = Lora({ subsets: ['latin'], weight: ['400', '500', '600'], style: ['normal', 'italic'], variable: '--font-lora', display: 'swap' });
+// latin-ext covers Polish (ł ż ó ą ę ć ń ś ź) and German (ä ö ü ß); Jost + Lora
+// also ship Cyrillic for the Russian edition. Bodoni Moda has no Cyrillic, so
+// Russian display headings fall back to Lora via the --disp chain in globals.css.
+const bodoni = Bodoni_Moda({ subsets: ['latin', 'latin-ext'], weight: ['400', '500', '600', '700'], style: ['normal', 'italic'], variable: '--font-bodoni', display: 'swap' });
+const jost = Jost({ subsets: ['latin', 'latin-ext', 'cyrillic'], weight: ['300', '400', '500', '600'], variable: '--font-jost', display: 'swap' });
+const lora = Lora({ subsets: ['latin', 'latin-ext', 'cyrillic'], weight: ['400', '500', '600'], style: ['normal', 'italic'], variable: '--font-lora', display: 'swap' });
 const amiri = Amiri({ subsets: ['arabic', 'latin'], weight: ['400', '700'], variable: '--font-amiri', display: 'swap' });
 const arefRuqaa = Aref_Ruqaa({ subsets: ['arabic', 'latin'], weight: ['400', '700'], variable: '--font-aref', display: 'swap' });
 

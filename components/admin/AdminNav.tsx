@@ -8,6 +8,7 @@ const TABS = [
   { grp: 'Newsroom' },
   { href: '/admin/editor', label: 'Editor' },
   { href: '/admin/ai', label: 'AI' },
+  { href: '/admin/editorial', label: 'Editorial Studio' },
   { href: '/admin/articles', label: 'Articles (Articole)' },
   { href: '/admin/scraper', label: 'Scraper RSS' },
   { href: '/admin/comments', label: 'Comments (Comentarii)' },
@@ -28,7 +29,7 @@ const TABS = [
 export default function AdminNav() {
   const pathname = usePathname();
   // strip a leading locale segment (e.g. /el/admin/ai → /admin/ai)
-  const path = pathname.replace(/^\/(en|el|ro|ar)(?=\/)/, '') || '/admin';
+  const path = pathname.replace(/^\/(en|el|ro|ar|de|pl|ru)(?=\/)/, '') || '/admin';
 
   async function signOut() {
     await supabaseBrowser().auth.signOut();

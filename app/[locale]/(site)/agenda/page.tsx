@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
+import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
 import { getUpcomingEvents } from '@/lib/queries';
 import { breadcrumbJsonLd, eventJsonLd, ld, pageMetadata } from '@/lib/seo';
@@ -70,7 +71,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ locale:
                   {e.price ? ` · ${e.price}` : ''}
                 </div>
                 <h3 style={{ margin: '2px 0 4px' }}>
-                  {e.url ? <a href={e.url} target="_blank" rel="noopener nofollow">{e.title}</a> : e.title}
+                  <Link href={`/agenda/${e.slug}`}>{e.title}</Link>
                 </h3>
                 {e.summary ? <p className="dek" style={{ margin: 0 }}>{e.summary}</p> : null}
               </article>

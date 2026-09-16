@@ -100,9 +100,18 @@ const REVALIDATE_SECRET = Deno.env.get("REVALIDATE_SECRET") || "";
 const RELEVANCE_GATE = (Deno.env.get("RELEVANCE_GATE") || "on").toLowerCase() !== "off";
 
 // ── taxonomy (Cyprus) ────────────────────────────────────────────────────────
-type Lang = "en" | "el" | "ro" | "ar";
-const LANGS: Lang[] = ["en", "el", "ro", "ar"];
-const LANG_NAME: Record<Lang, string> = { en: "English", el: "Greek", ro: "Romanian", ar: "Arabic" };
+type Lang = "en" | "el" | "ro" | "ar" | "de" | "pl" | "ru";
+// CORE editions are required: English is the anchor, EL/RO/AR must succeed or the
+// article is held back. EXTRA editions (German/Polish/Russian) are best-effort —
+// composed to the same native standard, but a failure never blocks an article; the
+// edition is simply written null and the site falls back to English for it.
+const CORE_LANGS: Lang[] = ["en", "el", "ro", "ar"];
+const EXTRA_LANGS: Lang[] = ["de", "pl", "ru"];
+const LANGS: Lang[] = [...CORE_LANGS, ...EXTRA_LANGS];
+const LANG_NAME: Record<Lang, string> = {
+  en: "English", el: "Greek", ro: "Romanian", ar: "Arabic",
+  de: "German", pl: "Polish", ru: "Russian",
+};
 
 type EditorKey =
   | "cyprus"
@@ -453,8 +462,10 @@ function deShoutTitle(title: string): string {
 // Dash strip — Latin em/en dashes → comma (or Arabic comma for AR). Idempotent.
 function stripDashes(s: string, lang: Lang = "en"): string {
   if (!s) return s;
-  const sep = lang === "ar" ? "، " : ", ";
   let r = s.replace(/&mdash;|&#8212;|&#x2014;/gi, "—").replace(/&ndash;|&#8211;|&#x2013;/gi, "–");
+  // Russian uses the dash (тире) as standard punctuation — decode entities but keep it.
+  if (lang === "ru") return r;
+  const sep = lang === "ar" ? "، " : ", ";
   r = r.replace(/(\d)\s*[–—]\s*(\d)/g, "$1-$2");
   r = r.replace(/\s+[–—]\s+/g, sep).replace(/\s+--\s+/g, sep);
   r = r.replace(/—/g, sep).replace(/–/g, "-");
@@ -569,6 +580,42 @@ const LEX: Record<Lang, Array<[RegExp, string]>> = {
     [/\bالغوص في\b/g, "استكشاف"],
     [/\bحجر الزاوية\b/g, "الأساس"],
   ],
+  de: [
+    [/\bspielt eine (?:entscheidende|zentrale|wichtige|Schlüssel)rolle\b/gi, "ist zentral"],
+    [/\bist ein Zeugnis (?:für|von)\b/gi, "beweist"],
+    [/\bein Zeugnis (?:für|von)\b/gi, "ein Beweis für"],
+    [/\bim Herzen (?:von|der|des)\b/gi, "in"],
+    [/\beine breite Palette von\b/gi, "viele"],
+    [/\beine Vielzahl von\b/gi, "viele"],
+    [/\bwirft ein Licht auf\b/gi, "zeigt"],
+    [/\bin der heutigen (?:schnelllebigen |digitalen )?(?:Welt|Zeit)\b/gi, "heute"],
+    [/\bnahtlose[srmn]?\b/gi, "reibungslos"],
+    [/\bein wahres\b/gi, "ein"],
+    [/\bnicht nur\b/gi, "nicht bloß"],
+  ],
+  pl: [
+    [/\bodgrywa (?:kluczową|zasadniczą|istotną|ważną|centralną) rolę\b/gi, "jest kluczowy"],
+    [/\bstanowi (?:dowód|świadectwo)\b/gi, "dowodzi"],
+    [/\bw (?:samym )?sercu\b/gi, "w"],
+    [/\bszeroki (?:wachlarz|zakres|wybór)\b/gi, "wiele"],
+    [/\bcały wachlarz\b/gi, "wiele"],
+    [/\brzuca światło na\b/gi, "pokazuje"],
+    [/\bw dzisiejszych czasach\b/gi, "dziś"],
+    [/\bw dzisiejszym (?:szybkim |cyfrowym )?świecie\b/gi, "dziś"],
+    [/\bbezproblemow\w*/gi, "sprawnie"],
+    [/\bprawdziw\w* (?:skarbnic|gratk)\w*/gi, "bogactwo"],
+  ],
+  ru: [
+    [/\bиграет (?:ключевую|решающую|важную|центральную) роль\b/gi, "является ключевым"],
+    [/\bявляется свидетельством\b/gi, "доказывает"],
+    [/\bв (?:самом )?сердце\b/gi, "в"],
+    [/\bширокий (?:спектр|ассортимент|выбор|ряд)\b/gi, "множество"],
+    [/\bцелый ряд\b/gi, "несколько"],
+    [/\bпроливает свет на\b/gi, "показывает"],
+    [/\bв (?:современном|сегодняшнем) (?:быстро меняющемся |цифровом )?мире\b/gi, "сегодня"],
+    [/\bбесшовн\w*/gi, "гладкий"],
+    [/\bнастоящ(?:ая|ий) (?:кладезь|находка)\b/gi, "богатство"],
+  ],
 };
 const FILLERS: Record<Lang, string> = {
   en:
@@ -578,6 +625,12 @@ const FILLERS: Record<Lang, string> = {
   ro:
     "Mai mult decât atât|Mai mult|Totodată|În plus|De asemenea|Nu în ultimul rând|În esență|De altfel|În concluzie|În cele din urmă|Merită menționat că|Merită subliniat că|Este important de menționat că|Trebuie subliniat că",
   ar: "علاوة على ذلك|إضافة إلى ذلك|من الجدير بالذكر أن|تجدر الإشارة إلى أن|في الختام|في النهاية|وأخيرًا",
+  de:
+    "Darüber hinaus|Zudem|Außerdem|Ferner|Des Weiteren|Bemerkenswerterweise|Es ist erwähnenswert, dass|Es ist wichtig zu beachten, dass|Zusammenfassend|Abschließend|Letztendlich|Nicht zuletzt",
+  pl:
+    "Ponadto|Co więcej|Dodatkowo|Warto zauważyć, że|Warto podkreślić, że|Należy zauważyć, że|Należy podkreślić, że|Co istotne|Podsumowując|Wreszcie|Ostatecznie",
+  ru:
+    "Более того|Кроме того|К тому же|Помимо этого|Стоит отметить, что|Следует отметить, что|Важно отметить, что|Примечательно, что|В заключение|Наконец|В конечном счёте",
 };
 function dropFillers(s: string, lang: Lang): string {
   const alt = FILLERS[lang];
@@ -749,6 +802,24 @@ const NATIVE_RULES: Record<Lang, string> = {
 - BANNED AI packaging: «شهادة على»، «نسيج غني من»، «حجر الزاوية»، «في عالم سريع التغير»، «تجربة سلسة»، «الغوص في». Replace with the concrete word or the figure.
 - Keep proper nouns and figures exact; render numbers clearly (٪ or %, €). Correct hamza and taa marbuta. NO Latin em/en dashes — use the Arabic comma (،) or a full stop.
 - Read it in your head: if it reads like English rendered word-for-word into Arabic, rewrite it into natural press Arabic.`,
+  de: `NATIVE GERMAN (schreibe DIREKT auf Deutsch, keine Übersetzung) — denke von Anfang an auf Deutsch:
+- Keine Anglizismus-Lehnübersetzungen, kein englischer Satzbau. Nutze natürliche deutsche Pressesprache und Wortstellung; das Verb steht, wo es hingehört.
+- Attribuierung: „sagte", „erklärte", „teilte mit", „bestätigte", „kündigte an", „laut", „so". VERBOTEN als KI-Tick: „betonte", „unterstrich", „hob hervor" in jedem Satz. Nie zweimal dasselbe Verb hintereinander.
+- VERBOTENE Verpackungswörter: „spielt eine entscheidende Rolle", „ist ein Zeugnis für", „im Herzen von", „eine breite Palette von", „nahtlos", „ganzheitlich", „wegweisend", „Ökosystem". Nimm das konkrete Wort oder die Zahl.
+- Überschriften folgen normaler deutscher Groß-/Kleinschreibung (Substantive groß), aber KEIN englisches Title Case. Zahlen mit dem Euro-Zeichen (€), deutsche Anführungszeichen („…"). KEINE Geviert-/Halbgeviertstriche — Kommas oder Punkte.
+- Lies es innerlich laut: klingt es wie „Englisch in deutschen Wörtern", schreib es um. Deutsche Presse hat ihren eigenen Rhythmus.`,
+  pl: `NATIVE POLISH (pisz BEZPOŚREDNIO po polsku, nie tłumacz) — myśl po polsku od pierwszego słowa:
+- Bez kalek z angielskiego i bez angielskiej składni. Naturalny polski szyk zdania i styl prasowy.
+- Czasowniki przytoczeń: „powiedział", „oświadczył", „przekazał", „potwierdził", „zapowiedział", „według", „jak podaje". ZAKAZANE jako tik AI: „podkreślił", „zaznaczył", „zwrócił uwagę" w każdym zdaniu. Nigdy tego samego czasownika dwa razy z rzędu.
+- ZAKAZANE słowa-opakowania (wszystkie formy): „odgrywa kluczową rolę", „stanowi świadectwo", „w sercu", „szeroki wachlarz", „bezproblemowy", „holistyczny", „ekosystem". Użyj konkretnego słowa lub liczby.
+- Tytuły zapisuj normalną polską pisownią (bez Wielkich Liter W Każdym Słowie). Liczby z symbolem euro (€), polskie cudzysłowy („…"). Bez myślników em/en — przecinki lub kropki. Poprawne znaki: ą, ć, ę, ł, ń, ó, ś, ź, ż.
+- Przeczytaj w myślach na głos: jeśli brzmi jak „angielski ubrany w polskie słowa", napisz to od nowa.`,
+  ru: `NATIVE RUSSIAN (пиши СРАЗУ по-русски, не перевод) — думай по-русски с первого слова:
+- Без калек с английского и без английского синтаксиса. Естественный русский порядок слов и газетный стиль.
+- Глаголы атрибуции: «сказал», «заявил», «сообщил», «подтвердил», «объявил», «по данным», «как сообщает». ЗАПРЕЩЕНО как ИИ-тик: «подчеркнул», «отметил», «акцентировал» в каждом предложении. Никогда один и тот же глагол дважды подряд.
+- ЗАПРЕЩЁННЫЕ слова-обёртки (во всех формах): «играет ключевую роль», «является свидетельством», «в самом сердце», «широкий спектр», «бесшовный», «холистический», «экосистема». Бери конкретное слово или цифру.
+- Заголовки — обычной строчной записью (без Заглавных Букв В Каждом Слове). Числа со знаком евро (€), русские кавычки-«ёлочки». Тире используй по правилам русского языка; букву «ё» ставь там, где она нужна.
+- Прочитай про себя вслух: если звучит как «английский в русских словах», перепиши. У русской прессы свой ритм.`,
 };
 const TITLE_CRAFT: Record<Lang, string> = {
   en:
@@ -759,6 +830,12 @@ const TITLE_CRAFT: Record<Lang, string> = {
     `TITLU (română): sentence case; taie coada "pe fondul/în contextul"; un verb puternic (taie, blochează, refuză), nu unul slab (anunță, discută); fără adjective de opinie; lasă un singur lucru pentru articol. Sub 90 de caractere.`,
   ar:
     `العنوان (بالعربية): جملة واضحة، دون ذيل "وسط/بينما"؛ فعل قوي لا محايد؛ دون صفات رأي؛ اترك شيئًا واحدًا للمقال. أقل من 90 حرفًا.`,
+  de:
+    `TITEL (Deutsch): normale deutsche Schreibung, kein englisches Title Case, kein Geschrei; schneide das „inmitten/während/vor"-Anhängsel ab — die Schlagzeile ist die Nachricht; ein starkes Verb (kürzt, blockiert, gewinnt, eröffnet), kein schwaches (kündigt an, erörtert); keine Meinungsadjektive. Unter 90 Zeichen.`,
+  pl:
+    `TYTUŁ (polski): normalna pisownia, bez Title Case, bez krzyku; utnij ogon „w obliczu/podczas gdy"; mocny czasownik (tnie, blokuje, wygrywa, otwiera), nie słaby (ogłasza, omawia); bez przymiotników oceniających. Poniżej 90 znaków.`,
+  ru:
+    `ЗАГОЛОВОК (русский): обычная запись, без Заглавных Букв В Каждом Слове, без крика; убери хвост «на фоне/в то время как»; сильный глагол (режет, блокирует, выигрывает, открывает), а не слабый (объявляет, обсуждает); без оценочных прилагательных. До 90 символов.`,
 };
 const HUMANIZATION: Record<Lang, string> = {
   en:
@@ -769,6 +846,12 @@ const HUMANIZATION: Record<Lang, string> = {
     `NATURALIZARE (română): variază agresiv lungimile frazelor; evită conectorii birocratici ("în cazul în care" → "dacă"; "în vederea" → "pentru"); registru oral-cultivat cu măsură ("practic", "de fapt", max 2-3).`,
   ar:
     `الأنسنة (بالعربية): نوّع طول الجُمل؛ تجنّب البدايات النمطية؛ تجنّب مفردات الذكاء الاصطناعي؛ اقرأه في ذهنك ليبدو صحافةً عربية طبيعية.`,
+  de:
+    `HUMANISIERUNG (Deutsch): variiere die Satzlängen stark; vermeide bürokratische Konnektoren und lange Nominalstil-Ketten; vermeide das KI-Stempel-Vokabular; lies es innerlich, bis es klingt wie ein Reporter unter Zeitdruck, nicht wie eine Pressemitteilung.`,
+  pl:
+    `NATURALIZACJA (polski): agresywnie zmieniaj długość zdań; unikaj urzędniczych łączników i rzeczownikowego stylu; unikaj słownictwa-pieczątki AI; czytaj w myślach, aż zabrzmi jak reporter na deadline, nie jak komunikat prasowy.`,
+  ru:
+    `ОЧЕЛОВЕЧИВАНИЕ (русский): резко меняй длину предложений; избегай канцелярских связок и цепочек отглагольных существительных; избегай штампов ИИ; читай про себя, пока не зазвучит как репортёр на дедлайне, а не пресс-релиз.`,
 };
 
 // ============================================================================
@@ -2654,12 +2737,10 @@ async function processOne(
     const composed = await Promise.all(
       LANGS.map((l) => composeNatively(l, title, enrich.research, category, editor, articleType, arch)),
     );
-    const byLang: Record<Lang, LangBundle> = {
-      en: composed[0],
-      el: composed[1],
-      ro: composed[2],
-      ar: composed[3],
-    };
+    // Built from LANGS order so it always covers every edition (core + extra).
+    const byLang = Object.fromEntries(
+      LANGS.map((l, i) => [l, composed[i]]),
+    ) as Record<Lang, LangBundle>;
 
     // English is the anchor — must succeed. Retry once, but only if enough of the
     // runtime budget remains (the compose ladder already tries plain+structured on
@@ -2740,7 +2821,7 @@ async function processOne(
     if (Date.now() - t0 < TOTAL_SOFT_LIMIT_MS - 40000) {
       const depthBudget = TOTAL_SOFT_LIMIT_MS - (Date.now() - t0);
       await Promise.all(
-        LANGS.map((l) => expandToDepth(byLang[l], enrich.research, arch, editor, depthBudget)),
+        LANGS.filter((l) => byLang[l].ok).map((l) => expandToDepth(byLang[l], enrich.research, arch, editor, depthBudget)),
       );
     }
 
@@ -2810,7 +2891,9 @@ async function processOne(
 
     // P1-4 abort — if any edition failed the plagiarism gate, refuse the whole
     // article (loud + logged) rather than commit a partial or borrowed edition.
-    const plagFailed = LANGS.filter((l) => !byLang[l].ok);
+    // Only the CORE editions can abort; a best-effort extra that fails the gate is
+    // dropped to null below (never committed borrowed, never blocks the article).
+    const plagFailed = CORE_LANGS.filter((l) => !byLang[l].ok);
     if (plagFailed.length) {
       const detail = plagFailed
         .map((l) => `${l.toUpperCase()}=${byLang[l].reason || "plagiarism"}`)
@@ -2849,35 +2932,61 @@ async function processOne(
     const nowIso = new Date().toISOString();
     const slug = generateSlug(byLang.en.title);
     const f = (l: Lang, k: keyof LangBundle) => byLang[l][k] as string;
+    // Best-effort editions: write the value only if the edition succeeded, else
+    // null — so a failed extra edition never ships English text disguised as a
+    // translation; the site falls back to English for a null column.
+    const g = (l: Lang, k: keyof LangBundle) => (byLang[l].ok ? (byLang[l][k] as string) : null);
+    const gt = (l: Lang) => (byLang[l].ok ? byLang[l].tags : null);
     const blogPayload: Record<string, unknown> = {
       title_en: f("en", "title"),
       title_el: f("el", "title"),
       title_ro: f("ro", "title"),
       title_ar: f("ar", "title"),
+      title_de: g("de", "title"),
+      title_pl: g("pl", "title"),
+      title_ru: g("ru", "title"),
       content_en: f("en", "content"),
       content_el: f("el", "content"),
       content_ro: f("ro", "content"),
       content_ar: f("ar", "content"),
+      content_de: g("de", "content"),
+      content_pl: g("pl", "content"),
+      content_ru: g("ru", "content"),
       excerpt_en: f("en", "excerpt"),
       excerpt_el: f("el", "excerpt"),
       excerpt_ro: f("ro", "excerpt"),
       excerpt_ar: f("ar", "excerpt"),
+      excerpt_de: g("de", "excerpt"),
+      excerpt_pl: g("pl", "excerpt"),
+      excerpt_ru: g("ru", "excerpt"),
       summary_en: f("en", "summary"),
       summary_el: f("el", "summary"),
       summary_ro: f("ro", "summary"),
       summary_ar: f("ar", "summary"),
+      summary_de: g("de", "summary"),
+      summary_pl: g("pl", "summary"),
+      summary_ru: g("ru", "summary"),
       tags_en: byLang.en.tags,
       tags_el: byLang.el.tags,
       tags_ro: byLang.ro.tags,
       tags_ar: byLang.ar.tags,
+      tags_de: gt("de"),
+      tags_pl: gt("pl"),
+      tags_ru: gt("ru"),
       seo_title_en: f("en", "seoTitle"),
       seo_title_el: f("el", "seoTitle"),
       seo_title_ro: f("ro", "seoTitle"),
       seo_title_ar: f("ar", "seoTitle"),
+      seo_title_de: g("de", "seoTitle"),
+      seo_title_pl: g("pl", "seoTitle"),
+      seo_title_ru: g("ru", "seoTitle"),
       seo_description_en: f("en", "seoDesc"),
       seo_description_el: f("el", "seoDesc"),
       seo_description_ro: f("ro", "seoDesc"),
       seo_description_ar: f("ar", "seoDesc"),
+      seo_description_de: g("de", "seoDesc"),
+      seo_description_pl: g("pl", "seoDesc"),
+      seo_description_ru: g("ru", "seoDesc"),
       slug,
       category,
       subcategory,
@@ -2898,31 +3007,52 @@ async function processOne(
       rewritten_el: f("el", "content"),
       rewritten_ro: f("ro", "content"),
       rewritten_ar: f("ar", "content"),
+      rewritten_de: g("de", "content"),
+      rewritten_pl: g("pl", "content"),
+      rewritten_ru: g("ru", "content"),
       title_en: f("en", "title"),
       title_el: f("el", "title"),
       title_ro: f("ro", "title"),
       title_ar: f("ar", "title"),
+      title_de: g("de", "title"),
+      title_pl: g("pl", "title"),
+      title_ru: g("ru", "title"),
       excerpt_en: f("en", "excerpt"),
       excerpt_el: f("el", "excerpt"),
       excerpt_ro: f("ro", "excerpt"),
       excerpt_ar: f("ar", "excerpt"),
+      excerpt_de: g("de", "excerpt"),
+      excerpt_pl: g("pl", "excerpt"),
+      excerpt_ru: g("ru", "excerpt"),
       summary_en: f("en", "summary"),
       summary_el: f("el", "summary"),
       summary_ro: f("ro", "summary"),
       summary_ar: f("ar", "summary"),
+      summary_de: g("de", "summary"),
+      summary_pl: g("pl", "summary"),
+      summary_ru: g("ru", "summary"),
       rewrite_tags: byLang.en.tags,
       rewrite_tags_en: byLang.en.tags,
       rewrite_tags_el: byLang.el.tags,
       rewrite_tags_ro: byLang.ro.tags,
       rewrite_tags_ar: byLang.ar.tags,
+      rewrite_tags_de: gt("de"),
+      rewrite_tags_pl: gt("pl"),
+      rewrite_tags_ru: gt("ru"),
       seo_title_en: f("en", "seoTitle"),
       seo_title_el: f("el", "seoTitle"),
       seo_title_ro: f("ro", "seoTitle"),
       seo_title_ar: f("ar", "seoTitle"),
+      seo_title_de: g("de", "seoTitle"),
+      seo_title_pl: g("pl", "seoTitle"),
+      seo_title_ru: g("ru", "seoTitle"),
       seo_description_en: f("en", "seoDesc"),
       seo_description_el: f("el", "seoDesc"),
       seo_description_ro: f("ro", "seoDesc"),
       seo_description_ar: f("ar", "seoDesc"),
+      seo_description_de: g("de", "seoDesc"),
+      seo_description_pl: g("pl", "seoDesc"),
+      seo_description_ru: g("ru", "seoDesc"),
       category,
       subcategory,
       cover_image: cover,
@@ -2977,7 +3107,7 @@ async function processOne(
         "All editions were written by the fallback model, so the text may read flat. Please regenerate.",
       );
     }
-    const lowHum = LANGS.filter((l) => byLang[l].humanness < HUMANNESS_TARGET);
+    const lowHum = LANGS.filter((l) => byLang[l].ok && byLang[l].humanness < HUMANNESS_TARGET);
     if (lowHum.length) {
       warns.push(
         `Humanness below ${HUMANNESS_TARGET} on ${
@@ -2985,7 +3115,14 @@ async function processOne(
         } — a manual polish pass would help.`,
       );
     }
-    const echoy = LANGS.filter((l) => (byLang[l].overlap ?? 0) > OVERLAP_MAX * 0.75);
+    // Note any best-effort extra edition that could not be produced (site falls back to English).
+    const extraMissing = EXTRA_LANGS.filter((l) => !byLang[l].ok);
+    if (extraMissing.length) {
+      warns.push(
+        `${extraMissing.map((l) => l.toUpperCase()).join(", ")} edition${extraMissing.length > 1 ? "s" : ""} not produced this run — the site shows English there until regenerated.`,
+      );
+    }
+    const echoy = LANGS.filter((l) => byLang[l].ok && (byLang[l].overlap ?? 0) > OVERLAP_MAX * 0.75);
     if (echoy.length) {
       warns.push(
         `Source overlap near the limit on ${

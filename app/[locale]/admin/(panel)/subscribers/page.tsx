@@ -21,7 +21,7 @@ export default function SubscribersTab() {
       <h1>Subscribers</h1>
       <p className="sub">Confirmed subscribers by edition.</p>
       <div className="cards">
-        {['en', 'el', 'ro', 'ar'].map((l) => <div className="stat" key={l}><div className="n">{counts[l] || 0}</div><div className="k">{l}</div></div>)}
+        {['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'].map((l) => <div className="stat" key={l}><div className="n">{counts[l] || 0}</div><div className="k">{l}</div></div>)}
       </div>
       <table className="adm-t">
         <thead><tr><th>Email</th><th>Edition</th><th>Confirmed</th><th>Joined</th></tr></thead>

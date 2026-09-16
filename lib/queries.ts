@@ -150,6 +150,41 @@ export async function getUpcomingEvents(locale: Locale, limit = 60): Promise<Eve
   return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toEvent(r, locale)).filter((e) => e.title);
 }
 
+export async function getEventBySlug(locale: Locale, slug: string): Promise<EventItem | null> {
+  const { data } = await supabaseAdmin().from('events').select(EVENT_COLS(locale))
+    .eq('status', 'published').eq('slug', slug).maybeSingle();
+  return data ? toEvent(data as unknown as Record<string, unknown>, locale) : null;
+}
+
+// A few published listings in the same district — "while you're in …" cross-links.
+export async function getListingsByDistrict(locale: Locale, district: string, limit = 6): Promise<Listing[]> {
+  const { data } = await supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale))
+    .eq('status', 'published').eq('district', district)
+    .order('featured', { ascending: false }).limit(limit);
+  return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale));
+}
+
+// Everything with coordinates, for the live map — published listings + upcoming events.
+export interface MapItem { id: string; name: string; type: string; district: string | null; lat: number; lng: number; href: string; }
+export async function getMapItems(locale: Locale): Promise<MapItem[]> {
+  const sb = supabaseAdmin();
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const [{ data: L }, { data: E }] = await Promise.all([
+    sb.from('directory_listings').select(`slug, type, district, lat, lng, name_${locale}, name_en`).eq('status', 'published').not('lat', 'is', null).limit(3000),
+    sb.from('events').select(`slug, district, lat, lng, starts_at, title_${locale}, title_en`).eq('status', 'published').gte('starts_at', start.toISOString()).not('lat', 'is', null).limit(500),
+  ]);
+  const items: MapItem[] = [];
+  for (const r of ((L || []) as Record<string, any>[])) {
+    if (r.lat == null || r.lng == null) continue;
+    items.push({ id: `l-${r.slug}`, name: r[`name_${locale}`] || r.name_en || r.slug, type: String(r.type || 'vendor'), district: r.district ?? null, lat: Number(r.lat), lng: Number(r.lng), href: `/directory/${r.type}/${r.slug}` });
+  }
+  for (const r of ((E || []) as Record<string, any>[])) {
+    if (r.lat == null || r.lng == null) continue;
+    items.push({ id: `e-${r.slug}`, name: r[`title_${locale}`] || r.title_en || r.slug, type: 'event', district: r.district ?? null, lat: Number(r.lat), lng: Number(r.lng), href: `/agenda/${r.slug}` });
+  }
+  return items;
+}
+
 export interface Banner { id: string; advertiser_name: string; headline: string; body: string; cta: string; url: string; image_url: string | null; bg_color: string; accent_color: string }
 export async function getBanner(locale: Locale, slot = 'sidebar-homepage'): Promise<Banner | null> {
   const l = locale;

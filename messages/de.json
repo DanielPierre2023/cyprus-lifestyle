@@ -1,0 +1,215 @@
+{
+  "brand": {
+    "name": "Cyprus Lifestyle",
+    "tagline": "Die Insel, in voller Farbe"
+  },
+  "nav": {
+    "home": "Start",
+    "cyprus": "Zypern",
+    "business": "Wirtschaft",
+    "property": "Immobilien",
+    "culture": "Kultur",
+    "escapes": "Reisen",
+    "table": "Die Tafel",
+    "world": "Welt",
+    "relocation": "Umzug",
+    "agenda": "Termine",
+    "people": "Menschen",
+    "menu": "Menü",
+    "close": "Schließen",
+    "search": "Suche",
+    "directory": "Verzeichnis",
+    "membership": "Mitgliedschaft"
+  },
+  "common": {
+    "readMore": "Weiterlesen",
+    "latest": "Neueste",
+    "featured": "Empfohlen",
+    "mostRead": "Meistgelesen",
+    "byline": "Von",
+    "minRead": "Min. Lesezeit",
+    "published": "Veröffentlicht",
+    "source": "Quelle",
+    "updated": "Aktualisiert",
+    "share": "Teilen",
+    "loading": "Lädt…",
+    "noResults": "Hier ist noch nichts.",
+    "backHome": "Zurück zur Startseite"
+  },
+  "newsletter": {
+    "title": "Der Cyprus-Lifestyle-Brief",
+    "subtitle": "Wirtschaft, Kultur und das gute Leben der Insel — in Ihrem Postfach.",
+    "placeholder": "Ihre E-Mail",
+    "cta": "Abonnieren",
+    "success": "Fast geschafft — bitte bestätigen Sie in Ihrem Postfach.",
+    "error": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut."
+  },
+  "footer": {
+    "sections": "Rubriken",
+    "about": "Über uns",
+    "advertise": "Werben",
+    "contact": "Kontakt",
+    "privacy": "Datenschutz",
+    "rights": "Alle Rechte vorbehalten.",
+    "languages": "Ausgaben",
+    "standards": "Redaktionelle Grundsätze"
+  },
+  "comments": {
+    "title": "Kommentare",
+    "placeholder": "Diskutieren Sie mit",
+    "name": "Ihr Name",
+    "submit": "Kommentar senden",
+    "pending": "Ihr Kommentar erscheint nach der Freigabe."
+  },
+  "home": {
+    "subscribe": "Abonnieren",
+    "tagline": "Die Insel, von ihrer schönsten Seite",
+    "issue": "Die Herbstausgabe",
+    "coverStory": "Die Titelgeschichte",
+    "readStory": "Zur Geschichte",
+    "edit": "Die Auswahl",
+    "editSub": "Diese Woche auf der Insel",
+    "property": "Immobilien & Design",
+    "propertySub": "Häuser und das Leben darin",
+    "culture": "Kultur & Kunst",
+    "cultureSub": "Was die Insel schafft und bewahrt",
+    "escapes": "Reisen",
+    "escapesSub": "Die Insel, abseits der Route",
+    "manifestoLead": "Wir zeigen die Insel so, wie Sie sie erleben möchten —",
+    "manifestoAccent": "in Ruhe und mit Genuss.",
+    "manifestoAttr": "Das Cyprus-Lifestyle-Manifest",
+    "letterTitle": "Der Samstagsbrief",
+    "letterSub": "Die Woche auf der Insel, ausgewählt und geschrieben von unserer Redaktion — Immobilien, Kultur und das gute Leben, in einer durchdachten E-Mail.",
+    "letterFine": "Sieben Sprachen · Kein Lärm · Jederzeit abbestellbar",
+    "footerBlurb": "Ein Premium-Magazin für Immobilien, Kultur und das gute Leben auf Zypern — in sieben Sprachen.",
+    "magazine": "Das Magazin",
+    "more": "Mehr von der Insel"
+  },
+  "sections": {
+    "cyprus": "Politik, Wirtschaft und die Geschichten, die die Republik prägen.",
+    "business": "Märkte, Fonds, Schifffahrt und das Kapital, das durch Limassol und Nikosia fließt.",
+    "property": "Villen, Marinas und die neue Architektur der Küste — die Insel als Adresse.",
+    "culture": "Kunst, Erbe, Musik und der gesellschaftliche Kalender, vom antiken Paphos bis zur Premiere.",
+    "escapes": "Wohin und wie man ankommt — das Mittelmeer, durch eine zyprische Linse gelesen.",
+    "table": "Restaurants, Weingüter und die zyprische Tafel, von Commandaria bis zur neuen Inselküche.",
+    "world": "Der Platz der Insel im größeren Bild.",
+    "relocation": "Umzug nach Zypern — Aufenthalt, Steuern, Schulen und die Praxis des Insellebens.",
+    "agenda": "Was auf der Insel los ist — Festivals, Ausstellungen, Konzerte und Eröffnungen.",
+    "people": "Die Zyprer und Wahl-Zyprer, die die Insel prägen — Porträts und Interviews."
+  },
+  "pages": {
+    "about": {
+      "kicker": "Über uns",
+      "title": "Die Insel, in voller Farbe",
+      "dek": "Ein Premium-Magazin für Immobilien, Kultur und das gute Leben auf Zypern.",
+      "body": [
+        "Cyprus Lifestyle ist die Chronik dessen, wie die Insel lebt, investiert und genießt — auf höchstem Niveau. Zypern liegt dort, wo Europa, die Levante und der Golf aufeinandertreffen, und dies ist die Publikation dieses Knotenpunkts — glanzvoll wie die großen Modetitel, maßgeblich wie die bedeutenden Lifestyle-Magazine und von Geburt an mehrsprachig.",
+        "Wir erscheinen in sieben Sprachen: Englisch als internationale Leitausgabe, Griechisch als Heimatausgabe, Arabisch für den Golf sowie Rumänisch, Russisch, Deutsch und Polnisch für die ansässigen und investierenden Gemeinschaften, die Zypern ausmachen. Jede kanonische Geschichte wird in alle sieben Ausgaben übertragen, für die arabische Ausgabe von rechts nach links.",
+        "Unsere Ressorts decken Zypern und Politik, Wirtschaft und Investment, Immobilien und Architektur, Kultur und Erbe, Reisen und das Meer sowie die zyprische Tafel ab. Zurückhaltung liest sich wertig; Konkretes liest sich wahr."
+      ]
+    },
+    "advertise": {
+      "kicker": "Partnerschaften",
+      "title": "Werben mit Cyprus Lifestyle",
+      "dek": "Sieben Ausgaben, ein anspruchsvolles Publikum — Investoren, Zuziehende und die Elite der Insel.",
+      "body": [
+        "Erreichen Sie internationale Investoren und Zuziehende, die zyprische Elite, die Gäste aus dem Golf und die berufstätigen Gemeinschaften — über sieben Ausgaben hinweg. Wir bieten Platzierungen auf der Startseite und im Artikel, Newsletter-Sponsoring und gesponserte Beiträge.",
+        "Erzählen Sie uns von Ihrer Marke, und wir senden Ihnen unsere aktuelle Preisliste."
+      ]
+    },
+    "privacy": {
+      "kicker": "Rechtliches",
+      "title": "Datenschutz",
+      "dek": "",
+      "body": [
+        "Cyprus Lifestyle erhebt nur das Nötigste für den Betrieb der Publikation: die E-Mail-Adresse, die Sie uns für den Newsletter geben, sowie anonyme, aggregierte Statistiken darüber, wie die Seite gelesen wird. Wir verkaufen keine personenbezogenen Daten.",
+        "Sie können den Newsletter jederzeit über den Link in jeder E-Mail abbestellen. Um die Löschung Ihrer Daten zu verlangen, kontaktieren Sie uns über die Kontaktseite. Dieser Hinweis ist ein Ausgangspunkt; bitte lassen Sie ihn vor dem Start rechtlich prüfen und an die DSGVO und das zyprische Recht anpassen."
+      ]
+    },
+    "contact": {
+      "kicker": "Cyprus Lifestyle",
+      "title": "Kontakt",
+      "dek": "Redaktion, Mitgliedschaft oder Partnerschaften — schreiben Sie uns."
+    },
+    "standards": {
+      "kicker": "Redaktion",
+      "title": "Redaktionelle Grundsätze",
+      "dek": "Wie Cyprus Lifestyle recherchiert, geschrieben, übersetzt und korrigiert wird.",
+      "body": [
+        "Cyprus Lifestyle ist redaktionell unabhängig. Unsere Berichterstattung ist nicht käuflich; gesponserte Beiträge sind stets als solche gekennzeichnet, und geschäftliche Beziehungen bestimmen niemals, worüber oder wie wir berichten.",
+        "Wir berichten aus namentlich genannten Ressorts und schätzen Konkretes höher als Adjektive. Stützt sich eine Geschichte auf eine andere Publikation oder ein Originaldokument, sagen wir das und verlinken die Quelle.",
+        "Wir nutzen KI-Werkzeuge beim Recherchieren, Verfassen und Übersetzen — doch jede kanonische Geschichte wird vor der Veröffentlichung von einem Menschen redigiert, und jede unserer sieben Ausgaben (Englisch, Griechisch, Rumänisch, Arabisch, Deutsch, Polnisch und Russisch) wird auf Richtigkeit und Ton geprüft, für die arabische Ausgabe von rechts nach links.",
+        "Wir korrigieren Fehler zügig und sichtbar. Ist etwas falsch, schreiben Sie uns über die Kontaktseite, und wir bringen es in Ordnung."
+      ]
+    },
+    "author": {
+      "desk": "Redaktion",
+      "recent": "Aktuelle Beiträge"
+    }
+  },
+  "contactForm": {
+    "name": "Ihr Name",
+    "email": "Ihre E-Mail",
+    "subject": "Betreff",
+    "message": "Nachricht",
+    "send": "Senden",
+    "sending": "Wird gesendet…",
+    "success": "Vielen Dank. Wir melden uns.",
+    "error": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut."
+  },
+  "consent": {
+    "title": "Ihre Privatsphäre",
+    "body": "Wir nutzen datenschutzfreundliche, cookiefreie Statistiken, um zu sehen, was auf Cyprus Lifestyle gelesen wird — niemals Werbe-Tracker.",
+    "accept": "Akzeptieren",
+    "decline": "Ablehnen",
+    "learnMore": "Datenschutz"
+  },
+  "search": {
+    "placeholder": "Cyprus Lifestyle durchsuchen",
+    "button": "Suchen",
+    "resultsFor": "Ergebnisse für",
+    "none": "Nichts gefunden für",
+    "prompt": "Geben Sie ein oder zwei Wörter ein, um das Magazin zu durchsuchen."
+  },
+  "directory": {
+    "title": "Verzeichnis",
+    "intro": "Die Insel, gelistet — wo man essen, verkosten, übernachten und einkaufen kann.",
+    "all": "Alle",
+    "visit": "Website besuchen",
+    "none": "Hier ist noch nichts gelistet.",
+    "restaurant": "Restaurants",
+    "winery": "Weingüter",
+    "development": "Neubauprojekte",
+    "hotel": "Hotels",
+    "beach": "Strände",
+    "vendor": "Dienstleistungen"
+  },
+  "membership": {
+    "kicker": "Mitgliedschaft",
+    "title": "Mitglied werden",
+    "dek": "Werden Sie Teil der Cyprus-Lifestyle-Leserschaft — Wirtschaft, Kultur und das gute Leben der Insel, in sieben Sprachen.",
+    "intro": "Die Mitgliedschaft beginnt kostenlos und bleibt es. Jede Leserin und jeder Leser erhält den Samstagsbrief, alle sieben Ausgaben und das gesamte Magazin samt Verzeichnis. Eine kostenpflichtige Stufe — mit Mitgliederabenden, der Printausgabe und Partnervorteilen — ist in Vorbereitung.",
+    "free": {
+      "name": "Leser",
+      "price": "Kostenlos",
+      "cta": "Kostenlos beitreten",
+      "features": [
+        "Der Samstagsbrief, jede Woche",
+        "Alle sieben Ausgaben — Englisch, Griechisch, Rumänisch, Arabisch, Deutsch, Polnisch und Russisch",
+        "Jeder Artikel und das vollständige Inselverzeichnis"
+      ]
+    },
+    "patron": {
+      "name": "Förderer",
+      "price": "Demnächst",
+      "features": [
+        "Alles aus der Leser-Stufe",
+        "Einladungen zu Mitgliederabenden und Verkostungen",
+        "Die saisonale Printausgabe, zu Ihnen nach Hause",
+        "Vorteile bei ausgewählten Namen in unserem Verzeichnis"
+      ]
+    },
+    "soon": "Die kostenpflichtige Mitgliedschaft ist noch nicht geöffnet. Treten Sie kostenlos als Leser bei, dann erfahren Sie als Erste, wenn die Förderer-Stufe startet.",
+    "note": "Fragen zur Mitgliedschaft oder zu Firmenabonnements? Schreiben Sie uns über"
+  }
+}

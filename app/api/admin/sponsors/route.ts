@@ -12,6 +12,7 @@ const eur = (n: number | null) => (n == null ? '—' : `€${Number(n).toLocaleS
 const HEAD: Record<Locale, string> = {
   en: 'Advertise with Cyprus Lifestyle', el: 'Διαφημιστείτε στο Cyprus Lifestyle',
   ro: 'Publicitate în Cyprus Lifestyle', ar: 'أعلن مع Cyprus Lifestyle',
+  de: 'Werben mit Cyprus Lifestyle', pl: 'Reklama w Cyprus Lifestyle', ru: 'Реклама в Cyprus Lifestyle',
 };
 
 export async function POST(req: NextRequest) {

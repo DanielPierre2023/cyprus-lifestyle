@@ -16,6 +16,9 @@ const AI_TELL_HINT: Record<Locale, string> = {
   el: '«αξίζει να σημειωθεί», «διαδραματίζει κρίσιμο ρόλο», «αποτελεί απόδειξη/μαρτυρία», «ένα ευρύ φάσμα», «μια πληθώρα», «στην καρδιά της», «ρίχνει φως σε», «στη σύγχρονη/ψηφιακή εποχή», «όχι μόνο… αλλά και», «Επιπλέον/Επιπροσθέτως», «Εν κατακλείδι/Συμπερασματικά»',
   ro: '„joacă un rol crucial", „reprezintă o dovadă", „merită menționat că", „o gamă largă de", „în cele din urmă"',
   ar: '«تجدر الإشارة إلى أن»، «من الجدير بالذكر»، «يلعب دورا حاسما/محوريا»، «يشكل دليلا على»، «يسلط الضوء على»، «مجموعة واسعة من»، «في قلب»، «في عالم اليوم»، «ليس فقط… بل أيضا»، «علاوة على ذلك/بالإضافة إلى ذلك»، «في الختام/في نهاية المطاف»',
+  de: '„es ist erwähnenswert", „spielt eine entscheidende Rolle", „ist ein Zeugnis für", „eine breite Palette von", „im Herzen von", „wirft ein Licht auf", „in der heutigen Zeit", „nicht nur… sondern auch", „zudem / darüber hinaus", „letztlich / schließlich"',
+  pl: '„warto zauważyć, że", „odgrywa kluczową rolę", „stanowi dowód/świadectwo", „szeroki wachlarz", „w sercu", „rzuca światło na", „w dzisiejszych czasach", „nie tylko… ale także", „co więcej / ponadto", „ostatecznie"',
+  ru: '«стоит отметить, что», «играет ключевую/решающую роль», «является свидетельством», «широкий спектр», «в самом сердце», «проливает свет на», «в современном мире», «не только… но и», «более того / кроме того», «в конечном счёте»',
 };
 
 // Translate a rich HTML body, preserving structure 1:1.

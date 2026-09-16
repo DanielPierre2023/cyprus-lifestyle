@@ -25,7 +25,7 @@ export function alternatesFor(locale: Locale, path: string) {
   return { canonical: urlFor(locale, path), languages };
 }
 
-const OG_LOCALE: Record<Locale, string> = { en: 'en_US', el: 'el_GR', ro: 'ro_RO', ar: 'ar_AR' };
+const OG_LOCALE: Record<Locale, string> = { en: 'en_US', el: 'el_GR', ro: 'ro_RO', ar: 'ar_AR', de: 'de_DE', pl: 'pl_PL', ru: 'ru_RU' };
 
 /** Absolute URL of a generated branded social card. */
 export function ogImageUrl(o: { title: string; kicker?: string; locale: Locale; cover?: string | null }): string {

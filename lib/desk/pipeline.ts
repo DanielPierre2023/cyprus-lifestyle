@@ -69,7 +69,9 @@ async function buildAllLanguages(draft: Draft): Promise<{ langs: Record<Locale, 
     seo_description: humanizeText(draft.seo_description, 'en'),
     tags: draft.tags.map((t) => t.toLowerCase()),
   };
-  const langs: Record<Locale, LangBundle> = { en, el: en, ro: en, ar: en };
+  // de/pl/ru start as the English bundle (fallback); TRANSLATE_TO fills the
+  // editions it targets. All seven keys are present so the map stays exhaustive.
+  const langs: Record<Locale, LangBundle> = { en, el: en, ro: en, ar: en, de: en, pl: en, ru: en };
 
   await Promise.all(TRANSLATE_TO.map(async (target) => {
     const [bodyRes, bundle] = await Promise.all([

@@ -27,7 +27,7 @@ export default function NewsletterTab() {
       <p className="sub">Send the weekly digest now, per edition or to all. (Cron also sends Mondays 06:00.)</p>
       <div className="row" style={{ marginBottom: 8 }}>
         <button className="abtn gold" disabled={!!busy} onClick={() => send()}>{busy === 'all' ? 'Sending…' : 'Send all editions'}</button>
-        {['en', 'el', 'ro', 'ar'].map((l) => <button key={l} className="abtn ghost" disabled={!!busy} onClick={() => send(l)}>{busy === l ? '…' : `Send ${l}`}</button>)}
+        {['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'].map((l) => <button key={l} className="abtn ghost" disabled={!!busy} onClick={() => send(l)}>{busy === l ? '…' : `Send ${l}`}</button>)}
       </div>
       {msg ? <p style={{ color: '#1c6b34' }}>{msg}</p> : null}
       <table className="adm-t">

@@ -8,14 +8,14 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 // time and stored as UTC (timestamptz).
 
 const DISTRICTS = ['', 'nicosia', 'limassol', 'larnaca', 'famagusta', 'paphos', 'kyrenia'];
-const LANGS = ['en', 'el', 'ro', 'ar'] as const;
+const LANGS = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'] as const;
 
 type Row = Record<string, any>;
 
 const BLANK: Row = {
   id: null, slug: '', district: '',
-  title_en: '', title_el: '', title_ro: '', title_ar: '',
-  summary_en: '', summary_el: '', summary_ro: '', summary_ar: '',
+  title_en: '', title_el: '', title_ro: '', title_ar: '', title_de: '', title_pl: '', title_ru: '',
+  summary_en: '', summary_el: '', summary_ro: '', summary_ar: '', summary_de: '', summary_pl: '', summary_ru: '',
   venue: '', starts_at: '', ends_at: '', price: '', url: '', image: '',
   lat: '', lng: '', tags: '', status: 'published',
 };
@@ -68,7 +68,9 @@ export default function AgendaAdmin() {
     const payload: Row = {
       slug, district: form.district || null,
       title_en: form.title_en || null, title_el: form.title_el || null, title_ro: form.title_ro || null, title_ar: form.title_ar || null,
+      title_de: form.title_de || null, title_pl: form.title_pl || null, title_ru: form.title_ru || null,
       summary_en: form.summary_en || null, summary_el: form.summary_el || null, summary_ro: form.summary_ro || null, summary_ar: form.summary_ar || null,
+      summary_de: form.summary_de || null, summary_pl: form.summary_pl || null, summary_ru: form.summary_ru || null,
       venue: form.venue || null, starts_at: fromLocalInput(form.starts_at), ends_at: fromLocalInput(form.ends_at),
       price: form.price || null, url: form.url || null, image: form.image || null,
       lat: num(form.lat), lng: num(form.lng), tags: parseTags(form.tags || ''), status: form.status || 'published',
@@ -129,9 +131,9 @@ export default function AgendaAdmin() {
           ))}
         </div>
         <details style={{ marginBottom: 10 }}>
-          <summary style={{ cursor: 'pointer', color: '#8a5b12', fontSize: 13 }}>Localised titles (EL / RO / AR) — optional</summary>
+          <summary style={{ cursor: 'pointer', color: '#8a5b12', fontSize: 13 }}>Localised titles (EL / RO / AR / DE / PL / RU) — optional</summary>
           <div className="row" style={{ marginTop: 8, alignItems: 'flex-start' }}>
-            {(['el', 'ro', 'ar'] as const).map((l) => (
+            {(['el', 'ro', 'ar', 'de', 'pl', 'ru'] as const).map((l) => (
               <div key={l} style={{ flex: '1 1 200px' }}><label className="fl">Title ({l.toUpperCase()})</label><input value={form[`title_${l}`]} onChange={(e) => set(`title_${l}`, e.target.value)} /></div>
             ))}
           </div>

@@ -80,8 +80,8 @@
     "manifestoAttr": "Manifestul Cyprus Lifestyle",
     "letterTitle": "Scrisoarea de Sâmbătă",
     "letterSub": "Săptămâna pe insulă, aleasă și scrisă de redactorii noștri — imobiliare, cultură și viața bună, într-un singur email îngrijit.",
-    "letterFine": "Patru limbi · Fără zgomot · Dezabonare oricând",
-    "footerBlurb": "O revistă premium de imobiliare, cultură și viață bună din Cipru — publicată în engleză, greacă, română și arabă.",
+    "letterFine": "Șapte limbi · Fără zgomot · Dezabonare oricând",
+    "footerBlurb": "O revistă premium de imobiliare, cultură și viață bună din Cipru — publicată în șapte limbi.",
     "magazine": "Revista",
     "more": "Mai multe de pe insulă"
   },
@@ -104,16 +104,16 @@
       "dek": "O revistă premium de imobiliare, cultură și viața bună din Cipru.",
       "body": [
         "Cyprus Lifestyle este cronica felului în care insula trăiește, investește și se bucură de viață la cel mai înalt nivel. Ciprul se află acolo unde se întâlnesc Europa, Levantul și Golful, iar aceasta este publicația acelei răscruci — elegantă precum revistele de modă, autoritară precum marile titluri de lifestyle și multilingvă din naștere.",
-        "Publicăm în patru limbi: engleza ca ediție internațională, greaca ca ediție locală, româna pentru comunitatea de rezidenți și araba pentru Golf. Fiecare articol de referință este tradus în toate cele patru, de la dreapta la stânga pentru ediția arabă.",
+        "Publicăm în șapte limbi: engleza ca ediție internațională, greaca ca ediție locală, araba pentru Golf, precum și româna, rusa, germana și poloneza pentru comunitățile de rezidenți și investitori care fac Ciprul ceea ce este. Fiecare articol de referință este tradus în toate cele șapte, de la dreapta la stânga pentru ediția arabă.",
         "Redacțiile noastre acoperă Ciprul și politica, afacerile și investițiile, imobiliarele și arhitectura, cultura și patrimoniul, escapadele și marea, și masa cipriotă. Sobrietatea se citește ca lux; detaliile se citesc ca adevăr."
       ]
     },
     "advertise": {
       "kicker": "Parteneriate",
       "title": "Publicitate în Cyprus Lifestyle",
-      "dek": "Patru ediții, un public bine ales — investitori, noi rezidenți și elita insulei.",
+      "dek": "Șapte ediții, un public bine ales — investitori, noi rezidenți și elita insulei.",
       "body": [
-        "Ajungeți la investitori și noi rezidenți internaționali, la elita cipriotă, la vizitatorii din Golf și la comunitatea profesională românească — în patru ediții. Oferim plasări pe pagina principală și în articole, sponsorizarea newsletterului și materiale sponsorizate.",
+        "Ajungeți la investitori și noi rezidenți internaționali, la elita cipriotă, la vizitatorii din Golf și la comunitățile profesionale — în șapte ediții. Oferim plasări pe pagina principală și în articole, sponsorizarea newsletterului și materiale sponsorizate.",
         "Spuneți-ne despre brandul dumneavoastră și vă vom trimite grila tarifară actuală."
       ]
     },
@@ -138,7 +138,7 @@
       "body": [
         "Cyprus Lifestyle este independent editorial. Acoperirea noastră nu este de vânzare; materialele sponsorizate sunt întotdeauna semnalate ca atare, iar relațiile comerciale nu decid niciodată ce acoperim sau cum.",
         "Scriem din redacții cu nume și preferăm faptele concrete în locul adjectivelor. Când un articol se bazează pe o altă publicație sau pe un document primar, o spunem și trimitem la sursă.",
-        "Folosim instrumente AI pentru documentare, redactare și traducere — dar fiecare articol de referință este editat de un om înainte de publicare, iar fiecare dintre cele patru ediții (engleză, greacă, română și arabă) este verificată pentru acuratețe și ton, de la dreapta la stânga pentru ediția arabă.",
+        "Folosim instrumente AI pentru documentare, redactare și traducere — dar fiecare articol de referință este editat de un om înainte de publicare, iar fiecare dintre cele șapte ediții (engleză, greacă, română, arabă, germană, poloneză și rusă) este verificată pentru acuratețe și ton, de la dreapta la stânga pentru ediția arabă.",
         "Corectăm greșelile prompt și vizibil. Dacă ceva este greșit, scrieți-ne prin pagina de contact și vom îndrepta lucrurile."
       ]
     },
@@ -187,15 +187,15 @@
   "membership": {
     "kicker": "Membri",
     "title": "Deveniți membru",
-    "dek": "Alăturați-vă comunității Cyprus Lifestyle — afacerile, cultura și viața bună a insulei, în patru limbi.",
-    "intro": "Calitatea de membru începe gratuit și așa va rămâne. Fiecare cititor primește Scrisoarea de sâmbătă, toate cele patru ediții și întreaga colecție a revistei și a ghidului său. Un nivel cu plată — cu seri pentru membri, ediția tipărită și privilegii de la parteneri — este pe cale să apară.",
+    "dek": "Alăturați-vă comunității Cyprus Lifestyle — afacerile, cultura și viața bună a insulei, în șapte limbi.",
+    "intro": "Calitatea de membru începe gratuit și așa va rămâne. Fiecare cititor primește Scrisoarea de sâmbătă, toate cele șapte ediții și întreaga colecție a revistei și a ghidului său. Un nivel cu plată — cu seri pentru membri, ediția tipărită și privilegii de la parteneri — este pe cale să apară.",
     "free": {
       "name": "Cititor",
       "price": "Gratuit",
       "cta": "Înscrieți-vă gratuit",
       "features": [
         "Scrisoarea de sâmbătă, în fiecare săptămână",
-        "Toate cele patru ediții — engleză, greacă, română și arabă",
+        "Toate cele șapte ediții — engleză, greacă, română, arabă, germană, poloneză și rusă",
         "Fiecare articol și întregul ghid al insulei"
       ]
     },

@@ -80,8 +80,8 @@
     "manifestoAttr": "The Cyprus Lifestyle Manifesto",
     "letterTitle": "The Saturday Letter",
     "letterSub": "The week on the island, chosen and written by our editors — property, culture and the good life, in one considered email.",
-    "letterFine": "Four languages · No noise · Unsubscribe anytime",
-    "footerBlurb": "A premium magazine of property, culture and the good life across Cyprus — published in English, Greek, Romanian and Arabic.",
+    "letterFine": "Seven languages · No noise · Unsubscribe anytime",
+    "footerBlurb": "A premium magazine of property, culture and the good life across Cyprus — published in seven languages.",
     "magazine": "The Magazine",
     "more": "More from the island"
   },
@@ -104,16 +104,16 @@
       "dek": "A premium magazine of property, culture and the good life across Cyprus.",
       "body": [
         "Cyprus Lifestyle is the record of how the island lives, invests and enjoys itself at the top end. Cyprus sits where Europe, the Levant and the Gulf meet, and this is the publication of that crossroads — glamorous like the fashion books, authoritative like the great living titles, and multilingual by birth.",
-        "We publish in four languages: English as the international lead, Greek as the home edition, Romanian for the resident community, and Arabic for the Gulf. Every canonical story is translated across all four, right-to-left for the Arabic edition.",
+        "We publish in seven languages: English as the international lead, Greek as the home edition, Arabic for the Gulf, and Romanian, Russian, German and Polish for the resident and investor communities that make Cyprus what it is. Every canonical story is translated across all seven, right-to-left for the Arabic edition.",
         "Our desks cover Cyprus and politics, business and investment, property and architecture, culture and heritage, escapes and the sea, and the Cypriot table. Restraint reads as expensive; specifics read as true."
       ]
     },
     "advertise": {
       "kicker": "Partnerships",
       "title": "Advertise with Cyprus Lifestyle",
-      "dek": "Four editions, one considered audience — investors, relocators and the island's elite.",
+      "dek": "Seven editions, one considered audience — investors, relocators and the island's elite.",
       "body": [
-        "Reach international investors and relocators, the Cypriot elite, the Gulf's visitors and the Romanian professional community — across four editions. We offer homepage and in-article placements, newsletter sponsorship, and sponsored features.",
+        "Reach international investors and relocators, the Cypriot elite, the Gulf's visitors and the Romanian professional community — across seven editions. We offer homepage and in-article placements, newsletter sponsorship, and sponsored features.",
         "Tell us about your brand and we will send our current rate card."
       ]
     },
@@ -138,7 +138,7 @@
       "body": [
         "Cyprus Lifestyle is editorially independent. Our coverage is not for sale; sponsored features are always labelled as such, and commercial relationships never determine what we cover or how.",
         "We report from named desks and value specifics over adjectives. Where a story draws on another publication or a primary document, we say so and link to the source.",
-        "We use AI tools to help gather, draft and translate — but every canonical story is edited by a person before it publishes, and each of our four editions (English, Greek, Romanian and Arabic) is reviewed for accuracy and tone, right-to-left for the Arabic edition.",
+        "We use AI tools to help gather, draft and translate — but every canonical story is edited by a person before it publishes, and each of our seven editions (English, Greek, Romanian, Arabic, German, Polish and Russian) is reviewed for accuracy and tone, right-to-left for the Arabic edition.",
         "We correct mistakes promptly and visibly. If something is wrong, write to us through the contact page and we will put it right."
       ]
     },
@@ -187,15 +187,15 @@
   "membership": {
     "kicker": "Membership",
     "title": "Become a member",
-    "dek": "Join the Cyprus Lifestyle readership — the island's business, culture and good living, in four languages.",
-    "intro": "Membership begins free, and always will. Every reader gets the Saturday Letter, all four editions, and the full run of the magazine and its directory. A paid tier — with member evenings, the print edition and partner privileges — is on the way.",
+    "dek": "Join the Cyprus Lifestyle readership — the island's business, culture and good living, in seven languages.",
+    "intro": "Membership begins free, and always will. Every reader gets the Saturday Letter, all seven editions, and the full run of the magazine and its directory. A paid tier — with member evenings, the print edition and partner privileges — is on the way.",
     "free": {
       "name": "Reader",
       "price": "Free",
       "cta": "Join free",
       "features": [
         "The Saturday Letter, every week",
-        "All four editions — English, Greek, Romanian and Arabic",
+        "All seven editions — English, Greek, Romanian, Arabic, German, Polish and Russian",
         "Every article, and the full island directory"
       ]
     },
