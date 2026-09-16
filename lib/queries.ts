@@ -166,6 +166,18 @@ export async function getListingsByDistrict(locale: Locale, district: string, li
 
 // Everything with coordinates, for the live map — published listings + upcoming events.
 export interface MapItem { id: string; name: string; type: string; district: string | null; lat: number; lng: number; href: string; }
+
+// Cyprus bounding box (a little generous around the island). Rows whose lat/lng are
+// outside it are either genuinely wrong (dropped) or stored swapped — a common
+// import mistake that lands points in the sea — which we recover by flipping them.
+function cyprusCoord(lat: number, lng: number): { lat: number; lng: number } | null {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const inBox = (a: number, b: number) => a >= 34.4 && a <= 35.9 && b >= 32.0 && b <= 34.7;
+  if (inBox(lat, lng)) return { lat, lng };
+  if (inBox(lng, lat)) return { lat: lng, lng: lat }; // lat/lng were swapped → recover
+  return null; // off the island → drop rather than draw a pin in the water
+}
+
 export async function getMapItems(locale: Locale): Promise<MapItem[]> {
   const sb = supabaseAdmin();
   const start = new Date(); start.setHours(0, 0, 0, 0);
@@ -175,12 +187,14 @@ export async function getMapItems(locale: Locale): Promise<MapItem[]> {
   ]);
   const items: MapItem[] = [];
   for (const r of ((L || []) as Record<string, any>[])) {
-    if (r.lat == null || r.lng == null) continue;
-    items.push({ id: `l-${r.slug}`, name: r[`name_${locale}`] || r.name_en || r.slug, type: String(r.type || 'vendor'), district: r.district ?? null, lat: Number(r.lat), lng: Number(r.lng), href: `/directory/${r.type}/${r.slug}` });
+    const c = cyprusCoord(Number(r.lat), Number(r.lng));
+    if (!c) continue;
+    items.push({ id: `l-${r.slug}`, name: r[`name_${locale}`] || r.name_en || r.slug, type: String(r.type || 'vendor'), district: r.district ?? null, lat: c.lat, lng: c.lng, href: `/directory/${r.type}/${r.slug}` });
   }
   for (const r of ((E || []) as Record<string, any>[])) {
-    if (r.lat == null || r.lng == null) continue;
-    items.push({ id: `e-${r.slug}`, name: r[`title_${locale}`] || r.title_en || r.slug, type: 'event', district: r.district ?? null, lat: Number(r.lat), lng: Number(r.lng), href: `/agenda/${r.slug}` });
+    const c = cyprusCoord(Number(r.lat), Number(r.lng));
+    if (!c) continue;
+    items.push({ id: `e-${r.slug}`, name: r[`title_${locale}`] || r.title_en || r.slug, type: 'event', district: r.district ?? null, lat: c.lat, lng: c.lng, href: `/agenda/${r.slug}` });
   }
   return items;
 }
