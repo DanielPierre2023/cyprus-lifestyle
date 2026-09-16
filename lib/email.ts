@@ -31,9 +31,9 @@ Cyprus Lifestyle · ${site.replace(/^https?:\/\//, '')}<br>
 </table></td></tr></table></body></html>`;
 }
 
-export async function sendEmail(opts: { to: string | string[]; subject: string; html: string; replyTo?: string }): Promise<{ ok: boolean; id?: string; error?: string }> {
+export async function sendEmail(opts: { to: string | string[]; subject: string; html: string; replyTo?: string; from?: string }): Promise<{ ok: boolean; id?: string; error?: string }> {
   const key = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM || 'Cyprus Lifestyle <newsroom@cypruslifestyle.com>';
+  const from = opts.from || process.env.EMAIL_FROM || 'Cyprus Lifestyle <newsroom@cypruslifestyle.com>';
   if (!key) return { ok: false, error: 'RESEND_API_KEY not configured' };
   try {
     const res = await fetch('https://api.resend.com/emails', {

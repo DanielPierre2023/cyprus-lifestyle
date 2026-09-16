@@ -11,7 +11,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isCronAuthorized } from '@/lib/cron';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { scrapeAllActive } from '@/lib/scraper';
-import { processBatch } from '@/lib/desk/queue';
+import { dispatchEdgeProcessing } from '@/lib/desk/queue';
+import { runOutreach } from '@/lib/outreach';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap
@@ -22,20 +23,26 @@ export async function GET(req: NextRequest) {
   const { data } = await sb.from('automation_settings').select('scraper_enabled, processor_enabled, auto_publish').eq('id', 1).maybeSingle();
   const s = data as { scraper_enabled: boolean; processor_enabled: boolean; auto_publish: boolean } | null;
 
-  const start = Date.now();
   const out: Record<string, unknown> = { ok: true };
 
   if (s?.scraper_enabled) {
     out.scrape = await scrapeAllActive(sb, { deadlineMs: 30_000 }); // ~30s ceiling
   }
   if (s?.processor_enabled) {
-    const remaining = 52_000 - (Date.now() - start);
-    if (remaining > 9_000) {
-      out.process = await processBatch(sb, { autoPublish: !!s.auto_publish, max: 1, deadlineMs: remaining });
-    } else {
-      out.process = { skipped: 'no_time_budget' };
-    }
+    // Dispatch to the edge desk (background). It ACKs immediately and runs the
+    // batch to completion on Supabase, so the 60s cron limit is a non-issue.
+    out.process = await dispatchEdgeProcessing();
   }
   if (!s?.scraper_enabled && !s?.processor_enabled) out.skipped = 'automation_disabled';
+
+  // Outreach cadence — best-effort, and only actually sends when sending is
+  // switched on in crm_settings (otherwise runOutreach no-ops on commit).
+  try {
+    const { data: cs } = await sb.from('crm_settings').select('sending_enabled').eq('id', 1).maybeSingle();
+    if ((cs as { sending_enabled?: boolean } | null)?.sending_enabled) {
+      out.outreach = await runOutreach(sb, { commit: true });
+    }
+  } catch { /* crm_settings not present yet — ignore */ }
+
   return NextResponse.json(out);
 }
