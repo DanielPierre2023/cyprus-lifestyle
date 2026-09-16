@@ -25,14 +25,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'recipient_name and a valid recipient_email are required' }, { status: 400 });
   }
   const sb = supabaseAdmin();
-  let q = sb.from('ad_pricing').select(`slot, format, weekly_eur, monthly_eur, yearly_eur, label_${locale}, label_en`);
+  let q = sb.from('ad_pricing').select(`slot, format, unit, price_from, price_to, kind, label_${locale}, label_en`).order('sort');
   if (slots.length) q = q.in('slot', slots);
   const { data } = await q;
-  const rows = (data || []) as Record<string, string | number | null>[];
+  const rows = (data || []) as Record<string, any>[];
 
-  const table = `<table role="presentation" width="100%" cellpadding="8" style="border-collapse:collapse;font-size:14px">
-    <tr style="background:#0B0E11;color:#C9A24C"><th align="left">Placement</th><th align="left">Format</th><th align="right">Weekly</th><th align="right">Monthly</th><th align="right">Yearly</th></tr>
-    ${rows.map((r) => `<tr style="border-bottom:1px solid #e7e0d2"><td>${r[`label_${locale}`] || r.label_en}</td><td>${r.format || ''}</td><td align="right">${eur(r.weekly_eur as number)}</td><td align="right">${eur(r.monthly_eur as number)}</td><td align="right">${eur(r.yearly_eur as number)}</td></tr>`).join('')}
+  const label = (r: Record<string, any>) => r[`label_${locale}`] || r.label_en || '';
+  const priceText = (r: Record<string, any>) => {
+    const from = r.price_from != null ? eur(r.price_from as number) : '';
+    const to = r.price_to != null ? `–${eur(r.price_to as number)}` : '';
+    return from ? `${r.slot === 'tier-partner' ? 'from ' : ''}${from}${to}` : '—';
+  };
+  const tiers = rows.filter((r) => r.kind === 'package');
+  const items = rows.filter((r) => r.kind !== 'package');
+  const tiersHtml = tiers.length
+    ? `<p style="margin:16px 0 6px;font-weight:700">Packages</p>${tiers.map((r) => `<p style="margin:2px 0"><strong>${label(r)}</strong> — ${priceText(r)} ${r.unit || ''}</p>`).join('')}`
+    : '';
+  const table = `${tiersHtml}<p style="margin:16px 0 6px;font-weight:700">À la carte</p><table role="presentation" width="100%" cellpadding="8" style="border-collapse:collapse;font-size:14px">
+    <tr style="background:#0B0E11;color:#C9A24C"><th align="left">Placement</th><th align="left">Format</th><th align="right">Price</th><th align="left">Basis</th></tr>
+    ${items.map((r) => `<tr style="border-bottom:1px solid #e7e0d2"><td>${label(r)}</td><td>${r.format || ''}</td><td align="right">${priceText(r)}</td><td>${r.unit || ''}</td></tr>`).join('')}
   </table>`;
 
   const html = brandedEmail({

@@ -95,10 +95,21 @@ export default function SponsorsTab() {
   const loadAds = useCallback(async () => {
     const [{ data: b }, { data: p }] = await Promise.all([
       sb.from('sponsor_banners').select('id, advertiser_name, slot, is_active, impressions, clicks').order('created_at', { ascending: false }),
-      sb.from('ad_pricing').select('slot, label_en, format, weekly_eur, monthly_eur, yearly_eur').order('weekly_eur', { ascending: false }),
+      sb.from('ad_pricing').select('slot, label_en, format, unit, price_from, price_to, kind, blurb_en, sort').order('sort'),
     ]);
     setBanners((b as Row[]) || []); setPricing((p as Row[]) || []);
   }, [sb]);
+
+  async function sendKitTo(org: Row) {
+    if (!org.email) { setMsg(`No email on file for ${org.name}.`); return; }
+    setMsg(`Sending rate card to ${org.name}…`);
+    const res = await fetch('/api/admin/sponsors', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipient_name: org.name, recipient_email: org.email, language: 'en' }),
+    });
+    const d = await res.json();
+    setMsg(d.ok ? `Rate card sent to ${org.name}.` : (d.error || 'Failed to send'));
+  }
 
   useEffect(() => { loadCrm(); loadOutreach(); loadAds(); }, [loadCrm, loadOutreach, loadAds]);
 
@@ -165,6 +176,15 @@ export default function SponsorsTab() {
   const enrolledCount = Object.values(enroll).filter((e) => e.status === 'active').length;
   const sending = !!settings?.sending_enabled && !!settings?.from_email;
 
+  const fmtEur = (n: number) => `€${Number(n).toLocaleString('en-IE')}`;
+  const priceText = (p: Row) => {
+    const from = p.price_from != null ? fmtEur(p.price_from) : '';
+    const to = p.price_to != null ? `–${fmtEur(p.price_to)}` : '';
+    return from ? `${p.slot === 'tier-partner' ? 'from ' : ''}${from}${to}` : '—';
+  };
+  const packages = pricing.filter((p) => p.kind === 'package');
+  const alacarte = pricing.filter((p) => p.kind !== 'package');
+
   return (
     <>
       <h1>Sponsors · Publicitate</h1>
@@ -223,6 +243,13 @@ export default function SponsorsTab() {
               </div>
             ))}
           </details>
+        </div>
+      )}
+
+      {outreachMissing && (
+        <div style={{ background: '#fff8ec', border: '1px solid #e7d3a8', borderRadius: 6, padding: '12px 16px', marginBottom: 14 }}>
+          <strong>Outreach engine not enabled yet.</strong>{' '}
+          <span style={{ fontSize: 14, color: '#6b6552' }}>Run <code>0027_outreach.sql</code> in the Supabase SQL editor (and make sure this build is deployed) to unlock enrolment, preview and sending here — the <em>Run preview</em> button lives in this banner once it’s on.</span>
         </div>
       )}
 
@@ -292,6 +319,7 @@ export default function SponsorsTab() {
                     </td>
                     <td style={{ fontSize: 13 }}>
                       {o.email ? <a href={`mailto:${o.email}`} style={{ color: '#8a5b12' }}>{o.email}</a> : <span style={{ color: '#b8b0a0' }}>no email</span>}
+                      {o.email ? <><br /><button className="abtn ghost" style={{ fontSize: 11, padding: '1px 6px', marginTop: 2 }} onClick={() => sendKitTo(o)}>Send rate card</button></> : null}
                     </td>
                     <td>
                       <select value={o.status || 'prospect'} onChange={(ev) => setField(o.id, { status: ev.target.value })}
@@ -337,15 +365,26 @@ export default function SponsorsTab() {
       </table>
 
       {/* ─────────── RATE CARD ─────────── */}
-      <h1 style={{ fontSize: 20, marginTop: 22 }}>Rate card (EUR)</h1>
-      <table className="adm-t">
-        <thead><tr><th>Placement</th><th>Format</th><th>Weekly</th><th>Monthly</th><th>Yearly</th></tr></thead>
-        <tbody>
-          {pricing.map((p) => (
-            <tr key={p.slot}><td>{p.label_en}</td><td>{p.format}</td>
-              <td>€{p.weekly_eur}</td><td>€{p.monthly_eur}</td><td>€{p.yearly_eur}</td></tr>
+      <h1 style={{ fontSize: 20, marginTop: 22 }}>Rate card</h1>
+      {packages.length > 0 && (
+        <div className="row" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+          {packages.map((p) => (
+            <div key={p.slot} style={{ flex: '1 1 220px', background: '#fff', border: `1px solid ${p.slot === 'tier-featured' ? '#C9A24C' : '#e3ddcf'}`, borderRadius: 6, padding: 14 }}>
+              <div style={{ fontWeight: 700, color: '#26221b', fontSize: 16 }}>{p.label_en}{p.slot === 'tier-featured' ? <span style={{ fontSize: 11, color: '#8a5b12' }}> · most popular</span> : null}</div>
+              <div style={{ fontSize: 22, color: '#8a5b12', fontWeight: 700, margin: '4px 0' }}>{priceText(p)} <span style={{ fontSize: 12, color: '#8a8371', fontWeight: 400 }}>{p.unit}</span></div>
+              <div style={{ fontSize: 13, color: '#6b6552', lineHeight: 1.5 }}>{p.blurb_en}</div>
+            </div>
           ))}
-          {pricing.length === 0 ? <tr><td colSpan={5}>No rate card yet.</td></tr> : null}
+        </div>
+      )}
+      <table className="adm-t">
+        <thead><tr><th>Placement</th><th>Format</th><th>Price</th><th>Basis</th></tr></thead>
+        <tbody>
+          {alacarte.map((p) => (
+            <tr key={p.slot}><td>{p.label_en}</td><td style={{ fontSize: 13 }}>{p.format}</td>
+              <td style={{ fontWeight: 600 }}>{priceText(p)}</td><td style={{ fontSize: 13, color: '#8a8371' }}>{p.unit}</td></tr>
+          ))}
+          {pricing.length === 0 ? <tr><td colSpan={4}>No rate card yet — run 0028_ratecard.sql.</td></tr> : null}
         </tbody>
       </table>
 
