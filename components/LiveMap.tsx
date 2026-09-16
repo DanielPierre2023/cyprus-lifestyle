@@ -50,7 +50,7 @@ export default function LiveMap({ items, locale = 'en', labels }: { items: LiveI
       const L = (await import('leaflet')).default;
       if (cancelled || !mapEl.current || mapRef.current) return;
       LRef.current = L;
-      const map = L.map(mapEl.current, { scrollWheelZoom: true, zoomControl: true });
+      const map = L.map(mapEl.current, { scrollWheelZoom: true, zoomControl: true, preferCanvas: true });
       const { url, attr } = tile(locale);
       L.tileLayer(url, { attribution: attr, subdomains: 'abc', maxZoom: 19 }).addTo(map);
       map.setView([34.92, 33.0], 9);

@@ -52,7 +52,7 @@ export default function DirectoryMap({
       if (cancelled || !el || el.dataset.init === '1') return;
       el.dataset.init = '1';
       const pts = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
-      map = L.map(el, { scrollWheelZoom: false });
+      map = L.map(el, { scrollWheelZoom: false, preferCanvas: true }); // canvas: smooth with thousands of pins
 
       const cartoKey = process.env.NEXT_PUBLIC_CARTO_KEY;
       const style = process.env.NEXT_PUBLIC_MAP_TILE_STYLE || 'voyager';

@@ -178,25 +178,63 @@ function cyprusCoord(lat: number, lng: number): { lat: number; lng: number } | n
   return null; // off the island → drop rather than draw a pin in the water
 }
 
+// Page past PostgREST's 1000-row cap to fetch coordinates for EVERY published
+// listing (thousands), not just the first page. Bounds-guarded via cyprusCoord.
+async function allPublishedListingCoords(locale: Locale): Promise<Record<string, any>[]> {
+  const sb = supabaseAdmin();
+  const rows: Record<string, any>[] = [];
+  const page = 1000;
+  for (let from = 0; from < 12000; from += page) {
+    const { data } = await sb.from('directory_listings')
+      .select(`slug, type, district, lat, lng, name_${locale}, name_en`)
+      .eq('status', 'published').not('lat', 'is', null)
+      .order('slug').range(from, from + page - 1);
+    const batch = (data || []) as Record<string, any>[];
+    rows.push(...batch);
+    if (batch.length < page) break;
+  }
+  return rows;
+}
+
 export async function getMapItems(locale: Locale): Promise<MapItem[]> {
   const sb = supabaseAdmin();
   const start = new Date(); start.setHours(0, 0, 0, 0);
-  const [{ data: L }, { data: E }] = await Promise.all([
-    sb.from('directory_listings').select(`slug, type, district, lat, lng, name_${locale}, name_en`).eq('status', 'published').not('lat', 'is', null).limit(3000),
-    sb.from('events').select(`slug, district, lat, lng, starts_at, title_${locale}, title_en`).eq('status', 'published').gte('starts_at', start.toISOString()).not('lat', 'is', null).limit(500),
-  ]);
   const items: MapItem[] = [];
-  for (const r of ((L || []) as Record<string, any>[])) {
+  for (const r of await allPublishedListingCoords(locale)) {
     const c = cyprusCoord(Number(r.lat), Number(r.lng));
     if (!c) continue;
     items.push({ id: `l-${r.slug}`, name: r[`name_${locale}`] || r.name_en || r.slug, type: String(r.type || 'vendor'), district: r.district ?? null, lat: c.lat, lng: c.lng, href: `/directory/${r.type}/${r.slug}` });
   }
+  const { data: E } = await sb.from('events').select(`slug, district, lat, lng, starts_at, title_${locale}, title_en`)
+    .eq('status', 'published').gte('starts_at', start.toISOString()).not('lat', 'is', null).limit(500);
   for (const r of ((E || []) as Record<string, any>[])) {
     const c = cyprusCoord(Number(r.lat), Number(r.lng));
     if (!c) continue;
     items.push({ id: `e-${r.slug}`, name: r[`title_${locale}`] || r.title_en || r.slug, type: 'event', district: r.district ?? null, lat: c.lat, lng: c.lng, href: `/agenda/${r.slug}` });
   }
   return items;
+}
+
+// Directory landing map — every published listing as a point (paginated, bounds-guarded).
+export async function getDirectoryMapPoints(locale: Locale): Promise<{ lat: number; lng: number; name: string; type: string; slug: string }[]> {
+  const out: { lat: number; lng: number; name: string; type: string; slug: string }[] = [];
+  for (const r of await allPublishedListingCoords(locale)) {
+    const c = cyprusCoord(Number(r.lat), Number(r.lng));
+    if (!c) continue;
+    out.push({ lat: c.lat, lng: c.lng, name: r[`name_${locale}`] || r.name_en || r.slug, type: String(r.type || 'vendor'), slug: String(r.slug) });
+  }
+  return out;
+}
+
+// True published head-count per directory type (uncapped), for the category chips.
+export async function getDirectoryCounts(): Promise<Record<string, number>> {
+  const sb = supabaseAdmin();
+  const out: Record<string, number> = {};
+  await Promise.all(DIRECTORY_TYPES.map(async (ty) => {
+    const { count } = await sb.from('directory_listings').select('id', { count: 'exact', head: true }).eq('status', 'published').eq('type', ty);
+    out[ty] = count || 0;
+  }));
+  return out;
 }
 
 export interface Banner { id: string; advertiser_name: string; headline: string; body: string; cta: string; url: string; image_url: string | null; bg_color: string; accent_color: string }
