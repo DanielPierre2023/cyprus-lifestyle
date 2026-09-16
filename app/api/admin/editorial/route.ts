@@ -1,6 +1,7 @@
-// Admin: generate an editorial piece (interview questions / interview write-up /
-// review) via the ai-editorial edge function. isAdmin-gated; the service-role
-// key (which authorises the edge function) stays server-side only.
+// Admin: generate an editorial piece (interview questions / write-up / review)
+// via the ai-editorial edge function. isAdmin-gated; the service-role key (which
+// authorises the edge function) stays server-side only. The edge function holds
+// the model key already stored in Supabase — nothing to configure in Vercel.
 //   POST { mode: 'questions'|'interview'|'review', business: {...}, transcript?, notes? }
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },
       body: JSON.stringify({ ...body, secret: key }),
-      signal: AbortSignal.timeout(115000),
+      signal: AbortSignal.timeout(55000),
     });
     const d = await res.json().catch(() => ({ ok: false, error: 'The editorial AI returned an unreadable response.' }));
     return NextResponse.json(d, { status: d.ok ? 200 : 502 });

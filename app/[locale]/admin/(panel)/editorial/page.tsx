@@ -82,6 +82,15 @@ export default function EditorialStudio() {
     if (!confirm('Delete this draft?')) return;
     await sb.from('editorial_pieces').delete().eq('id', id); loadSaved();
   }
+  async function viewDraft(p: Row) {
+    const { data, error } = await sb.from('editorial_pieces').select('kind, business_name, result').eq('id', p.id).single();
+    if (error || !data) { setMsg(error?.message || 'Could not open draft'); return; }
+    if (data.kind) setMode(data.kind as Mode);
+    setBiz((b) => ({ ...b, name: data.business_name || b.name }));
+    setResult((data.result as Row) || {});
+    setMsg('');
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
   const shownOrgs = orgFilter.trim()
     ? orgs.filter((o) => (o.name || '').toLowerCase().includes(orgFilter.toLowerCase()))
@@ -179,7 +188,10 @@ export default function EditorialStudio() {
                 <td>{p.kind}</td>
                 <td>{p.business_name || '—'}</td>
                 <td><span className="pill draft">{p.status}</span></td>
-                <td><button className="abtn ghost" onClick={() => removeSaved(p.id)} style={{ color: '#9a2020' }}>Delete</button></td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  <button className="abtn ghost" onClick={() => viewDraft(p)}>View</button>{' '}
+                  <button className="abtn ghost" onClick={() => removeSaved(p.id)} style={{ color: '#9a2020' }}>Delete</button>
+                </td>
               </tr>
             ))}
             {saved.length === 0 ? <tr><td colSpan={5}>No drafts yet.</td></tr> : null}
