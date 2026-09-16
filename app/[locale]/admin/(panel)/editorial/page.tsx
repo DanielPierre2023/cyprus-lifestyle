@@ -142,9 +142,15 @@ export default function EditorialStudio() {
           {mode === 'questions' ? (
             <>
               {result.analysis ? <p style={{ fontStyle: 'italic', color: '#5b5647', marginTop: 0 }}>{result.analysis}</p> : null}
-              <ol style={{ paddingLeft: 20, lineHeight: 1.7 }}>
-                {(result.questions as string[] | undefined)?.map((q, i) => <li key={i}>{q}</li>)}
-              </ol>
+              {Array.isArray(result.questions) && result.questions.length ? (
+                <ol style={{ paddingLeft: 20, lineHeight: 1.7 }}>
+                  {(result.questions as string[]).map((q, i) => <li key={i}>{q}</li>)}
+                </ol>
+              ) : result.body_html ? (
+                <div style={{ lineHeight: 1.7 }} dangerouslySetInnerHTML={{ __html: String(result.body_html) }} />
+              ) : (
+                <p style={{ color: '#9a2020' }}>No questions came back this time — please press Generate again.</p>
+              )}
             </>
           ) : (
             <>
