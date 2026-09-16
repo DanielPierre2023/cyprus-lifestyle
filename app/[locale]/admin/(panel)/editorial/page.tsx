@@ -24,6 +24,8 @@ export default function EditorialStudio() {
   const [mode, setMode] = useState<Mode>('questions');
   const [orgs, setOrgs] = useState<Row[]>([]);
   const [orgFilter, setOrgFilter] = useState('');
+  const [dirResults, setDirResults] = useState<Row[]>([]);
+  const [searching, setSearching] = useState(false);
   const [biz, setBiz] = useState<Row>({ ...BLANK_BIZ });
   const [transcript, setTranscript] = useState('');
   const [notes, setNotes] = useState('');
@@ -34,7 +36,10 @@ export default function EditorialStudio() {
   const [savedError, setSavedError] = useState('');
 
   const loadOrgs = useCallback(async () => {
-    const { data } = await sb.from('crm_orgs').select('id, name, category, district, website, notes').order('name').limit(1000);
+    // Default list = the accounts you're most likely to work (top tiers first).
+    // Every business is now a CRM account, so the full set is reached by search.
+    const { data } = await sb.from('crm_orgs').select('id, name, category, district, website, notes, tier')
+      .order('tier', { ascending: true }).order('name').limit(200);
     setOrgs((data as Row[]) || []);
   }, [sb]);
   const loadSaved = useCallback(async () => {
@@ -44,8 +49,26 @@ export default function EditorialStudio() {
   }, [sb]);
   useEffect(() => { loadOrgs(); loadSaved(); }, [loadOrgs, loadSaved]);
 
+  // Live search across ALL your CRM accounts (every business is now an account).
+  // Debounced; matches on the business name, server-side, so it isn't capped.
+  useEffect(() => {
+    const q = orgFilter.trim();
+    if (q.length < 2) { setDirResults([]); setSearching(false); return; }
+    let active = true;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      const { data } = await sb.from('crm_orgs')
+        .select('id, name, category, district, website, notes')
+        .ilike('name', `%${q}%`).order('name').limit(80);
+      if (!active) return;
+      setDirResults((data as Row[]) || []);
+      setSearching(false);
+    }, 250);
+    return () => { active = false; clearTimeout(t); };
+  }, [orgFilter, sb]);
+
   function pickOrg(id: string) {
-    const o = orgs.find((x) => x.id === id);
+    const o = [...orgs, ...dirResults].find((x) => x.id === id);
     if (!o) { setBiz({ ...BLANK_BIZ }); return; }
     setBiz({ id: o.id, name: o.name || '', category: o.category || '', district: o.district || '', website: o.website || '', notes: o.notes || '' });
   }
@@ -71,8 +94,11 @@ export default function EditorialStudio() {
   async function save() {
     if (!result) return;
     const title = result.title || (mode === 'questions' ? `Interview brief — ${biz.name}` : biz.name);
+    // Every picked business is a CRM account now, so link it; a typed-by-hand
+    // name (not in the list) stays unlinked.
+    const orgId = [...orgs, ...dirResults].some((o) => o.id === biz.id) ? biz.id : null;
     const { error } = await sb.from('editorial_pieces').insert({
-      kind: mode, org_id: biz.id || null, business_name: biz.name || null,
+      kind: mode, org_id: orgId, business_name: biz.name || null,
       category: biz.category || null, title, result, status: 'draft',
     });
     if (error) { setMsg(error.message); return; }
@@ -92,9 +118,8 @@ export default function EditorialStudio() {
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  const shownOrgs = orgFilter.trim()
-    ? orgs.filter((o) => (o.name || '').toLowerCase().includes(orgFilter.toLowerCase()))
-    : orgs;
+  // >=2 chars → server search results; otherwise the default top-tier list.
+  const shownOrgs = orgFilter.trim().length >= 2 ? dirResults : orgs;
 
   return (
     <>
@@ -111,11 +136,11 @@ export default function EditorialStudio() {
       <div style={{ background: '#fff', border: '1px solid #e3ddcf', borderRadius: 6, padding: 16, marginBottom: 18 }}>
         <div className="row" style={{ alignItems: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
           <div style={{ flex: '2 1 260px' }}>
-            <label className="fl">Business (from your contact book)</label>
-            <input placeholder="filter by name…" value={orgFilter} onChange={(e) => setOrgFilter(e.target.value)} style={{ marginBottom: 6 }} />
+            <label className="fl">Business — your CRM, every business {searching ? '· searching…' : ''}</label>
+            <input placeholder="type a name to search all businesses…" value={orgFilter} onChange={(e) => setOrgFilter(e.target.value)} style={{ marginBottom: 6 }} />
             <select value={biz.id} onChange={(e) => pickOrg(e.target.value)}>
-              <option value="">— pick a business, or type below —</option>
-              {shownOrgs.slice(0, 300).map((o) => <option key={o.id} value={o.id}>{o.name}{o.category ? ` · ${o.category}` : ''}</option>)}
+              <option value="">{orgFilter.trim().length >= 2 ? `— ${shownOrgs.length} match${shownOrgs.length === 1 ? '' : 'es'} —` : '— pick a business, or type to search —'}</option>
+              {shownOrgs.slice(0, 200).map((o) => <option key={o.id} value={o.id}>{o.name}{o.category ? ` · ${o.category}` : ''}</option>)}
             </select>
           </div>
         </div>
