@@ -4,6 +4,7 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { brandedEmail, sendEmail } from '@/lib/email';
+import { logInboundToAccount } from '@/lib/crm';
 import { LOCALES, isLocale, type Locale } from '@/lib/locales';
 
 function token(): string {
@@ -31,6 +32,8 @@ export async function subscribe(sb: SupabaseClient, email: string, language: str
     { onConflict: 'email' },
   );
   if (error) return { ok: false, error: error.message };
+  // If the subscriber is from a business we track, note it on that account's timeline.
+  await logInboundToAccount(sb, { email: em, subject: 'Newsletter signup' });
   const c = CONFIRM_COPY[locale];
   const url = `${site()}/api/newsletter/confirm?token=${tok}`;
   await sendEmail({ to: em, subject: c.subject, html: brandedEmail({ locale, heading: c.heading, bodyHtml: `<p>${c.body}</p>`, ctaLabel: c.cta, ctaUrl: url, preheader: c.subject }) });

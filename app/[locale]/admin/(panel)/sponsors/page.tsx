@@ -38,6 +38,7 @@ const SEQ_PILL: Record<string, string> = {
   active: 'info', paused: 'draft', replied: 'ok', done: 'ok', unsubscribed: 'no', bounced: 'no',
 };
 const TIERS = ['A', 'B', 'C'] as const;
+const CRM_PAGE = 100; // accounts per page (server-side; the CRM now holds thousands)
 const catLabel = (c: string) => (CRM_CATEGORIES.find(([v]) => v === c)?.[1]) || c;
 
 export default function SponsorsTab() {
@@ -50,7 +51,11 @@ export default function SponsorsTab() {
   const [cat, setCat] = useState('all');
   const [tier, setTier] = useState('all');
   const [stage, setStage] = useState('all');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState('');      // raw input
+  const [searchQ, setSearchQ] = useState('');     // debounced term used in the query
+  const [page, setPage] = useState(0);            // 0-based page into the filtered set
+  const [total, setTotal] = useState(0);          // total rows matching the current filter
+  const [crmCounts, setCrmCounts] = useState({ total: 0, tierA: 0, wonLive: 0 }); // head counts for the tiles
 
   // outreach
   const [settings, setSettings] = useState<Row | null>(null);
@@ -66,15 +71,37 @@ export default function SponsorsTab() {
   const [pricing, setPricing] = useState<Row[]>([]);
   const [kit, setKit] = useState({ recipient_name: '', recipient_email: '', language: 'en' });
 
+  // The contact book now holds thousands of accounts, so filtering + paging happen
+  // on the server (PostgREST caps a plain select at 1000 rows). One page at a time,
+  // with an exact count so the pager and footer are honest.
   const loadCrm = useCallback(async () => {
     setCrmLoading(true);
-    const { data, error } = await sb
+    let q = sb
       .from('crm_orgs')
-      .select('id, name, category, tier, district, website, email, phone, status, notes, source_url')
-      .order('tier').order('name').limit(1000);
+      .select('id, name, category, tier, district, website, email, phone, status, notes, source_url', { count: 'exact' });
+    if (cat !== 'all') q = q.eq('category', cat);
+    if (tier !== 'all') q = q.eq('tier', tier);
+    if (stage !== 'all') q = q.eq('status', stage);
+    const term = searchQ.trim().replace(/[,()]/g, ' ').trim(); // strip PostgREST or() delimiters
+    if (term) q = q.or(`name.ilike.%${term}%,district.ilike.%${term}%`);
+    const from = page * CRM_PAGE;
+    const { data, error, count } = await q
+      .order('tier').order('name').order('id')
+      .range(from, from + CRM_PAGE - 1);
     setCrmLoading(false);
-    if (error) { setCrmError(error.message); setOrgs([]); return; }
-    setCrmError(''); setOrgs((data as Row[]) || []);
+    if (error) { setCrmError(error.message); setOrgs([]); setTotal(0); return; }
+    setCrmError(''); setOrgs((data as Row[]) || []); setTotal(count || 0);
+  }, [sb, cat, tier, stage, searchQ, page]);
+
+  // Unfiltered head counts for the summary tiles — cheap (head:true, no rows).
+  const loadCrmCounts = useCallback(async () => {
+    const base = () => sb.from('crm_orgs').select('id', { count: 'exact', head: true });
+    const [a, b, c] = await Promise.all([
+      base(),
+      base().eq('tier', 'A'),
+      base().in('status', ['won', 'live']),
+    ]);
+    setCrmCounts({ total: a.count || 0, tierA: b.count || 0, wonLive: c.count || 0 });
   }, [sb]);
 
   const loadOutreach = useCallback(async () => {
@@ -111,7 +138,15 @@ export default function SponsorsTab() {
     setMsg(d.ok ? `Rate card sent to ${org.name}.` : (d.error || 'Failed to send'));
   }
 
-  useEffect(() => { loadCrm(); loadOutreach(); loadAds(); }, [loadCrm, loadOutreach, loadAds]);
+  // Load-once: outreach, ads and the tile head-counts don't depend on the filter.
+  useEffect(() => { loadOutreach(); loadAds(); loadCrmCounts(); }, [loadOutreach, loadAds, loadCrmCounts]);
+  // Re-run whenever the filter or page changes (loadCrm's identity tracks those deps).
+  useEffect(() => { loadCrm(); }, [loadCrm]);
+  // Debounce the search box into searchQ, and jump back to the first page on a new term.
+  useEffect(() => {
+    const t = setTimeout(() => { setSearchQ(search); setPage(0); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   async function setField(id: string, patch: Row) {
     setOrgs((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
@@ -165,14 +200,8 @@ export default function SponsorsTab() {
     if (d.ok) setKit({ recipient_name: '', recipient_email: '', language: 'en' });
   }
 
-  const shown = orgs.filter((o) =>
-    (cat === 'all' || o.category === cat) &&
-    (tier === 'all' || o.tier === tier) &&
-    (stage === 'all' || o.status === stage) &&
-    (!search.trim() ||
-      (o.name || '').toLowerCase().includes(search.toLowerCase()) ||
-      (o.district || '').toLowerCase().includes(search.toLowerCase())));
-  const count = (pred: (o: Row) => boolean) => orgs.filter(pred).length;
+  const shown = orgs; // the server already applied the filter + page
+  const pageCount = Math.max(1, Math.ceil(total / CRM_PAGE));
   const enrolledCount = Object.values(enroll).filter((e) => e.status === 'active').length;
   const sending = !!settings?.sending_enabled && !!settings?.from_email;
 
@@ -267,10 +296,10 @@ export default function SponsorsTab() {
         <>
           <div className="row" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
             {[
-              ['Businesses', orgs.length],
-              ['Tier A', count((o) => o.tier === 'A')],
+              ['Businesses', crmCounts.total],
+              ['Tier A', crmCounts.tierA],
               ['In sequence', enrolledCount],
-              ['Won / live', count((o) => o.status === 'won' || o.status === 'live')],
+              ['Won / live', crmCounts.wonLive],
             ].map(([label, n]) => (
               <div key={label as string} style={{ flex: '1 1 120px', background: '#fff', border: '1px solid #e3ddcf', borderRadius: 6, padding: '10px 14px' }}>
                 <div style={{ fontSize: 24, fontWeight: 700, color: '#26221b' }}>{n as number}</div>
@@ -281,17 +310,17 @@ export default function SponsorsTab() {
 
           <div className="row" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 12, alignItems: 'flex-end' }}>
             <div><label className="fl">Vertical</label>
-              <select value={cat} onChange={(e) => setCat(e.target.value)} style={{ width: 190 }}>
-                {CRM_CATEGORIES.map(([v, l]) => <option key={v} value={v}>{l}{v !== 'all' ? ` (${count((o) => o.category === v)})` : ''}</option>)}
+              <select value={cat} onChange={(e) => { setCat(e.target.value); setPage(0); }} style={{ width: 190 }}>
+                {CRM_CATEGORIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
             <div><label className="fl">Tier</label>
-              <select value={tier} onChange={(e) => setTier(e.target.value)} style={{ width: 100 }}>
+              <select value={tier} onChange={(e) => { setTier(e.target.value); setPage(0); }} style={{ width: 100 }}>
                 <option value="all">All</option>{TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div><label className="fl">Stage</label>
-              <select value={stage} onChange={(e) => setStage(e.target.value)} style={{ width: 130 }}>
+              <select value={stage} onChange={(e) => { setStage(e.target.value); setPage(0); }} style={{ width: 130 }}>
                 <option value="all">All stages</option>{STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
@@ -345,7 +374,14 @@ export default function SponsorsTab() {
               {crmLoading ? <tr><td colSpan={6}>Loading…</td></tr> : null}
             </tbody>
           </table>
-          <p style={{ fontSize: 12, color: '#8a8371', marginTop: 6 }}>Showing {shown.length} of {orgs.length}. Tier, stage and sequence save instantly. {msg ? <span style={{ color: msg.includes('sent') || msg.includes('Saved') ? '#1c6b34' : '#9a2020' }}>· {msg}</span> : null}</p>
+          <div className="row" style={{ gap: 12, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+            <button className="abtn ghost" type="button" disabled={page <= 0 || crmLoading} onClick={() => setPage((p) => Math.max(0, p - 1))}>‹ Prev</button>
+            <span style={{ fontSize: 13, color: '#8a8371' }}>
+              {total.toLocaleString('en-IE')} match{total === 1 ? '' : 'es'} · page {page + 1} of {pageCount}
+            </span>
+            <button className="abtn ghost" type="button" disabled={page + 1 >= pageCount || crmLoading} onClick={() => setPage((p) => p + 1)}>Next ›</button>
+          </div>
+          <p style={{ fontSize: 12, color: '#8a8371', marginTop: 6 }}>Showing {shown.length} on this page of {total.toLocaleString('en-IE')} total. Tier, stage and sequence save instantly. {msg ? <span style={{ color: msg.includes('sent') || msg.includes('Saved') ? '#1c6b34' : '#9a2020' }}>· {msg}</span> : null}</p>
         </>
       )}
 
