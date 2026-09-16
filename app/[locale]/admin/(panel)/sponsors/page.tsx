@@ -20,6 +20,12 @@ const CRM_CATEGORIES = [
   ['beauty-spa', 'Beauty & spa'],
   ['luxury-retail', 'Luxury retail'],
   ['fine-dining', 'Fine dining'],
+  ['luxury-realestate', 'Luxury real estate'],
+  ['interior-design', 'Interior design & architecture'],
+  ['yacht-marine', 'Yachting & marine'],
+  ['art-culture', 'Art & galleries'],
+  ['private-health', 'Private healthcare'],
+  ['gourmet', 'Gourmet & fine wine'],
 ] as const;
 
 // Sales pipeline, in order. Colours map to the .pill classes in globals.css.
