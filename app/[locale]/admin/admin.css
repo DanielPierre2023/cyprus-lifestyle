@@ -24,7 +24,9 @@ table.adm-t tr:hover td { background: #fcfaf4; }
 .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; letter-spacing: .04em; }
 .pill.published, .pill.ok, .pill.processed, .pill.done, .pill.replied, .pill.confirmed { background: #dff2e3; color: #1c6b34; }
 .pill.draft, .pill.scraped, .pill.queued, .pill.unread, .pill.pending { background: #fdf0d6; color: #8a5b12; }
-.pill.error, .pill.failed { background: #f8dcdc; color: #9a2020; }
+.pill.error, .pill.failed, .pill.no { background: #f8dcdc; color: #9a2020; }
+.pill.info { background: #dce8f7; color: #1c4a7a; }
+.pill.warn { background: #f7e6c8; color: #8a5b12; }
 
 .abtn { font-family: var(--font-jost), "Jost", sans-serif; font-size: 12.5px; background: #0B0E11; color: #C9A24C; border: none; padding: 7px 13px; border-radius: 3px; cursor: pointer; margin-inline-end: 6px; }
 .abtn.gold { background: #C9A24C; color: #0B0E11; font-weight: 600; }
