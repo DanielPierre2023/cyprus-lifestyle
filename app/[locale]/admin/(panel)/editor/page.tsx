@@ -4,6 +4,7 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 import { LOCALES, LOCALE_LABEL, type Locale } from '@/lib/locales';
 import { slugify } from '@/lib/util';
 import CoverImagePicker from '@/components/admin/CoverImagePicker';
+import RichEditor from '@/components/admin/RichEditor';
 
 const CATS = ['cyprus', 'business', 'property', 'relocation', 'culture', 'escapes', 'table', 'agenda', 'people', 'world'];
 const DISTRICTS = ['', 'nicosia', 'limassol', 'larnaca', 'famagusta', 'paphos', 'kyrenia'];
@@ -34,7 +35,7 @@ export default function EditorTab() {
 
   async function autoTranslate() {
     setBusy('translate'); setMsg('');
-    for (const target of ['el', 'ro', 'ar'] as Locale[]) {
+    for (const target of LOCALES.filter((x) => x !== 'en')) {
       const body = await fetch('/api/admin/translate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ html: f.content_en || '', source: 'en', target }) }).then((r) => r.json());
       const bundle: F = {};
       for (const k of ['title', 'excerpt', 'summary', 'seo_title', 'seo_description']) {
@@ -44,7 +45,7 @@ export default function EditorTab() {
       }
       setF((p) => ({ ...p, ...bundle, [`content_${target}`]: body.ok ? body.html : p[`content_${target}`] }));
     }
-    setBusy(''); setMsg('Translated EN → EL, RO, AR. Review and save.');
+    setBusy(''); setMsg('Translated EN → EL, RO, AR, DE, PL, RU. Review and save.');
   }
 
   async function proof() {
@@ -109,7 +110,7 @@ export default function EditorTab() {
   return (
     <>
       <h1>Editor</h1>
-      <p className="sub">{id ? 'Editing an article' : 'New article'} · write in English, then auto-translate to the other three editions.</p>
+      <p className="sub">{id ? 'Editing an article' : 'New article'} · write in English, then auto-translate to the other six editions.</p>
 
       <div className="row" style={{ marginBottom: 12 }}>
         <select value={f.category} onChange={(e) => set('category', e.target.value)} style={{ width: 150 }}>{CATS.map((c) => <option key={c}>{c}</option>)}</select>
@@ -118,7 +119,7 @@ export default function EditorTab() {
       </div>
       <div className="row" style={{ marginBottom: 12 }}>
         <input placeholder="Tags (comma separated, EN)" value={f.tags_en_str ?? (Array.isArray(f.tags_en) ? f.tags_en.join(', ') : '')} onChange={(e) => set('tags_en_str', e.target.value)} style={{ flex: '1 1 300px' }} />
-        <button className="abtn" disabled={!!busy} onClick={autoTranslate}>{busy === 'translate' ? 'Translating…' : 'Auto-translate EN → EL/RO/AR'}</button>
+        <button className="abtn" disabled={!!busy} onClick={autoTranslate}>{busy === 'translate' ? 'Translating…' : 'Auto-translate EN → all 6 editions'}</button>
       </div>
 
       <CoverImagePicker
@@ -141,7 +142,8 @@ export default function EditorTab() {
         <input placeholder="Headline" value={f[`title_${tab}`] || ''} onChange={(e) => set(`title_${tab}`, e.target.value)} style={{ fontSize: 18 }} />
         <input placeholder="Standfirst / excerpt" value={f[`excerpt_${tab}`] || ''} onChange={(e) => set(`excerpt_${tab}`, e.target.value)} />
         <textarea rows={3} placeholder="Summary (cards & search)" value={f[`summary_${tab}`] || ''} onChange={(e) => set(`summary_${tab}`, e.target.value)} />
-        <textarea rows={16} placeholder="Body (HTML: <p>, <h2>, <blockquote>…)" value={f[`content_${tab}`] || ''} onChange={(e) => set(`content_${tab}`, e.target.value)} style={{ fontFamily: 'ui-monospace, monospace', fontSize: 13 }} />
+        <label className="fl" style={{ display: 'block', margin: '8px 0 4px' }}>Body — write normally; use the toolbar to format. No HTML needed.</label>
+        <RichEditor key={tab} value={f[`content_${tab}`] || ''} onChange={(html) => set(`content_${tab}`, html)} dir={rtl ? 'rtl' : 'ltr'} />
         <div className="row">
           <input placeholder="SEO title" value={f[`seo_title_${tab}`] || ''} onChange={(e) => set(`seo_title_${tab}`, e.target.value)} />
           <input placeholder="SEO description" value={f[`seo_description_${tab}`] || ''} onChange={(e) => set(`seo_description_${tab}`, e.target.value)} />
