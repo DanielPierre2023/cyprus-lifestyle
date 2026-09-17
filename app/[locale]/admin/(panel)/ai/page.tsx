@@ -92,7 +92,7 @@ keys present:     ${Object.entries(report.keys_present || {}).map(([k, v]) => `$
           <div>
             <strong>{k === 'scraper_enabled' ? 'RSS scraper' : k === 'processor_enabled' ? 'AI processor' : 'Auto-publish'}</strong>
             <div style={{ fontSize: 12, color: '#8a8371' }}>
-              {k === 'scraper_enabled' ? 'Hourly cron pulls new items from active feeds.' : k === 'processor_enabled' ? 'Cron rewrites queued items into 4-language drafts.' : 'Publish automatically instead of leaving drafts for review.'}
+              {k === 'scraper_enabled' ? 'Hourly cron pulls new items from active feeds.' : k === 'processor_enabled' ? 'Cron rewrites queued items into 7-language drafts.' : 'Publish automatically instead of leaving drafts for review.'}
             </div>
           </div>
         </div>

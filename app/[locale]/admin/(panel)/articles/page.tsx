@@ -16,7 +16,19 @@ export default function ArticlesTab() {
   useEffect(() => { load(); }, [load]);
 
   async function setStatus(id: string, status: string) {
-    await sb.from('blog_posts').update({ status, published_at: status === 'published' ? new Date().toISOString() : null }).eq('id', id);
+    const row = rows.find((r) => r.id === id);
+    const { error } = await sb.from('blog_posts').update({ status, published_at: status === 'published' ? new Date().toISOString() : null }).eq('id', id);
+    // Instant on-demand ISR on both publish and unpublish, so the reader pages
+    // reflect the change immediately instead of after the time-based window.
+    if (!error && row) {
+      try {
+        await fetch('/api/admin/revalidate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: row.slug, category: row.category }),
+        });
+      } catch { /* non-fatal */ }
+    }
     load();
   }
   async function del(id: string) {
@@ -27,7 +39,7 @@ export default function ArticlesTab() {
   return (
     <>
       <h1>Articles</h1>
-      <p className="sub">Every story, in all four languages. Publish, unpublish or edit.</p>
+      <p className="sub">Every story, in all seven languages. Publish, unpublish or edit.</p>
       <div className="row" style={{ marginBottom: 14 }}>
         {(['all', 'published', 'draft'] as const).map((f) => (
           <button key={f} className={`abtn ${filter === f ? 'gold' : 'ghost'}`} onClick={() => setFilter(f)}>{f}</button>

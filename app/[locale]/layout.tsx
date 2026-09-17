@@ -27,7 +27,7 @@ export function generateStaticParams() {
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: { default: SITE_NAME, template: `%s · ${SITE_NAME}` },
-  description: 'The island, in full colour — Cyprus business, property, culture and good living, in four languages.',
+  description: 'The island, in full colour — Cyprus business, property, culture and good living, in seven languages.',
   openGraph: { siteName: SITE_NAME, type: 'website' },
   robots: { index: true, follow: true },
 };
