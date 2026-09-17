@@ -58,6 +58,7 @@ export default async function DirectoryType({ params }: { params: Promise<{ loca
                   <span className="kicker">{x.district || label}{x.price_band ? ` · ${x.price_band}` : ''}</span>
                   <h3>{x.name}</h3>
                 </Link>
+                {x.verified ? <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, color: '#8a5b12', background: 'rgba(201,162,76,.16)', border: '1px solid #C9A24C', borderRadius: 999, padding: '1px 8px', margin: '2px 0 0' }}>✓ Verified</span> : null}
                 {x.summary ? <p className="dek">{x.summary}</p> : null}
               </article>
             ))}

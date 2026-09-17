@@ -4,6 +4,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { verifyWebhook } from '@/lib/stripe';
+import { onboardingEmail, type OrderLike } from '@/lib/fulfilment';
+import { sendEmail } from '@/lib/email';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -55,6 +57,15 @@ export async function POST(req: NextRequest) {
           await sb.from('crm_activities').insert({ org_id: orgId, type: 'note', subject: `Paid — ${order.label || order.slot || 'placement'}`, body: `€${order.amount ?? ''} · ${order.mode ?? ''}` }).then(() => {}, () => {});
           await sb.from('crm_deals').insert({ org_id: orgId, stage: order.mode === 'subscription' ? 'live' : 'won', product: order.slot ?? null, value_eur: (order.amount as number) ?? null }).then(() => {}, () => {});
           await sb.from('crm_orgs').update({ status: 'live', updated_at: now }).eq('id', orgId).then(() => {}, () => {});
+        }
+
+        // Auto-provision the placement + raise a fulfilment task (best-effort).
+        await sb.rpc('fulfil_ad_order', { p_order_id: order.id as string }).then(() => {}, () => {});
+        // Onboarding intake email — asks the buyer for exactly what we need to go live.
+        const toEmail = (order.customer_email as string) || (patch.customer_email as string) || null;
+        if (toEmail) {
+          const mail = onboardingEmail(order as OrderLike);
+          await sendEmail({ to: toEmail, subject: mail.subject, html: mail.html }).catch(() => {});
         }
       }
     } else if (type === 'customer.subscription.deleted') {

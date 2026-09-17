@@ -13,6 +13,7 @@ export interface Card {
 export interface Article extends Card {
   content: string; summary: string; tags: string[]; county: string | null;
   seo_title: string; seo_description: string; source_url: string | null; updated_at: string | null;
+  sponsored: boolean; sponsor_name: string | null; sponsor_url: string | null;
 }
 
 function pick(r: Record<string, unknown>, base: string, locale: Locale): string {
@@ -68,6 +69,7 @@ export async function searchArticles(locale: Locale, q: string, limit = 24): Pro
 export async function getArticle(locale: Locale, slug: string): Promise<Article | null> {
   const l = locale;
   const cols = `id, slug, category, county, cover_image, cover_image_credit, author_name, published_at, updated_at, reading_time_min, source_url,
+    sponsored, sponsor_name, sponsor_url,
     title_${l}, title_en, excerpt_${l}, excerpt_en, summary_${l}, summary_en, content_${l}, content_en,
     seo_title_${l}, seo_title_en, seo_description_${l}, seo_description_en, tags_${l}, tags_en, author:authors(slug)`;
   const { data } = await supabaseAdmin().from('blog_posts').select(cols)
@@ -85,6 +87,9 @@ export async function getArticle(locale: Locale, slug: string): Promise<Article 
     source_url: (r.source_url as string) ?? null,
     updated_at: (r.updated_at as string) ?? null,
     tags: Array.isArray(tags) ? tags : [],
+    sponsored: Boolean(r.sponsored),
+    sponsor_name: (r.sponsor_name as string) ?? null,
+    sponsor_url: (r.sponsor_url as string) ?? null,
   };
 }
 
@@ -96,10 +101,10 @@ export interface Listing {
   name: string; summary: string; address: string | null;
   lat: number | null; lng: number | null; price_band: string | null;
   url: string | null; phone: string | null; image: string | null;
-  tags: string[]; featured: boolean;
+  tags: string[]; featured: boolean; verified: boolean;
 }
 const LISTING_COLS = (l: Locale) =>
-  `id, slug, type, district, address, lat, lng, price_band, url, phone, image, tags, featured, name_${l}, name_en, summary_${l}, summary_en`;
+  `id, slug, type, district, address, lat, lng, price_band, url, phone, image, tags, featured, verified, name_${l}, name_en, summary_${l}, summary_en`;
 function toListing(r: Record<string, unknown>, l: Locale): Listing {
   return {
     id: String(r.id), slug: String(r.slug), type: String(r.type), district: (r.district as string) ?? null,
@@ -108,7 +113,7 @@ function toListing(r: Record<string, unknown>, l: Locale): Listing {
     lat: (r.lat as number) ?? null, lng: (r.lng as number) ?? null,
     price_band: (r.price_band as string) ?? null, url: (r.url as string) ?? null,
     phone: (r.phone as string) ?? null, image: (r.image as string) ?? null,
-    tags: (r.tags as string[]) ?? [], featured: Boolean(r.featured),
+    tags: (r.tags as string[]) ?? [], featured: Boolean(r.featured), verified: Boolean(r.verified),
   };
 }
 export async function getListings(locale: Locale, type?: string, limit = 200): Promise<Listing[]> {
@@ -146,7 +151,7 @@ export async function getUpcomingEvents(locale: Locale, limit = 60): Promise<Eve
   start.setHours(0, 0, 0, 0);
   const { data } = await supabaseAdmin().from('events').select(EVENT_COLS(locale))
     .eq('status', 'published').gte('starts_at', start.toISOString())
-    .order('starts_at', { ascending: true }).limit(limit);
+    .order('featured', { ascending: false }).order('starts_at', { ascending: true }).limit(limit);
   return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toEvent(r, locale)).filter((e) => e.title);
 }
 

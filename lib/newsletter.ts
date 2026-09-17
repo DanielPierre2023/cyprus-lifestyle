@@ -77,6 +77,27 @@ function digestHtml(locale: Locale, cards: PostCard[]): string {
     </tr></table>`).join('');
 }
 
+// A single tasteful sponsor block for the "sole sponsor" newsletter product.
+function sponsorBlockHtml(s: Record<string, unknown>): string {
+  const name = String(s.advertiser_name || '');
+  const headline = String(s.headline || name);
+  const body = String(s.body || '');
+  const url = String(s.url || '');
+  const image = String(s.image || '');
+  if (!headline && !body) return '';
+  const cta = url ? `<a href="${url}" style="color:#8a5b12;text-decoration:none;font-weight:700">${name || 'Learn more'} →</a>` : '';
+  return `
+    <table role="presentation" width="100%" style="margin:0 0 26px;background:#FBF7EE;border:1px solid #e7d3a8;border-radius:4px">
+      <tr><td style="padding:14px 16px">
+        <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#a9832f;font-weight:700;margin-bottom:6px">In partnership with${name ? ` ${name}` : ''}</div>
+        ${image ? `<img src="${image}" width="140" style="width:140px;border-radius:2px;margin:0 0 8px" alt="">` : ''}
+        <div style="font-weight:700;color:#16181C;font-size:16px">${headline}</div>
+        ${body ? `<p style="margin:6px 0 8px;color:#4a463d;font-size:14px;line-height:1.5">${body}</p>` : ''}
+        ${cta}
+      </td></tr>
+    </table>`;
+}
+
 const DIGEST_SUBJECT: Record<Locale, string> = {
   en: 'The Dispatch — this week from Cyprus',
   el: 'Το εβδομαδιαίο δελτίο από την Κύπρο',
@@ -92,6 +113,14 @@ export async function weeklyDigest(sb: SupabaseClient, only?: Locale): Promise<{
   const locales = only ? [only] : [...LOCALES];
   const byLocale: Record<string, number> = {};
   let total = 0;
+  // Due sole-sponsors for this run (status 'scheduled', dated today-or-earlier or undated).
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: sponsorRows } = await sb.from('newsletter_sponsors')
+    .select('*').eq('status', 'scheduled').or(`send_date.is.null,send_date.lte.${today}`);
+  const sponsors = (sponsorRows || []) as Record<string, unknown>[];
+  const sponsorFor = (loc: string) =>
+    sponsors.find((s) => s.target_language === loc) || sponsors.find((s) => s.target_language === 'all') || null;
+  const usedSponsorIds = new Set<string>();
   for (const locale of locales) {
     const cards = await latestFor(sb, locale);
     if (cards.length === 0) { byLocale[locale] = 0; continue; }
@@ -99,7 +128,10 @@ export async function weeklyDigest(sb: SupabaseClient, only?: Locale): Promise<{
       .select('email').eq('confirmed', true).eq('is_active', true).eq('language', locale);
     const recipients = ((subs || []) as { email: string }[]).map((s) => s.email);
     const subject = DIGEST_SUBJECT[locale];
-    const html = brandedEmail({ locale, heading: subject, bodyHtml: digestHtml(locale, cards), preheader: cards[0]?.title });
+    const sp = sponsorFor(locale);
+    const sponsorHtml = sp ? sponsorBlockHtml(sp) : '';
+    if (sp && sponsorHtml) usedSponsorIds.add(String(sp.id));
+    const html = brandedEmail({ locale, heading: subject, bodyHtml: sponsorHtml + digestHtml(locale, cards), preheader: cards[0]?.title });
     let sent = 0;
     for (const to of recipients) {
       const r = await sendEmail({ to, subject, html });
@@ -109,6 +141,10 @@ export async function weeklyDigest(sb: SupabaseClient, only?: Locale): Promise<{
     await sb.from('newsletter_campaigns').insert({
       subject, content: html, status: 'sent', target_language: locale, sent_at: new Date().toISOString(), recipient_count: sent,
     });
+  }
+  // Retire the sponsors we just ran so they don't repeat next week.
+  if (usedSponsorIds.size) {
+    await sb.from('newsletter_sponsors').update({ status: 'sent' }).in('id', [...usedSponsorIds]);
   }
   return { sent: total, byLocale };
 }

@@ -22,6 +22,7 @@ const TABS = [
   { href: '/admin/inbox', label: 'Inbox' },
   { grp: 'Revenue & ops' },
   { href: '/admin/crm', label: 'CRM' },
+  { href: '/admin/fulfillment', label: 'Fulfilment' },
   { href: '/admin/sponsors', label: 'Sponsors (Publicitate)' },
   { href: '/admin/advertising', label: 'Advertising' },
   { href: '/admin/analytics', label: 'Analytics (Observabilitate)' },

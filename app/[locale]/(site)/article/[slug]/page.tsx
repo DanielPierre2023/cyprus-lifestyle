@@ -12,6 +12,17 @@ import NewsletterSignup from '@/components/NewsletterSignup';
 
 export const revalidate = 300;
 
+// Ad-disclosure label for sponsored features, per edition (legally conspicuous).
+const SPONSORED: Record<string, { s: string; p: string }> = {
+  en: { s: 'Sponsored', p: 'Presented by' },
+  el: { s: 'Χορηγία', p: 'Σε συνεργασία με' },
+  ro: { s: 'Sponsorizat', p: 'Prezentat de' },
+  ar: { s: 'محتوى مموّل', p: 'برعاية' },
+  de: { s: 'Anzeige', p: 'Präsentiert von' },
+  pl: { s: 'Materiał sponsorowany', p: 'Prezentuje' },
+  ru: { s: 'Спонсировано', p: 'При поддержке' },
+};
+
 export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }): Promise<Metadata> {
   const { locale, slug } = await params;
   if (!isLocale(locale)) return {};
@@ -73,7 +84,11 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
           <div className="hero-scrim" />
           {a.cover_image_credit ? <span className="credit">{a.cover_image_credit}</span> : null}
           <div className="inner">
-            {catLabel ? <span className="kicker">{catLabel}</span> : null}
+            {a.sponsored ? (
+              <span className="kicker" style={{ display: 'inline-block', background: '#C9A24C', color: '#0B0E11', padding: '2px 10px', borderRadius: 999, fontWeight: 700 }}>
+                {(SPONSORED[l] || SPONSORED.en).s}{a.sponsor_name ? ` · ${(SPONSORED[l] || SPONSORED.en).p} ${a.sponsor_name}` : ''}
+              </span>
+            ) : catLabel ? <span className="kicker">{catLabel}</span> : null}
             <h1>{a.title}</h1>
             {a.excerpt ? <p className="dek">{a.excerpt}</p> : null}
             <div className="byline">
