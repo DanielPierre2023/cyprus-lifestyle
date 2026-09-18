@@ -102,10 +102,9 @@ export interface Listing {
   lat: number | null; lng: number | null; price_band: string | null;
   url: string | null; phone: string | null; image: string | null;
   tags: string[]; featured: boolean; verified: boolean;
-  rating: number | null; rating_count: number | null;
 }
 const LISTING_COLS = (l: Locale) =>
-  `id, slug, type, district, address, lat, lng, price_band, url, phone, image, tags, featured, verified, rating, rating_count, name_${l}, name_en, summary_${l}, summary_en`;
+  `id, slug, type, district, address, lat, lng, price_band, url, phone, image, tags, featured, verified, name_${l}, name_en, summary_${l}, summary_en`;
 function toListing(r: Record<string, unknown>, l: Locale): Listing {
   return {
     id: String(r.id), slug: String(r.slug), type: String(r.type), district: (r.district as string) ?? null,
@@ -115,56 +114,7 @@ function toListing(r: Record<string, unknown>, l: Locale): Listing {
     price_band: (r.price_band as string) ?? null, url: (r.url as string) ?? null,
     phone: (r.phone as string) ?? null, image: (r.image as string) ?? null,
     tags: (r.tags as string[]) ?? [], featured: Boolean(r.featured), verified: Boolean(r.verified),
-    rating: (r.rating as number) ?? null, rating_count: (r.rating_count as number) ?? null,
   };
-}
-// haversine distance in km between two lat/lng points
-function distKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
-  const R = 6371, toR = Math.PI / 180;
-  const dLat = (bLat - aLat) * toR, dLng = (bLng - aLng) * toR;
-  const s = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * toR) * Math.cos(bLat * toR) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
-}
-export interface NearbyItem extends Listing { distanceKm: number }
-// "Around this place": published listings near a point, closest first, capped per
-// type so one category can't crowd the rest. Bounding-box prefilter + haversine.
-export async function getNearby(locale: Locale, lat: number, lng: number, excludeSlug: string, radiusKm = 9, perType = 4, total = 12): Promise<NearbyItem[]> {
-  const dLat = radiusKm / 111, dLng = radiusKm / (111 * Math.cos(lat * Math.PI / 180) || 1);
-  const { data } = await supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale))
-    .eq('status', 'published')
-    .gte('lat', lat - dLat).lte('lat', lat + dLat)
-    .gte('lng', lng - dLng).lte('lng', lng + dLng)
-    .limit(400);
-  const rows = ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale)).filter((x) => x.name && x.slug !== excludeSlug && x.lat != null && x.lng != null);
-  const withD = rows.map((x) => ({ ...x, distanceKm: distKm(lat, lng, x.lat as number, x.lng as number) }))
-    .filter((x) => x.distanceKm <= radiusKm)
-    .sort((a, b) => a.distanceKm - b.distanceKm);
-  const perTypeCount: Record<string, number> = {};
-  const out: NearbyItem[] = [];
-  for (const x of withD) {
-    perTypeCount[x.type] = (perTypeCount[x.type] || 0) + 1;
-    if (perTypeCount[x.type] > perType) continue;
-    out.push(x);
-    if (out.length >= total) break;
-  }
-  return out;
-}
-// Peers for comparison: same type + district, ranked by rating then featured.
-export async function getPeers(locale: Locale, type: string, district: string | null, excludeSlug: string, limit = 5): Promise<Listing[]> {
-  let q = supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale)).eq('status', 'published').eq('type', type);
-  if (district) q = q.eq('district', district);
-  const { data } = await q.order('rating', { ascending: false, nullsFirst: false }).order('featured', { ascending: false }).limit(limit + 1);
-  return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale))
-    .filter((x) => x.name && x.slug !== excludeSlug).slice(0, limit);
-}
-// Upcoming events in a district — "what's on nearby".
-export async function getEventsByDistrict(locale: Locale, district: string | null, limit = 3): Promise<EventItem[]> {
-  if (!district) return [];
-  const start = new Date(); start.setHours(0, 0, 0, 0);
-  const { data } = await supabaseAdmin().from('events').select(EVENT_COLS(locale))
-    .eq('status', 'published').eq('district', district).gte('starts_at', start.toISOString())
-    .order('starts_at', { ascending: true }).limit(limit);
-  return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toEvent(r, locale)).filter((e) => e.title);
 }
 export async function getListings(locale: Locale, type?: string, limit = 200): Promise<Listing[]> {
   let q = supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale)).eq('status', 'published');

@@ -56,7 +56,7 @@ export default async function DirectoryType({ params }: { params: Promise<{ loca
             {listings.map((x) => (
               <article key={x.id} className="card">
                 <Link href={`/directory/${x.type}/${x.slug}`} className="ph" aria-hidden="true" tabIndex={-1}>
-                  <CoverImage src={x.image} seed={x.slug} alt={x.name} className="ph-img" sizes="(max-width: 900px) 100vw, 33vw" fallbackKind="brand" />
+                  <CoverImage src={x.image} seed={x.slug} alt={x.name} className="ph-img" sizes="(max-width: 900px) 100vw, 33vw" />
                 </Link>
                 <span className="kicker">{x.district || label}{x.price_band ? ` · ${x.price_band}` : ''}</span>
                 <h3><Link href={`/directory/${x.type}/${x.slug}`}>{x.name}</Link></h3>
