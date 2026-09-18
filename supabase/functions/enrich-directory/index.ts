@@ -18,6 +18,7 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const PLACES_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY') || '';
 const ENRICH_SECRET = Deno.env.get('ENRICH_SECRET') || '';
 const BUCKET = Deno.env.get('ENRICH_BUCKET') || 'listings';
+const UNSPLASH_KEY = Deno.env.get('UNSPLASH_ACCESS_KEY') || '';
 
 const GENERIC_LOCAL = ['info', 'contact', 'reservations', 'bookings', 'sales', 'hello', 'office', 'enquiries', 'enquiry', 'admin', 'reception'];
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
@@ -25,7 +26,7 @@ const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 // ── entity config ───────────────────────────────────────────────────────────
 interface EntityCfg { table: string; nameField: string; select: string; imageFirst: 'places' | 'website'; contacts: boolean }
 const ENTITIES: Record<string, EntityCfg> = {
-  directory: { table: 'directory_listings', nameField: 'name_en', select: 'id,slug,name_en,district,url,email,image,phone', imageFirst: 'places', contacts: true },
+  directory: { table: 'directory_listings', nameField: 'name_en', select: 'id,slug,type,name_en,district,url,email,image,phone,summary_en,rating', imageFirst: 'places', contacts: true },
   events: { table: 'events', nameField: 'title_en', select: 'id,slug,title_en,venue,district,url,source_url,image', imageFirst: 'website', contacts: false },
 };
 
@@ -70,7 +71,7 @@ export function extractOgImage(html: string, base: string): string | null {
 }
 export function isLikelyLogo(url: string): boolean {
   const u = url.toLowerCase();
-  return u.endsWith('.svg') || /logo|favicon|icon|placeholder|sprite/.test(u);
+  return u.endsWith('.svg') || /logo|favicon|icon|placeholder|sprite|watermark|brandmark/.test(u);
 }
 
 // ── REST + fetch helpers ────────────────────────────────────────────────────
@@ -85,7 +86,7 @@ async function timedFetch(url: string, ms = 9000, init: RequestInit = {}): Promi
 }
 
 // ── Places (New) ────────────────────────────────────────────────────────────
-interface PlaceHit { websiteUri?: string; internationalPhoneNumber?: string; photoName?: string; photoAttr?: string }
+interface PlaceHit { websiteUri?: string; internationalPhoneNumber?: string; photoName?: string; photoAttr?: string; rating?: number; ratingCount?: number; editorial?: string; primaryType?: string }
 async function placesLookup(query: string): Promise<PlaceHit | null> {
   if (!PLACES_KEY || !query.trim()) return null;
   const res = await timedFetch('https://places.googleapis.com/v1/places:searchText', 12000, {
@@ -93,7 +94,9 @@ async function placesLookup(query: string): Promise<PlaceHit | null> {
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': PLACES_KEY,
-      'X-Goog-FieldMask': 'places.id,places.displayName,places.websiteUri,places.internationalPhoneNumber,places.photos',
+      // photos already put this call in the top field-mask tier, so adding rating,
+      // editorialSummary and primaryType costs nothing extra — they ride the same request.
+      'X-Goog-FieldMask': 'places.id,places.displayName,places.websiteUri,places.internationalPhoneNumber,places.photos,places.rating,places.userRatingCount,places.editorialSummary,places.primaryTypeDisplayName,places.businessStatus',
     },
     body: JSON.stringify({ textQuery: query, regionCode: 'CY', maxResultCount: 1 }),
   });
@@ -103,12 +106,32 @@ async function placesLookup(query: string): Promise<PlaceHit | null> {
   if (!p) return null;
   const photo = (p.photos as Array<Record<string, unknown>> | undefined)?.[0];
   const attr = (photo?.authorAttributions as Array<{ displayName?: string }> | undefined)?.[0]?.displayName;
+  const ed = (p.editorialSummary as { text?: string } | undefined)?.text;
+  const pt = (p.primaryTypeDisplayName as { text?: string } | undefined)?.text;
   return {
     websiteUri: p.websiteUri as string | undefined,
     internationalPhoneNumber: p.internationalPhoneNumber as string | undefined,
     photoName: photo?.name as string | undefined,
     photoAttr: attr ? `Photo: ${attr} / Google` : (photo ? 'Photo: Google' : undefined),
+    rating: typeof p.rating === 'number' ? p.rating : undefined,
+    ratingCount: typeof p.userRatingCount === 'number' ? p.userRatingCount : undefined,
+    editorial: ed && ed.trim() ? ed.trim() : undefined,
+    primaryType: pt && pt.trim() ? pt.trim() : undefined,
   };
+}
+
+// A clean, factual one-liner when Google has no editorial summary — never invented
+// marketing, just what the place verifiably is and where. e.g. "Seafood restaurant
+// in Paphos." Uses Google's own primary type when available, else our category noun.
+const TYPE_NOUN: Record<string, string> = {
+  restaurant: 'Restaurant', winery: 'Winery', hotel: 'Hotel',
+  beach: 'Beach', development: 'Property development', vendor: 'Local business',
+};
+function titleCase(s: string): string { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+export function composedSummary(entityType: string, primaryType: string | undefined, district: string | null): string {
+  const noun = (primaryType && primaryType.trim()) || TYPE_NOUN[entityType] || 'Local business';
+  const where = district ? ` in ${titleCase(district)}` : ' in Cyprus';
+  return `${noun}${where}.`;
 }
 
 type ImgData = { buf: ArrayBuffer; ct: string };
@@ -128,25 +151,62 @@ async function downloadImage(url: string): Promise<ImgData | null> {
   if (buf.byteLength < 3000) return null;
   return { buf, ct };
 }
+let LAST_UPLOAD_ERR = '';
 async function uploadToStorage(entity: string, slug: string, buf: ArrayBuffer, ct: string): Promise<string | null> {
   const ext = ct.includes('png') ? 'png' : ct.includes('webp') ? 'webp' : 'jpg';
-  const path = `${entity}/${slug}.${ext}`;
+  // slugs are ASCII-hyphen already, but guard the storage key against stray chars
+  const safe = String(slug || 'x').toLowerCase().replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-').replace(/(^-|-$)/g, '') || 'x';
+  const path = `${entity}/${safe}.${ext}`;
   const up = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': ct, 'x-upsert': 'true' },
+    // apikey is REQUIRED by the Supabase API gateway for storage writes — without
+    // it every upload is rejected before it reaches storage (the bug that made all
+    // downloads get silently discarded). Authorization alone is not enough.
+    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': ct, 'x-upsert': 'true' },
     body: buf,
-  }).catch(() => null);
-  if (!up || !up.ok) return null;
+  }).catch((e) => { LAST_UPLOAD_ERR = 'throw ' + String(e).slice(0, 80); return null; });
+  if (!up) return null;
+  if (!up.ok) { LAST_UPLOAD_ERR = up.status + ' ' + (await up.text().catch(() => '')).slice(0, 120); return null; }
+  LAST_UPLOAD_ERR = '';
   return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`;
 }
-async function ogImage(siteUrl: string): Promise<ImgData | null> {
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+
+// Ordered list of real-photo candidates from a page: social preview images first
+// (og:image / twitter:image / link image_src / JSON-LD image), then the biggest-
+// looking content <img> (uploads/media/gallery/hero), skipping logos, icons, svg,
+// data-URIs, spacers. This is what makes "download the website photography" work.
+export function siteImageCandidates(html: string, base: string): string[] {
+  const out: string[] = [];
+  const add = (u?: string | null) => { if (u) { const r = resolveUrl(u.replace(/&amp;/g, '&'), base); if (r && !out.includes(r)) out.push(r); } };
+  const meta = (re: RegExp) => html.match(re)?.[1];
+  add(meta(/<meta[^>]+property=["']og:image(?::secure_url)?["'][^>]+content=["']([^"']+)["']/i));
+  add(meta(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image(?::secure_url)?["']/i));
+  add(meta(/<meta[^>]+name=["']twitter:image(?::src)?["'][^>]+content=["']([^"']+)["']/i));
+  add(meta(/<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i));
+  for (const m of html.matchAll(/"image"\s*:\s*"([^"]+\.(?:jpe?g|png|webp)[^"]*)"/gi)) add(m[1]);
+  const SKIP = /logo|favicon|icon|sprite|placeholder|avatar|badge|flag|spacer|pixel|spinner|loader|blank|1x1|data:image/i;
+  for (const m of html.matchAll(/<img[^>]+(?:data-src|data-lazy-src|data-original|src)=["']([^"']+)["']/gi)) {
+    const src = m[1];
+    if (!src || /^data:/i.test(src) || /\.svg(\?|$)/i.test(src) || SKIP.test(src)) continue;
+    if (/\.(jpe?g|png|webp)(\?|$)/i.test(src) || /\/(uploads|media|images?|img|photos?|gallery|wp-content|assets)\//i.test(src)) add(src);
+  }
+  return out.slice(0, 15);
+}
+
+// Fetch a business/event site and self-host its best real photo. Tries each
+// candidate until one is a genuine photo (>9KB skips small logos/icons).
+async function websiteImage(siteUrl: string): Promise<{ data: ImgData; src: string } | null> {
   const base = siteUrl.startsWith('http') ? siteUrl : `https://${siteUrl}`;
-  const res = await timedFetch(base, 9000, { headers: { 'User-Agent': 'CyprusLifestyleBot/1.0' } });
+  const res = await timedFetch(base, 9000, { headers: { 'User-Agent': BROWSER_UA, Accept: 'text/html,application/xhtml+xml' } });
   if (!res || !res.ok) return null;
   const html = await res.text().catch(() => '');
-  const og = extractOgImage(html, base);
-  if (!og || isLikelyLogo(og)) return null;
-  return downloadImage(og);
+  for (const cand of siteImageCandidates(html, base)) {
+    if (isLikelyLogo(cand)) continue;
+    const img = await downloadImage(cand);
+    if (img && img.buf.byteLength > 9000) return { data: img, src: cand };
+  }
+  return null;
 }
 async function findEmail(siteUrl: string): Promise<string | null> {
   const base = siteUrl.startsWith('http') ? siteUrl : `https://${siteUrl}`;
@@ -162,8 +222,34 @@ async function findEmail(siteUrl: string): Promise<string | null> {
   return pickEmail(found, dom);
 }
 
+// Unsplash fallback — a tasteful, license-clean, ATTRIBUTED representative photo
+// so events (and, if you opt in, listings) are never blank. Uses your existing
+// UNSPLASH_ACCESS_KEY. We store the Unsplash CDN url directly (hotlinking is what
+// Unsplash intends), so this needs no Storage upload.
+export function eventQuery(title: string, district: string | null): string {
+  const t = (title || '').toLowerCase();
+  const map: [RegExp, string][] = [
+    [/wine|grape|vineyard/, 'wine festival'], [/medieval/, 'medieval festival'],
+    [/jazz|music|concert|philharmon|symphony/, 'music concert'], [/film|cinema/, 'film festival'],
+    [/art|paint|sculpt|galler|exhibition/, 'art exhibition'], [/dance|ballet/, 'dance performance'],
+    [/theatre|theater|drama|perform|fringe/, 'theatre stage'], [/food|gastronom|culinary|taste/, 'food festival'],
+    [/carnival/, 'carnival celebration'], [/book|literature/, 'book fair'], [/flower|anthestiria/, 'flower festival'],
+  ];
+  for (const [re, kw] of map) if (re.test(t)) return `${kw} Cyprus`;
+  return `${district ? district + ' ' : ''}Cyprus festival celebration`;
+}
+async function unsplashImage(query: string): Promise<{ url: string; credit: string } | null> {
+  if (!UNSPLASH_KEY || !query.trim()) return null;
+  const res = await timedFetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape&content_filter=high`, 9000, { headers: { Authorization: `Client-ID ${UNSPLASH_KEY}` } });
+  if (!res || !res.ok) return null;
+  const j = await res.json().catch(() => null) as { results?: Array<{ urls?: { regular?: string }; user?: { name?: string } }> } | null;
+  const p = j?.results?.[0];
+  if (!p?.urls?.regular) return null;
+  return { url: p.urls.regular, credit: `Photo: ${p.user?.name || 'Unsplash'} / Unsplash` };
+}
+
 // ── per-row enrichment ──────────────────────────────────────────────────────
-async function enrichRow(entity: string, cfg: EntityCfg, r: Record<string, unknown>, opts: { imagesOnly: boolean; contactsOnly: boolean }): Promise<Record<string, unknown>> {
+async function enrichRow(entity: string, cfg: EntityCfg, r: Record<string, unknown>, opts: { imagesOnly: boolean; contactsOnly: boolean; stock: boolean }): Promise<Record<string, unknown>> {
   const patch: Record<string, unknown> = { enriched_at: new Date().toISOString() };
   let hits = 0;
   const name = String(r[cfg.nameField] || '');
@@ -171,30 +257,54 @@ async function enrichRow(entity: string, cfg: EntityCfg, r: Record<string, unkno
   const query = entity === 'events'
     ? [String(r.venue || name), district, 'Cyprus'].filter(Boolean).join(', ')
     : [name, district, 'Cyprus'].filter(Boolean).join(', ');
-  const place = await placesLookup(query);
-  const site = (r.url as string) || (r.source_url as string) || place?.websiteUri || null;
+  // Lazy Places lookup: only spend a Places call when we actually need a website,
+  // phone or photo we don't already have. A listing that already has a URL costs
+  // ZERO Places calls — we go straight to its website for the photo.
+  let placeChecked = false;
+  let place: PlaceHit | null = null;
+  const getPlace = async (): Promise<PlaceHit | null> => { if (!placeChecked) { placeChecked = true; place = await placesLookup(query); } return place; };
 
   if (cfg.contacts) {
-    if (!r.url && place?.websiteUri) { patch.url = place.websiteUri; hits++; }
-    if (!r.phone && place?.internationalPhoneNumber) { patch.phone = place.internationalPhoneNumber; hits++; }
+    if (!r.url) { const p = await getPlace(); if (p?.websiteUri) { patch.url = p.websiteUri; hits++; } }
+    if (!r.phone) { const p = await getPlace(); if (p?.internationalPhoneNumber) { patch.phone = p.internationalPhoneNumber; hits++; } }
   }
+
+  const site = (r.url as string) || (r.source_url as string) || (patch.url as string) || null;
 
   if (!opts.contactsOnly && !r.image) {
     let img: ImgData | null = null;
     let credit: string | undefined;
-    const tryWebsite = async () => { if (!img && site) { const g = await ogImage(site); if (g) { img = g; credit = entity === 'events' ? 'Photo: event page' : 'Photo: business website'; } } };
-    const tryPlaces = async () => { if (!img && place?.photoName) { const p = await placesPhotoBytes(place.photoName); if (p) { img = p; credit = place.photoAttr; } } };
+    const tryPlaces = async () => { if (!img) { const p = await getPlace(); if (p?.photoName) { const pb = await placesPhotoBytes(p.photoName); if (pb) { img = pb; credit = p.photoAttr; } } } };
+    const tryWebsite = async () => { if (!img && site) { const w = await websiteImage(site); if (w) { img = w.data; credit = entity === 'events' ? 'Photo: event page' : 'Photo: business website'; } } };
+    // Directory: REAL Google Places photo of the place first (avoids grabbing a
+    // site's og:image, which is often just the company logo — e.g. 360 Nicosia →
+    // Cyfield logo); the business website is a non-logo fallback. Events: the
+    // event page first (posters), Places as backup.
     if (cfg.imageFirst === 'website') { await tryWebsite(); await tryPlaces(); }
     else { await tryPlaces(); await tryWebsite(); }
     if (img) {
       const publicUrl = await uploadToStorage(entity, String(r.slug), (img as ImgData).buf, (img as ImgData).ct);
       if (publicUrl) { patch.image = publicUrl; patch.image_credit = credit; hits++; }
     }
+    // 3) Unsplash theme fallback: always for events; directory only with &stock=1
+    if (!patch.image) {
+      const q = entity === 'events' ? eventQuery(name, district) : (opts.stock ? `${(r.type as string) || ''} ${district || ''} Cyprus`.trim() : '');
+      if (q) { const us = await unsplashImage(q); if (us) { patch.image = us.url; patch.image_credit = us.credit; hits++; } }
+    }
   }
 
   if (cfg.contacts && !opts.imagesOnly && !r.email && site) {
     const email = await findEmail(site);
     if (email) { patch.email = email; hits++; }
+  }
+
+  // Description + rating (directory only). Google's editorial summary when it has
+  // one (accurate, authoritative); otherwise a clean factual line. Never overwrites
+  // an editor's existing description.
+  if (cfg.contacts) {
+    const p = await getPlace();
+    if (!r.summary_en) { patch.summary_en = (p?.editorial) || composedSummary(String(r.type || ''), p?.primaryType, district); hits++; }
+    if (p?.rating != null && r.rating == null) { patch.rating = p.rating; if (p.ratingCount != null) patch.rating_count = p.ratingCount; }
   }
 
   patch.enrich_status = hits === 0 ? 'none' : ((patch.image || r.image) && (!cfg.contacts || patch.email || r.email) ? 'ok' : 'partial');
@@ -214,7 +324,45 @@ async function handler(req: Request): Promise<Response> {
   const redo = u.searchParams.get('redo') === '1';
   const imagesOnly = u.searchParams.get('imagesOnly') === '1';
   const contactsOnly = u.searchParams.get('contactsOnly') === '1';
+  const stock = u.searchParams.get('stock') === '1';
+
+  // ── diagnostics: ?debug=<name substring> — inspects ONE listing, writes nothing,
+  // and reports exactly what the edge sees so we can tell why a photo is missing.
+  const dbg = u.searchParams.get('debug');
+  if (dbg) {
+    const dsel = await rest(`${cfg.table}?select=${cfg.select}&status=eq.published&${cfg.nameField}=ilike.*${encodeURIComponent(dbg)}*&limit=1`);
+    const drow = ((await dsel.json().catch(() => [])) as Record<string, unknown>[])[0];
+    if (!drow) return new Response(JSON.stringify({ debug: 'no match for ' + dbg }), { headers: { 'Content-Type': 'application/json' } });
+    const nm = String(drow[cfg.nameField] || '');
+    const dist = (drow.district as string) || null;
+    const q = [nm, dist, 'Cyprus'].filter(Boolean).join(', ');
+    const out: Record<string, unknown> = { name: nm, existing_url: drow.url || null };
+    const pl = await placesLookup(q);
+    out.places = pl ? { website: pl.websiteUri || null, hasPhoto: !!pl.photoName, photoName: (pl.photoName || '').slice(0, 70) } : 'no place match';
+    if (pl?.photoName) { const pb = await placesPhotoBytes(pl.photoName); out.placesPhotoDownload = pb ? { ok: true, bytes: pb.buf.byteLength, ct: pb.ct } : { ok: false }; }
+    const site = (drow.url as string) || pl?.websiteUri || null;
+    if (site) {
+      const base = site.startsWith('http') ? site : `https://${site}`;
+      const res = await timedFetch(base, 9000, { headers: { 'User-Agent': BROWSER_UA, Accept: 'text/html,application/xhtml+xml' } });
+      const w: Record<string, unknown> = { url: base, status: res ? res.status : 'fetch-failed' };
+      if (res && res.ok) {
+        const html = await res.text().catch(() => '');
+        const cands = siteImageCandidates(html, base);
+        w.bytes = html.length; w.candidates = cands.slice(0, 5);
+        if (cands[0]) { const im = await downloadImage(cands[0]); w.firstDownload = im ? { ok: true, bytes: im.buf.byteLength, ct: im.ct } : { ok: false }; }
+      }
+      out.website = w;
+    }
+    // prove the Storage upload works now (writes one probe file, reports the result)
+    let testImg: ImgData | null = null;
+    if (pl?.photoName) testImg = await placesPhotoBytes(pl.photoName);
+    if (!testImg && site) { const w = await websiteImage(site.startsWith('http') ? site : `https://${site}`); if (w) testImg = w.data; }
+    if (testImg) { const url = await uploadToStorage('debugtest', `probe-${Date.now()}`, testImg.buf, testImg.ct); out.uploadTest = url ? { ok: true, url } : { ok: false, error: LAST_UPLOAD_ERR }; }
+    return new Response(JSON.stringify(out, null, 2), { headers: { 'Content-Type': 'application/json' } });
+  }
+
   const filter = redo ? '' : '&enriched_at=is.null';
+  const isJunk = (nm: string) => /^\d+$/.test(nm.trim()) || /\[closed\]/i.test(nm); // numeric codes + closed places
 
   const sel = await rest(`${cfg.table}?select=${cfg.select}&status=eq.published${filter}&order=${cfg.nameField}.asc&limit=${limit}`);
   if (!sel.ok) return new Response(JSON.stringify({ ok: false, error: `select ${sel.status}` }), { status: 500, headers: { 'Content-Type': 'application/json' } });
@@ -223,11 +371,17 @@ async function handler(req: Request): Promise<Response> {
   let updated = 0;
   const results: Array<Record<string, unknown>> = [];
   for (const r of rows) {
+    const nm = String(r[cfg.nameField] || '');
+    // Cheaply drain junk directory rows (numeric import codes, [CLOSED]) — no API spend.
+    if (entity === 'directory' && isJunk(nm)) {
+      await rest(`${cfg.table}?id=eq.${r.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ enriched_at: new Date().toISOString(), enrich_status: 'skipped' }) });
+      updated++; results.push({ name: nm, status: 'skipped' }); continue;
+    }
     try {
-      const patch = await enrichRow(entity, cfg, r, { imagesOnly, contactsOnly });
+      const patch = await enrichRow(entity, cfg, r, { imagesOnly, contactsOnly, stock });
       const up = await rest(`${cfg.table}?id=eq.${r.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
-      if (up.ok) { updated++; results.push({ name: r[cfg.nameField], status: patch.enrich_status, image: !!patch.image, email: patch.email || undefined, url: patch.url || undefined }); }
-    } catch (e) { results.push({ name: r[cfg.nameField], error: String(e) }); }
+      if (up.ok) { updated++; results.push({ name: nm, status: patch.enrich_status, image: !!patch.image, email: patch.email || undefined, url: patch.url || undefined }); }
+    } catch (e) { results.push({ name: nm, error: String(e) }); }
   }
 
   const head = await rest(`${cfg.table}?select=id&status=eq.published&enriched_at=is.null`, { method: 'HEAD', headers: { Prefer: 'count=exact' } });

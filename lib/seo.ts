@@ -135,6 +135,7 @@ export function listingJsonLd(a: {
   locale: Locale; slug: string; type: string; name: string; description?: string;
   url?: string | null; image?: string | null; address?: string | null;
   lat?: number | null; lng?: number | null; district?: string | null; priceRange?: string | null;
+  rating?: number | null; ratingCount?: number | null;
 }) {
   return {
     '@context': 'https://schema.org',
@@ -146,6 +147,9 @@ export function listingJsonLd(a: {
     sameAs: a.url ? [a.url] : undefined,
     image: a.image ? [a.image] : undefined,
     priceRange: a.priceRange || undefined,
+    aggregateRating: (typeof a.rating === 'number' && a.rating > 0 && a.ratingCount && a.ratingCount > 0)
+      ? { '@type': 'AggregateRating', ratingValue: a.rating, reviewCount: a.ratingCount, bestRating: 5 }
+      : undefined,
     address: (a.address || a.district)
       ? {
         '@type': 'PostalAddress',
