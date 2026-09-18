@@ -227,5 +227,36 @@
     "faqA1": "Cyprus Lifestyle prezentuje {count} {type} w {place}, każdy ze zdjęciami, ocenami i lokalizacją.",
     "faqQ2": "Które {type} w {place} są najwyżej oceniane?",
     "faqA2": "{top} obecnie przoduje w ocenach odwiedzających w {place}."
+  },
+  "concierge": {
+    "title": "Zapytaj wyspę",
+    "intro": "Opisz, czego szukasz — cicha kolacja nad morzem, hotel rodzinny przy piaszczystej plaży, kto buduje nowe apartamenty w Limassol — a concierge znajdzie to na całej wyspie.",
+    "placeholder": "Zapytaj o cokolwiek — „romantyczna kolacja nad morzem w Pafos”",
+    "ask": "Zapytaj",
+    "thinking": "Szukam…",
+    "error": "Concierge jest teraz zajęty — spróbuj ponownie.",
+    "examplesTitle": "Wypróbuj",
+    "examples": [
+      "Cicha kolacja nad morzem w Pafos",
+      "Hotel rodzinny przy piaszczystej plaży",
+      "Winnice w pobliżu Limassol",
+      "Kto buduje nowe apartamenty w Limassol?"
+    ],
+    "picksTitle": "Polecane dla Ciebie"
+  },
+  "recent": {
+    "title": "Ostatnio oglądane"
+  },
+  "enquiry": {
+    "title": "Poproś o informacje",
+    "intro": "Wyślij zapytanie — przekażemy je bezpośrednio.",
+    "name": "Twoje imię",
+    "email": "Twój email",
+    "message": "Twoja wiadomość (opcjonalnie)",
+    "send": "Wyślij zapytanie",
+    "sending": "Wysyłanie…",
+    "success": "Dziękujemy — zapytanie zostało wysłane.",
+    "error": "Coś poszło nie tak — spróbuj ponownie.",
+    "featured": "Wyróżnione"
   }
 }

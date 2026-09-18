@@ -8,6 +8,8 @@ import { collectionSlug, slugifyDistrict, districtLabel } from '@/lib/collection
 import { breadcrumbJsonLd, ld, listingJsonLd, pageMetadata } from '@/lib/seo';
 import DirectoryMap from '@/components/DirectoryMap';
 import CoverImage from '@/components/CoverImage';
+import TrackView from '@/components/TrackView';
+import EnquiryForm, { type EnquiryLabels } from '@/components/EnquiryForm';
 
 export const revalidate = 300;
 
@@ -67,9 +69,15 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
        ...nearby.filter((n) => n.lat != null && n.lng != null).map((n) => ({ lat: n.lat as number, lng: n.lng as number, name: n.name, type: n.type, image: n.image, href: `/${l}/directory/${n.type}/${n.slug}` }))]
     : [];
   const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(l, { day: 'numeric', month: 'short' });
+  const enqLabels: EnquiryLabels = {
+    title: t('enquiry.title'), intro: t('enquiry.intro'), name: t('enquiry.name'),
+    email: t('enquiry.email'), message: t('enquiry.message'), send: t('enquiry.send'),
+    sending: t('enquiry.sending'), success: t('enquiry.success'), error: t('enquiry.error'),
+  };
 
   return (
     <>
+      <TrackView slug={x.slug} type={x.type} name={x.name} image={x.image} district={x.district} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(listLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(crumbLd) }} />
 
@@ -87,6 +95,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
             <div className="lh-badges">
               {x.rating != null ? <span className="lh-badge"><Stars rating={x.rating} /> <b>{x.rating.toFixed(1)}</b>{x.rating_count ? <span className="muted"> · {x.rating_count.toLocaleString(l)} reviews</span> : null}</span> : null}
               {x.price_band ? <span className="lh-badge">{x.price_band}</span> : null}
+              {x.featured ? <span className="lh-badge featured">★ {t('enquiry.featured')}</span> : null}
               {x.verified ? <span className="lh-badge verified">✓ Verified</span> : null}
             </div>
           </div>
@@ -181,6 +190,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
             </div>
           </div>
           {points.length ? <div className="lh-map"><DirectoryMap points={points} height={300} locale={l} typeLabels={typeLabels} /></div> : null}
+          <EnquiryForm listingSlug={x.slug} listingType={x.type} listingName={x.name} locale={l} labels={enqLabels} />
         </aside>
       </div>
 
@@ -193,6 +203,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
         .lh-badges{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:12px;font-family:var(--sans);font-size:14px;align-items:center}
         .lh-badge{display:inline-flex;align-items:center;gap:6px;color:#f3ecdd}
         .lh-badge.verified{color:#F1D592;border:1px solid rgba(241,213,146,.5);border-radius:999px;padding:1px 10px;font-size:12px;font-weight:600}
+        .lh-badge.featured{color:#0B0E11;background:#F1D592;border-radius:999px;padding:1px 10px;font-size:12px;font-weight:700}
         .lh-badge .muted{color:#c9c0ad}
         .lh-grid{display:grid;grid-template-columns:1fr 340px;gap:40px;margin-top:34px;align-items:start}
         .lh-desc{font-family:var(--body);font-size:20px;line-height:1.55;color:var(--ink-soft,#5b5346)}

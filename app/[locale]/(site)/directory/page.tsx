@@ -7,6 +7,8 @@ import { DIRECTORY_TYPES, getListings, getDirectoryMapPoints, getDirectoryCounts
 import { breadcrumbJsonLd, itemListJsonLd, ld, pageMetadata } from '@/lib/seo';
 import DirectoryMap from '@/components/DirectoryMap';
 import CoverImage from '@/components/CoverImage';
+import Concierge, { type ConciergeLabels } from '@/components/Concierge';
+import RecentlyViewed from '@/components/RecentlyViewed';
 
 export const revalidate = 300;
 
@@ -37,6 +39,11 @@ export default async function DirectoryIndex({ params }: { params: Promise<{ loc
   const groups = previews.map((g) => ({ ...g, count: counts[g.ty] || 0 })).filter((g) => g.count > 0);
   const sample = previews.flatMap((g) => g.items).slice(0, 50);
   const crumbLd = breadcrumbJsonLd(l, [{ name: t('brand.name'), path: '/' }, { name: t('directory.title'), path: '/directory' }]);
+  const conciergeLabels: ConciergeLabels = {
+    placeholder: t('concierge.placeholder'), ask: t('concierge.ask'), thinking: t('concierge.thinking'),
+    error: t('concierge.error'), examplesTitle: t('concierge.examplesTitle'),
+    examples: (t.raw('concierge.examples') as string[]) || [], picksTitle: t('concierge.picksTitle'),
+  };
 
   return (
     <>
@@ -55,9 +62,30 @@ export default async function DirectoryIndex({ params }: { params: Promise<{ loc
         <div className="rule-orn orn"><span className="diamond" /></div>
       </div>
 
+      <div className="wrap section">
+        <div className="dir-concierge">
+          <h2 className="dir-cnc-h">{t('concierge.title')}</h2>
+          <p className="dir-cnc-i">{t('concierge.intro')}</p>
+          <Concierge locale={l} labels={conciergeLabels} />
+        </div>
+        <style>{`
+          .dir-concierge{background:linear-gradient(135deg,#12242b,#0B0E11);border:1px solid rgba(201,162,76,.28);border-radius:10px;padding:26px 26px 28px}
+          .dir-cnc-h{font-family:var(--disp);font-weight:600;font-size:26px;color:#fff;margin:0 0 4px}
+          .dir-cnc-i{font-family:var(--body);font-size:16px;color:#d7cdb8;margin:0 0 18px;max-width:640px}
+          .dir-concierge .cnc-input{background:#fff}
+          .dir-concierge .cnc-ex-t,.dir-concierge .cnc-chip{color:#cdc4af}
+          .dir-concierge .cnc-chip{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.18)}
+          .dir-concierge .cnc-chip:hover{color:#fff;border-color:#C9A24C}
+          .dir-concierge .cnc-answer{color:#f3ecdd}
+          .dir-concierge .cnc-picks-t{color:#cdc4af}
+        `}</style>
+      </div>
+
       {points.length ? (
         <div className="wrap section"><DirectoryMap points={points} typeLabels={typeLabels} locale={l} /></div>
       ) : null}
+
+      <div className="wrap section"><RecentlyViewed title={t('recent.title')} /></div>
 
       {groups.length ? groups.map(({ ty, items, count }) => (
         <section key={ty} id={ty} className="wrap section dir-group">
