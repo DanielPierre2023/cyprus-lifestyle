@@ -32,6 +32,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     for (const r of (listings || []) as { slug: string; type: string; updated_at: string | null }[]) {
       entries.push(entry(`/directory/${r.type}/${r.slug}`, r.updated_at ? new Date(r.updated_at) : undefined));
     }
+    // Programmatic collection guides ("best restaurants in Paphos", …).
+    const { getCollectionFacets } = await import('@/lib/queries');
+    for (const f of await getCollectionFacets()) {
+      entries.push(entry(`/best/${f.slug}`));
+    }
   } catch {
     /* a sitemap of the static routes is still valid without the dynamic lists */
   }

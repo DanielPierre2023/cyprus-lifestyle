@@ -3,6 +3,7 @@
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Locale } from '@/lib/locales';
+import { MIN_COLLECTION_SIZE, collectionSlug, slugifyDistrict, type CollectionFacet } from '@/lib/collections';
 
 export interface Card {
   id: string; slug: string; title: string; excerpt: string; category: string | null;
@@ -192,6 +193,56 @@ export async function getListing(locale: Locale, slug: string): Promise<Listing 
   const { data } = await supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale))
     .eq('status', 'published').eq('slug', slug).maybeSingle();
   return data ? toListing(data as unknown as Record<string, unknown>, locale) : null;
+}
+
+// ── Collections: type × district guide pages ("best restaurants in Paphos") ──
+// One lightweight scan of (type, district) across all published rows, aggregated
+// in JS into the set of collections worth a page. Memoised so a build that emits
+// hundreds of these pages doesn't rescan per page.
+let _facetCache: { at: number; data: CollectionFacet[] } | null = null;
+export async function getCollectionFacets(): Promise<CollectionFacet[]> {
+  if (_facetCache && Date.now() - _facetCache.at < 60_000) return _facetCache.data;
+  const sb = supabaseAdmin();
+  const rows: { type: string | null; district: string | null }[] = [];
+  const PAGE = 1000;
+  for (let from = 0; from < 12000; from += PAGE) {
+    const { data } = await sb.from('directory_listings').select('type, district')
+      .eq('status', 'published').not('district', 'is', null).order('slug').range(from, from + PAGE - 1);
+    const batch = (data || []) as { type: string | null; district: string | null }[];
+    rows.push(...batch);
+    if (batch.length < PAGE) break;
+  }
+  const acc = new Map<string, CollectionFacet>();
+  for (const r of rows) {
+    if (!r.type || !r.district) continue;
+    const districtSlug = slugifyDistrict(r.district);
+    if (!districtSlug) continue;
+    const key = `${r.type}::${districtSlug}`;
+    const cur = acc.get(key);
+    if (cur) cur.count += 1;
+    else acc.set(key, { type: r.type, district: r.district, districtSlug, slug: collectionSlug(r.type, districtSlug), count: 1 });
+  }
+  const data = [...acc.values()].filter((f) => f.count >= MIN_COLLECTION_SIZE).sort((a, b) => b.count - a.count);
+  _facetCache = { at: Date.now(), data };
+  return data;
+}
+export async function getCollectionBySlug(slug: string): Promise<CollectionFacet | null> {
+  return (await getCollectionFacets()).find((f) => f.slug === slug) || null;
+}
+// Sibling collections in the same district but a different type — the intent
+// bundle's link targets ("also in Paphos: hotels, beaches …").
+export async function getCollectionsInDistrict(districtSlug: string, excludeType?: string): Promise<CollectionFacet[]> {
+  return (await getCollectionFacets()).filter((f) => f.districtSlug === districtSlug && f.type !== excludeType);
+}
+// Ranked listings for a collection: featured first, then rating, then review volume.
+export async function getCollectionListings(locale: Locale, type: string, district: string, limit = 30): Promise<Listing[]> {
+  const { data } = await supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale))
+    .eq('status', 'published').eq('type', type).eq('district', district)
+    .order('featured', { ascending: false })
+    .order('rating', { ascending: false, nullsFirst: false })
+    .order('rating_count', { ascending: false, nullsFirst: false })
+    .limit(limit);
+  return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale)).filter((x) => x.name);
 }
 
 // ── Events / Agenda ──────────────────────────────────────────────────────────

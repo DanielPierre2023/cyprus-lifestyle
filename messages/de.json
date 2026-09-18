@@ -212,5 +212,20 @@
     },
     "soon": "Die kostenpflichtige Mitgliedschaft ist noch nicht geöffnet. Treten Sie kostenlos als Leser bei, dann erfahren Sie als Erste, wenn die Förderer-Stufe startet.",
     "note": "Fragen zur Mitgliedschaft oder zu Firmenabonnements? Schreiben Sie uns über"
+  },
+  "collections": {
+    "heading": "Die besten {type} in {place}",
+    "intro": "{count} {type} in {place}, sortiert nach Bewertung und Rezensionen — samt allem in der Nähe, damit Sie den ganzen Besuch planen können, nicht nur eine Station.",
+    "rankedTitle": "Top bewertet",
+    "reviews": "Bewertungen",
+    "verified": "Verifiziert",
+    "seeAllType": "Alle {type} auf Zypern ansehen",
+    "alsoTitle": "Auch in {place}",
+    "whatsOnTitle": "Veranstaltungen in {place}",
+    "faqTitle": "Gut zu wissen",
+    "faqQ1": "Wie viele {type} gibt es in {place}?",
+    "faqA1": "Cyprus Lifestyle listet {count} {type} in {place}, jeweils mit Fotos, Bewertungen und Standort.",
+    "faqQ2": "Welches sind die bestbewerteten {type} in {place}?",
+    "faqA2": "{top} führt derzeit die Besucherbewertungen in {place} an."
   }
 }

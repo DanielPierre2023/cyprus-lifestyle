@@ -212,5 +212,20 @@
     },
     "soon": "Paid membership isn't open yet. Join free as a Reader and you'll be the first to hear when Patron opens.",
     "note": "Questions about membership or corporate subscriptions? Write to us via"
+  },
+  "collections": {
+    "heading": "The best {type} in {place}",
+    "intro": "{count} {type} across {place}, ranked by rating and reviews — with what’s nearby, so you can plan the whole visit, not just one stop.",
+    "rankedTitle": "Top rated",
+    "reviews": "reviews",
+    "verified": "Verified",
+    "seeAllType": "Browse all {type} in Cyprus",
+    "alsoTitle": "Also in {place}",
+    "whatsOnTitle": "What’s on in {place}",
+    "faqTitle": "Good to know",
+    "faqQ1": "How many {type} are there in {place}?",
+    "faqA1": "Cyprus Lifestyle lists {count} {type} in {place}, each with photos, ratings and location.",
+    "faqQ2": "What is the best-rated {type} in {place}?",
+    "faqA2": "{top} currently leads the traveller ratings in {place}."
   }
 }

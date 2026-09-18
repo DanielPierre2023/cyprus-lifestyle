@@ -212,5 +212,20 @@
     },
     "soon": "Płatne członkostwo nie jest jeszcze dostępne. Dołącz bezpłatnie jako Czytelnik, a jako pierwszy dowiesz się, gdy ruszy poziom Patron.",
     "note": "Pytania o członkostwo lub prenumeratę firmową? Napisz do nas przez"
+  },
+  "collections": {
+    "heading": "Najlepsze {type} w {place}",
+    "intro": "{count} {type} w {place}, uszeregowane według ocen i recenzji — wraz z tym, co jest w pobliżu, aby zaplanować całą wizytę, a nie tylko jeden przystanek.",
+    "rankedTitle": "Najwyżej oceniane",
+    "reviews": "recenzje",
+    "verified": "Zweryfikowano",
+    "seeAllType": "Zobacz wszystkie {type} na Cyprze",
+    "alsoTitle": "Także w {place}",
+    "whatsOnTitle": "Wydarzenia w {place}",
+    "faqTitle": "Warto wiedzieć",
+    "faqQ1": "Ile jest {type} w {place}?",
+    "faqA1": "Cyprus Lifestyle prezentuje {count} {type} w {place}, każdy ze zdjęciami, ocenami i lokalizacją.",
+    "faqQ2": "Które {type} w {place} są najwyżej oceniane?",
+    "faqA2": "{top} obecnie przoduje w ocenach odwiedzających w {place}."
   }
 }

@@ -3,7 +3,8 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { DIRECTORY_TYPES, getListing, getNearby, getPeers, getEventsByDistrict } from '@/lib/queries';
+import { DIRECTORY_TYPES, getListing, getNearby, getPeers, getEventsByDistrict, getCollectionBySlug } from '@/lib/queries';
+import { collectionSlug, slugifyDistrict, districtLabel } from '@/lib/collections';
 import { breadcrumbJsonLd, ld, listingJsonLd, pageMetadata } from '@/lib/seo';
 import DirectoryMap from '@/components/DirectoryMap';
 import CoverImage from '@/components/CoverImage';
@@ -40,10 +41,11 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
   const x = await getListing(l, slug);
   if (!x) notFound();
 
-  const [nearby, peers, events] = await Promise.all([
+  const [nearby, peers, events, collection] = await Promise.all([
     x.lat != null && x.lng != null ? getNearby(l, x.lat, x.lng, x.slug) : Promise.resolve([]),
     getPeers(l, x.type, x.district, x.slug, 4),
     getEventsByDistrict(l, x.district, 3),
+    x.district ? getCollectionBySlug(collectionSlug(x.type, slugifyDistrict(x.district))) : Promise.resolve(null),
   ]);
 
   const label = t(`directory.${x.type}`);
@@ -142,6 +144,9 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
                   </tbody>
                 </table>
               </div>
+              {collection ? (
+                <p className="lh-more"><Link href={`/best/${collection.slug}`}>{t('collections.heading', { type: label, place: districtLabel(x.district as string) })} →</Link></p>
+              ) : null}
             </section>
           ) : null}
 
@@ -204,6 +209,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
         table.lh-cmp tr.me{background:rgba(201,162,76,.12)}
         table.lh-cmp tr.me .nm::after{content:'THIS';font-family:var(--sans);font-size:9px;letter-spacing:.1em;color:#8a5b12;border:1px solid #C9A24C;border-radius:4px;padding:1px 5px;margin-left:8px;vertical-align:middle}
         .lh-view{font-size:13px;white-space:nowrap}
+        .lh-more{margin-top:14px;font-family:var(--sans);font-size:15px}
         .lh-events{display:flex;flex-direction:column;border:1px solid var(--line,#e0d6c1);border-radius:6px;overflow:hidden}
         .lh-event{display:flex;gap:14px;align-items:baseline;padding:13px 16px;border-bottom:1px solid var(--line,#e0d6c1);background:#fff}
         .lh-event:last-child{border-bottom:0}

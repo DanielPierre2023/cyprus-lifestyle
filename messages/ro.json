@@ -212,5 +212,20 @@
     },
     "soon": "Abonamentul cu plată nu este încă disponibil. Înscrieți-vă gratuit ca Cititor și veți fi primii care află când se deschide nivelul Patron.",
     "note": "Întrebări despre calitatea de membru sau abonamente corporative? Scrieți-ne prin"
+  },
+  "collections": {
+    "heading": "Cele mai bune {type} din {place}",
+    "intro": "{count} {type} în {place}, clasate după evaluări și recenzii — împreună cu ce se află în apropiere, ca să planifici toată vizita, nu doar o oprire.",
+    "rankedTitle": "Cele mai apreciate",
+    "reviews": "recenzii",
+    "verified": "Verificat",
+    "seeAllType": "Vezi toate {type} din Cipru",
+    "alsoTitle": "Și în {place}",
+    "whatsOnTitle": "Evenimente în {place}",
+    "faqTitle": "Bine de știut",
+    "faqQ1": "Câte {type} sunt în {place}?",
+    "faqA1": "Cyprus Lifestyle listează {count} {type} în {place}, fiecare cu fotografii, evaluări și locație.",
+    "faqQ2": "Care sunt cele mai bine cotate {type} din {place}?",
+    "faqA2": "{top} conduce în prezent în topul evaluărilor din {place}."
   }
 }
