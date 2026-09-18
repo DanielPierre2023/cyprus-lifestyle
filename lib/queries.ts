@@ -122,6 +122,22 @@ export async function getListings(locale: Locale, type?: string, limit = 200): P
   const { data } = await q.order('featured', { ascending: false }).order('name_en', { ascending: true }).limit(limit);
   return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale)).filter((x) => x.name);
 }
+// ALL published listings of a type (or all types), paginated past PostgREST's
+// 1000-row cap. The category page uses this so nothing is hidden by a limit —
+// getListings (limit 200) stays for previews.
+export async function getAllListings(locale: Locale, type?: string): Promise<Listing[]> {
+  const out: Listing[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    let q = supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale)).eq('status', 'published');
+    if (type) q = q.eq('type', type);
+    const { data } = await q.order('featured', { ascending: false }).order('name_en', { ascending: true }).range(from, from + PAGE - 1);
+    const rows = (data || []) as unknown as Record<string, unknown>[];
+    out.push(...rows.map((r) => toListing(r, locale)).filter((x) => x.name));
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
 export async function getListing(locale: Locale, slug: string): Promise<Listing | null> {
   const { data } = await supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale))
     .eq('status', 'published').eq('slug', slug).maybeSingle();
@@ -191,7 +207,7 @@ async function allPublishedListingCoords(locale: Locale): Promise<Record<string,
   const page = 1000;
   for (let from = 0; from < 12000; from += page) {
     const { data } = await sb.from('directory_listings')
-      .select(`slug, type, district, lat, lng, name_${locale}, name_en`)
+      .select(`slug, type, district, lat, lng, image, name_${locale}, name_en`)
       .eq('status', 'published').not('lat', 'is', null)
       .order('slug').range(from, from + page - 1);
     const batch = (data || []) as Record<string, any>[];
@@ -221,12 +237,12 @@ export async function getMapItems(locale: Locale): Promise<MapItem[]> {
 }
 
 // Directory landing map — every published listing as a point (paginated, bounds-guarded).
-export async function getDirectoryMapPoints(locale: Locale): Promise<{ lat: number; lng: number; name: string; type: string; slug: string }[]> {
-  const out: { lat: number; lng: number; name: string; type: string; slug: string }[] = [];
+export async function getDirectoryMapPoints(locale: Locale): Promise<{ lat: number; lng: number; name: string; type: string; slug: string; image: string | null }[]> {
+  const out: { lat: number; lng: number; name: string; type: string; slug: string; image: string | null }[] = [];
   for (const r of await allPublishedListingCoords(locale)) {
     const c = cyprusCoord(Number(r.lat), Number(r.lng));
     if (!c) continue;
-    out.push({ lat: c.lat, lng: c.lng, name: r[`name_${locale}`] || r.name_en || r.slug, type: String(r.type || 'vendor'), slug: String(r.slug) });
+    out.push({ lat: c.lat, lng: c.lng, name: r[`name_${locale}`] || r.name_en || r.slug, type: String(r.type || 'vendor'), slug: String(r.slug), image: (r.image as string) ?? null });
   }
   return out;
 }

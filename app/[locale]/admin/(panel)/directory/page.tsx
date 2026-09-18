@@ -19,9 +19,9 @@ const LANGS = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'] as const;
 const PAGE = 100; // rows per page
 
 type Row = Record<string, any>;
-type Counts = { total: number; published: number; draft: number; byType: Record<string, number> };
+type Counts = { total: number; published: number; draft: number; hidden: number; byType: Record<string, number> };
 
-const ZERO_COUNTS: Counts = { total: 0, published: 0, draft: 0, byType: {} };
+const ZERO_COUNTS: Counts = { total: 0, published: 0, draft: 0, hidden: 0, byType: {} };
 
 const BLANK: Row = {
   id: null, slug: '', type: 'restaurant', district: '',
@@ -61,15 +61,16 @@ export default function DirectoryAdmin() {
   const loadCounts = useCallback(async () => {
     const head = (build: (q: any) => any) =>
       build(sb.from('directory_listings').select('*', { count: 'exact', head: true }));
-    const [total, published, draft, ...byTypeRes] = await Promise.all([
+    const [total, published, draft, hidden, ...byTypeRes] = await Promise.all([
       head((q) => q),
       head((q) => q.eq('status', 'published')),
       head((q) => q.eq('status', 'draft')),
+      head((q) => q.eq('status', 'hidden')),
       ...TYPES.map((t) => head((q) => q.eq('type', t))),
     ]);
     const byType: Record<string, number> = {};
     TYPES.forEach((t, i) => { byType[t] = byTypeRes[i]?.count || 0; });
-    setCounts({ total: total.count || 0, published: published.count || 0, draft: draft.count || 0, byType });
+    setCounts({ total: total.count || 0, published: published.count || 0, draft: draft.count || 0, hidden: hidden.count || 0, byType });
   }, [sb]);
 
   // ── the visible page of rows, filtered + ordered + paged on the server ──
@@ -212,13 +213,20 @@ export default function DirectoryAdmin() {
         <div className="row" style={{ alignItems: 'flex-start' }}>
           <div style={{ flex: '2 1 220px' }}><label className="fl">Website URL</label><input value={form.url} onChange={(e) => set('url', e.target.value)} placeholder="https://…" /></div>
           <div style={{ flex: '1 1 160px' }}><label className="fl">Phone</label><input value={form.phone} onChange={(e) => set('phone', e.target.value)} /></div>
-          <div style={{ flex: '2 1 220px' }}><label className="fl">Image URL</label><input value={form.image} onChange={(e) => set('image', e.target.value)} placeholder="https://… (optional)" /></div>
+          <div style={{ flex: '2 1 220px' }}>
+            <label className="fl">Image URL <span style={{ color: '#8a8371', fontWeight: 400 }}>— scraped photo; paste a new URL to replace</span></label>
+            <input value={form.image} onChange={(e) => set('image', e.target.value)} placeholder="https://… (optional)" />
+            {form.image ? (
+              <img src={form.image} alt="" style={{ marginTop: 8, width: '100%', maxWidth: 260, height: 130, objectFit: 'cover', borderRadius: 4, border: '1px solid #e3ddcf' }}
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+            ) : null}
+          </div>
         </div>
         <div className="row" style={{ alignItems: 'flex-start' }}>
           <div style={{ flex: '3 1 260px' }}><label className="fl">Tags (comma-separated)</label><input value={form.tags} onChange={(e) => set('tags', e.target.value)} placeholder="wine, troodos, pelendri" /></div>
           <div style={{ flex: '1 1 140px' }}>
             <label className="fl">Status</label>
-            <select value={form.status} onChange={(e) => set('status', e.target.value)}><option value="published">published</option><option value="draft">draft</option></select>
+            <select value={form.status} onChange={(e) => set('status', e.target.value)}><option value="published">published</option><option value="draft">draft</option><option value="hidden">hidden</option></select>
           </div>
           <label className="toggle" style={{ flex: '0 0 auto', marginTop: 22 }}>
             <input type="checkbox" style={{ width: 'auto', margin: 0 }} checked={!!form.featured} onChange={(e) => set('featured', e.target.checked)} /> Featured
@@ -247,6 +255,7 @@ export default function DirectoryAdmin() {
             <option value="all">All ({counts.total})</option>
             <option value="published">published ({counts.published})</option>
             <option value="draft">draft ({counts.draft})</option>
+            <option value="hidden">hidden · N. Cyprus ({counts.hidden})</option>
           </select>
         </div>
         <form

@@ -3,9 +3,10 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { DIRECTORY_TYPES, getListings } from '@/lib/queries';
+import { DIRECTORY_TYPES, getAllListings } from '@/lib/queries';
 import { breadcrumbJsonLd, itemListJsonLd, ld, pageMetadata } from '@/lib/seo';
 import DirectoryMap from '@/components/DirectoryMap';
+import CoverImage from '@/components/CoverImage';
 
 export const revalidate = 300;
 
@@ -27,10 +28,10 @@ export default async function DirectoryType({ params }: { params: Promise<{ loca
   setRequestLocale(locale);
   const l = locale as Locale;
   const t = await getTranslations();
-  const listings = await getListings(l, type);
+  const listings = await getAllListings(l, type);
   const label = t(`directory.${type}`);
   const points = listings.filter((x) => x.lat != null && x.lng != null)
-    .map((x) => ({ lat: x.lat as number, lng: x.lng as number, name: x.name, type: x.type, href: `/${l}/directory/${x.type}/${x.slug}` }));
+    .map((x) => ({ lat: x.lat as number, lng: x.lng as number, name: x.name, type: x.type, image: x.image, href: `/${l}/directory/${x.type}/${x.slug}` }));
   const crumbLd = breadcrumbJsonLd(l, [
     { name: t('brand.name'), path: '/' },
     { name: t('directory.title'), path: '/directory' },
@@ -54,12 +55,13 @@ export default async function DirectoryType({ params }: { params: Promise<{ loca
           <div className="grid g3">
             {listings.map((x) => (
               <article key={x.id} className="card">
-                <Link href={`/directory/${x.type}/${x.slug}`}>
-                  <span className="kicker">{x.district || label}{x.price_band ? ` · ${x.price_band}` : ''}</span>
-                  <h3>{x.name}</h3>
+                <Link href={`/directory/${x.type}/${x.slug}`} className="ph" aria-hidden="true" tabIndex={-1}>
+                  <CoverImage src={x.image} seed={x.slug} alt={x.name} className="ph-img" sizes="(max-width: 900px) 100vw, 33vw" />
                 </Link>
+                <span className="kicker">{x.district || label}{x.price_band ? ` · ${x.price_band}` : ''}</span>
+                <h3><Link href={`/directory/${x.type}/${x.slug}`}>{x.name}</Link></h3>
                 {x.verified ? <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, color: '#8a5b12', background: 'rgba(201,162,76,.16)', border: '1px solid #C9A24C', borderRadius: 999, padding: '1px 8px', margin: '2px 0 0' }}>✓ Verified</span> : null}
-                {x.summary ? <p className="dek">{x.summary}</p> : null}
+                {x.summary ? <p>{x.summary}</p> : null}
               </article>
             ))}
           </div>

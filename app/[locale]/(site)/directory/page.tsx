@@ -6,6 +6,7 @@ import { isLocale, type Locale } from '@/lib/locales';
 import { DIRECTORY_TYPES, getListings, getDirectoryMapPoints, getDirectoryCounts } from '@/lib/queries';
 import { breadcrumbJsonLd, itemListJsonLd, ld, pageMetadata } from '@/lib/seo';
 import DirectoryMap from '@/components/DirectoryMap';
+import CoverImage from '@/components/CoverImage';
 
 export const revalidate = 300;
 
@@ -31,7 +32,7 @@ export default async function DirectoryIndex({ params }: { params: Promise<{ loc
     getDirectoryCounts(),
     Promise.all(DIRECTORY_TYPES.map(async (ty) => ({ ty, items: await getListings(l, ty, PREVIEW) }))),
   ]);
-  const points = rawPoints.map((p) => ({ lat: p.lat, lng: p.lng, name: p.name, type: p.type, href: `/${l}/directory/${p.type}/${p.slug}` }));
+  const points = rawPoints.map((p) => ({ lat: p.lat, lng: p.lng, name: p.name, type: p.type, image: p.image, href: `/${l}/directory/${p.type}/${p.slug}` }));
   const typeLabels: Record<string, string> = Object.fromEntries(DIRECTORY_TYPES.map((ty) => [ty, t(`directory.${ty}`)]));
   const groups = previews.map((g) => ({ ...g, count: counts[g.ty] || 0 })).filter((g) => g.count > 0);
   const sample = previews.flatMap((g) => g.items).slice(0, 50);
@@ -67,11 +68,12 @@ export default async function DirectoryIndex({ params }: { params: Promise<{ loc
           <div className="grid g3">
             {items.slice(0, PREVIEW).map((x) => (
               <article key={x.id} className="card">
-                <Link href={`/directory/${x.type}/${x.slug}`}>
-                  <span className="kicker">{x.district || typeLabels[ty]}{x.price_band ? ` · ${x.price_band}` : ''}</span>
-                  <h3>{x.name}</h3>
+                <Link href={`/directory/${x.type}/${x.slug}`} className="ph" aria-hidden="true" tabIndex={-1}>
+                  <CoverImage src={x.image} seed={x.slug} alt={x.name} className="ph-img" sizes="(max-width: 900px) 100vw, 33vw" />
                 </Link>
-                {x.summary ? <p className="dek">{x.summary}</p> : null}
+                <span className="kicker">{x.district || typeLabels[ty]}{x.price_band ? ` · ${x.price_band}` : ''}</span>
+                <h3><Link href={`/directory/${x.type}/${x.slug}`}>{x.name}</Link></h3>
+                {x.summary ? <p>{x.summary}</p> : null}
               </article>
             ))}
           </div>
