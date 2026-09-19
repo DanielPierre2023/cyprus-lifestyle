@@ -30,10 +30,42 @@ const TYPE_DOT: Record<string, string> = { restaurant: '#C0492E', winery: '#7B2D
 const SPEECH_LANG: Record<string, string> = { en: 'en-GB', el: 'el-GR', ro: 'ro-RO', ar: 'ar-SA', de: 'de-DE', pl: 'pl-PL', ru: 'ru-RU' };
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function getSR(): any { return typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null; }
-// Premium read-aloud: use our server TTS (OpenAI neural voice) and play the mp3;
-// fall back to the browser voice only if that is unavailable.
+// Premium read-aloud: generate the reply as speech via our server TTS (OpenAI
+// neural voice) and play the mp3. Browsers block audio that isn't tied to a user
+// gesture (NotAllowedError), so we "prime" ONE reusable <audio> element on a real
+// click (the read-aloud toggle / Send); after that, later playback is allowed.
+// We never fall back to the browser voice for non-English text — it would read
+// Romanian/Greek/etc. in an English voice — so a non-English locale stays silent
+// if TTS is ever unavailable; English may use the browser voice as a last resort.
 let ttsAudio: HTMLAudioElement | null = null;
 let ttsUrl: string | null = null;
+let audioPrimed = false;
+
+function getAudioEl(): HTMLAudioElement | null {
+  if (typeof window === 'undefined') return null;
+  if (!ttsAudio) { ttsAudio = new Audio(); ttsAudio.preload = 'auto'; }
+  return ttsAudio;
+}
+// A ~0.05s silent WAV built at runtime, played within a gesture to unlock audio.
+function silentWav(): string {
+  const sr = 8000, n = 400, buf = new ArrayBuffer(44 + n * 2), dv = new DataView(buf);
+  const w = (o: number, s: string) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt '); dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true);
+  dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); w(36, 'data'); dv.setUint32(40, n * 2, true);
+  let bin = ''; const b = new Uint8Array(buf); for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+  return 'data:audio/wav;base64,' + btoa(bin);
+}
+// Must be called from a user gesture (toggle / Send) to unlock audio playback.
+function primeAudio() {
+  const a = getAudioEl(); if (!a || audioPrimed) return;
+  try {
+    a.src = silentWav();
+    const p = a.play();
+    if (p && typeof p.then === 'function') p.then(() => { audioPrimed = true; try { a.pause(); a.currentTime = 0; } catch { /* no-op */ } }).catch(() => { /* stays unprimed */ });
+    else audioPrimed = true;
+  } catch { /* no-op */ }
+}
 function browserSpeak(text: string, locale: string) {
   try {
     const s = window.speechSynthesis; if (!s || !text) return;
@@ -47,24 +79,25 @@ async function speak(text: string, locale: string) {
   const t = (text || '').trim();
   if (!t) return;
   stopSpeaking();
+  const a = getAudioEl();
   try {
     const res = await fetch('/api/concierge/tts', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: t.slice(0, 4000), locale }),
     });
-    if (!res.ok) throw new Error('tts');
+    if (!res.ok || !a) throw new Error('tts');
     const blob = await res.blob();
+    if (ttsUrl) { try { URL.revokeObjectURL(ttsUrl); } catch { /* no-op */ } ttsUrl = null; }
     ttsUrl = URL.createObjectURL(blob);
-    ttsAudio = new Audio(ttsUrl);
-    await ttsAudio.play();
+    a.src = ttsUrl;
+    await a.play();
   } catch {
-    browserSpeak(t, locale); // graceful fallback to the browser voice
+    if (locale === 'en') browserSpeak(t, locale); // English only; never a wrong-language voice
   }
 }
 function stopSpeaking() {
   try { window.speechSynthesis?.cancel(); } catch { /* no-op */ }
-  try { if (ttsAudio) { ttsAudio.pause(); ttsAudio = null; } } catch { /* no-op */ }
-  try { if (ttsUrl) { URL.revokeObjectURL(ttsUrl); ttsUrl = null; } } catch { /* no-op */ }
+  try { if (ttsAudio) ttsAudio.pause(); } catch { /* no-op */ }
 }
 
 export default function ConciergeChat({ locale, labels }: { locale: Locale; labels: ConciergeChatLabels }) {
@@ -130,7 +163,10 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
   }, [msgs, voiceOut, locale]);
 
   function toggleVoiceOut() {
-    setVoiceOut((v) => { const n = !v; try { localStorage.setItem('cl_voiceout', n ? '1' : '0'); } catch { /* ignore */ } if (!n) stopSpeaking(); return n; });
+    const turningOn = !voiceOut;
+    if (turningOn) primeAudio(); else stopSpeaking(); // unlock audio within this click
+    setVoiceOut(turningOn);
+    try { localStorage.setItem('cl_voiceout', turningOn ? '1' : '0'); } catch { /* ignore */ }
   }
 
   function toggleMic() {
@@ -189,6 +225,7 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
     const q = text.trim();
     if (q.length < 2 || busy) return;
     stopSpeaking();
+    if (voiceOut) primeAudio(); // Send is a user gesture — unlock audio for the reply
     setInput('');
     setReq(null);
     const history: Msg[] = [...msgs, { role: 'user', content: q }];
