@@ -30,7 +30,11 @@ const TYPE_DOT: Record<string, string> = { restaurant: '#C0492E', winery: '#7B2D
 const SPEECH_LANG: Record<string, string> = { en: 'en-GB', el: 'el-GR', ro: 'ro-RO', ar: 'ar-SA', de: 'de-DE', pl: 'pl-PL', ru: 'ru-RU' };
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function getSR(): any { return typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null; }
-function speak(text: string, locale: string) {
+// Premium read-aloud: use our server TTS (OpenAI neural voice) and play the mp3;
+// fall back to the browser voice only if that is unavailable.
+let ttsAudio: HTMLAudioElement | null = null;
+let ttsUrl: string | null = null;
+function browserSpeak(text: string, locale: string) {
   try {
     const s = window.speechSynthesis; if (!s || !text) return;
     s.cancel();
@@ -39,7 +43,29 @@ function speak(text: string, locale: string) {
     s.speak(u);
   } catch { /* no-op */ }
 }
-function stopSpeaking() { try { window.speechSynthesis?.cancel(); } catch { /* no-op */ } }
+async function speak(text: string, locale: string) {
+  const t = (text || '').trim();
+  if (!t) return;
+  stopSpeaking();
+  try {
+    const res = await fetch('/api/concierge/tts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: t.slice(0, 4000), locale }),
+    });
+    if (!res.ok) throw new Error('tts');
+    const blob = await res.blob();
+    ttsUrl = URL.createObjectURL(blob);
+    ttsAudio = new Audio(ttsUrl);
+    await ttsAudio.play();
+  } catch {
+    browserSpeak(t, locale); // graceful fallback to the browser voice
+  }
+}
+function stopSpeaking() {
+  try { window.speechSynthesis?.cancel(); } catch { /* no-op */ }
+  try { if (ttsAudio) { ttsAudio.pause(); ttsAudio = null; } } catch { /* no-op */ }
+  try { if (ttsUrl) { URL.revokeObjectURL(ttsUrl); ttsUrl = null; } } catch { /* no-op */ }
+}
 
 export default function ConciergeChat({ locale, labels }: { locale: Locale; labels: ConciergeChatLabels }) {
   const rtl = locale === 'ar';
