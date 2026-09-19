@@ -278,13 +278,13 @@ export type StreamEvent =
   | { type: 'error'; error: string }
   | { type: 'done' };
 
-export async function* streamConcierge(messages: ChatMessage[], locale: string, memoryBlock = ''): AsyncGenerator<StreamEvent> {
+export async function* streamConcierge(messages: ChatMessage[], locale: string, memoryBlock = '', memberBlock = ''): AsyncGenerator<StreamEvent> {
   const loc = isConciergeLocale(locale) ? locale : 'en';
   const history = sanitizeHistory(messages);
   const q = latestUserText(history);
   yield { type: 'status', label: 'searching' };
   const ctx = await assembleContext(loc, q);
-  const system = conciergeSystem(loc) + (memoryBlock || '') + groundingBlock(ctx, loc);
+  const system = conciergeSystem(loc) + (memoryBlock || '') + (memberBlock || '') + groundingBlock(ctx, loc);
   yield { type: 'status', label: 'composing' };
 
   let gotText = false;

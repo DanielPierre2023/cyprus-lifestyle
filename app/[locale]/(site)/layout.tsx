@@ -32,6 +32,7 @@ export default async function SiteLayout({
     voice: {
       speak: t('concierge.chat.voice.speak'), listening: t('concierge.chat.voice.listening'), readAloud: t('concierge.chat.voice.readAloud'),
     },
+    member: t('concierge.chat.member'),
   };
 
   return (

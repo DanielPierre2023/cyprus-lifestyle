@@ -8,6 +8,7 @@ import { NextRequest, after } from 'next/server';
 import { rateLimit } from '@/lib/ratelimit';
 import { streamConcierge, latestUserText, type ChatMessage } from '@/lib/concierge/brain';
 import { loadMemory, renderMemory, updateMemory, isValidCid, type MemoryProfile } from '@/lib/concierge/memory';
+import { isMemberCid, MEMBER_BLOCK } from '@/lib/concierge/membership';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -24,8 +25,12 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'empty' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const memory: MemoryProfile = cid ? await loadMemory(cid) : {};
+  const [memory, member] = await Promise.all([
+    cid ? loadMemory(cid) : Promise.resolve({} as MemoryProfile),
+    cid ? isMemberCid(cid) : Promise.resolve(false),
+  ]);
   const memoryBlock = renderMemory(memory);
+  const memberBlock = member ? MEMBER_BLOCK : '';
   const lastUser = latestUserText(rawMessages);
 
   const encoder = new TextEncoder();
@@ -34,7 +39,7 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       const send = (obj: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
       try {
-        for await (const evt of streamConcierge(rawMessages, locale, memoryBlock)) {
+        for await (const evt of streamConcierge(rawMessages, locale, memoryBlock, memberBlock)) {
           if (evt.type === 'delta') collected += evt.text;
           send(evt);
         }

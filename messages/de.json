@@ -234,7 +234,26 @@
       ]
     },
     "soon": "Die kostenpflichtige Mitgliedschaft ist noch nicht geöffnet. Treten Sie kostenlos als Leser bei, dann erfahren Sie als Erste, wenn die Förderer-Stufe startet.",
-    "note": "Fragen zur Mitgliedschaft oder zu Firmenabonnements? Schreiben Sie uns über"
+    "note": "Fragen zur Mitgliedschaft oder zu Firmenabonnements? Schreiben Sie uns über",
+    "concierge": {
+      "name": "Concierge-Mitgliedschaft",
+      "tagline": "Ihr persönlicher Concierge für Zypern.",
+      "perMonth": "/ Monat",
+      "features": [
+        "Bevorzugter Concierge — immer zuerst",
+        "Ein persönlicher Concierge für alles Maßgeschneiderte",
+        "Ihre Reisen & Vorlieben, gemerkt",
+        "Die ganze Insel, für Sie kuratiert"
+      ],
+      "cta": "Mitglied werden",
+      "sending": "Sichere Bezahlung wird geöffnet…",
+      "active": "Sie sind Mitglied — vielen Dank.",
+      "welcome": "Willkommen. Ihr Concierge ist bereit — achten Sie auf die Glocke.",
+      "restorePrompt": "Schon Mitglied auf einem anderen Gerät?",
+      "emailPh": "Ihre E-Mail",
+      "restore": "Wiederherstellen",
+      "notConfigured": "Mitgliedschaften starten in Kürze — bitte später erneut versuchen."
+    }
   },
   "collections": {
     "heading": "Die besten {type} in {place}",
@@ -305,7 +324,8 @@
         "speak": "Sprechen",
         "listening": "Ich höre zu…",
         "readAloud": "Antworten vorlesen"
-      }
+      },
+      "member": "Mitglied"
     }
   },
   "recent": {

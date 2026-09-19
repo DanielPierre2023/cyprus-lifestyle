@@ -24,6 +24,22 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString();
 
   try {
+    const meta = (obj.metadata as Record<string, string>) || {};
+    // Concierge membership — handled here so one Stripe endpoint covers both flows.
+    if (type === 'checkout.session.completed' && meta.kind === 'membership') {
+      const md = (obj.customer_details as Record<string, unknown>) || {};
+      await sb.from('concierge_members').upsert({
+        cid: meta.cid || (obj.client_reference_id as string) || null,
+        email: (md.email as string) || (obj.customer_email as string) || null,
+        tier: meta.tier || 'concierge',
+        status: 'active',
+        stripe_customer_id: (obj.customer as string) || null,
+        stripe_subscription_id: (obj.subscription as string) || null,
+        stripe_session_id: (obj.id as string) || null,
+        updated_at: now,
+      }, { onConflict: 'stripe_subscription_id' });
+      return NextResponse.json({ received: true });
+    }
     if (type === 'checkout.session.completed') {
       const orderId = (obj.client_reference_id as string) || ((obj.metadata as Record<string, string>)?.order_id);
       const details = (obj.customer_details as Record<string, unknown>) || {};
@@ -69,9 +85,15 @@ export async function POST(req: NextRequest) {
         }
       }
     } else if (type === 'customer.subscription.deleted') {
-      if (obj.id) await sb.from('ad_orders').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
+      if (obj.id) {
+        await sb.from('ad_orders').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
+        await sb.from('concierge_members').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
+      }
     } else if (type === 'invoice.payment_failed') {
-      if (obj.subscription) await sb.from('ad_orders').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
+      if (obj.subscription) {
+        await sb.from('ad_orders').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
+        await sb.from('concierge_members').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
+      }
     }
   } catch {
     // Never fail the webhook on our own logic error — Stripe would retry endlessly.

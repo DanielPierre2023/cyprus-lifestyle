@@ -5,6 +5,7 @@ import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
 import { breadcrumbJsonLd, ld, pageMetadata } from '@/lib/seo';
 import NewsletterSignup from '@/components/NewsletterSignup';
+import MembershipCheckout from '@/components/MembershipCheckout';
 
 export const revalidate = 3600;
 
@@ -24,6 +25,12 @@ export default async function MembershipPage({ params }: { params: Promise<{ loc
 
   const free = t.raw('membership.free') as { name: string; price: string; cta: string; features: string[] };
   const patron = t.raw('membership.patron') as { name: string; price: string; features: string[] };
+  const conc = t.raw('membership.concierge') as {
+    name: string; tagline: string; perMonth: string; features: string[];
+    cta: string; sending: string; active: string; welcome: string;
+    restorePrompt: string; emailPh: string; restore: string; notConfigured: string;
+  };
+  const priceEur = process.env.MEMBERSHIP_PRICE_EUR || '19';
   const crumbLd = breadcrumbJsonLd(l, [{ name: t('brand.name'), path: '/' }, { name: t('membership.title'), path: '/membership' }]);
 
   return (
@@ -56,6 +63,16 @@ export default async function MembershipPage({ params }: { params: Promise<{ loc
               {patron.features.map((f, i) => <li key={i} style={{ padding: '6px 0', borderBottom: '1px solid #f0ece0' }}>{f}</li>)}
             </ul>
             <p style={{ color: '#8a8371', fontSize: 13.5, margin: 0 }}>{t('membership.soon')}</p>
+          </div>
+
+          <div style={{ border: '1px solid #C9A24C', borderRadius: 6, padding: '24px 22px', background: 'linear-gradient(180deg,#1c1710,#2a2114)', color: '#f1e9d8' }}>
+            <div className="kicker" style={{ color: '#E9C978' }}>{conc.name}</div>
+            <div className="display" style={{ fontSize: 34, margin: '6px 0 0', color: '#fff' }}>€{priceEur} <span style={{ fontSize: 15, color: '#c9bfa6' }}>{conc.perMonth}</span></div>
+            <p style={{ fontFamily: 'var(--body)', fontStyle: 'italic', color: '#c9bfa6', margin: '4px 0 0', fontSize: 14.5 }}>{conc.tagline}</p>
+            <ul style={{ listStyle: 'none', padding: 0, margin: '16px 0 20px' }}>
+              {conc.features.map((f, i) => <li key={i} style={{ padding: '7px 0', borderBottom: '1px solid rgba(201,162,76,.22)', fontSize: 15 }}>◆&nbsp;&nbsp;{f}</li>)}
+            </ul>
+            <MembershipCheckout labels={{ cta: conc.cta, sending: conc.sending, active: conc.active, welcome: conc.welcome, restorePrompt: conc.restorePrompt, emailPh: conc.emailPh, restore: conc.restore, notConfigured: conc.notConfigured }} />
           </div>
         </div>
 

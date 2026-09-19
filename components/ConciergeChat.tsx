@@ -18,6 +18,7 @@ export interface ConciergeChatLabels {
   trust: string; trustLink: string;
   mem: { welcome: string; title: string; note: string; forget: string; name: string; base: string; party: string; dates: string; interests: string; dietary: string; status: string };
   voice: { speak: string; listening: string; readAloud: string };
+  member: string;
 }
 interface MemoryProfile { name?: string; language?: string; interests?: string[]; base?: string; party?: string; dates?: string; dietary?: string; status?: string; notes?: string; }
 interface Pick { slug: string; type: string; name: string; district: string | null; rating: number | null; rating_count: number | null; price_band: string | null; image: string | null; verified?: boolean; }
@@ -58,6 +59,33 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
   const [voiceOut, setVoiceOut] = useState(false);
   const recRef = useRef<any>(null); // SpeechRecognition instance
   const spokenRef = useRef<Set<number>>(new Set());
+  const [proactive, setProactive] = useState<{ greeting: string; chips: string[] } | null>(null);
+  const proactiveFetched = useRef(false);
+  const [isMember, setIsMember] = useState(false);
+  const memberFetched = useRef(false);
+
+  // Recognise a concierge member (by the browser cid) → show the Member mark.
+  useEffect(() => {
+    if (!open || memberFetched.current) return;
+    memberFetched.current = true;
+    const cid = cidRef.current;
+    if (!cid) return;
+    fetch(`/api/membership/status?cid=${encodeURIComponent(cid)}`)
+      .then((r) => r.json()).then((d) => { if (d && d.member) setIsMember(true); })
+      .catch(() => { /* free tier */ });
+  }, [open]);
+
+  // Proactive opener: on first open, fetch a timely greeting + suggestions
+  // grounded on the season, what's on, and memory. Falls back to the static one.
+  useEffect(() => {
+    if (!open || proactiveFetched.current) return;
+    proactiveFetched.current = true;
+    const cid = cidRef.current;
+    fetch(`/api/concierge/proactive?locale=${encodeURIComponent(locale)}${cid ? `&cid=${encodeURIComponent(cid)}` : ''}`)
+      .then((r) => r.json())
+      .then((d) => { if (d && d.ok && d.greeting) setProactive({ greeting: d.greeting, chips: Array.isArray(d.chips) ? d.chips : [] }); })
+      .catch(() => { /* keep the static opener */ });
+  }, [open, locale]);
 
   useEffect(() => {
     setVoiceSupported(!!getSR());
@@ -218,7 +246,7 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
         <div className="cc-scrim" onClick={() => setOpen(false)}>
           <section className="cc-panel" onClick={(e) => e.stopPropagation()} aria-label={labels.title}>
             <header className="cc-head">
-              <span className="cc-head-t"><span className="cc-diamond" aria-hidden="true" />{labels.title}</span>
+              <span className="cc-head-t"><span className="cc-diamond" aria-hidden="true" />{labels.title}{isMember && <span className="cc-member">{labels.member}</span>}</span>
               <span className="cc-head-actions">
                 <button className={`cc-ghost cc-voiceout${voiceOut ? ' on' : ''}`} aria-pressed={voiceOut} aria-label={labels.voice.readAloud} title={labels.voice.readAloud} onClick={toggleVoiceOut}>
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -250,10 +278,10 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
             <div className="cc-stream" ref={streamRef}>
               {empty && (
                 <div className="cc-welcome">
-                  {hasMem && <p className="cc-wb">✦ {labels.mem.welcome}{mem?.name ? `, ${mem.name}` : ''}</p>}
-                  <p className="cc-greeting">{labels.greeting}</p>
+                  {hasMem && !proactive && <p className="cc-wb">✦ {labels.mem.welcome}{mem?.name ? `, ${mem.name}` : ''}</p>}
+                  <p className="cc-greeting">{proactive?.greeting || labels.greeting}</p>
                   <div className="cc-starters">
-                    {labels.examples.map((ex) => (
+                    {(proactive?.chips?.length ? proactive.chips : labels.examples).map((ex) => (
                       <button key={ex} className="cc-starter" onClick={() => send(ex)}>{ex}</button>
                     ))}
                   </div>
@@ -367,6 +395,7 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
           background:color-mix(in srgb, var(--paper,#F3EDDF) 82%, transparent);backdrop-filter:blur(6px)}
         .cc-head-t{font-family:var(--disp,'Playfair Display',serif);font-size:20px;color:var(--ink,#1C1710);display:flex;align-items:center;gap:9px}
         .cc-diamond{width:7px;height:7px;background:#C9A24C;transform:rotate(45deg);display:inline-block}
+        .cc-member{margin-inline-start:8px;font-family:var(--sans,'Jost',sans-serif);font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#8a5b12;border:1px solid #C9A24C;border-radius:999px;padding:2px 8px;vertical-align:middle}
         .cc-head-actions{display:flex;align-items:center;gap:6px}
         .cc-ghost{background:none;border:0;color:var(--ink-soft,#6E6455);font-family:var(--sans,'Jost',sans-serif);font-size:12.5px;cursor:pointer;padding:6px 8px;border-radius:6px}
         .cc-ghost:hover{color:var(--ink,#1C1710);background:var(--paper-2,#EAE1CC)}
