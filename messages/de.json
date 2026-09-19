@@ -321,5 +321,19 @@
     "culture": "Kultur & Erlebnisse",
     "community": "Bildung & Gemeinschaft",
     "mobility": "Mobilität"
+  },
+  "whenToVisit": {
+    "kicker": "Planen Sie Ihren Besuch",
+    "title": "Wann Zypern besuchen",
+    "intro": "Ein halbes Jahr lang warm, trocken und badetauglich. Hier ist die Insel Monat für Monat — Tagestemperatur, Wassertemperatur und ob Strandwetter herrscht.",
+    "month": "Monat",
+    "day": "Tag °C",
+    "sea": "Meer",
+    "swimming": "Baden",
+    "yes": "Strandwetter",
+    "shoulder": "Nebensaison",
+    "no": "Außerhalb der Saison",
+    "best": "Das Meer ist im August und September am wärmsten, aber Mai, Juni, Oktober und Anfang November sind herrlich zum Baden — mit weniger Andrang. Der Winter ist mild und grün, eher zum Entdecken als für den Strand; ab Oktober kühlen die Abende rasch ab, also eine leichte Jacke einpacken.",
+    "askCta": "Fragen Sie den Concierge zu Ihren Terminen"
   }
 }

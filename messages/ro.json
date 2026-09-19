@@ -321,5 +321,19 @@
     "culture": "Cultură & Experiențe",
     "community": "Educație & Comunitate",
     "mobility": "Transport"
+  },
+  "whenToVisit": {
+    "kicker": "Planifică-ți vizita",
+    "title": "Când să vizitezi Ciprul",
+    "intro": "Cald, uscat și bun de scăldat jumătate de an. Iată insula lună cu lună — temperatura zilei, temperatura mării și dacă e vreme de plajă.",
+    "month": "Luna",
+    "day": "Ziua °C",
+    "sea": "Marea",
+    "swimming": "Scăldat",
+    "yes": "Vreme de plajă",
+    "shoulder": "Sezon intermediar",
+    "no": "Extrasezon",
+    "best": "Marea e cea mai caldă în august și septembrie, dar mai, iunie, octombrie și începutul lui noiembrie sunt minunate pentru scăldat, cu mai puțină aglomerație. Iarna e blândă și verde — mai potrivită pentru explorare decât pentru plajă; serile din octombrie se răcesc repede, așa că ia o jachetă subțire.",
+    "askCta": "Întreabă concierge-ul despre datele tale"
   }
 }

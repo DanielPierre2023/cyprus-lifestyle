@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { isLocale, type Locale } from '@/lib/locales';
+import { Link } from '@/lib/i18n/routing';
 import { breadcrumbJsonLd, ld, pageMetadata } from '@/lib/seo';
 import Concierge, { type ConciergeLabels } from '@/components/Concierge';
 
@@ -55,6 +56,9 @@ export default async function AskPage({ params }: { params: Promise<{ locale: st
       </div>
       <div className="wrap section">
         <Concierge locale={l} labels={labels} autofocus />
+        <p style={{ marginTop: 22, fontFamily: 'var(--sans)', fontSize: 15 }}>
+          <Link href="/when-to-visit">{t('whenToVisit.title')} →</Link>
+        </p>
       </div>
     </>
   );

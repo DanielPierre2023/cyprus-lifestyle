@@ -321,5 +321,19 @@
     "culture": "Kultura & Doświadczenia",
     "community": "Edukacja & Społeczność",
     "mobility": "Transport"
+  },
+  "whenToVisit": {
+    "kicker": "Zaplanuj wizytę",
+    "title": "Kiedy odwiedzić Cypr",
+    "intro": "Ciepło, sucho i można się kąpać przez pół roku. Oto wyspa miesiąc po miesiącu — temperatura w dzień, temperatura morza i czy jest pogoda na plażę.",
+    "month": "Miesiąc",
+    "day": "Dzień °C",
+    "sea": "Morze",
+    "swimming": "Kąpiel",
+    "yes": "Pogoda na plażę",
+    "shoulder": "Sezon przejściowy",
+    "no": "Poza sezonem",
+    "best": "Morze jest najcieplejsze w sierpniu i wrześniu, ale maj, czerwiec, październik i początek listopada są wspaniałe do kąpieli, przy mniejszym tłoku. Zima jest łagodna i zielona — bardziej do zwiedzania niż na plażę; od października wieczory szybko się ochładzają, więc weź lekką kurtkę.",
+    "askCta": "Zapytaj concierge’a o swoje terminy"
   }
 }

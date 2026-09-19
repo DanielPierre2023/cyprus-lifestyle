@@ -321,5 +321,19 @@
     "culture": "Culture & Experiences",
     "community": "Education & Community",
     "mobility": "Getting Around"
+  },
+  "whenToVisit": {
+    "kicker": "Plan your visit",
+    "title": "When to visit Cyprus",
+    "intro": "Warm, dry and swimmable for half the year. Here's the island month by month — day temperature, sea temperature, and whether it's beach weather.",
+    "month": "Month",
+    "day": "Day °C",
+    "sea": "Sea",
+    "swimming": "Swimming",
+    "yes": "Beach weather",
+    "shoulder": "Shoulder season",
+    "no": "Off-season",
+    "best": "The sea is warmest in August and September, but May, June, October and early November are gloriously swimmable with lighter crowds. Winter is mild and green — made for exploring more than for the beach; evenings from October cool quickly, so pack a light jacket.",
+    "askCta": "Ask the concierge about your dates"
   }
 }
