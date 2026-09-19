@@ -13,8 +13,9 @@
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { CLAUDE_SONNET } from '@/lib/ai';
-import { retrieveKnowledge, guideHref, type QAHit } from '@/lib/knowledge/qa';
+import { retrieveKnowledge, guideHref, QA_INDEX, type QAHit } from '@/lib/knowledge/qa';
 import { localizedIntent } from '@/lib/knowledge/qa.i18n';
+import { embedText } from '@/lib/concierge/embed';
 
 export const CONCIERGE_MODEL = process.env.SONNET_MODEL || CLAUDE_SONNET;
 
@@ -135,10 +136,38 @@ export async function searchDirectory(locale: string, q: string, limit = 8): Pro
   return out.slice(0, limit);
 }
 
+// Semantic KB recall (pgvector). Returns intent ids by similarity, or [] when
+// embeddings aren't configured yet — so the concierge always falls back to keyword.
+async function vectorKbIds(query: string): Promise<string[]> {
+  const vec = await embedText(query);
+  if (!vec) return [];
+  try {
+    const { data, error } = await supabaseAdmin().rpc('match_kb', { query_embedding: vec, match_count: 6 });
+    if (error || !Array.isArray(data)) return [];
+    return (data as { id: string }[]).map((r) => String(r.id)).filter(Boolean);
+  } catch { return []; }
+}
+
+// Merge keyword hits (precise on exact terms) with semantic hits (oblique wording).
+function mergeKbHits(keyword: QAHit[], vecIds: string[], max = 6): QAHit[] {
+  const out: QAHit[] = [...keyword];
+  const seen = new Set(keyword.map((h) => h.item.id));
+  for (const id of vecIds) {
+    if (seen.has(id)) continue;
+    const hit = QA_INDEX[id];
+    if (hit) { out.push(hit); seen.add(id); }
+  }
+  return out.slice(0, max);
+}
+
 // ── Assemble the grounded context for one turn (from the latest user message) ──
 export async function assembleContext(locale: string, latestUser: string): Promise<ConciergeContext> {
-  const kb = retrieveKnowledge(latestUser, 5);
-  const candidates = await searchDirectory(locale, latestUser, 8);
+  const kbKeyword = retrieveKnowledge(latestUser, 5);
+  const [candidates, kbVecIds] = await Promise.all([
+    searchDirectory(locale, latestUser, 8),
+    vectorKbIds(latestUser), // [] unless OPENAI_API_KEY + embeddings exist → keyword-only fallback
+  ]);
+  const kb = mergeKbHits(kbKeyword, kbVecIds);
   const guides: GuideLink[] = kb.slice(0, 4).map((h) => ({ label: localizedIntent(h.item.id, locale).q, path: guideHref(h.item.id) }));
   const canRoute = candidates.length > 0 || kb.some((h) => h.item.connect.length > 0);
   return { candidates, picks: candidates.slice(0, 6), guides, kb, canRoute };
