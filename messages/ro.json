@@ -263,7 +263,18 @@
       "Crame de vizitat lângă Limassol",
       "Cine construiește apartamente noi în Limassol?"
     ],
-    "picksTitle": "Recomandate pentru tine"
+    "picksTitle": "Recomandate pentru tine",
+    "req": {
+      "title": "Să ne ocupăm noi?",
+      "intro": "Trimite asta ca solicitare și o direcționăm către locurile potrivite — lasă un email dacă vrei un răspuns.",
+      "emailPh": "Emailul tău (opțional)",
+      "notePh": "Orice altceva — dată, număr de persoane, buget… (opțional)",
+      "send": "Trimite solicitarea",
+      "sending": "Se trimite…",
+      "sent": "Trimis — preluăm noi de aici.",
+      "trust": "Independent — sponsorizarea nu cumpără niciodată o evaluare.",
+      "trustLink": "Cum lucrăm"
+    }
   },
   "recent": {
     "title": "Vizualizate recent"
@@ -284,5 +295,15 @@
     "thePlace": "Locul",
     "whileIn": "Cât timp ești în {place}",
     "exploreDirectory": "Explorează catalogul"
+  },
+  "trust": {
+    "independent": "Independent — sponsorizarea nu cumpără niciodată o evaluare.",
+    "link": "Cum lucrăm"
+  },
+  "luxury": {
+    "kicker": "Selecție",
+    "title": "Colecția de Lux",
+    "intro": "Cele mai fine locuri ale insulei, în fiecare categorie — adresele pentru care merită să traversezi Ciprul.",
+    "strip": "Cele mai fine locuri ale insulei, selectate"
   }
 }

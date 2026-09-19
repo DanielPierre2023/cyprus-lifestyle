@@ -263,7 +263,18 @@
       "Wineries to visit near Limassol",
       "Who builds new apartments in Limassol?"
     ],
-    "picksTitle": "Recommended for you"
+    "picksTitle": "Recommended for you",
+    "req": {
+      "title": "Shall we arrange it?",
+      "intro": "Send this as a request and we'll route it to the right places — leave an email if you'd like a reply.",
+      "emailPh": "Your email (optional)",
+      "notePh": "Anything else — date, party size, budget… (optional)",
+      "send": "Send request",
+      "sending": "Sending…",
+      "sent": "Sent — we'll take it from here.",
+      "trust": "Independent — sponsorship never buys a rating.",
+      "trustLink": "How we work"
+    }
   },
   "recent": {
     "title": "Recently viewed"
@@ -284,5 +295,15 @@
     "thePlace": "The place",
     "whileIn": "While you're in {place}",
     "exploreDirectory": "Explore the directory"
+  },
+  "trust": {
+    "independent": "Independent — sponsorship never buys a rating.",
+    "link": "How we work"
+  },
+  "luxury": {
+    "kicker": "Curated",
+    "title": "The Luxury Collection",
+    "intro": "The island's finest, across every category — the addresses worth crossing Cyprus for.",
+    "strip": "The island's finest, curated"
   }
 }

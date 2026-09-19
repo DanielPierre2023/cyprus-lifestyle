@@ -191,6 +191,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
           </div>
           {points.length ? <div className="lh-map"><DirectoryMap points={points} height={300} locale={l} typeLabels={typeLabels} viewLabel={t('directory.view')} placesLabel={t('directory.places')} ariaLabel={t('directory.mapAria')} /></div> : null}
           <EnquiryForm listingSlug={x.slug} listingType={x.type} listingName={x.name} locale={l} labels={enqLabels} />
+          <p className="lh-trust">◆ {t('trust.independent')} <Link href="/standards">{t('trust.link')} →</Link></p>
         </aside>
       </div>
 
@@ -237,6 +238,8 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
         .lh-actions{display:flex;flex-direction:column;gap:9px}
         .lh-actions .btn{text-align:center}
         .lh-map{border-radius:6px;overflow:hidden}
+        .lh-trust{font-family:var(--sans);font-size:12px;color:var(--ink-soft,#5b5346);line-height:1.5;margin:2px 0 0}
+        .lh-trust a{color:#8a5b12;font-weight:600}
         @media (max-width:900px){.lh-grid{grid-template-columns:1fr;gap:26px}.lh-side{position:static}}
       `}</style>
     </>

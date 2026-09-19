@@ -32,6 +32,12 @@ export default async function AskPage({ params }: { params: Promise<{ locale: st
     examplesTitle: t('concierge.examplesTitle'),
     examples: (t.raw('concierge.examples') as string[]) || [],
     picksTitle: t('concierge.picksTitle'),
+    req: {
+      title: t('concierge.req.title'), intro: t('concierge.req.intro'),
+      emailPh: t('concierge.req.emailPh'), notePh: t('concierge.req.notePh'),
+      send: t('concierge.req.send'), sending: t('concierge.req.sending'), sent: t('concierge.req.sent'),
+      trust: t('concierge.req.trust'), trustLink: t('concierge.req.trustLink'),
+    },
   };
   const crumbLd = breadcrumbJsonLd(l, [
     { name: t('brand.name'), path: '/' },

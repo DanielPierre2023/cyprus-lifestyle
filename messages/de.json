@@ -263,7 +263,18 @@
       "Weingüter bei Limassol",
       "Wer baut neue Apartments in Limassol?"
     ],
-    "picksTitle": "Für Sie empfohlen"
+    "picksTitle": "Für Sie empfohlen",
+    "req": {
+      "title": "Sollen wir es arrangieren?",
+      "intro": "Senden Sie dies als Anfrage — wir leiten sie an die richtigen Stellen weiter. Hinterlassen Sie eine E-Mail, wenn Sie eine Antwort möchten.",
+      "emailPh": "Ihre E-Mail (optional)",
+      "notePh": "Sonstiges — Datum, Personenzahl, Budget… (optional)",
+      "send": "Anfrage senden",
+      "sending": "Senden…",
+      "sent": "Gesendet — wir übernehmen ab hier.",
+      "trust": "Unabhängig — Sponsoring erkauft niemals eine Bewertung.",
+      "trustLink": "Wie wir arbeiten"
+    }
   },
   "recent": {
     "title": "Zuletzt angesehen"
@@ -284,5 +295,15 @@
     "thePlace": "Der Ort",
     "whileIn": "Während Sie in {place} sind",
     "exploreDirectory": "Zum Verzeichnis"
+  },
+  "trust": {
+    "independent": "Unabhängig — Sponsoring erkauft niemals eine Bewertung.",
+    "link": "Wie wir arbeiten"
+  },
+  "luxury": {
+    "kicker": "Kuratiert",
+    "title": "Die Luxus-Kollektion",
+    "intro": "Das Feinste der Insel, in jeder Kategorie — die Adressen, für die sich der Weg quer durch Zypern lohnt.",
+    "strip": "Das Feinste der Insel, kuratiert"
   }
 }

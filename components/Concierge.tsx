@@ -8,6 +8,11 @@ import { Link } from '@/lib/i18n/routing';
 import CoverImage from '@/components/CoverImage';
 import type { Locale } from '@/lib/locales';
 
+export interface ConciergeReqLabels {
+  title: string; intro: string; emailPh: string; notePh: string;
+  send: string; sending: string; sent: string; trust: string; trustLink: string;
+}
+
 export interface ConciergePick {
   slug: string; type: string; name: string; district: string | null;
   rating: number | null; rating_count: number | null; price_band: string | null;
@@ -16,6 +21,7 @@ export interface ConciergePick {
 export interface ConciergeLabels {
   placeholder: string; ask: string; thinking: string; error: string;
   examplesTitle: string; examples: string[]; picksTitle: string;
+  req: ConciergeReqLabels;
 }
 
 const TYPE_DOT: Record<string, string> = {
@@ -30,11 +36,27 @@ export default function Concierge({ locale, labels, autofocus = false }: { local
   const [picks, setPicks] = useState<ConciergePick[]>([]);
   const [error, setError] = useState('');
   const [asked, setAsked] = useState(false);
+  const [reqEmail, setReqEmail] = useState('');
+  const [reqNote, setReqNote] = useState('');
+  const [reqState, setReqState] = useState<'idle' | 'sending' | 'sent'>('idle');
+
+  async function sendRequest() {
+    if (reqState === 'sending' || reqState === 'sent') return;
+    setReqState('sending');
+    try {
+      const res = await fetch('/api/concierge/request', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q, answer, picks, email: reqEmail, note: reqNote, locale }),
+      });
+      const d = await res.json();
+      setReqState(d.ok ? 'sent' : 'idle');
+    } catch { setReqState('idle'); }
+  }
 
   async function ask(question: string) {
     const query = question.trim();
     if (query.length < 3 || loading) return;
-    setLoading(true); setError(''); setAsked(true);
+    setLoading(true); setError(''); setAsked(true); setReqState('idle');
     try {
       const res = await fetch('/api/concierge', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -100,8 +122,39 @@ export default function Concierge({ locale, labels, autofocus = false }: { local
         </>
       ) : null}
 
+      {!loading && picks.length ? (
+        <div className="cnc-req">
+          {reqState === 'sent' ? (
+            <p className="cnc-req-sent">✓ {labels.req.sent}</p>
+          ) : (
+            <>
+              <div className="cnc-req-h">{labels.req.title}</div>
+              <p className="cnc-req-i">{labels.req.intro}</p>
+              <div className="cnc-req-row">
+                <input className="cnc-req-in" type="email" placeholder={labels.req.emailPh} value={reqEmail} onChange={(e) => setReqEmail(e.target.value)} aria-label={labels.req.emailPh} />
+                <button className="btn cnc-req-go" type="button" onClick={sendRequest} disabled={reqState === 'sending'}>{reqState === 'sending' ? labels.req.sending : labels.req.send}</button>
+              </div>
+              <input className="cnc-req-in cnc-req-note" placeholder={labels.req.notePh} value={reqNote} onChange={(e) => setReqNote(e.target.value)} aria-label={labels.req.notePh} />
+            </>
+          )}
+          <p className="cnc-trust">◆ {labels.req.trust} <Link href="/standards">{labels.req.trustLink} →</Link></p>
+        </div>
+      ) : null}
+
       <style>{`
         .cnc{max-width:760px}
+        .cnc-req{margin-top:22px;border:1px solid var(--line,#e0d6c1);border-radius:8px;background:var(--paper-2,#efe8d8);padding:18px 18px 16px}
+        .cnc-req-h{font-family:var(--disp);font-size:19px;color:var(--ink,#171310)}
+        .cnc-req-i{font-family:var(--body);font-size:14.5px;color:var(--ink-soft,#5b5346);margin:4px 0 12px}
+        .cnc-req-row{display:flex;gap:10px}
+        .cnc-req-in{flex:1;min-width:0;font-family:var(--body);font-size:15px;padding:10px 12px;border:1px solid var(--line,#e0d6c1);border-radius:6px;background:#fff;color:var(--ink,#171310)}
+        .cnc-req-in:focus{outline:none;border-color:#C9A24C;box-shadow:0 0 0 3px rgba(201,162,76,.16)}
+        .cnc-req-note{margin-top:10px;width:100%}
+        .cnc-req-go{white-space:nowrap}
+        .cnc-req-go:disabled{opacity:.55}
+        .cnc-req-sent{font-family:var(--body);font-size:16px;color:#2f6b2f;margin:0}
+        .cnc-trust{font-family:var(--sans);font-size:12.5px;color:var(--ink-soft,#5b5346);margin:14px 0 0;letter-spacing:.01em}
+        .cnc-trust a{color:#8a5b12;font-weight:600}
         .cnc-bar{display:flex;gap:10px}
         .cnc-input{flex:1;min-width:0;font-family:var(--body);font-size:17px;padding:13px 16px;border:1px solid var(--line,#e0d6c1);border-radius:6px;background:#fff;color:var(--ink,#171310)}
         .cnc-input:focus{outline:none;border-color:#C9A24C;box-shadow:0 0 0 3px rgba(201,162,76,.18)}

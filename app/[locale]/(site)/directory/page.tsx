@@ -43,6 +43,12 @@ export default async function DirectoryIndex({ params }: { params: Promise<{ loc
     placeholder: t('concierge.placeholder'), ask: t('concierge.ask'), thinking: t('concierge.thinking'),
     error: t('concierge.error'), examplesTitle: t('concierge.examplesTitle'),
     examples: (t.raw('concierge.examples') as string[]) || [], picksTitle: t('concierge.picksTitle'),
+    req: {
+      title: t('concierge.req.title'), intro: t('concierge.req.intro'),
+      emailPh: t('concierge.req.emailPh'), notePh: t('concierge.req.notePh'),
+      send: t('concierge.req.send'), sending: t('concierge.req.sending'), sent: t('concierge.req.sent'),
+      trust: t('concierge.req.trust'), trustLink: t('concierge.req.trustLink'),
+    },
   };
 
   return (
@@ -60,6 +66,21 @@ export default async function DirectoryIndex({ params }: { params: Promise<{ loc
           ))}
         </div>
         <div className="rule-orn orn"><span className="diamond" /></div>
+      </div>
+
+      <div className="wrap" style={{ marginTop: 8 }}>
+        <Link href="/luxury" className="dir-lux">
+          <span className="dir-lux-orn">◆</span>
+          <span className="dir-lux-t">{t('luxury.title')}</span>
+          <span className="dir-lux-s">{t('luxury.strip')} →</span>
+        </Link>
+        <style>{`
+          .dir-lux{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 22px;border-radius:10px;background:linear-gradient(160deg,#12242b,#0B0E11 75%);border:1px solid rgba(201,162,76,.32)}
+          .dir-lux:hover{text-decoration:none;border-color:#C9A24C}
+          .dir-lux-orn{color:var(--gold,#C9A24C)}
+          .dir-lux-t{font-family:var(--disp);font-size:20px;color:#fff;font-weight:600}
+          .dir-lux-s{font-family:var(--sans);font-size:13px;letter-spacing:.02em;color:#d7cdb8;margin-left:auto}
+        `}</style>
       </div>
 
       <div className="wrap section">

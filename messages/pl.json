@@ -263,7 +263,18 @@
       "Winnice w pobliżu Limassol",
       "Kto buduje nowe apartamenty w Limassol?"
     ],
-    "picksTitle": "Polecane dla Ciebie"
+    "picksTitle": "Polecane dla Ciebie",
+    "req": {
+      "title": "Zająć się tym za Ciebie?",
+      "intro": "Wyślij to jako zapytanie, a przekażemy je do właściwych miejsc — zostaw email, jeśli chcesz odpowiedź.",
+      "emailPh": "Twój email (opcjonalnie)",
+      "notePh": "Coś jeszcze — data, liczba osób, budżet… (opcjonalnie)",
+      "send": "Wyślij zapytanie",
+      "sending": "Wysyłanie…",
+      "sent": "Wysłane — dalej zajmujemy się my.",
+      "trust": "Niezależnie — sponsoring nigdy nie kupuje oceny.",
+      "trustLink": "Jak pracujemy"
+    }
   },
   "recent": {
     "title": "Ostatnio oglądane"
@@ -284,5 +295,15 @@
     "thePlace": "Miejsce",
     "whileIn": "Gdy jesteś w {place}",
     "exploreDirectory": "Przeglądaj katalog"
+  },
+  "trust": {
+    "independent": "Niezależnie — sponsoring nigdy nie kupuje oceny.",
+    "link": "Jak pracujemy"
+  },
+  "luxury": {
+    "kicker": "Wyselekcjonowane",
+    "title": "Kolekcja Luksusu",
+    "intro": "To, co najlepsze na wyspie, w każdej kategorii — adresy warte przemierzenia całego Cypru.",
+    "strip": "To, co najlepsze na wyspie — wyselekcjonowane"
   }
 }

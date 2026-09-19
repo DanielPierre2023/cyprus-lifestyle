@@ -195,6 +195,25 @@ export async function getListing(locale: Locale, slug: string): Promise<Listing 
   return data ? toListing(data as unknown as Record<string, unknown>, locale) : null;
 }
 
+// The island's finest, across categories — the Luxury tier. Curated from the
+// strongest signals we already hold: a top price band (€€€/€€€€), or an
+// exceptional rating, with featured and verified rising first.
+export async function getLuxuryListings(locale: Locale, limit = 30): Promise<Listing[]> {
+  const { data } = await supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale))
+    .eq('status', 'published')
+    .order('rating', { ascending: false, nullsFirst: false })
+    .limit(500);
+  const tier = (b: string | null) => (b === '€€€€' ? 3 : b === '€€€' ? 2 : 0);
+  const rows = ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale))
+    .filter((x) => x.name && x.image && (tier(x.price_band) >= 2 || (x.rating != null && x.rating >= 4.7)));
+  rows.sort((a, b) =>
+    Number(b.featured) - Number(a.featured)
+    || tier(b.price_band) - tier(a.price_band)
+    || (b.rating ?? 0) - (a.rating ?? 0)
+    || (b.rating_count ?? 0) - (a.rating_count ?? 0));
+  return rows.slice(0, limit);
+}
+
 // ── Collections: type × district guide pages ("best restaurants in Paphos") ──
 // One lightweight scan of (type, district) across all published rows, aggregated
 // in JS into the set of collections worth a page. Memoised so a build that emits
