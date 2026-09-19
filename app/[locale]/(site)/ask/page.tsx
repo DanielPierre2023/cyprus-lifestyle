@@ -33,6 +33,7 @@ export default async function AskPage({ params }: { params: Promise<{ locale: st
     examplesTitle: t('concierge.examplesTitle'),
     examples: (t.raw('concierge.examples') as string[]) || [],
     picksTitle: t('concierge.picksTitle'),
+    guidesTitle: t('concierge.guidesTitle'),
     req: {
       title: t('concierge.req.title'), intro: t('concierge.req.intro'),
       emailPh: t('concierge.req.emailPh'), notePh: t('concierge.req.notePh'),

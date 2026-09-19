@@ -5,6 +5,7 @@
 // key that authorises the function stays server-side only.
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/ratelimit';
+import { retrieveKnowledge, compactForConcierge } from '@/lib/knowledge/qa';
 
 export const runtime = 'nodejs';
 export const maxDuration = 45;
@@ -22,11 +23,15 @@ export async function POST(req: NextRequest) {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return NextResponse.json({ ok: false, error: 'The concierge is not configured.' }, { status: 500 });
 
+  // Ground the concierge in the practical knowledge base (the master intent map):
+  // pick the most relevant priced answers + our on-site pages and hand them over.
+  const knowledge = compactForConcierge(retrieveKnowledge(q, 6));
+
   try {
     const res = await fetch(`${url}/functions/v1/concierge`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ q, locale, secret: key }),
+      body: JSON.stringify({ q, locale, secret: key, knowledge }),
       signal: AbortSignal.timeout(40000),
     });
     const d = await res.json().catch(() => ({ ok: false, error: 'The concierge returned an unreadable response.' }));

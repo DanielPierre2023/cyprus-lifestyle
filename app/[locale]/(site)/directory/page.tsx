@@ -46,6 +46,7 @@ export default async function DirectoryIndex({ params }: { params: Promise<{ loc
     placeholder: t('concierge.placeholder'), ask: t('concierge.ask'), thinking: t('concierge.thinking'),
     error: t('concierge.error'), examplesTitle: t('concierge.examplesTitle'),
     examples: (t.raw('concierge.examples') as string[]) || [], picksTitle: t('concierge.picksTitle'),
+    guidesTitle: t('concierge.guidesTitle'),
     req: {
       title: t('concierge.req.title'), intro: t('concierge.req.intro'),
       emailPh: t('concierge.req.emailPh'), notePh: t('concierge.req.notePh'),

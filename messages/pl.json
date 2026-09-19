@@ -253,17 +253,17 @@
   },
   "concierge": {
     "title": "Zapytaj wyspę",
-    "intro": "Opisz, czego szukasz — cicha kolacja nad morzem, hotel rodzinny przy piaszczystej plaży, kto buduje nowe apartamenty w Limassol — a concierge znajdzie to na całej wyspie.",
-    "placeholder": "Zapytaj o cokolwiek — „romantyczna kolacja nad morzem w Pafos”",
+    "intro": "Zapytaj o wszystko, co dotyczy wakacji lub życia na Cyprze — gdzie zjeść lub się zatrzymać, jak wyczyścić basen albo założyć firmę, ile kosztuje nurkowanie lub pierścionek zaręczynowy — a concierge odpowie, wraz ze stronami i ludźmi, którzy to zrealizują.",
+    "placeholder": "Zapytaj o wszystko — od „romantyczna kolacja nad morzem” po „kto montuje panele słoneczne?”",
     "ask": "Zapytaj",
     "thinking": "Szukam…",
     "error": "Concierge jest teraz zajęty — spróbuj ponownie.",
     "examplesTitle": "Wypróbuj",
     "examples": [
-      "Cicha kolacja nad morzem w Pafos",
-      "Hotel rodzinny przy piaszczystej plaży",
-      "Winnice w pobliżu Limassol",
-      "Kto buduje nowe apartamenty w Limassol?"
+      "Czy wrak Zenobia jest odpowiedni dla początkujących?",
+      "Kto wyczyści mój basen i ile to kosztuje?",
+      "Jak założyć firmę i korzystać z podatku non-dom?",
+      "Spokojna kolacja nad morzem w Pafos"
     ],
     "picksTitle": "Polecane dla Ciebie",
     "req": {
@@ -276,7 +276,8 @@
       "sent": "Wysłane — dalej zajmujemy się my.",
       "trust": "Niezależnie — sponsoring nigdy nie kupuje oceny.",
       "trustLink": "Jak pracujemy"
-    }
+    },
+    "guidesTitle": "Na Cyprus Lifestyle"
   },
   "recent": {
     "title": "Ostatnio oglądane"

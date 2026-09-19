@@ -18,9 +18,11 @@ export interface ConciergePick {
   rating: number | null; rating_count: number | null; price_band: string | null;
   image: string | null; why: string;
 }
+export interface ConciergeGuide { label: string; path: string; }
 export interface ConciergeLabels {
   placeholder: string; ask: string; thinking: string; error: string;
   examplesTitle: string; examples: string[]; picksTitle: string;
+  guidesTitle?: string;
   req: ConciergeReqLabels;
 }
 
@@ -34,6 +36,7 @@ export default function Concierge({ locale, labels, autofocus = false }: { local
   const [loading, setLoading] = useState(false);
   const [answer, setAnswer] = useState('');
   const [picks, setPicks] = useState<ConciergePick[]>([]);
+  const [guides, setGuides] = useState<ConciergeGuide[]>([]);
   const [error, setError] = useState('');
   const [asked, setAsked] = useState(false);
   const [reqEmail, setReqEmail] = useState('');
@@ -46,7 +49,7 @@ export default function Concierge({ locale, labels, autofocus = false }: { local
     try {
       const res = await fetch('/api/concierge/request', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ q, answer, picks, email: reqEmail, note: reqNote, locale }),
+        body: JSON.stringify({ q, answer, picks, guides, email: reqEmail, note: reqNote, locale }),
       });
       const d = await res.json();
       setReqState(d.ok ? 'sent' : 'idle');
@@ -63,9 +66,9 @@ export default function Concierge({ locale, labels, autofocus = false }: { local
         body: JSON.stringify({ q: query, locale }),
       });
       const d = await res.json();
-      if (!d.ok) { setError(d.error || labels.error); setAnswer(''); setPicks([]); }
-      else { setAnswer(d.answer || ''); setPicks(Array.isArray(d.picks) ? d.picks : []); }
-    } catch { setError(labels.error); setAnswer(''); setPicks([]); }
+      if (!d.ok) { setError(d.error || labels.error); setAnswer(''); setPicks([]); setGuides([]); }
+      else { setAnswer(d.answer || ''); setPicks(Array.isArray(d.picks) ? d.picks : []); setGuides(Array.isArray(d.guides) ? d.guides : []); }
+    } catch { setError(labels.error); setAnswer(''); setPicks([]); setGuides([]); }
     finally { setLoading(false); }
   }
 
@@ -96,6 +99,17 @@ export default function Concierge({ locale, labels, autofocus = false }: { local
 
       {!loading && answer ? <p className="cnc-answer">{answer}</p> : null}
 
+      {!loading && guides.length ? (
+        <div className="cnc-guides">
+          <span className="cnc-guides-t">{labels.guidesTitle || 'On Cyprus Lifestyle'}</span>
+          <div className="cnc-guides-row">
+            {guides.map((g) => (
+              <Link key={g.path} href={g.path} className="cnc-guide">{g.label} →</Link>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {!loading && picks.length ? (
         <>
           <h3 className="cnc-picks-t">{labels.picksTitle}</h3>
@@ -122,7 +136,7 @@ export default function Concierge({ locale, labels, autofocus = false }: { local
         </>
       ) : null}
 
-      {!loading && picks.length ? (
+      {!loading && (picks.length || guides.length) ? (
         <div className="cnc-req">
           {reqState === 'sent' ? (
             <p className="cnc-req-sent">✓ {labels.req.sent}</p>
@@ -165,6 +179,11 @@ export default function Concierge({ locale, labels, autofocus = false }: { local
         .cnc-chip{font-family:var(--body);font-size:14px;padding:6px 12px;border:1px solid var(--line,#e0d6c1);border-radius:999px;background:#fff;color:var(--ink-soft,#5b5346);cursor:pointer}
         .cnc-chip:hover{border-color:#C9A24C;color:var(--ink,#171310)}
         .cnc-answer{font-family:var(--body);font-size:19px;line-height:1.55;color:var(--ink,#171310);margin:22px 0 6px}
+        .cnc-guides{margin:14px 0 2px}
+        .cnc-guides-t{font-family:var(--sans);font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-soft,#5b5346)}
+        .cnc-guides-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+        .cnc-guide{font-family:var(--body);font-size:14px;padding:7px 13px;border:1px solid var(--line,#e0d6c1);border-radius:999px;background:#fff;color:#8a5b12;font-weight:600}
+        .cnc-guide:hover{border-color:#C9A24C;text-decoration:none}
         .cnc-picks-t{font-family:var(--sans);font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-soft,#5b5346);margin:18px 0 12px}
         .cnc-picks{display:flex;flex-direction:column;gap:12px}
         .cnc-pick{display:flex;gap:14px;align-items:stretch;border:1px solid var(--line,#e0d6c1);border-radius:8px;background:#fff;overflow:hidden}

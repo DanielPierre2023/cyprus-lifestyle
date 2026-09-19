@@ -253,17 +253,17 @@
   },
   "concierge": {
     "title": "Întreabă insula",
-    "intro": "Descrie ce cauți — o cină liniștită pe malul mării, un hotel de familie lângă o plajă cu nisip, cine construiește apartamente noi în Limassol — iar concierge-ul găsește pe toată insula.",
-    "placeholder": "Întreabă orice — „o cină romantică lângă mare în Paphos”",
+    "intro": "Întreabă orice despre vacanța sau viața în Cipru — unde să mănânci sau să stai, cum să-ți cureți piscina sau să-ți înființezi o firmă, cât costă o scufundare sau un inel de logodnă — iar concierge-ul răspunde, cu paginile și oamenii care fac lucrurile să se întâmple.",
+    "placeholder": "Întreabă orice — de la „o cină romantică lângă mare” la „cine instalează panouri solare?”",
     "ask": "Întreabă",
     "thinking": "Caut…",
     "error": "Concierge-ul este ocupat acum — încearcă din nou.",
     "examplesTitle": "Încearcă",
     "examples": [
-      "O cină liniștită pe malul mării în Paphos",
-      "Hotel de familie lângă o plajă cu nisip",
-      "Crame de vizitat lângă Limassol",
-      "Cine construiește apartamente noi în Limassol?"
+      "Epava Zenobia e potrivită pentru începători?",
+      "Cine îmi curăță piscina și cât costă?",
+      "Cum îmi înființez o firmă și cum funcționează taxa non-dom?",
+      "O cină liniștită pe malul mării în Paphos"
     ],
     "picksTitle": "Recomandate pentru tine",
     "req": {
@@ -276,7 +276,8 @@
       "sent": "Trimis — preluăm noi de aici.",
       "trust": "Independent — sponsorizarea nu cumpără niciodată o evaluare.",
       "trustLink": "Cum lucrăm"
-    }
+    },
+    "guidesTitle": "Pe Cyprus Lifestyle"
   },
   "recent": {
     "title": "Vizualizate recent"

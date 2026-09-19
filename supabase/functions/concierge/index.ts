@@ -36,8 +36,10 @@ const HOUSE =
   "British spelling. When RECOMMENDING places, use ONLY the candidate places provided to you; never invent a place, name, price or rating. " +
   "If the candidates don't fit the request well, say so honestly and suggest the closest sensible option. " +
   "You may ALSO answer practical travel questions about Cyprus — weather and sea temperature by month and whether it is swimming season; airport transfers and getting around; beaches (sand, gentle entry, how busy); car hire; seasonality and public holidays — using the CYPRUS FACTS below. " +
+  "You are ALSO an expert on practical life in Cyprus for visitors and residents. When the request matches one of the KNOWLEDGE entries provided, use its facts, prices and advice to answer directly and specifically (a scuba dive, cleaning a pool, forming a company, buying an engagement ring, finding a plumber, getting residency, and so on). Give the euro figures and the honest caveat where relevant (for services, always advise getting two or three quotes; note when insurance matters). The KNOWLEDGE is written in English — always WRITE your answer in the visitor's language. " +
+  "Always keep the person on Cyprus Lifestyle first: when a KNOWLEDGE entry has on-site pages, cite the RELEVANT ones by their id in `sources` so we can show 'on our site' links from which they connect onward — never send them straight to an outside site. " +
   "Be specific and honest: give typical figures, and where something depends on live conditions (a specific day's forecast far ahead, a current sea state, a particular hotel's winter opening) say what is usual and note it can vary. " +
-  "For a purely informational question it is completely fine to answer with few or no picks. Always reply in the visitor's language. Keep the answer to 2–5 sentences.";
+  "For a purely informational or how-to question it is completely fine to answer with few or no picks. Always reply in the visitor's language. Keep the answer to 2–5 sentences.";
 
 // Curated, accurate Cyprus facts (south coast: Ayia Napa, Protaras, Larnaca,
 // Limassol, Paphos) so the concierge can answer the practical questions real
@@ -209,6 +211,11 @@ const TOOL_PICKS: Tool = {
           required: ["slug", "why"],
         },
       },
+      sources: {
+        type: "array",
+        description: "The ids of the KNOWLEDGE entries you actually used to answer (0-4). Use ONLY ids from the provided KNOWLEDGE. Leave empty if you used none.",
+        items: { type: "string" },
+      },
       followup: { type: "string", description: "One optional short follow-up question to refine, or empty string." },
     },
     required: ["answer", "picks"],
@@ -227,19 +234,45 @@ serve(async (req) => {
     const locale = LOCALES.includes(String(body.locale || "")) ? String(body.locale) : "en";
     if (q.length < 3) return j({ ok: false, error: "Please ask a fuller question." }, 400);
 
+    // Practical knowledge base, retrieved by the site route from the intent map.
+    interface KBItem { id: string; q: string; a: string; res: { l: string; p: string }[]; connect: string[]; }
+    const knowledge: KBItem[] = (Array.isArray(body.knowledge) ? body.knowledge : [])
+      .map((k: Record<string, unknown>) => ({
+        id: str(k.id),
+        q: str(k.q),
+        a: str(k.a),
+        res: Array.isArray(k.res) ? (k.res as Record<string, unknown>[]).map((r) => ({ l: str(r.l), p: str(r.p) })).filter((r) => r.l && r.p) : [],
+        connect: Array.isArray(k.connect) ? (k.connect as unknown[]).map(str).filter(Boolean) : [],
+      }))
+      .filter((k: KBItem) => k.id && k.a)
+      .slice(0, 8);
+
     const candidates = await retrieve(locale, q);
-    if (!candidates.length) return j({ ok: true, answer: "I couldn't find anything published that fits yet — try another area or category.", picks: [], candidates: [] });
+    if (!candidates.length && !knowledge.length) {
+      return j({ ok: true, answer: "I couldn't find anything published that fits yet — try another area or category.", picks: [], guides: [], candidates: [] });
+    }
 
     // Compact candidate list for the model (index + the facts it may cite).
-    const menu = candidates.map((c, i) =>
-      `${i + 1}. [${c.slug}] ${c.name} — ${c.type}${c.district ? `, ${c.district}` : ""}${c.rating ? `, ${c.rating}★${c.rating_count ? ` (${c.rating_count})` : ""}` : ""}${c.price_band ? `, ${c.price_band}` : ""}${c.summary ? ` — ${c.summary.slice(0, 160)}` : ""}`
-    ).join("\n");
+    const menu = candidates.length
+      ? candidates.map((c, i) =>
+          `${i + 1}. [${c.slug}] ${c.name} — ${c.type}${c.district ? `, ${c.district}` : ""}${c.rating ? `, ${c.rating}★${c.rating_count ? ` (${c.rating_count})` : ""}` : ""}${c.price_band ? `, ${c.price_band}` : ""}${c.summary ? ` — ${c.summary.slice(0, 160)}` : ""}`
+        ).join("\n")
+      : "(no directory places retrieved for this request — answer from your knowledge)";
+
+    const kbBlock = knowledge.length
+      ? "\n\nKNOWLEDGE (accurate facts, prices and advice you may use; cite the ids you actually use in 'sources'):\n" +
+        knowledge.map((k) =>
+          `- id=${k.id} · ${k.q}\n  ${k.a}${k.res.length ? `\n  on-site pages: ${k.res.map((r) => r.l).join("; ")}` : ""}`
+        ).join("\n")
+      : "";
 
     const system = HOUSE + "\n\n" + CY_BRIEF;
     const user =
       `Visitor's request:\n"${q}"\n\n` +
-      `Candidate places (recommend ONLY from these, by their [slug]):\n${menu}\n\n` +
-      `Choose the 3-6 that best fit the request, best first, and explain each in one specific sentence. ` +
+      `Candidate places (recommend ONLY from these, by their [slug]):\n${menu}` +
+      kbBlock + "\n\n" +
+      "If this is a practical or how-to question, answer it directly from the KNOWLEDGE with the euro figures and honest caveats, and set 'sources' to the ids you used. " +
+      "If it calls for specific places, choose the 3-6 candidates that best fit, best first, each in one specific sentence; return an empty picks list for a pure how-to question. " +
       `Write the answer in the visitor's language (locale "${locale}").`;
 
     const out = await claudeTool(system, user, TOOL_PICKS, 1200);
@@ -255,7 +288,22 @@ serve(async (req) => {
         return { slug: c.slug, type: c.type, name: c.name, district: c.district, rating: c.rating, rating_count: c.rating_count, price_band: c.price_band, image: c.image, why: p.why };
       });
 
-    return j({ ok: true, answer: str(out.answer), followup: str(out.followup), picks });
+    // Map the KNOWLEDGE ids the model cited to on-site links (validated against
+    // what we actually sent, so a guide link can never point somewhere invented).
+    const kbById = new Map(knowledge.map((k) => [k.id, k]));
+    const guideSeen = new Set<string>();
+    const guides: { label: string; path: string }[] = [];
+    for (const id of (Array.isArray(out.sources) ? out.sources : [])) {
+      const k = kbById.get(str(id));
+      if (!k) continue;
+      for (const r of k.res) {
+        if (guideSeen.has(r.p)) continue;
+        guideSeen.add(r.p);
+        guides.push({ label: r.l, path: r.p });
+      }
+    }
+
+    return j({ ok: true, answer: str(out.answer), followup: str(out.followup), picks, guides: guides.slice(0, 4) });
   } catch (e) {
     return j({ ok: false, error: (e as Error).message }, 500);
   }

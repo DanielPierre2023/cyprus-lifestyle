@@ -253,17 +253,17 @@
   },
   "concierge": {
     "title": "Ask the island",
-    "intro": "Describe what you're after — a quiet beachfront dinner, a family hotel near a sandy beach, who builds new apartments in Limassol — and the concierge finds it from across the island.",
-    "placeholder": "Ask anything — 'a romantic dinner by the sea in Paphos'",
+    "intro": "Ask anything about visiting or living in Cyprus — where to dine or stay, how to clean a pool or form a company, what a dive or an engagement ring costs — and the concierge answers, with the pages and the people to make it happen.",
+    "placeholder": "Ask anything — from 'a romantic dinner by the sea' to 'who installs solar panels?'",
     "ask": "Ask",
     "thinking": "Finding…",
     "error": "The concierge is busy right now — please try again.",
     "examplesTitle": "Try",
     "examples": [
-      "A quiet beachfront dinner in Paphos",
-      "Family hotel near a sandy beach",
-      "Wineries to visit near Limassol",
-      "Who builds new apartments in Limassol?"
+      "Is the Zenobia wreck good for a beginner?",
+      "Who can clean my pool, and how much?",
+      "How do I form a company and pay non-dom tax?",
+      "A quiet beachfront dinner in Paphos"
     ],
     "picksTitle": "Recommended for you",
     "req": {
@@ -276,7 +276,8 @@
       "sent": "Sent — we'll take it from here.",
       "trust": "Independent — sponsorship never buys a rating.",
       "trustLink": "How we work"
-    }
+    },
+    "guidesTitle": "On Cyprus Lifestyle"
   },
   "recent": {
     "title": "Recently viewed"

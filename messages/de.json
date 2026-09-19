@@ -253,17 +253,17 @@
   },
   "concierge": {
     "title": "Frag die Insel",
-    "intro": "Beschreiben Sie, was Sie suchen — ein ruhiges Dinner am Strand, ein Familienhotel nahe einem Sandstrand, wer in Limassol neue Apartments baut — und der Concierge findet es auf der ganzen Insel.",
-    "placeholder": "Fragen Sie alles — „romantisches Dinner am Meer in Paphos“",
+    "intro": "Fragen Sie alles über Urlaub oder Leben in Zypern — wo man essen oder übernachten kann, wie man einen Pool reinigt oder eine Firma gründet, was ein Tauchgang oder ein Verlobungsring kostet — und der Concierge antwortet, mit den Seiten und den Menschen, die es möglich machen.",
+    "placeholder": "Fragen Sie alles — von „ein romantisches Dinner am Meer“ bis „wer installiert Solaranlagen?“",
     "ask": "Fragen",
     "thinking": "Suche…",
     "error": "Der Concierge ist gerade beschäftigt — bitte erneut versuchen.",
     "examplesTitle": "Beispiele",
     "examples": [
-      "Ruhiges Dinner am Strand in Paphos",
-      "Familienhotel nahe einem Sandstrand",
-      "Weingüter bei Limassol",
-      "Wer baut neue Apartments in Limassol?"
+      "Ist das Wrack der Zenobia für Anfänger geeignet?",
+      "Wer reinigt meinen Pool und was kostet das?",
+      "Wie gründe ich eine Firma und nutze die Non-Dom-Steuer?",
+      "Ein ruhiges Dinner am Meer in Paphos"
     ],
     "picksTitle": "Für Sie empfohlen",
     "req": {
@@ -276,7 +276,8 @@
       "sent": "Gesendet — wir übernehmen ab hier.",
       "trust": "Unabhängig — Sponsoring erkauft niemals eine Bewertung.",
       "trustLink": "Wie wir arbeiten"
-    }
+    },
+    "guidesTitle": "Auf Cyprus Lifestyle"
   },
   "recent": {
     "title": "Zuletzt angesehen"
