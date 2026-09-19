@@ -277,7 +277,18 @@
       "trust": "Niezależnie — sponsoring nigdy nie kupuje oceny.",
       "trustLink": "Jak pracujemy"
     },
-    "guidesTitle": "Na Cyprus Lifestyle"
+    "guidesTitle": "Na Cyprus Lifestyle",
+    "chat": {
+      "open": "Concierge",
+      "title": "Concierge",
+      "greeting": "Dzień dobry. Jestem concierge’em Cyprus Lifestyle — jak mogę pomóc Ci cieszyć się wyspą?",
+      "searching": "Konsultuję wyspę…",
+      "composing": "Redaguję…",
+      "newChat": "Nowa",
+      "close": "Zamknij",
+      "arrange": "Zaaranżuj",
+      "human": "Porozmawiaj z osobą"
+    }
   },
   "recent": {
     "title": "Ostatnio oglądane"

@@ -1,0 +1,313 @@
+'use client';
+// The Cyprus Lifestyle Concierge — a bespoke luxury chat experience.
+// A discreet "Concierge Bell" launcher unfolds into an editorial panel with
+// streaming replies, grounded place cards and guide links, lead-routing and a
+// human handoff. Multi-turn, multilingual, RTL-aware. Talks to
+// /api/concierge/chat (SSE) and routes requests via /api/concierge/request.
+import { useEffect, useRef, useState } from 'react';
+import { Link } from '@/lib/i18n/routing';
+import CoverImage from '@/components/CoverImage';
+import type { Locale } from '@/lib/locales';
+
+export interface ConciergeChatLabels {
+  open: string; title: string; greeting: string; placeholder: string; send: string;
+  searching: string; composing: string; error: string;
+  examplesTitle: string; examples: string[]; picksTitle: string; guidesTitle: string;
+  arrange: string; human: string; newChat: string; close: string;
+  reqEmailPh: string; reqNotePh: string; reqSend: string; reqSending: string; reqSent: string;
+  trust: string; trustLink: string;
+}
+interface Pick { slug: string; type: string; name: string; district: string | null; rating: number | null; rating_count: number | null; price_band: string | null; image: string | null; verified?: boolean; }
+interface GuideLink { label: string; path: string; }
+interface Msg { role: 'user' | 'assistant'; content: string; picks?: Pick[]; guides?: GuideLink[]; canRoute?: boolean; streaming?: boolean; }
+
+const TYPE_DOT: Record<string, string> = { restaurant: '#C0492E', winery: '#7B2D42', hotel: '#1F6F78', beach: '#2F86C4', development: '#8A6D3B', vendor: '#4E7A46' };
+
+export default function ConciergeChat({ locale, labels }: { locale: Locale; labels: ConciergeChatLabels }) {
+  const rtl = locale === 'ar';
+  const [open, setOpen] = useState(false);
+  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState('');
+  const streamRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [req, setReq] = useState<{ email: string; note: string; state: 'idle' | 'sending' | 'sent' } | null>(null);
+
+  useEffect(() => {
+    const el = streamRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [msgs, status]);
+
+  useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 350); }, [open]);
+
+  async function send(text: string) {
+    const q = text.trim();
+    if (q.length < 2 || busy) return;
+    setInput('');
+    setReq(null);
+    const history: Msg[] = [...msgs, { role: 'user', content: q }];
+    setMsgs([...history, { role: 'assistant', content: '', streaming: true }]);
+    setBusy(true); setStatus(labels.searching);
+
+    try {
+      const res = await fetch('/api/concierge/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locale, messages: history.map((m) => ({ role: m.role, content: m.content })) }),
+      });
+      if (!res.ok || !res.body) throw new Error('bad');
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      let acc = '';
+      const setLast = (patch: Partial<Msg>) => setMsgs((prev) => {
+        const next = [...prev]; const i = next.length - 1;
+        if (i >= 0 && next[i].role === 'assistant') next[i] = { ...next[i], ...patch };
+        return next;
+      });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n'); buf = lines.pop() || '';
+        for (const line of lines) {
+          const s = line.trim();
+          if (!s.startsWith('data:')) continue;
+          const raw = s.slice(5).trim(); if (!raw) continue;
+          let evt: Record<string, unknown>; try { evt = JSON.parse(raw); } catch { continue; }
+          if (evt.type === 'status') setStatus(evt.label === 'composing' ? labels.composing : labels.searching);
+          else if (evt.type === 'delta') { acc += String(evt.text || ''); setStatus(''); setLast({ content: acc, streaming: true }); }
+          else if (evt.type === 'meta') setLast({ picks: (evt.picks as Pick[]) || [], guides: (evt.guides as GuideLink[]) || [], canRoute: Boolean(evt.canRoute) });
+          else if (evt.type === 'error') { if (!acc) setLast({ content: labels.error }); }
+          else if (evt.type === 'done') setLast({ streaming: false });
+        }
+      }
+      setLast({ streaming: false });
+      if (!acc) setLast({ content: labels.error, streaming: false });
+    } catch {
+      setMsgs((prev) => { const n = [...prev]; const i = n.length - 1; if (i >= 0) n[i] = { role: 'assistant', content: labels.error }; return n; });
+    } finally { setBusy(false); setStatus(''); }
+  }
+
+  async function sendRequest() {
+    if (!req || req.state !== 'idle') return;
+    setReq({ ...req, state: 'sending' });
+    const lastA = [...msgs].reverse().find((m) => m.role === 'assistant');
+    const lastU = [...msgs].reverse().find((m) => m.role === 'user');
+    try {
+      const res = await fetch('/api/concierge/request', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q: lastU?.content || '', answer: lastA?.content || '', picks: lastA?.picks || [], guides: lastA?.guides || [], email: req.email, note: req.note, locale }),
+      });
+      const d = await res.json().catch(() => ({}));
+      setReq({ ...req, state: d.ok ? 'sent' : 'idle' });
+    } catch { setReq({ ...req, state: 'idle' }); }
+  }
+
+  const empty = msgs.length === 0;
+
+  return (
+    <div dir={rtl ? 'rtl' : 'ltr'}>
+      {!open && (
+        <button className="cc-bell" aria-label={labels.open} onClick={() => setOpen(true)}>
+          <span className="cc-bell-halo" aria-hidden="true" />
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 3.5a1.3 1.3 0 0 1 1.3 1.3v.7a5.7 5.7 0 0 1 4.4 5.55V15l1.3 1.8H5L6.3 15v-3.95A5.7 5.7 0 0 1 10.7 5.5v-.7A1.3 1.3 0 0 1 12 3.5Z" />
+            <path d="M10 19a2 2 0 0 0 4 0" />
+          </svg>
+        </button>
+      )}
+
+      {open && (
+        <div className="cc-scrim" onClick={() => setOpen(false)}>
+          <section className="cc-panel" onClick={(e) => e.stopPropagation()} aria-label={labels.title}>
+            <header className="cc-head">
+              <span className="cc-head-t"><span className="cc-diamond" aria-hidden="true" />{labels.title}</span>
+              <span className="cc-head-actions">
+                {msgs.length > 0 && <button className="cc-ghost" onClick={() => { setMsgs([]); setReq(null); }}>{labels.newChat}</button>}
+                <button className="cc-ghost cc-close" aria-label={labels.close} onClick={() => setOpen(false)}>✕</button>
+              </span>
+            </header>
+
+            <div className="cc-stream" ref={streamRef}>
+              {empty && (
+                <div className="cc-welcome">
+                  <p className="cc-greeting">{labels.greeting}</p>
+                  <div className="cc-starters">
+                    {labels.examples.map((ex) => (
+                      <button key={ex} className="cc-starter" onClick={() => send(ex)}>{ex}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {msgs.map((m, i) => (
+                <div key={i} className={`cc-msg cc-${m.role}`}>
+                  {m.role === 'assistant' && <span className="cc-av" aria-hidden="true">✦</span>}
+                  <div className="cc-msg-body">
+                    <div className="cc-bubble">
+                      {m.content}{m.streaming && <span className="cc-caret" aria-hidden="true" />}
+                    </div>
+
+                    {m.role === 'assistant' && !m.streaming && m.guides && m.guides.length > 0 && (
+                      <div className="cc-guides">
+                        <span className="cc-lbl">{labels.guidesTitle}</span>
+                        <div className="cc-guide-row">
+                          {m.guides.map((g) => <Link key={g.path} href={g.path} className="cc-guide" onClick={() => setOpen(false)}>{g.label} →</Link>)}
+                        </div>
+                      </div>
+                    )}
+
+                    {m.role === 'assistant' && !m.streaming && m.picks && m.picks.length > 0 && (
+                      <>
+                        <span className="cc-lbl cc-lbl-picks">{labels.picksTitle}</span>
+                        <div className="cc-picks">
+                          {m.picks.map((p) => (
+                            <Link key={p.slug} href={`/directory/${p.type}/${p.slug}`} className="cc-pick" onClick={() => setOpen(false)}>
+                              <span className="cc-pick-img"><CoverImage src={p.image} seed={p.slug} alt={p.name} className="ph-img" sizes="72px" fallbackKind="brand" /></span>
+                              <span className="cc-pick-b">
+                                <span className="cc-pick-meta"><span className="d" style={{ background: TYPE_DOT[p.type] || '#C9A24C' }} />{p.district || p.type}{p.rating != null ? <span className="cc-rate"> · ★ {p.rating.toFixed(1)}</span> : null}{p.verified ? <span className="cc-seal">✓</span> : null}</span>
+                                <span className="cc-pick-name">{p.name}</span>
+                              </span>
+                            </Link>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {m.role === 'assistant' && !m.streaming && m.canRoute && i === msgs.length - 1 && (
+                      req?.state === 'sent' ? (
+                        <p className="cc-sent">✓ {labels.reqSent}</p>
+                      ) : req ? (
+                        <div className="cc-req">
+                          <div className="cc-req-row">
+                            <input className="cc-req-in" type="email" placeholder={labels.reqEmailPh} value={req.email} onChange={(e) => setReq({ ...req, email: e.target.value })} />
+                            <button className="cc-req-go" onClick={sendRequest} disabled={req.state === 'sending'}>{req.state === 'sending' ? labels.reqSending : labels.reqSend}</button>
+                          </div>
+                          <input className="cc-req-in cc-req-note" placeholder={labels.reqNotePh} value={req.note} onChange={(e) => setReq({ ...req, note: e.target.value })} />
+                          <p className="cc-trust">◆ {labels.trust} <Link href="/standards" onClick={() => setOpen(false)}>{labels.trustLink} →</Link></p>
+                        </div>
+                      ) : (
+                        <div className="cc-actions">
+                          <button className="cc-act" onClick={() => setReq({ email: '', note: '', state: 'idle' })}>{labels.arrange}</button>
+                          <Link href="/contact" className="cc-act cc-act-2" onClick={() => setOpen(false)}>{labels.human}</Link>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {status && <div className="cc-status"><span className="cc-dots"><i /><i /><i /></span>{status}</div>}
+            </div>
+
+            <form className="cc-composer" onSubmit={(e) => { e.preventDefault(); send(input); }}>
+              <textarea
+                ref={inputRef} className="cc-input" rows={1} value={input}
+                placeholder={labels.placeholder} enterKeyHint="send"
+                onChange={(e) => { setInput(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); } }}
+              />
+              <button className="cc-go" type="submit" disabled={busy || input.trim().length < 2} aria-label={labels.send}>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={rtl ? 'M20 12H4M10 6l-6 6 6 6' : 'M4 12h16M14 6l6 6-6 6'} /></svg>
+              </button>
+            </form>
+          </section>
+        </div>
+      )}
+
+      <style>{`
+        .cc-bell{position:fixed;inset-block-end:calc(22px + env(safe-area-inset-bottom,0px));inset-inline-end:22px;z-index:60;
+          width:60px;height:60px;border-radius:50%;border:1px solid rgba(201,162,76,.55);cursor:pointer;
+          background:radial-gradient(120% 120% at 30% 25%, #1f1a12, #0b0e11);color:#E9C978;display:flex;align-items:center;justify-content:center;
+          box-shadow:0 8px 30px rgba(11,14,17,.34),0 1px 0 rgba(255,255,255,.06) inset}
+        .cc-bell:hover{transform:translateY(-2px);color:#F1D592;transition:transform .16s cubic-bezier(.2,0,0,1)}
+        .cc-bell-halo{position:absolute;inset:-6px;border-radius:50%;border:1px solid rgba(201,162,76,.4);animation:ccpulse 3.4s ease-out infinite}
+        @keyframes ccpulse{0%{transform:scale(1);opacity:.6}70%{transform:scale(1.25);opacity:0}100%{opacity:0}}
+        @media (prefers-reduced-motion:reduce){.cc-bell-halo{animation:none}.cc-bell:hover{transform:none}}
+
+        .cc-scrim{position:fixed;inset:0;z-index:70;background:rgba(11,10,7,.34);backdrop-filter:blur(3px);
+          display:flex;align-items:stretch;justify-content:flex-end;animation:ccfade .2s ease}
+        @keyframes ccfade{from{opacity:0}to{opacity:1}}
+        .cc-panel{width:min(520px,100%);height:100%;display:flex;flex-direction:column;background:var(--paper,#F3EDDF);
+          border-inline-start:1px solid var(--line,#DDD2BB);box-shadow:-20px 0 60px rgba(11,10,7,.22);
+          animation:ccslide .34s cubic-bezier(.2,0,0,1)}
+        @keyframes ccslide{from{transform:translateX(var(--cc-from,24px));opacity:.4}to{transform:none;opacity:1}}
+        [dir=rtl] .cc-panel{--cc-from:-24px}
+        @media (prefers-reduced-motion:reduce){.cc-panel{animation:none}}
+        @media (max-width:560px){.cc-scrim{align-items:stretch;justify-content:stretch}.cc-panel{width:100%}}
+
+        .cc-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line,#DDD2BB);
+          background:color-mix(in srgb, var(--paper,#F3EDDF) 82%, transparent);backdrop-filter:blur(6px)}
+        .cc-head-t{font-family:var(--disp,'Playfair Display',serif);font-size:20px;color:var(--ink,#1C1710);display:flex;align-items:center;gap:9px}
+        .cc-diamond{width:7px;height:7px;background:#C9A24C;transform:rotate(45deg);display:inline-block}
+        .cc-head-actions{display:flex;align-items:center;gap:6px}
+        .cc-ghost{background:none;border:0;color:var(--ink-soft,#6E6455);font-family:var(--sans,'Jost',sans-serif);font-size:12.5px;cursor:pointer;padding:6px 8px;border-radius:6px}
+        .cc-ghost:hover{color:var(--ink,#1C1710);background:var(--paper-2,#EAE1CC)}
+        .cc-close{font-size:15px}
+
+        .cc-stream{flex:1;overflow-y:auto;padding:20px 18px;display:flex;flex-direction:column;gap:16px}
+        .cc-welcome{margin:auto 0}
+        .cc-greeting{font-family:var(--disp,'Playfair Display',serif);font-size:22px;line-height:1.35;color:var(--ink,#1C1710);margin:0 0 18px;max-width:34ch}
+        .cc-starters{display:flex;flex-direction:column;gap:9px;align-items:flex-start}
+        .cc-starter{font-family:var(--body,'Lora',serif);font-size:15px;text-align:start;padding:11px 15px;border:1px solid var(--line,#DDD2BB);border-radius:12px;background:var(--card,#FBF7EE);color:var(--ink,#1C1710);cursor:pointer;width:100%}
+        .cc-starter:hover{border-color:#C9A24C;background:var(--card-2,#F6F0E2)}
+
+        .cc-msg{display:flex;gap:10px;align-items:flex-start}
+        .cc-user{flex-direction:row-reverse}
+        .cc-av{flex:none;width:26px;height:26px;border-radius:50%;background:radial-gradient(120% 120% at 30% 25%, #1f1a12, #0b0e11);color:#E9C978;display:flex;align-items:center;justify-content:center;font-size:13px;margin-top:2px}
+        .cc-msg-body{max-width:86%;min-width:0}
+        .cc-user .cc-msg-body{display:flex;flex-direction:column;align-items:flex-end}
+        .cc-bubble{font-family:var(--body,'Lora',serif);font-size:16px;line-height:1.6;color:var(--ink,#1C1710);white-space:pre-wrap;word-wrap:break-word}
+        .cc-user .cc-bubble{background:var(--paper-2,#EAE1CC);border:1px solid var(--line,#DDD2BB);border-radius:14px;padding:10px 14px;font-size:15.5px}
+        .cc-caret{display:inline-block;width:2px;height:1.05em;background:#C9A24C;margin-inline-start:2px;vertical-align:-2px;animation:ccblink 1s steps(2) infinite}
+        @keyframes ccblink{50%{opacity:0}}
+
+        .cc-lbl{font-family:var(--sans,'Jost',sans-serif);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint,#938876);display:block;margin:14px 0 8px}
+        .cc-guide-row{display:flex;flex-wrap:wrap;gap:7px}
+        .cc-guide{font-family:var(--body,'Lora',serif);font-size:13.5px;padding:6px 12px;border:1px solid var(--line,#DDD2BB);border-radius:999px;background:var(--card,#FBF7EE);color:#8a5b12;font-weight:600}
+        .cc-guide:hover{border-color:#C9A24C;text-decoration:none}
+        .cc-picks{display:flex;flex-direction:column;gap:8px}
+        .cc-pick{display:flex;gap:11px;align-items:center;border:1px solid var(--line,#DDD2BB);border-radius:11px;background:var(--card,#FBF7EE);overflow:hidden;padding-inline-end:12px}
+        .cc-pick:hover{border-color:#C9A24C;text-decoration:none;box-shadow:0 2px 10px rgba(0,0,0,.05)}
+        .cc-pick-img{position:relative;width:64px;height:64px;flex:none;background:linear-gradient(135deg,#1c2b33,#0B0E11)}
+        .cc-pick-img .ph-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+        .cc-pick-b{display:flex;flex-direction:column;gap:2px;min-width:0}
+        .cc-pick-meta{font-family:var(--sans,'Jost',sans-serif);font-size:12px;color:var(--ink-soft,#6E6455);display:flex;align-items:center;gap:6px;text-transform:capitalize}
+        .cc-pick-meta .d{width:7px;height:7px;border-radius:50%;flex:none}
+        .cc-rate{color:#8a5b12;font-weight:600}
+        .cc-seal{color:#2f6b2f;font-weight:700}
+        .cc-pick-name{font-family:var(--disp,'Playfair Display',serif);font-size:16px;color:var(--ink,#1C1710);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+        .cc-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+        .cc-act{font-family:var(--sans,'Jost',sans-serif);font-size:13.5px;font-weight:600;padding:8px 15px;border-radius:999px;border:1px solid #C9A24C;background:#C9A24C;color:#0b0e11;cursor:pointer}
+        .cc-act:hover{background:#b8912f;text-decoration:none}
+        .cc-act-2{background:transparent;color:var(--ink,#1C1710);border-color:var(--line,#DDD2BB)}
+        .cc-act-2:hover{background:var(--paper-2,#EAE1CC)}
+        .cc-req{margin-top:14px;border:1px solid var(--line,#DDD2BB);border-radius:12px;background:var(--card-2,#F6F0E2);padding:14px}
+        .cc-req-row{display:flex;gap:8px}
+        .cc-req-in{flex:1;min-width:0;font-family:var(--body,'Lora',serif);font-size:14.5px;padding:9px 12px;border:1px solid var(--line,#DDD2BB);border-radius:8px;background:var(--card,#fff);color:var(--ink,#1C1710)}
+        .cc-req-in:focus{outline:none;border-color:#C9A24C}
+        .cc-req-note{margin-top:8px;width:100%}
+        .cc-req-go{white-space:nowrap;font-family:var(--sans,'Jost',sans-serif);font-weight:600;font-size:13.5px;padding:0 15px;border-radius:8px;border:1px solid #C9A24C;background:#C9A24C;color:#0b0e11;cursor:pointer}
+        .cc-req-go:disabled{opacity:.6}
+        .cc-sent{font-family:var(--body,'Lora',serif);color:#2f6b2f;margin:14px 0 0}
+        .cc-trust{font-family:var(--sans,'Jost',sans-serif);font-size:11.5px;color:var(--ink-soft,#6E6455);margin:11px 0 0}
+        .cc-trust a{color:#8a5b12;font-weight:600}
+
+        .cc-status{display:flex;align-items:center;gap:9px;font-family:var(--sans,'Jost',sans-serif);font-size:13px;color:var(--ink-soft,#6E6455)}
+        .cc-dots{display:inline-flex;gap:3px}
+        .cc-dots i{width:5px;height:5px;border-radius:50%;background:#C9A24C;animation:ccb 1.1s infinite ease-in-out}
+        .cc-dots i:nth-child(2){animation-delay:.15s}.cc-dots i:nth-child(3){animation-delay:.3s}
+        @keyframes ccb{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+
+        .cc-composer{display:flex;gap:9px;align-items:flex-end;padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line,#DDD2BB);
+          background:color-mix(in srgb, var(--paper,#F3EDDF) 82%, transparent);backdrop-filter:blur(8px)}
+        .cc-input{flex:1;resize:none;font-family:var(--body,'Lora',serif);font-size:16px;line-height:1.4;padding:11px 14px;border:1px solid var(--line,#DDD2BB);border-radius:14px;background:var(--card,#fff);color:var(--ink,#1C1710);max-height:120px}
+        .cc-input:focus{outline:none;border-color:#C9A24C;box-shadow:0 0 0 3px rgba(201,162,76,.16)}
+        .cc-go{flex:none;width:44px;height:44px;border-radius:50%;border:0;background:#C9A24C;color:#0b0e11;cursor:pointer;display:flex;align-items:center;justify-content:center}
+        .cc-go:hover{background:#b8912f}.cc-go:disabled{opacity:.45;cursor:default}
+      `}</style>
+    </div>
+  );
+}

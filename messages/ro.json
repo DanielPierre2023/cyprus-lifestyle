@@ -277,7 +277,18 @@
       "trust": "Independent — sponsorizarea nu cumpără niciodată o evaluare.",
       "trustLink": "Cum lucrăm"
     },
-    "guidesTitle": "Pe Cyprus Lifestyle"
+    "guidesTitle": "Pe Cyprus Lifestyle",
+    "chat": {
+      "open": "Concierge",
+      "title": "Concierge",
+      "greeting": "Bună ziua. Sunt concierge-ul Cyprus Lifestyle — cum vă pot ajuta să vă bucurați de insulă?",
+      "searching": "Consult insula…",
+      "composing": "Compun răspunsul…",
+      "newChat": "Nou",
+      "close": "Închide",
+      "arrange": "Aranjează",
+      "human": "Vorbește cu o persoană"
+    }
   },
   "recent": {
     "title": "Vizualizate recent"

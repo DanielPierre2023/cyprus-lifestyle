@@ -277,7 +277,18 @@
       "trust": "Independent — sponsorship never buys a rating.",
       "trustLink": "How we work"
     },
-    "guidesTitle": "On Cyprus Lifestyle"
+    "guidesTitle": "On Cyprus Lifestyle",
+    "chat": {
+      "open": "Concierge",
+      "title": "The Concierge",
+      "greeting": "Good day. I'm the Cyprus Lifestyle concierge — how may I help you enjoy the island?",
+      "searching": "Consulting the island…",
+      "composing": "Composing…",
+      "newChat": "New",
+      "close": "Close",
+      "arrange": "Arrange this",
+      "human": "Speak to a person"
+    }
   },
   "recent": {
     "title": "Recently viewed"

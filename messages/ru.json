@@ -277,7 +277,18 @@
       "trust": "Независимо — спонсорство никогда не покупает оценку.",
       "trustLink": "Как мы работаем"
     },
-    "guidesTitle": "На Cyprus Lifestyle"
+    "guidesTitle": "На Cyprus Lifestyle",
+    "chat": {
+      "open": "Консьерж",
+      "title": "Консьерж",
+      "greeting": "Добрый день. Я консьерж Cyprus Lifestyle — чем помочь вам насладиться островом?",
+      "searching": "Сверяюсь с островом…",
+      "composing": "Формулирую…",
+      "newChat": "Новый",
+      "close": "Закрыть",
+      "arrange": "Организовать",
+      "human": "Связаться с человеком"
+    }
   },
   "recent": {
     "title": "Недавно просмотренные"

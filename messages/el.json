@@ -277,7 +277,18 @@
       "trust": "Ανεξάρτητο — η χορηγία δεν αγοράζει ποτέ βαθμολογία.",
       "trustLink": "Πώς εργαζόμαστε"
     },
-    "guidesTitle": "Στο Cyprus Lifestyle"
+    "guidesTitle": "Στο Cyprus Lifestyle",
+    "chat": {
+      "open": "Concierge",
+      "title": "Ο Concierge",
+      "greeting": "Καλησπέρα σας. Είμαι ο concierge του Cyprus Lifestyle — πώς μπορώ να σας βοηθήσω να απολαύσετε το νησί;",
+      "searching": "Συμβουλεύομαι το νησί…",
+      "composing": "Συντάσσω…",
+      "newChat": "Νέα",
+      "close": "Κλείσιμο",
+      "arrange": "Κανονίστε το",
+      "human": "Μιλήστε με άνθρωπο"
+    }
   },
   "recent": {
     "title": "Είδατε πρόσφατα"

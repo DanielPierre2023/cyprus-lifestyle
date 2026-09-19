@@ -277,7 +277,18 @@
       "trust": "مستقلّون — الرعاية لا تشتري تقييمًا أبدًا.",
       "trustLink": "كيف نعمل"
     },
-    "guidesTitle": "على Cyprus Lifestyle"
+    "guidesTitle": "على Cyprus Lifestyle",
+    "chat": {
+      "open": "الكونسيرج",
+      "title": "الكونسيرج",
+      "greeting": "طاب يومك. أنا كونسيرج Cyprus Lifestyle — كيف يمكنني مساعدتك للاستمتاع بالجزيرة؟",
+      "searching": "أستشير الجزيرة…",
+      "composing": "أصوغ الرد…",
+      "newChat": "جديد",
+      "close": "إغلاق",
+      "arrange": "رتّب ذلك",
+      "human": "تحدث إلى شخص"
+    }
   },
   "recent": {
     "title": "شوهد مؤخراً"
