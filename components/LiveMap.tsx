@@ -20,7 +20,7 @@ function tile(locale: string): { url: string; attr: string } {
   return { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: OSM_ATTR };
 }
 
-export default function LiveMap({ items, locale = 'en', labels }: { items: LiveItem[]; locale?: string; labels: Record<string, string> }) {
+export default function LiveMap({ items, locale = 'en', labels, ui }: { items: LiveItem[]; locale?: string; labels: Record<string, string>; ui: { search: string; inView: string; noMatches: string; mapAria: string } }) {
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import('leaflet').Map | null>(null);
   const layerRef = useRef<import('leaflet').FeatureGroup | null>(null);
@@ -94,7 +94,7 @@ export default function LiveMap({ items, locale = 'en', labels }: { items: LiveI
       {/* Sidebar */}
       <div style={{ flex: '1 1 320px', maxWidth: 380, background: '#0B0E11', color: '#e7e0d2', display: 'flex', flexDirection: 'column', minHeight: 360 }}>
         <div style={{ padding: '14px 16px', borderBottom: '1px solid #1c2128' }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search places, venues, events…"
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={ui.search}
             style={{ width: '100%', background: '#161b22', border: '1px solid #262d36', color: '#e7e0d2', borderRadius: 6, padding: '10px 12px', fontSize: 14 }} />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
             {types.map((tp) => (
@@ -110,7 +110,7 @@ export default function LiveMap({ items, locale = 'en', labels }: { items: LiveI
             ))}
           </div>
         </div>
-        <div style={{ padding: '8px 8px', fontSize: 11, color: '#8a8f98', textTransform: 'uppercase', letterSpacing: '.06em' }}>{shown.length} in view</div>
+        <div style={{ padding: '8px 8px', fontSize: 11, color: '#8a8f98', textTransform: 'uppercase', letterSpacing: '.06em' }}>{shown.length} {ui.inView}</div>
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {shown.slice(0, 400).map((i) => (
             <button key={i.id} type="button" onClick={() => focus(i)}
@@ -120,11 +120,11 @@ export default function LiveMap({ items, locale = 'en', labels }: { items: LiveI
               <span style={{ display: 'block', fontSize: 12, color: '#8a8f98', marginLeft: 16 }}>{labels[i.type] || i.type}{i.district ? ` · ${i.district}` : ''}</span>
             </button>
           ))}
-          {shown.length === 0 ? <p style={{ padding: 16, color: '#8a8f98' }}>Nothing matches those filters.</p> : null}
+          {shown.length === 0 ? <p style={{ padding: 16, color: '#8a8f98' }}>{ui.noMatches}</p> : null}
         </div>
       </div>
       {/* Map */}
-      <div ref={mapEl} style={{ flex: '2 1 420px', minHeight: 360, height: 'auto' }} aria-label="Map" />
+      <div ref={mapEl} style={{ flex: '2 1 420px', minHeight: 360, height: 'auto' }} aria-label={ui.mapAria} />
     </div>
   );
 }

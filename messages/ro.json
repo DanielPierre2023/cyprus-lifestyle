@@ -19,7 +19,9 @@
     "close": "Închide",
     "search": "Căutare",
     "directory": "Ghid",
-    "membership": "Membri"
+    "membership": "Membri",
+    "editions": "ediții",
+    "city": "Nicosia"
   },
   "common": {
     "readMore": "Citește mai mult",
@@ -183,7 +185,26 @@
     "development": "Dezvoltări",
     "hotel": "Hoteluri",
     "beach": "Plaje",
-    "vendor": "Servicii"
+    "vendor": "Servicii",
+    "reviews": "recenzii",
+    "verified": "Verificat",
+    "around": "Ce e în apropiere",
+    "aroundSub": "Tot ce e în apropiere, de la mare la masă — de la cele mai apropiate.",
+    "compare": "Compară cu altele similare",
+    "compareSub": "Altele din apropiere, unul lângă altul.",
+    "rating": "Evaluare",
+    "price": "Preț",
+    "address": "Adresă",
+    "district": "Regiune",
+    "phone": "Telefon",
+    "directions": "Direcții",
+    "view": "Vezi",
+    "whatsOn": "Evenimente în apropiere",
+    "places": "locuri",
+    "searchPlaces": "Caută locuri, spații, evenimente…",
+    "inView": "vizibile",
+    "noMatches": "Nimic nu corespunde acestor filtre.",
+    "mapAria": "Hartă"
   },
   "membership": {
     "kicker": "Membri",
@@ -258,5 +279,10 @@
     "success": "Mulțumim — solicitarea a fost trimisă.",
     "error": "Ceva n-a mers — încearcă din nou.",
     "featured": "Promovat"
+  },
+  "agenda": {
+    "thePlace": "Locul",
+    "whileIn": "Cât timp ești în {place}",
+    "exploreDirectory": "Explorează catalogul"
   }
 }

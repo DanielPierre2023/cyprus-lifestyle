@@ -19,7 +19,9 @@
     "close": "Zamknij",
     "search": "Szukaj",
     "directory": "Katalog",
-    "membership": "Członkostwo"
+    "membership": "Członkostwo",
+    "editions": "edycje",
+    "city": "Nikozja"
   },
   "common": {
     "readMore": "Czytaj dalej",
@@ -183,7 +185,26 @@
     "development": "Inwestycje",
     "hotel": "Hotele",
     "beach": "Plaże",
-    "vendor": "Usługi"
+    "vendor": "Usługi",
+    "reviews": "recenzje",
+    "verified": "Zweryfikowane",
+    "around": "W pobliżu",
+    "aroundSub": "Wszystko w pobliżu, od morza po stół — od najbliższych.",
+    "compare": "Porównaj z podobnymi",
+    "compareSub": "Inne w pobliżu, obok siebie.",
+    "rating": "Ocena",
+    "price": "Cena",
+    "address": "Adres",
+    "district": "Region",
+    "phone": "Telefon",
+    "directions": "Trasa",
+    "view": "Zobacz",
+    "whatsOn": "Wydarzenia w pobliżu",
+    "places": "miejsc",
+    "searchPlaces": "Szukaj miejsc, lokali, wydarzeń…",
+    "inView": "widocznych",
+    "noMatches": "Nic nie pasuje do tych filtrów.",
+    "mapAria": "Mapa"
   },
   "membership": {
     "kicker": "Członkostwo",
@@ -258,5 +279,10 @@
     "success": "Dziękujemy — zapytanie zostało wysłane.",
     "error": "Coś poszło nie tak — spróbuj ponownie.",
     "featured": "Wyróżnione"
+  },
+  "agenda": {
+    "thePlace": "Miejsce",
+    "whileIn": "Gdy jesteś w {place}",
+    "exploreDirectory": "Przeglądaj katalog"
   }
 }

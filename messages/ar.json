@@ -19,7 +19,9 @@
     "close": "إغلاق",
     "search": "بحث",
     "directory": "الدليل",
-    "membership": "العضوية"
+    "membership": "العضوية",
+    "editions": "الإصدارات",
+    "city": "نيقوسيا"
   },
   "common": {
     "readMore": "اقرأ المزيد",
@@ -183,7 +185,26 @@
     "development": "مشاريع عقارية",
     "hotel": "فنادق",
     "beach": "شواطئ",
-    "vendor": "خدمات"
+    "vendor": "خدمات",
+    "reviews": "مراجعات",
+    "verified": "موثّق",
+    "around": "ما حولك",
+    "aroundSub": "كل ما هو قريب، من البحر إلى المائدة — الأقرب أولاً.",
+    "compare": "قارن مع أماكن مشابهة",
+    "compareSub": "أماكن أخرى قريبة، جنبًا إلى جنب.",
+    "rating": "التقييم",
+    "price": "السعر",
+    "address": "العنوان",
+    "district": "المنطقة",
+    "phone": "الهاتف",
+    "directions": "الاتجاهات",
+    "view": "عرض",
+    "whatsOn": "فعاليات قريبة",
+    "places": "أماكن",
+    "searchPlaces": "ابحث عن أماكن ومواقع وفعاليات…",
+    "inView": "في العرض",
+    "noMatches": "لا شيء يطابق عوامل التصفية هذه.",
+    "mapAria": "خريطة"
   },
   "membership": {
     "kicker": "العضوية",
@@ -258,5 +279,10 @@
     "success": "شكراً لك — تم إرسال استفسارك.",
     "error": "حدث خطأ ما — حاول مرة أخرى.",
     "featured": "مميّز"
+  },
+  "agenda": {
+    "thePlace": "المكان",
+    "whileIn": "أثناء وجودك في {place}",
+    "exploreDirectory": "استكشف الدليل"
   }
 }

@@ -19,7 +19,9 @@
     "close": "Schließen",
     "search": "Suche",
     "directory": "Verzeichnis",
-    "membership": "Mitgliedschaft"
+    "membership": "Mitgliedschaft",
+    "editions": "Ausgaben",
+    "city": "Nikosia"
   },
   "common": {
     "readMore": "Weiterlesen",
@@ -183,7 +185,26 @@
     "development": "Neubauprojekte",
     "hotel": "Hotels",
     "beach": "Strände",
-    "vendor": "Dienstleistungen"
+    "vendor": "Dienstleistungen",
+    "reviews": "Bewertungen",
+    "verified": "Verifiziert",
+    "around": "In der Umgebung",
+    "aroundSub": "Alles in der Nähe, vom Meer bis zum Tisch — das Nächste zuerst.",
+    "compare": "Mit ähnlichen vergleichen",
+    "compareSub": "Weitere in der Nähe, direkt im Vergleich.",
+    "rating": "Bewertung",
+    "price": "Preis",
+    "address": "Adresse",
+    "district": "Bezirk",
+    "phone": "Telefon",
+    "directions": "Route",
+    "view": "Ansehen",
+    "whatsOn": "Veranstaltungen in der Nähe",
+    "places": "Orte",
+    "searchPlaces": "Orte, Locations, Events suchen…",
+    "inView": "in Ansicht",
+    "noMatches": "Nichts entspricht diesen Filtern.",
+    "mapAria": "Karte"
   },
   "membership": {
     "kicker": "Mitgliedschaft",
@@ -258,5 +279,10 @@
     "success": "Danke — Ihre Anfrage wurde gesendet.",
     "error": "Etwas ist schiefgelaufen — bitte erneut versuchen.",
     "featured": "Empfohlen"
+  },
+  "agenda": {
+    "thePlace": "Der Ort",
+    "whileIn": "Während Sie in {place} sind",
+    "exploreDirectory": "Zum Verzeichnis"
   }
 }

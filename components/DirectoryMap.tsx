@@ -31,12 +31,15 @@ function esc(s: string): string {
 }
 
 export default function DirectoryMap({
-  points, height = 520, typeLabels, locale = 'en',
+  points, height = 520, typeLabels, locale = 'en', viewLabel = 'View', placesLabel = 'places', ariaLabel = 'Map',
 }: {
   points: MapPoint[];
   height?: number;
   typeLabels?: Record<string, string>;
   locale?: string;
+  viewLabel?: string;
+  placesLabel?: string;
+  ariaLabel?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import('leaflet').Map | undefined>(undefined);
@@ -82,7 +85,7 @@ export default function DirectoryMap({
         });
         const label = (typeLabels && p.type && typeLabels[p.type]) ? typeLabels[p.type] : (p.type || '');
         const img = p.image ? `<span class="mp-img" style="background-image:url('${esc(p.image)}')"></span>` : '';
-        const link = p.href ? `<a class="mp-go" href="${esc(p.href)}">View →</a>` : '';
+        const link = p.href ? `<a class="mp-go" href="${esc(p.href)}">${esc(viewLabel)} →</a>` : '';
         m.bindPopup(
           `<div class="mp">${img}<div class="mp-b">${label ? `<span class="mp-t" style="color:${color}">${esc(label)}</span>` : ''}<b>${esc(p.name)}</b>${link}</div></div>`,
           { minWidth: 200, maxWidth: 240, closeButton: true, className: 'mp-pop' },
@@ -141,8 +144,8 @@ export default function DirectoryMap({
         .dm-legend .lbl{flex:1 1 auto;text-align:left}
         .dm-legend button.is-off{opacity:.4}
       `}</style>
-      <div ref={ref} style={{ height, width: '100%', borderRadius: 6, overflow: 'hidden', border: '1px solid #e3d9c4', boxShadow: '0 4px 20px rgba(0,0,0,.06)' }} aria-label="Map of Cyprus listings" />
-      <div className="dm-badge">{visibleCount.toLocaleString()} places</div>
+      <div ref={ref} style={{ height, width: '100%', borderRadius: 6, overflow: 'hidden', border: '1px solid #e3d9c4', boxShadow: '0 4px 20px rgba(0,0,0,.06)' }} aria-label={ariaLabel} />
+      <div className="dm-badge">{visibleCount.toLocaleString()} {placesLabel}</div>
       {legend.length ? (
         <div className="dm-legend">
           {legend.map((t) => (

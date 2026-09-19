@@ -19,7 +19,9 @@
     "close": "Close",
     "search": "Search",
     "directory": "Directory",
-    "membership": "Membership"
+    "membership": "Membership",
+    "editions": "editions",
+    "city": "Nicosia"
   },
   "common": {
     "readMore": "Read more",
@@ -183,7 +185,26 @@
     "development": "Developments",
     "hotel": "Hotels",
     "beach": "Beaches",
-    "vendor": "Services"
+    "vendor": "Services",
+    "reviews": "reviews",
+    "verified": "Verified",
+    "around": "What's nearby",
+    "aroundSub": "Everything close by, from the sea to the table — closest first.",
+    "compare": "Compare with similar",
+    "compareSub": "Others nearby, side by side.",
+    "rating": "Rating",
+    "price": "Price",
+    "address": "Address",
+    "district": "District",
+    "phone": "Phone",
+    "directions": "Directions",
+    "view": "View",
+    "whatsOn": "What's on nearby",
+    "places": "places",
+    "searchPlaces": "Search places, venues, events…",
+    "inView": "in view",
+    "noMatches": "Nothing matches those filters.",
+    "mapAria": "Map"
   },
   "membership": {
     "kicker": "Membership",
@@ -258,5 +279,10 @@
     "success": "Thank you — your enquiry has been sent.",
     "error": "Something went wrong — please try again.",
     "featured": "Featured"
+  },
+  "agenda": {
+    "thePlace": "The place",
+    "whileIn": "While you're in {place}",
+    "exploreDirectory": "Explore the directory"
   }
 }

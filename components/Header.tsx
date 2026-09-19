@@ -29,12 +29,12 @@ export default function Header() {
       <div className="util">
         <div className="wrap row">
           <div className="l">
-            <span>Nicosia</span>
+            <span>{t('city')}</span>
             <span className="hide">·</span>
             <span className="hide" suppressHydrationWarning>{date}</span>
           </div>
           <div className="r">
-            <div className="langs" aria-label="editions">
+            <div className="langs" aria-label={t('editions')}>
               {LOCALES.map((l: Locale) => (
                 <Link key={l} href={pathname} locale={l} hrefLang={l}
                   className={l === locale ? 'active' : ''}>{langLabel(l)}</Link>
