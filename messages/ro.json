@@ -287,7 +287,25 @@
       "newChat": "Nou",
       "close": "Închide",
       "arrange": "Aranjează",
-      "human": "Vorbește cu o persoană"
+      "human": "Vorbește cu o persoană",
+      "mem": {
+        "welcome": "Bine ai revenit",
+        "title": "Ce îmi amintesc",
+        "note": "Doar ce mi-ai spus — le poți șterge oricând.",
+        "forget": "Uită-mă",
+        "name": "Nume",
+        "base": "Bază",
+        "party": "Grup",
+        "dates": "Date",
+        "interests": "Interese",
+        "dietary": "Alimentație",
+        "status": "Statut"
+      },
+      "voice": {
+        "speak": "Vorbește",
+        "listening": "Ascult…",
+        "readAloud": "Citește răspunsurile cu voce tare"
+      }
     }
   },
   "recent": {

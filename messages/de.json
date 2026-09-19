@@ -287,7 +287,25 @@
       "newChat": "Neu",
       "close": "Schließen",
       "arrange": "Arrangieren",
-      "human": "Mit einer Person sprechen"
+      "human": "Mit einer Person sprechen",
+      "mem": {
+        "welcome": "Willkommen zurück",
+        "title": "Woran ich mich erinnere",
+        "note": "Nur was Sie mir gesagt haben — jederzeit löschbar.",
+        "forget": "Vergiss mich",
+        "name": "Name",
+        "base": "Standort",
+        "party": "Gruppe",
+        "dates": "Daten",
+        "interests": "Interessen",
+        "dietary": "Ernährung",
+        "status": "Status"
+      },
+      "voice": {
+        "speak": "Sprechen",
+        "listening": "Ich höre zu…",
+        "readAloud": "Antworten vorlesen"
+      }
     }
   },
   "recent": {

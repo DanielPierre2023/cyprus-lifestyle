@@ -287,7 +287,25 @@
       "newChat": "New",
       "close": "Close",
       "arrange": "Arrange this",
-      "human": "Speak to a person"
+      "human": "Speak to a person",
+      "mem": {
+        "welcome": "Welcome back",
+        "title": "What I remember",
+        "note": "Only what you've told me — yours to clear anytime.",
+        "forget": "Forget me",
+        "name": "Name",
+        "base": "Base",
+        "party": "Party",
+        "dates": "Dates",
+        "interests": "Interests",
+        "dietary": "Dietary",
+        "status": "Status"
+      },
+      "voice": {
+        "speak": "Speak",
+        "listening": "Listening…",
+        "readAloud": "Read replies aloud"
+      }
     }
   },
   "recent": {

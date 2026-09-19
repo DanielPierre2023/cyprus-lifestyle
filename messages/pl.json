@@ -287,7 +287,25 @@
       "newChat": "Nowa",
       "close": "Zamknij",
       "arrange": "Zaaranżuj",
-      "human": "Porozmawiaj z osobą"
+      "human": "Porozmawiaj z osobą",
+      "mem": {
+        "welcome": "Witaj ponownie",
+        "title": "Co pamiętam",
+        "note": "Tylko to, co mi powiedziałeś — możesz usunąć w każdej chwili.",
+        "forget": "Zapomnij mnie",
+        "name": "Imię",
+        "base": "Baza",
+        "party": "Grupa",
+        "dates": "Terminy",
+        "interests": "Zainteresowania",
+        "dietary": "Dieta",
+        "status": "Status"
+      },
+      "voice": {
+        "speak": "Mów",
+        "listening": "Słucham…",
+        "readAloud": "Czytaj odpowiedzi na głos"
+      }
     }
   },
   "recent": {

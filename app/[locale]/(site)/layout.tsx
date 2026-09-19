@@ -24,6 +24,14 @@ export default async function SiteLayout({
     reqEmailPh: t('concierge.req.emailPh'), reqNotePh: t('concierge.req.notePh'),
     reqSend: t('concierge.req.send'), reqSending: t('concierge.req.sending'), reqSent: t('concierge.req.sent'),
     trust: t('concierge.req.trust'), trustLink: t('concierge.req.trustLink'),
+    mem: {
+      welcome: t('concierge.chat.mem.welcome'), title: t('concierge.chat.mem.title'), note: t('concierge.chat.mem.note'), forget: t('concierge.chat.mem.forget'),
+      name: t('concierge.chat.mem.name'), base: t('concierge.chat.mem.base'), party: t('concierge.chat.mem.party'), dates: t('concierge.chat.mem.dates'),
+      interests: t('concierge.chat.mem.interests'), dietary: t('concierge.chat.mem.dietary'), status: t('concierge.chat.mem.status'),
+    },
+    voice: {
+      speak: t('concierge.chat.voice.speak'), listening: t('concierge.chat.voice.listening'), readAloud: t('concierge.chat.voice.readAloud'),
+    },
   };
 
   return (

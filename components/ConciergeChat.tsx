@@ -16,12 +16,29 @@ export interface ConciergeChatLabels {
   arrange: string; human: string; newChat: string; close: string;
   reqEmailPh: string; reqNotePh: string; reqSend: string; reqSending: string; reqSent: string;
   trust: string; trustLink: string;
+  mem: { welcome: string; title: string; note: string; forget: string; name: string; base: string; party: string; dates: string; interests: string; dietary: string; status: string };
+  voice: { speak: string; listening: string; readAloud: string };
 }
+interface MemoryProfile { name?: string; language?: string; interests?: string[]; base?: string; party?: string; dates?: string; dietary?: string; status?: string; notes?: string; }
 interface Pick { slug: string; type: string; name: string; district: string | null; rating: number | null; rating_count: number | null; price_band: string | null; image: string | null; verified?: boolean; }
 interface GuideLink { label: string; path: string; }
 interface Msg { role: 'user' | 'assistant'; content: string; picks?: Pick[]; guides?: GuideLink[]; canRoute?: boolean; streaming?: boolean; }
 
 const TYPE_DOT: Record<string, string> = { restaurant: '#C0492E', winery: '#7B2D42', hotel: '#1F6F78', beach: '#2F86C4', development: '#8A6D3B', vendor: '#4E7A46' };
+
+const SPEECH_LANG: Record<string, string> = { en: 'en-GB', el: 'el-GR', ro: 'ro-RO', ar: 'ar-SA', de: 'de-DE', pl: 'pl-PL', ru: 'ru-RU' };
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function getSR(): any { return typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null; }
+function speak(text: string, locale: string) {
+  try {
+    const s = window.speechSynthesis; if (!s || !text) return;
+    s.cancel();
+    const u = new SpeechSynthesisUtterance(text.slice(0, 700));
+    u.lang = SPEECH_LANG[locale] || 'en-GB'; u.rate = 1; u.pitch = 1;
+    s.speak(u);
+  } catch { /* no-op */ }
+}
+function stopSpeaking() { try { window.speechSynthesis?.cancel(); } catch { /* no-op */ } }
 
 export default function ConciergeChat({ locale, labels }: { locale: Locale; labels: ConciergeChatLabels }) {
   const rtl = locale === 'ar';
@@ -33,6 +50,79 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
   const streamRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [req, setReq] = useState<{ email: string; note: string; state: 'idle' | 'sending' | 'sent' } | null>(null);
+  const cidRef = useRef<string>('');
+  const [mem, setMem] = useState<MemoryProfile | null>(null);
+  const [memOpen, setMemOpen] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [voiceOut, setVoiceOut] = useState(false);
+  const recRef = useRef<any>(null); // SpeechRecognition instance
+  const spokenRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    setVoiceSupported(!!getSR());
+    try { if (localStorage.getItem('cl_voiceout') === '1') setVoiceOut(true); } catch { /* ignore */ }
+  }, []);
+
+  // Read the concierge's replies aloud when voice output is on.
+  useEffect(() => {
+    if (!voiceOut) return;
+    const i = msgs.length - 1;
+    const m = msgs[i];
+    if (m && m.role === 'assistant' && !m.streaming && m.content && !spokenRef.current.has(i)) {
+      spokenRef.current.add(i);
+      speak(m.content, locale);
+    }
+  }, [msgs, voiceOut, locale]);
+
+  function toggleVoiceOut() {
+    setVoiceOut((v) => { const n = !v; try { localStorage.setItem('cl_voiceout', n ? '1' : '0'); } catch { /* ignore */ } if (!n) stopSpeaking(); return n; });
+  }
+
+  function toggleMic() {
+    if (listening) { try { recRef.current?.stop(); } catch { /* ignore */ } return; }
+    const SR = getSR(); if (!SR) return;
+    stopSpeaking();
+    const rec = new SR();
+    rec.lang = SPEECH_LANG[locale] || 'en-GB';
+    rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
+    let finalText = '';
+    rec.onresult = (e: any) => {
+      let interim = '';
+      for (let k = e.resultIndex; k < e.results.length; k++) {
+        const tr = e.results[k][0].transcript;
+        if (e.results[k].isFinal) finalText += tr; else interim += tr;
+      }
+      setInput((finalText + interim).slice(0, 400));
+    };
+    rec.onerror = () => setListening(false);
+    rec.onend = () => { setListening(false); const text = finalText.trim(); if (text) send(text); };
+    recRef.current = rec;
+    setListening(true);
+    try { rec.start(); } catch { setListening(false); }
+  }
+
+  // Anonymous, per-browser id for cross-session memory (guest can wipe it).
+  useEffect(() => {
+    try {
+      let c = localStorage.getItem('cl_cid');
+      if (!c) { c = (crypto.randomUUID?.() || String(Date.now()) + Math.random().toString(36).slice(2)).replace(/[^A-Za-z0-9_-]/g, ''); localStorage.setItem('cl_cid', c); }
+      cidRef.current = c;
+    } catch { cidRef.current = ''; }
+  }, []);
+
+  // On first open, fetch what we remember about this guest.
+  useEffect(() => {
+    if (!open || !cidRef.current || mem !== null) return;
+    fetch(`/api/concierge/memory?cid=${encodeURIComponent(cidRef.current)}`)
+      .then((r) => r.json()).then((d) => { if (d.has && d.profile) setMem(d.profile as MemoryProfile); else setMem({}); })
+      .catch(() => setMem({}));
+  }, [open, mem]);
+
+  async function forgetMe() {
+    try { await fetch(`/api/concierge/memory?cid=${encodeURIComponent(cidRef.current)}`, { method: 'DELETE' }); } catch { /* ignore */ }
+    setMem({}); setMemOpen(false);
+  }
 
   useEffect(() => {
     const el = streamRef.current;
@@ -44,6 +134,7 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
   async function send(text: string) {
     const q = text.trim();
     if (q.length < 2 || busy) return;
+    stopSpeaking();
     setInput('');
     setReq(null);
     const history: Msg[] = [...msgs, { role: 'user', content: q }];
@@ -53,7 +144,7 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
     try {
       const res = await fetch('/api/concierge/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locale, messages: history.map((m) => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({ locale, cid: cidRef.current || undefined, messages: history.map((m) => ({ role: m.role, content: m.content })) }),
       });
       if (!res.ok || !res.body) throw new Error('bad');
       const reader = res.body.getReader();
@@ -105,6 +196,11 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
   }
 
   const empty = msgs.length === 0;
+  const hasMem = !!mem && Object.keys(mem).length > 0;
+  const memFields: [string, string][] = mem ? ([
+    ['name', mem.name], ['base', mem.base], ['party', mem.party], ['dates', mem.dates],
+    ['interests', mem.interests?.length ? mem.interests.join(', ') : ''], ['dietary', mem.dietary], ['status', mem.status],
+  ].filter((e) => e[1]) as [string, string][]) : [];
 
   return (
     <div dir={rtl ? 'rtl' : 'ltr'}>
@@ -124,14 +220,37 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
             <header className="cc-head">
               <span className="cc-head-t"><span className="cc-diamond" aria-hidden="true" />{labels.title}</span>
               <span className="cc-head-actions">
-                {msgs.length > 0 && <button className="cc-ghost" onClick={() => { setMsgs([]); setReq(null); }}>{labels.newChat}</button>}
-                <button className="cc-ghost cc-close" aria-label={labels.close} onClick={() => setOpen(false)}>✕</button>
+                <button className={`cc-ghost cc-voiceout${voiceOut ? ' on' : ''}`} aria-pressed={voiceOut} aria-label={labels.voice.readAloud} title={labels.voice.readAloud} onClick={toggleVoiceOut}>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M11 5 6 9H3v6h3l5 4V5Z" />
+                    {voiceOut ? <><path d="M15.5 8.5a5 5 0 0 1 0 7" /><path d="M18 6a8 8 0 0 1 0 12" /></> : <path d="m16 9 5 6M21 9l-5 6" />}
+                  </svg>
+                </button>
+                {hasMem && <button className="cc-ghost cc-memtoggle" aria-label={labels.mem.title} title={labels.mem.title} onClick={() => setMemOpen((v) => !v)}>✦</button>}
+                {msgs.length > 0 && <button className="cc-ghost" onClick={() => { setMsgs([]); setReq(null); spokenRef.current.clear(); stopSpeaking(); }}>{labels.newChat}</button>}
+                <button className="cc-ghost cc-close" aria-label={labels.close} onClick={() => { stopSpeaking(); try { recRef.current?.stop(); } catch { /* ignore */ } setOpen(false); }}>✕</button>
               </span>
             </header>
+
+            {memOpen && hasMem && (
+              <div className="cc-mem">
+                <div className="cc-mem-h">{labels.mem.title}</div>
+                <div className="cc-mem-fields">
+                  {memFields.map(([k, v]) => (
+                    <div key={k} className="cc-mem-row"><span className="cc-mem-k">{labels.mem[k as keyof typeof labels.mem]}</span><span className="cc-mem-v">{v}</span></div>
+                  ))}
+                </div>
+                <div className="cc-mem-foot">
+                  <span className="cc-mem-note">{labels.mem.note}</span>
+                  <button className="cc-mem-forget" onClick={forgetMe}>{labels.mem.forget}</button>
+                </div>
+              </div>
+            )}
 
             <div className="cc-stream" ref={streamRef}>
               {empty && (
                 <div className="cc-welcome">
+                  {hasMem && <p className="cc-wb">✦ {labels.mem.welcome}{mem?.name ? `, ${mem.name}` : ''}</p>}
                   <p className="cc-greeting">{labels.greeting}</p>
                   <div className="cc-starters">
                     {labels.examples.map((ex) => (
@@ -202,9 +321,16 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
             </div>
 
             <form className="cc-composer" onSubmit={(e) => { e.preventDefault(); send(input); }}>
+              {voiceSupported && (
+                <button type="button" className={`cc-mic${listening ? ' on' : ''}`} aria-label={labels.voice.speak} title={labels.voice.speak} onClick={toggleMic}>
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+                  </svg>
+                </button>
+              )}
               <textarea
                 ref={inputRef} className="cc-input" rows={1} value={input}
-                placeholder={labels.placeholder} enterKeyHint="send"
+                placeholder={listening ? labels.voice.listening : labels.placeholder} enterKeyHint="send"
                 onChange={(e) => { setInput(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); } }}
               />
@@ -245,6 +371,18 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
         .cc-ghost{background:none;border:0;color:var(--ink-soft,#6E6455);font-family:var(--sans,'Jost',sans-serif);font-size:12.5px;cursor:pointer;padding:6px 8px;border-radius:6px}
         .cc-ghost:hover{color:var(--ink,#1C1710);background:var(--paper-2,#EAE1CC)}
         .cc-close{font-size:15px}
+        .cc-memtoggle{color:#8a5b12;font-size:14px}
+        .cc-mem{padding:14px 18px;border-bottom:1px solid var(--line,#DDD2BB);background:var(--card-2,#F6F0E2)}
+        .cc-mem-h{font-family:var(--sans,'Jost',sans-serif);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint,#938876);margin-bottom:10px}
+        .cc-mem-fields{display:flex;flex-direction:column;gap:6px}
+        .cc-mem-row{display:flex;gap:10px;align-items:baseline}
+        .cc-mem-k{flex:none;width:88px;color:var(--ink-soft,#6E6455);font-family:var(--sans,'Jost',sans-serif);font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+        .cc-mem-v{color:var(--ink,#1C1710);font-family:var(--body,'Lora',serif);font-size:14.5px}
+        .cc-mem-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}
+        .cc-mem-note{font-family:var(--sans,'Jost',sans-serif);font-size:11px;color:var(--ink-faint,#938876);max-width:60%}
+        .cc-mem-forget{font-family:var(--sans,'Jost',sans-serif);font-size:12.5px;color:#a3341f;background:none;border:1px solid var(--line,#DDD2BB);border-radius:999px;padding:5px 12px;cursor:pointer;white-space:nowrap}
+        .cc-mem-forget:hover{border-color:#a3341f}
+        .cc-wb{font-family:var(--sans,'Jost',sans-serif);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#8a5b12;margin:0 0 12px}
 
         .cc-stream{flex:1;overflow-y:auto;padding:20px 18px;display:flex;flex-direction:column;gap:16px}
         .cc-welcome{margin:auto 0}
@@ -307,6 +445,13 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
         .cc-input:focus{outline:none;border-color:#C9A24C;box-shadow:0 0 0 3px rgba(201,162,76,.16)}
         .cc-go{flex:none;width:44px;height:44px;border-radius:50%;border:0;background:#C9A24C;color:#0b0e11;cursor:pointer;display:flex;align-items:center;justify-content:center}
         .cc-go:hover{background:#b8912f}.cc-go:disabled{opacity:.45;cursor:default}
+        .cc-voiceout{color:var(--ink-soft,#6E6455)}
+        .cc-voiceout.on{color:#8a5b12}
+        .cc-mic{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--line,#DDD2BB);background:var(--card,#fff);color:var(--ink-soft,#6E6455);cursor:pointer;display:flex;align-items:center;justify-content:center}
+        .cc-mic:hover{border-color:#C9A24C;color:var(--ink,#1C1710)}
+        .cc-mic.on{background:#C9A24C;color:#0b0e11;border-color:#C9A24C;position:relative}
+        .cc-mic.on::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid rgba(201,162,76,.5);animation:ccpulse 1.6s ease-out infinite}
+        @media (prefers-reduced-motion:reduce){.cc-mic.on::after{animation:none}}
       `}</style>
     </div>
   );
