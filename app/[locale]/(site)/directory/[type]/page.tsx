@@ -70,7 +70,7 @@ export default async function DirectoryType({ params }: { params: Promise<{ loca
         </div>
       ) : null}
 
-      {points.length ? <div className="wrap section"><DirectoryMap points={points} locale={l} /></div> : null}
+      {points.length ? <div className="wrap section"><DirectoryMap points={points} locale={l} viewLabel={t('directory.view')} placesLabel={t('directory.places')} ariaLabel={t('directory.mapAria')} /></div> : null}
 
       <div className="wrap section">
         {listings.length ? (
@@ -82,7 +82,7 @@ export default async function DirectoryType({ params }: { params: Promise<{ loca
                 </Link>
                 <span className="kicker">{x.district || label}{x.price_band ? ` · ${x.price_band}` : ''}</span>
                 <h3><Link href={`/directory/${x.type}/${x.slug}`}>{x.name}</Link></h3>
-                {x.verified ? <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, color: '#8a5b12', background: 'rgba(201,162,76,.16)', border: '1px solid #C9A24C', borderRadius: 999, padding: '1px 8px', margin: '2px 0 0' }}>✓ Verified</span> : null}
+                {x.verified ? <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, color: '#8a5b12', background: 'rgba(201,162,76,.16)', border: '1px solid #C9A24C', borderRadius: 999, padding: '1px 8px', margin: '2px 0 0' }}>✓ {t('directory.verified')}</span> : null}
                 {x.summary ? <p>{x.summary}</p> : null}
               </article>
             ))}

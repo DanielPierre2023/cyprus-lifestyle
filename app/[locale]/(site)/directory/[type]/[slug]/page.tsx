@@ -31,7 +31,7 @@ const TYPE_DOT: Record<string, string> = {
 
 function Stars({ rating }: { rating: number }) {
   const full = Math.round(rating);
-  return <span aria-label={`${rating} out of 5`} style={{ color: '#C9A24C', letterSpacing: 1 }}>{'★'.repeat(full)}<span style={{ color: '#d9cfba' }}>{'★'.repeat(5 - full)}</span></span>;
+  return <span aria-label={`${rating}/5`} style={{ color: '#C9A24C', letterSpacing: 1 }}>{'★'.repeat(full)}<span style={{ color: '#d9cfba' }}>{'★'.repeat(5 - full)}</span></span>;
 }
 
 export default async function ListingDetail({ params }: { params: Promise<{ locale: string; type: string; slug: string }> }) {
@@ -93,10 +93,10 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
           <div className="lh-hero-cap">
             <h1 style={{ margin: 0 }}>{x.name}</h1>
             <div className="lh-badges">
-              {x.rating != null ? <span className="lh-badge"><Stars rating={x.rating} /> <b>{x.rating.toFixed(1)}</b>{x.rating_count ? <span className="muted"> · {x.rating_count.toLocaleString(l)} reviews</span> : null}</span> : null}
+              {x.rating != null ? <span className="lh-badge"><Stars rating={x.rating} /> <b>{x.rating.toFixed(1)}</b>{x.rating_count ? <span className="muted"> · {x.rating_count.toLocaleString(l)} {t('directory.reviews')}</span> : null}</span> : null}
               {x.price_band ? <span className="lh-badge">{x.price_band}</span> : null}
               {x.featured ? <span className="lh-badge featured">★ {t('enquiry.featured')}</span> : null}
-              {x.verified ? <span className="lh-badge verified">✓ Verified</span> : null}
+              {x.verified ? <span className="lh-badge verified">✓ {t('directory.verified')}</span> : null}
             </div>
           </div>
         </div>
@@ -109,8 +109,8 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
 
           {nearby.length ? (
             <section className="lh-sec">
-              <h2 className="lh-h2">Around this {label.toLowerCase()}</h2>
-              <p className="lh-sub">Everything close by, from the sea to the table — closest first.</p>
+              <h2 className="lh-h2">{t('directory.around')}</h2>
+              <p className="lh-sub">{t('directory.aroundSub')}</p>
               <div className="grid g3 lh-around">
                 {nearby.map((n) => (
                   <article key={n.id} className="card">
@@ -130,11 +130,11 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
 
           {peers.length ? (
             <section className="lh-sec">
-              <h2 className="lh-h2">Compare with similar</h2>
-              <p className="lh-sub">Other {label.toLowerCase()}{x.district ? ` in ${x.district}` : ''}, side by side.</p>
+              <h2 className="lh-h2">{t('directory.compare')}</h2>
+              <p className="lh-sub">{t('directory.compareSub')}</p>
               <div className="lh-cmp-wrap">
                 <table className="lh-cmp">
-                  <thead><tr><th>{label}</th><th>Rating</th><th>Price</th><th></th></tr></thead>
+                  <thead><tr><th>{label}</th><th>{t('directory.rating')}</th><th>{t('directory.price')}</th><th></th></tr></thead>
                   <tbody>
                     <tr className="me">
                       <td className="nm">{x.name}</td>
@@ -147,7 +147,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
                         <td className="nm"><Link href={`/directory/${p.type}/${p.slug}`}>{p.name}</Link></td>
                         <td>{p.rating != null ? p.rating.toFixed(1) : '—'}</td>
                         <td>{p.price_band || '—'}</td>
-                        <td><Link className="lh-view" href={`/directory/${p.type}/${p.slug}`}>View →</Link></td>
+                        <td><Link className="lh-view" href={`/directory/${p.type}/${p.slug}`}>{t('directory.view')} →</Link></td>
                       </tr>
                     ))}
                   </tbody>
@@ -161,7 +161,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
 
           {events.length ? (
             <section className="lh-sec">
-              <h2 className="lh-h2">What's on nearby</h2>
+              <h2 className="lh-h2">{t('directory.whatsOn')}</h2>
               <div className="lh-events">
                 {events.map((e) => (
                   <Link key={e.id} href={`/agenda/${e.slug}`} className="lh-event">
@@ -178,18 +178,18 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
         <aside className="lh-side">
           <div className="lh-card">
             <div className="lh-facts">
-              {x.address ? <div className="lh-fact"><span className="k">Address</span><span className="v">{x.address}</span></div> : null}
-              {x.district ? <div className="lh-fact"><span className="k">District</span><span className="v" style={{ textTransform: 'capitalize' }}>{x.district}</span></div> : null}
-              {x.price_band ? <div className="lh-fact"><span className="k">Price</span><span className="v">{x.price_band}</span></div> : null}
-              {x.rating != null ? <div className="lh-fact"><span className="k">Rating</span><span className="v">{x.rating.toFixed(1)} / 5{x.rating_count ? ` · ${x.rating_count.toLocaleString(l)}` : ''}</span></div> : null}
-              {x.phone ? <div className="lh-fact"><span className="k">Phone</span><span className="v"><a href={`tel:${x.phone.replace(/\s+/g, '')}`}>{x.phone}</a></span></div> : null}
+              {x.address ? <div className="lh-fact"><span className="k">{t('directory.address')}</span><span className="v">{x.address}</span></div> : null}
+              {x.district ? <div className="lh-fact"><span className="k">{t('directory.district')}</span><span className="v" style={{ textTransform: 'capitalize' }}>{x.district}</span></div> : null}
+              {x.price_band ? <div className="lh-fact"><span className="k">{t('directory.price')}</span><span className="v">{x.price_band}</span></div> : null}
+              {x.rating != null ? <div className="lh-fact"><span className="k">{t('directory.rating')}</span><span className="v">{x.rating.toFixed(1)} / 5{x.rating_count ? ` · ${x.rating_count.toLocaleString(l)}` : ''}</span></div> : null}
+              {x.phone ? <div className="lh-fact"><span className="k">{t('directory.phone')}</span><span className="v"><a href={`tel:${x.phone.replace(/\s+/g, '')}`}>{x.phone}</a></span></div> : null}
             </div>
             <div className="lh-actions">
               {x.url ? <a className="btn" href={x.url} target="_blank" rel="noopener nofollow">{t('directory.visit')}</a> : null}
-              {directions ? <a className="btn ghost" href={directions} target="_blank" rel="noopener noreferrer">Directions</a> : null}
+              {directions ? <a className="btn ghost" href={directions} target="_blank" rel="noopener noreferrer">{t('directory.directions')}</a> : null}
             </div>
           </div>
-          {points.length ? <div className="lh-map"><DirectoryMap points={points} height={300} locale={l} typeLabels={typeLabels} /></div> : null}
+          {points.length ? <div className="lh-map"><DirectoryMap points={points} height={300} locale={l} typeLabels={typeLabels} viewLabel={t('directory.view')} placesLabel={t('directory.places')} ariaLabel={t('directory.mapAria')} /></div> : null}
           <EnquiryForm listingSlug={x.slug} listingType={x.type} listingName={x.name} locale={l} labels={enqLabels} />
         </aside>
       </div>

@@ -123,7 +123,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ loc
         <div className="rule-orn orn"><span className="diamond" /></div>
       </div>
 
-      {points.length ? <div className="wrap section"><DirectoryMap points={points} locale={l} typeLabels={typeLabels} /></div> : null}
+      {points.length ? <div className="wrap section"><DirectoryMap points={points} locale={l} typeLabels={typeLabels} viewLabel={t('directory.view')} placesLabel={t('directory.places')} ariaLabel={t('directory.mapAria')} /></div> : null}
 
       {/* ── Ranked list ── */}
       <div className="wrap section">

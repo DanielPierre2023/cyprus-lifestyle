@@ -82,7 +82,7 @@ export default async function DirectoryIndex({ params }: { params: Promise<{ loc
       </div>
 
       {points.length ? (
-        <div className="wrap section"><DirectoryMap points={points} typeLabels={typeLabels} locale={l} /></div>
+        <div className="wrap section"><DirectoryMap points={points} typeLabels={typeLabels} locale={l} viewLabel={t('directory.view')} placesLabel={t('directory.places')} ariaLabel={t('directory.mapAria')} /></div>
       ) : null}
 
       <div className="wrap section"><RecentlyViewed title={t('recent.title')} /></div>

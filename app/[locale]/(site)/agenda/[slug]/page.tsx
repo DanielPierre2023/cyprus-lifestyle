@@ -92,9 +92,9 @@ export default async function EventDetail({ params }: { params: Promise<{ locale
         {/* The place */}
         {(e.venue || points.length) ? (
           <section style={{ marginBottom: 28 }}>
-            <h2 style={{ fontSize: 20, marginBottom: 10 }}>The place</h2>
+            <h2 style={{ fontSize: 20, marginBottom: 10 }}>{t('agenda.thePlace')}</h2>
             {e.venue ? <p style={{ margin: '0 0 12px', color: 'var(--ink-soft, #5b5647)' }}><strong style={{ color: 'var(--ink, #171922)' }}>{e.venue}</strong>{e.district ? ` · ${e.district}` : ''}</p> : null}
-            {points.length ? <DirectoryMap points={points} height={320} locale={l} /> : null}
+            {points.length ? <DirectoryMap points={points} height={320} locale={l} viewLabel={t('directory.view')} placesLabel={t('directory.places')} ariaLabel={t('directory.mapAria')} /> : null}
           </section>
         ) : null}
 
@@ -102,8 +102,8 @@ export default async function EventDetail({ params }: { params: Promise<{ locale
         {nearby.length ? (
           <section style={{ marginBottom: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-              <h2 style={{ fontSize: 20, margin: 0 }}>While you&rsquo;re in {e.district}</h2>
-              <Link href="/directory" style={{ fontSize: 14, color: 'var(--gold-deep, #a9832f)' }}>Explore the directory →</Link>
+              <h2 style={{ fontSize: 20, margin: 0 }}>{t('agenda.whileIn', { place: e.district || '' })}</h2>
+              <Link href="/directory" style={{ fontSize: 14, color: 'var(--gold-deep, #a9832f)' }}>{t('agenda.exploreDirectory')} →</Link>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
               {nearby.map((n) => (

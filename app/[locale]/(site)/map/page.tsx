@@ -9,12 +9,15 @@ import LiveMap from '@/components/LiveMap';
 export const revalidate = 300;
 
 // The map draws its base tiles + coordinates on the client, so keep it dynamic.
-const TITLE: Record<string, string> = { en: 'The Map', el: 'Ο Χάρτης', ro: 'Harta', ar: 'الخريطة' };
+const TITLE: Record<string, string> = { en: 'The Map', el: 'Ο Χάρτης', ro: 'Harta', ar: 'الخريطة', de: 'Die Karte', pl: 'Mapa', ru: 'Карта' };
 const DEK: Record<string, string> = {
   en: 'Every address we cover — restaurants, wineries, hotels, beaches and what’s on — on one living map of the island.',
   el: 'Κάθε διεύθυνση που καλύπτουμε — εστιατόρια, οινοποιεία, ξενοδοχεία, παραλίες και εκδηλώσεις — σε έναν ζωντανό χάρτη του νησιού.',
   ro: 'Fiecare adresă pe care o acoperim — restaurante, crame, hoteluri, plaje și evenimente — pe o singură hartă vie a insulei.',
   ar: 'كل عنوان نغطيه — مطاعم ومصانع نبيذ وفنادق وشواطئ وفعاليات — على خريطة حية واحدة للجزيرة.',
+  de: 'Jede Adresse, die wir abdecken — Restaurants, Weingüter, Hotels, Strände und Veranstaltungen — auf einer lebendigen Karte der Insel.',
+  pl: 'Każdy adres, który obejmujemy — restauracje, winnice, hotele, plaże i wydarzenia — na jednej żywej mapie wyspy.',
+  ru: 'Каждый адрес, который мы охватываем — рестораны, винодельни, отели, пляжи и события — на одной живой карте острова.',
 };
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -50,7 +53,7 @@ export default async function MapPage({ params }: { params: Promise<{ locale: st
         <p className="dek" style={{ maxWidth: '60ch' }}>{DEK[l] || DEK.en}</p>
         <div className="rule-orn orn"><span className="diamond" /></div>
       </div>
-      <LiveMap items={items} locale={l} labels={labels} />
+      <LiveMap items={items} locale={l} labels={labels} ui={{ search: t('directory.searchPlaces'), inView: t('directory.inView'), noMatches: t('directory.noMatches'), mapAria: t('directory.mapAria') }} />
     </div>
   );
 }
