@@ -278,7 +278,7 @@ export function latestUserText(messages: ChatMessage[]): string {
 interface AnthropicMessage { role: Role; content: string; }
 function buildAnthropicBody(system: string, messages: AnthropicMessage[], stream: boolean, maxTokens = 900) {
   return {
-    model: CONCIERGE_MODEL, max_tokens: maxTokens, temperature: 0.6, system,
+    model: CONCIERGE_MODEL, max_tokens: maxTokens, system,
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
     stream,
   };
