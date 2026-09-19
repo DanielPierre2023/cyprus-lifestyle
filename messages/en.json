@@ -350,5 +350,14 @@
     "bestOf": "Best-of guides",
     "partner": "Advertise with us",
     "allGuides": "All guides"
+  },
+  "market": {
+    "indexTitle": "Cyprus, for you",
+    "indexIntro": "Whoever you are and wherever you are from, here is your way into the island — the answers, the places and the people that matter most to you.",
+    "startHere": "Start here",
+    "guidesLabel": "Practical guides",
+    "exploreLabel": "Explore the directory",
+    "askTitle": "Ask in your language",
+    "askBody": "The concierge answers in your language and connects you to the right places across Cyprus."
   }
 }

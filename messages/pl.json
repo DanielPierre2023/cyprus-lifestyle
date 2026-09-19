@@ -350,5 +350,14 @@
     "bestOf": "Poradniki „Najlepsze”",
     "partner": "Reklamuj się u nas",
     "allGuides": "Wszystkie poradniki"
+  },
+  "market": {
+    "indexTitle": "Cypr, dla Ciebie",
+    "indexIntro": "Kimkolwiek jesteś i skądkolwiek pochodzisz, oto Twoja droga na wyspę — odpowiedzi, miejsca i ludzie, którzy znaczą dla Ciebie najwięcej.",
+    "startHere": "Zacznij tutaj",
+    "guidesLabel": "Praktyczne przewodniki",
+    "exploreLabel": "Przeglądaj katalog",
+    "askTitle": "Zapytaj w swoim języku",
+    "askBody": "Nasz concierge odpowie w Twoim języku i połączy Cię z właściwymi miejscami na całym Cyprze."
   }
 }

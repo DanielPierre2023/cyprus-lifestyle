@@ -350,5 +350,14 @@
     "bestOf": "Ghiduri „Cele mai bune”",
     "partner": "Fă reclamă la noi",
     "allGuides": "Toate ghidurile"
+  },
+  "market": {
+    "indexTitle": "Cipru, pentru tine",
+    "indexIntro": "Oricine ai fi și de oriunde ai veni, aici este calea ta spre insulă — răspunsurile, locurile și oamenii care contează cel mai mult pentru tine.",
+    "startHere": "Începe aici",
+    "guidesLabel": "Ghiduri practice",
+    "exploreLabel": "Explorează directorul",
+    "askTitle": "Întreabă în limba ta",
+    "askBody": "Concierge-ul îți răspunde în limba ta și te pune în legătură cu locurile potrivite din întregul Cipru."
   }
 }

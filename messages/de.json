@@ -350,5 +350,14 @@
     "bestOf": "Bestenlisten",
     "partner": "Werben Sie bei uns",
     "allGuides": "Alle Ratgeber"
+  },
+  "market": {
+    "indexTitle": "Zypern, für Sie",
+    "indexIntro": "Wer auch immer Sie sind und woher Sie auch kommen — hier ist Ihr Zugang zur Insel: die Antworten, die Orte und die Menschen, die für Sie am meisten zählen.",
+    "startHere": "Hier beginnen",
+    "guidesLabel": "Praktische Ratgeber",
+    "exploreLabel": "Das Verzeichnis entdecken",
+    "askTitle": "Fragen Sie in Ihrer Sprache",
+    "askBody": "Der Concierge antwortet in Ihrer Sprache und bringt Sie mit den richtigen Adressen in ganz Zypern zusammen."
   }
 }

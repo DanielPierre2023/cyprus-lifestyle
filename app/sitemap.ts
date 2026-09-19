@@ -4,7 +4,7 @@ import { urlFor } from '@/lib/seo';
 
 export const revalidate = 3600;
 
-const STATIC = ['/', '/property', '/relocation', '/culture', '/cyprus', '/business', '/escapes', '/table', '/agenda', '/people', '/world', '/directory', '/luxury', '/ask', '/guide', '/when-to-visit', '/membership', '/about', '/advertise', '/contact', '/standards', '/privacy'];
+const STATIC = ['/', '/property', '/relocation', '/culture', '/cyprus', '/business', '/escapes', '/table', '/agenda', '/people', '/world', '/directory', '/luxury', '/ask', '/guide', '/for', '/when-to-visit', '/membership', '/about', '/advertise', '/contact', '/standards', '/privacy'];
 const DIRECTORY_TYPES = ['restaurant', 'winery', 'development', 'hotel', 'beach', 'vendor'];
 
 function entry(path: string, lastModified?: Date): MetadataRoute.Sitemap[number] {
@@ -21,6 +21,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Practical guide pages (one per knowledge-base intent) — static, no DB needed.
   const { ALL_INTENTS, guideHref } = await import('@/lib/knowledge/qa');
   for (const h of ALL_INTENTS) entries.push(entry(guideHref(h.item.id)));
+  // Audience / market hubs — static.
+  const { MARKET_IDS } = await import('@/lib/knowledge/markets');
+  for (const id of MARKET_IDS) entries.push(entry(`/for/${id}`));
   try {
     const { supabaseAdmin } = await import('@/lib/supabase/admin');
     const sb = supabaseAdmin();
