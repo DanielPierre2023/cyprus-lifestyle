@@ -6,7 +6,10 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 
 // ── models (from TT) ──────────────────────────────────────────────────────────
 export const CLAUDE_HAIKU = 'claude-haiku-4-5-20251001';
-export const CLAUDE_SONNET = 'claude-sonnet-4-6';
+// Current production Sonnet. (The former 'claude-sonnet-4-6' was never a real API
+// model id — Anthropic rejected it, which is why the concierge kept saying "busy".)
+// Override per-deploy with the SONNET_MODEL env var if you move models again.
+export const CLAUDE_SONNET = 'claude-sonnet-5';
 export const OPENAI_MODEL = 'gpt-4o';
 export const GEMINI_MODEL = 'gemini-2.5-flash';
 

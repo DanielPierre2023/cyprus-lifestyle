@@ -371,7 +371,7 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
       )}
 
       <style>{`
-        .cc-bell{position:fixed;inset-block-end:calc(22px + env(safe-area-inset-bottom,0px));inset-inline-end:22px;z-index:60;
+        .cc-bell{position:fixed;inset-block-end:calc(22px + env(safe-area-inset-bottom,0px));inset-inline-end:22px;z-index:1200;
           width:60px;height:60px;border-radius:50%;border:1px solid rgba(201,162,76,.55);cursor:pointer;
           background:radial-gradient(120% 120% at 30% 25%, #1f1a12, #0b0e11);color:#E9C978;display:flex;align-items:center;justify-content:center;
           box-shadow:0 8px 30px rgba(11,14,17,.34),0 1px 0 rgba(255,255,255,.06) inset}
@@ -380,7 +380,7 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
         @keyframes ccpulse{0%{transform:scale(1);opacity:.6}70%{transform:scale(1.25);opacity:0}100%{opacity:0}}
         @media (prefers-reduced-motion:reduce){.cc-bell-halo{animation:none}.cc-bell:hover{transform:none}}
 
-        .cc-scrim{position:fixed;inset:0;z-index:70;background:rgba(11,10,7,.34);backdrop-filter:blur(3px);
+        .cc-scrim{position:fixed;inset:0;z-index:1300;background:rgba(11,10,7,.34);backdrop-filter:blur(3px);
           display:flex;align-items:stretch;justify-content:flex-end;animation:ccfade .2s ease}
         @keyframes ccfade{from{opacity:0}to{opacity:1}}
         .cc-panel{width:min(520px,100%);height:100%;display:flex;flex-direction:column;background:var(--paper,#F3EDDF);

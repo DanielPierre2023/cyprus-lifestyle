@@ -90,7 +90,7 @@ export default function LiveMap({ items, locale = 'en', labels, ui }: { items: L
   }
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', minHeight: 'calc(100vh - 120px)', border: '1px solid #1c2128', borderRadius: 6, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', minHeight: 'calc(100vh - 120px)', border: '1px solid #1c2128', borderRadius: 6, overflow: 'hidden', isolation: 'isolate' }}>
       {/* Sidebar */}
       <div style={{ flex: '1 1 320px', maxWidth: 380, background: '#0B0E11', color: '#e7e0d2', display: 'flex', flexDirection: 'column', minHeight: 360 }}>
         <div style={{ padding: '14px 16px', borderBottom: '1px solid #1c2128' }}>

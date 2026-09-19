@@ -125,7 +125,9 @@ export default function DirectoryMap({
   }).length;
 
   return (
-    <div style={{ position: 'relative' }}>
+    // isolate: keep Leaflet's internal z-indexes (panes 400–700, controls up to
+    // 1000) inside this box so they can't render over the fixed concierge chat.
+    <div style={{ position: 'relative', isolation: 'isolate' }}>
       <style>{`
         .mp-pop .leaflet-popup-content-wrapper{border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:0;overflow:hidden}
         .mp-pop .leaflet-popup-content{margin:0;width:auto!important}

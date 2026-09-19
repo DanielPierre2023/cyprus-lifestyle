@@ -106,16 +106,24 @@ async function run(force: boolean): Promise<Record<string, unknown>> {
   };
 }
 
-function gate(req: NextRequest): boolean {
-  const key = req.nextUrl.searchParams.get('key') || '';
-  return !!process.env.ENRICH_SECRET && key === process.env.ENRICH_SECRET;
+// A clear reason instead of a bare "unauthorized", so the cause is obvious.
+function denyReason(req: NextRequest): string | null {
+  if (!process.env.ENRICH_SECRET) {
+    return 'ENRICH_SECRET is not set on the server. Add it in Vercel → Settings → Environment Variables, redeploy, then call this URL with ?key=<that same value>.';
+  }
+  if ((req.nextUrl.searchParams.get('key') || '') !== process.env.ENRICH_SECRET) {
+    return 'Unauthorized — the ?key= value does not match ENRICH_SECRET set on the server.';
+  }
+  return null;
 }
 
 export async function GET(req: NextRequest) {
-  if (!gate(req)) return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
+  const deny = denyReason(req);
+  if (deny) return NextResponse.json({ ok: false, error: deny }, { status: 401 });
   return NextResponse.json(await run(req.nextUrl.searchParams.get('force') === '1'));
 }
 export async function POST(req: NextRequest) {
-  if (!gate(req)) return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
+  const deny = denyReason(req);
+  if (deny) return NextResponse.json({ ok: false, error: deny }, { status: 401 });
   return NextResponse.json(await run(req.nextUrl.searchParams.get('force') === '1'));
 }
