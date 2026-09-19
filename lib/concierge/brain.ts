@@ -43,6 +43,16 @@ const LANG_NAME: Record<string, string> = {
   en: 'English', el: 'Greek', ro: 'Romanian', ar: 'Arabic', de: 'German', pl: 'Polish', ru: 'Russian',
 };
 
+// Best-effort locale from a raw message by script (WhatsApp gives no locale).
+// Latin scripts resolve to 'en' for grounding labels; the model is told to reply
+// in the guest's actual language, which covers ro/de/pl written in Latin.
+export function detectLocale(text: string): string {
+  if (/[؀-ۿ]/.test(text)) return 'ar';
+  if (/[Ͱ-Ͽ]/.test(text)) return 'el';
+  if (/[Ѐ-ӿ]/.test(text)) return 'ru';
+  return 'en';
+}
+
 // ── The concierge persona + grounding rules (the "house voice") ───────────────
 export function conciergeSystem(locale: string): string {
   const lang = LANG_NAME[locale] || 'English';
@@ -191,11 +201,16 @@ function anthropicHeaders(): Record<string, string> {
 }
 
 // ── Non-streaming answer (WhatsApp, fallback) ─────────────────────────────────
-export async function runConcierge(messages: ChatMessage[], locale: string): Promise<{ text: string; ctx: ConciergeContext }> {
+export async function runConcierge(
+  messages: ChatMessage[], locale: string, opts?: { matchLanguage?: boolean },
+): Promise<{ text: string; ctx: ConciergeContext }> {
   const loc = isConciergeLocale(locale) ? locale : 'en';
   const history = sanitizeHistory(messages);
   const ctx = await assembleContext(loc, latestUserText(history));
-  const system = conciergeSystem(loc) + groundingBlock(ctx, loc);
+  let system = conciergeSystem(loc) + groundingBlock(ctx, loc);
+  if (opts?.matchLanguage) {
+    system += "\n\nThe guest is messaging on WhatsApp. Reply in the SAME language the guest writes in, even if it differs from the default. Keep it warm and concise for a chat message (a few sentences); no markdown headings.";
+  }
   if (!process.env.CLAUDE_API_KEY) return { text: '', ctx };
   const res = await fetch(ANTHROPIC_URL, {
     method: 'POST', headers: anthropicHeaders(),
