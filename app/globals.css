@@ -37,6 +37,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
+html, body { overflow-x: hidden; max-width: 100%; }
 body {
   background: var(--paper);
   color: var(--ink);
@@ -305,9 +306,25 @@ html[lang="ar"] .article .prose p:first-of-type::first-letter { font-size: inher
   .nav.open { display: flex; flex-direction: column; align-items: center; gap: 12px; }
   .menu-toggle { display: block; }
   .util .hide { display: none; }
+  /* Utility strip: wrap tidily instead of overflowing the viewport. */
+  .util .row { flex-wrap: wrap; justify-content: center; gap: 8px 14px; }
+  .util .l { width: 100%; justify-content: center; }
+  .util .r { flex-wrap: wrap; justify-content: center; gap: 8px 12px; }
+  .util .langs { gap: 12px; }
+  /* Masthead: scale the wordmark to fit; let it wrap to two lines if needed. */
+  .mast { padding-top: 22px; }
+  .mast .mono { width: 44px; height: 44px; margin-bottom: 12px; }
+  .mast .brand { font-size: clamp(26px, 8.5vw, 46px); letter-spacing: .07em; overflow-wrap: break-word; padding-inline: 14px; }
+  .mast .tag { letter-spacing: .28em; font-size: 10px; margin-top: 14px; padding-inline: 14px; }
+  .mast .navwrap { margin-top: 18px; }
 }
 @media (max-width: 520px) {
   .foot .top { grid-template-columns: 1fr; }
+  .util .row { font-size: 10px; letter-spacing: .1em; gap: 7px 10px; }
+  .util .sub { padding: 4px 9px; letter-spacing: .08em; }
+  .util .langs { gap: 10px; }
+  .mast .brand { font-size: clamp(22px, 9.2vw, 34px); letter-spacing: .04em; }
+  .mast .tag { letter-spacing: .2em; }
 }
 
 /* ── Directory: category chips + grouped sections ──────────────────────────── */

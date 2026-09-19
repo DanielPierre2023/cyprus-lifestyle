@@ -222,6 +222,25 @@ export async function runConcierge(
   return { text, ctx };
 }
 
+// Resilient fallback: the Supabase edge `concierge` function holds its own model
+// key, so if streaming from the Next side is unavailable (key not set here, or a
+// transient error) we still return a grounded answer rather than failing.
+async function edgeAnswer(q: string, locale: string): Promise<string> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key || !q) return '';
+  try {
+    const res = await fetch(`${url}/functions/v1/concierge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ q, locale, secret: key }),
+      signal: AbortSignal.timeout(40_000),
+    });
+    const d = await res.json().catch(() => ({}));
+    return typeof d.answer === 'string' ? d.answer : '';
+  } catch { return ''; }
+}
+
 // ── Streaming answer (web) — yields SSE-ready events ──────────────────────────
 export type StreamEvent =
   | { type: 'status'; label: string }
@@ -230,56 +249,61 @@ export type StreamEvent =
   | { type: 'error'; error: string }
   | { type: 'done' };
 
-export async function* streamConcierge(messages: ChatMessage[], locale: string): AsyncGenerator<StreamEvent> {
+export async function* streamConcierge(messages: ChatMessage[], locale: string, memoryBlock = ''): AsyncGenerator<StreamEvent> {
   const loc = isConciergeLocale(locale) ? locale : 'en';
   const history = sanitizeHistory(messages);
-  if (!process.env.CLAUDE_API_KEY) { yield { type: 'error', error: 'not_configured' }; return; }
+  const q = latestUserText(history);
   yield { type: 'status', label: 'searching' };
-  const ctx = await assembleContext(loc, latestUserText(history));
-  const system = conciergeSystem(loc) + groundingBlock(ctx, loc);
+  const ctx = await assembleContext(loc, q);
+  const system = conciergeSystem(loc) + (memoryBlock || '') + groundingBlock(ctx, loc);
   yield { type: 'status', label: 'composing' };
 
-  let res: Response;
-  try {
-    res = await fetch(ANTHROPIC_URL, {
-      method: 'POST', headers: anthropicHeaders(),
-      body: JSON.stringify(buildAnthropicBody(system, history, true)),
-      signal: AbortSignal.timeout(90_000),
-    });
-  } catch (e) { yield { type: 'error', error: (e as Error).message }; return; }
-  if (!res.ok || !res.body) {
-    const t = await res.text().catch(() => '');
-    yield { type: 'error', error: `ai_${res.status}: ${t.slice(0, 120)}` };
-    return;
+  let gotText = false;
+
+  // Primary: stream the answer from Claude (needs CLAUDE_API_KEY on the Next side).
+  if (process.env.CLAUDE_API_KEY) {
+    try {
+      const res = await fetch(ANTHROPIC_URL, {
+        method: 'POST', headers: anthropicHeaders(),
+        body: JSON.stringify(buildAnthropicBody(system, history, true)),
+        signal: AbortSignal.timeout(90_000),
+      });
+      if (res.ok && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop() || '';
+          for (const line of lines) {
+            const s = line.trim();
+            if (!s.startsWith('data:')) continue;
+            const payload = s.slice(5).trim();
+            if (!payload || payload === '[DONE]') continue;
+            try {
+              const evt = JSON.parse(payload);
+              if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta' && evt.delta.text) {
+                gotText = true;
+                yield { type: 'delta', text: evt.delta.text as string };
+              }
+            } catch { /* keep-alive / partial json */ }
+          }
+        }
+      }
+    } catch { /* fall through to the resilient fallback */ }
   }
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = '';
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop() || '';
-      for (const line of lines) {
-        const s = line.trim();
-        if (!s.startsWith('data:')) continue;
-        const payload = s.slice(5).trim();
-        if (!payload || payload === '[DONE]') continue;
-        try {
-          const evt = JSON.parse(payload);
-          if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta' && evt.delta.text) {
-            yield { type: 'delta', text: evt.delta.text as string };
-          }
-        } catch { /* ignore keep-alives / partial */ }
-      }
-    }
-  } catch (e) {
-    yield { type: 'error', error: (e as Error).message };
-    return;
+  // Fallback: no key here, an error, or an empty stream → the edge concierge
+  // (which holds its own key) answers, grounded, in one piece.
+  if (!gotText) {
+    const ans = await edgeAnswer(q, loc);
+    if (ans) { gotText = true; yield { type: 'delta', text: ans }; }
   }
+
+  if (!gotText) yield { type: 'error', error: 'unavailable' };
   yield { type: 'meta', picks: ctx.picks, guides: ctx.guides, canRoute: ctx.canRoute };
   yield { type: 'done' };
 }
