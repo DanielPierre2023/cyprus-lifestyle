@@ -465,6 +465,9 @@ export function getIntent(id: string): QAHit | undefined {
   return QA_INDEX[id];
 }
 
+/** Canonical on-site URL for an intent's practical guide page. */
+export const guideHref = (id: string): string => `/guide/${id}`;
+
 /** Only the resources safe to link right now (deployed routes). */
 export function liveResources(item: QAItem): QAResource[] {
   return item.resources.filter((r) => r.status === 'live');

@@ -336,5 +336,19 @@
     "no": "Poza sezonem",
     "best": "Morze jest najcieplejsze w sierpniu i wrześniu, ale maj, czerwiec, październik i początek listopada są wspaniałe do kąpieli, przy mniejszym tłoku. Zima jest łagodna i zielona — bardziej do zwiedzania niż na plażę; od października wieczory szybko się ochładzają, więc weź lekką kurtkę.",
     "askCta": "Zapytaj concierge’a o swoje terminy"
+  },
+  "guide": {
+    "title": "Praktyczne poradniki",
+    "intro": "Prawdziwe odpowiedzi na prawdziwe pytania o wakacje i życie na Cyprze — z cenami i ludźmi, którzy to zrealizują.",
+    "crumb": "Poradniki",
+    "exploreTitle": "Na Cyprus Lifestyle",
+    "relatedTitle": "Powiązane pytania",
+    "moreInTitle": "Więcej o: {topic}",
+    "connectTitle": "Gotowy, by przejść do działania?",
+    "connectBody": "Powiedz concierge'owi, czego potrzebujesz, a połączymy Cię z właściwymi miejscami na całej wyspie.",
+    "askCta": "Zapytaj concierge'a",
+    "bestOf": "Poradniki „Najlepsze”",
+    "partner": "Reklamuj się u nas",
+    "allGuides": "Wszystkie poradniki"
   }
 }

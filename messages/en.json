@@ -336,5 +336,19 @@
     "no": "Off-season",
     "best": "The sea is warmest in August and September, but May, June, October and early November are gloriously swimmable with lighter crowds. Winter is mild and green — made for exploring more than for the beach; evenings from October cool quickly, so pack a light jacket.",
     "askCta": "Ask the concierge about your dates"
+  },
+  "guide": {
+    "title": "Practical Guides",
+    "intro": "Real answers to the real questions of visiting and living in Cyprus — with prices, and the people to make it happen.",
+    "crumb": "Guides",
+    "exploreTitle": "On Cyprus Lifestyle",
+    "relatedTitle": "Related questions",
+    "moreInTitle": "More on {topic}",
+    "connectTitle": "Ready to make it happen?",
+    "connectBody": "Tell the concierge what you need and we'll connect you to the right places across the island.",
+    "askCta": "Ask the concierge",
+    "bestOf": "Best-of guides",
+    "partner": "Advertise with us",
+    "allGuides": "All guides"
   }
 }

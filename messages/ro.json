@@ -336,5 +336,19 @@
     "no": "Extrasezon",
     "best": "Marea e cea mai caldă în august și septembrie, dar mai, iunie, octombrie și începutul lui noiembrie sunt minunate pentru scăldat, cu mai puțină aglomerație. Iarna e blândă și verde — mai potrivită pentru explorare decât pentru plajă; serile din octombrie se răcesc repede, așa că ia o jachetă subțire.",
     "askCta": "Întreabă concierge-ul despre datele tale"
+  },
+  "guide": {
+    "title": "Ghiduri practice",
+    "intro": "Răspunsuri reale la întrebările reale despre vacanța și viața în Cipru — cu prețuri și cu oamenii care fac lucrurile să se întâmple.",
+    "crumb": "Ghiduri",
+    "exploreTitle": "Pe Cyprus Lifestyle",
+    "relatedTitle": "Întrebări conexe",
+    "moreInTitle": "Mai multe despre {topic}",
+    "connectTitle": "Gata să treci la fapte?",
+    "connectBody": "Spune-i concierge-ului ce ai nevoie și te conectăm cu locurile potrivite de pe insulă.",
+    "askCta": "Întreabă concierge-ul",
+    "bestOf": "Ghiduri „Cele mai bune”",
+    "partner": "Fă reclamă la noi",
+    "allGuides": "Toate ghidurile"
   }
 }

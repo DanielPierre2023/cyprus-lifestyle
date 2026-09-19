@@ -5,7 +5,8 @@
 // key that authorises the function stays server-side only.
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/ratelimit';
-import { retrieveKnowledge, compactForConcierge } from '@/lib/knowledge/qa';
+import { retrieveKnowledge, guideHref } from '@/lib/knowledge/qa';
+import { localizedIntent } from '@/lib/knowledge/qa.i18n';
 
 export const runtime = 'nodejs';
 export const maxDuration = 45;
@@ -24,8 +25,15 @@ export async function POST(req: NextRequest) {
   if (!url || !key) return NextResponse.json({ ok: false, error: 'The concierge is not configured.' }, { status: 500 });
 
   // Ground the concierge in the practical knowledge base (the master intent map):
-  // pick the most relevant priced answers + our on-site pages and hand them over.
-  const knowledge = compactForConcierge(retrieveKnowledge(q, 6));
+  // pick the most relevant priced answers and hand them over, each with a link to
+  // its full guide page labelled in the visitor's language (so nothing leaks English).
+  const knowledge = retrieveKnowledge(q, 6).map(({ item }) => ({
+    id: item.id,
+    q: item.q,
+    a: item.a,
+    res: [{ l: localizedIntent(item.id, locale).q, p: guideHref(item.id) }],
+    connect: item.connect,
+  }));
 
   try {
     const res = await fetch(`${url}/functions/v1/concierge`, {

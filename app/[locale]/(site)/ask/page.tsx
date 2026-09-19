@@ -57,7 +57,8 @@ export default async function AskPage({ params }: { params: Promise<{ locale: st
       </div>
       <div className="wrap section">
         <Concierge locale={l} labels={labels} autofocus />
-        <p style={{ marginTop: 22, fontFamily: 'var(--sans)', fontSize: 15 }}>
+        <p style={{ marginTop: 22, fontFamily: 'var(--sans)', fontSize: 15, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+          <Link href="/guide">{t('guide.title')} →</Link>
           <Link href="/when-to-visit">{t('whenToVisit.title')} →</Link>
         </p>
       </div>

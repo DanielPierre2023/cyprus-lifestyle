@@ -336,5 +336,19 @@
     "no": "Außerhalb der Saison",
     "best": "Das Meer ist im August und September am wärmsten, aber Mai, Juni, Oktober und Anfang November sind herrlich zum Baden — mit weniger Andrang. Der Winter ist mild und grün, eher zum Entdecken als für den Strand; ab Oktober kühlen die Abende rasch ab, also eine leichte Jacke einpacken.",
     "askCta": "Fragen Sie den Concierge zu Ihren Terminen"
+  },
+  "guide": {
+    "title": "Praktische Ratgeber",
+    "intro": "Echte Antworten auf die echten Fragen zu Urlaub und Leben in Zypern — mit Preisen und den Menschen, die es möglich machen.",
+    "crumb": "Ratgeber",
+    "exploreTitle": "Auf Cyprus Lifestyle",
+    "relatedTitle": "Verwandte Fragen",
+    "moreInTitle": "Mehr zu {topic}",
+    "connectTitle": "Bereit, es umzusetzen?",
+    "connectBody": "Sagen Sie dem Concierge, was Sie brauchen, und wir verbinden Sie mit den richtigen Adressen auf der ganzen Insel.",
+    "askCta": "Fragen Sie den Concierge",
+    "bestOf": "Bestenlisten",
+    "partner": "Werben Sie bei uns",
+    "allGuides": "Alle Ratgeber"
   }
 }
