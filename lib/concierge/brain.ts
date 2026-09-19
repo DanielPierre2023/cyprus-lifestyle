@@ -86,9 +86,28 @@ function readIntent(q: string): { types: string[]; districts: string[] } {
   return { types, districts };
 }
 
+// The directory columns we surface as a Pick (locale-aware, with English fallback).
+const dirCols = (locale: string) =>
+  `slug,type,district,price_band,rating,rating_count,verified,image,name_${locale},name_en,summary_${locale},summary_en`;
+
+function rowToPick(r: Record<string, unknown>, locale: string): Pick {
+  return {
+    slug: String(r.slug || ''),
+    type: String(r.type || ''),
+    name: String(r[`name_${locale}`] || r.name_en || ''),
+    district: (r.district as string) ?? null,
+    rating: (r.rating as number) ?? null,
+    rating_count: (r.rating_count as number) ?? null,
+    price_band: (r.price_band as string) ?? null,
+    image: (r.image as string) ?? null,
+    verified: Boolean(r.verified),
+  };
+}
+
+// Keyword + intent retrieval — precise on exact names, types and districts.
 export async function searchDirectory(locale: string, q: string, limit = 8): Promise<Pick[]> {
   const sb = supabaseAdmin();
-  const cols = `slug,type,district,price_band,rating,rating_count,verified,image,name_${locale},name_en,summary_${locale},summary_en`;
+  const cols = dirCols(locale);
   const seen = new Set<string>();
   const out: Pick[] = [];
   const push = (rows: Record<string, unknown>[] | null) => {
@@ -96,16 +115,7 @@ export async function searchDirectory(locale: string, q: string, limit = 8): Pro
       const slug = String(r.slug || '');
       if (!slug || seen.has(slug)) continue;
       seen.add(slug);
-      out.push({
-        slug, type: String(r.type || ''),
-        name: String(r[`name_${locale}`] || r.name_en || ''),
-        district: (r.district as string) ?? null,
-        rating: (r.rating as number) ?? null,
-        rating_count: (r.rating_count as number) ?? null,
-        price_band: (r.price_band as string) ?? null,
-        image: (r.image as string) ?? null,
-        verified: Boolean(r.verified),
-      });
+      out.push(rowToPick(r, locale));
     }
   };
   const { types, districts } = readIntent(q);
@@ -127,24 +137,56 @@ export async function searchDirectory(locale: string, q: string, limit = 8): Pro
       const { data } = await query.order('rating', { ascending: false, nullsFirst: false }).limit(10);
       push(data as Record<string, unknown>[] | null);
     }
-    if (out.length < 4) {
-      const { data } = await sb.from('directory_listings').select(cols).eq('status', 'published')
-        .order('rating', { ascending: false, nullsFirst: false }).limit(10);
-      push(data as Record<string, unknown>[] | null);
-    }
   } catch { /* directory unavailable — the KB still grounds the answer */ }
   return out.slice(0, limit);
 }
 
-// Semantic KB recall (pgvector). Returns intent ids by similarity, or [] when
-// embeddings aren't configured yet — so the concierge always falls back to keyword.
-async function vectorKbIds(query: string): Promise<string[]> {
-  const vec = await embedText(query);
+// Generic fallback — the best-rated published listings, when nothing else matched.
+async function topRated(locale: string, limit = 8): Promise<Pick[]> {
+  try {
+    const { data } = await supabaseAdmin().from('directory_listings').select(dirCols(locale))
+      .eq('status', 'published').order('rating', { ascending: false, nullsFirst: false }).limit(limit);
+    return ((data as Record<string, unknown>[] | null) || []).map((r) => rowToPick(r, locale));
+  } catch { return []; }
+}
+
+// Hydrate full Picks for a set of slugs, preserving the given order (turns the
+// slugs from semantic search back into rich, published candidates).
+async function hydrateSlugs(locale: string, slugs: string[]): Promise<Pick[]> {
+  if (!slugs.length) return [];
+  try {
+    const { data } = await supabaseAdmin().from('directory_listings').select(dirCols(locale))
+      .eq('status', 'published').in('slug', slugs);
+    const bySlug = new Map<string, Record<string, unknown>>();
+    for (const r of (data as Record<string, unknown>[] | null) || []) bySlug.set(String(r.slug), r);
+    const out: Pick[] = [];
+    for (const slug of slugs) { const r = bySlug.get(slug); if (r) out.push(rowToPick(r, locale)); }
+    return out;
+  } catch { return []; }
+}
+
+// ── Semantic recall (pgvector) — one query embedding feeds both the KB and the
+// whole directory. Returns [] whenever embeddings aren't configured, so the
+// concierge always degrades cleanly to keyword search. ────────────────────────
+async function vectorKbIds(vec: number[] | null): Promise<string[]> {
   if (!vec) return [];
   try {
     const { data, error } = await supabaseAdmin().rpc('match_kb', { query_embedding: vec, match_count: 6 });
     if (error || !Array.isArray(data)) return [];
     return (data as { id: string }[]).map((r) => String(r.id)).filter(Boolean);
+  } catch { return []; }
+}
+
+// Directory-wide semantic search: the concierge can now find a listing by what it
+// IS ("somewhere romantic for an anniversary", "a quiet family beach near Paphos")
+// even when the wording matches no name, tag or summary term.
+async function vectorDirectory(locale: string, vec: number[] | null, limit = 8): Promise<Pick[]> {
+  if (!vec) return [];
+  try {
+    const { data, error } = await supabaseAdmin().rpc('match_directory', { query_embedding: vec, match_count: Math.max(limit, 10) });
+    if (error || !Array.isArray(data)) return [];
+    const slugs = (data as { slug: string }[]).map((r) => String(r.slug)).filter(Boolean).slice(0, limit);
+    return hydrateSlugs(locale, slugs);
   } catch { return []; }
 }
 
@@ -160,13 +202,30 @@ function mergeKbHits(keyword: QAHit[], vecIds: string[], max = 6): QAHit[] {
   return out.slice(0, max);
 }
 
+// Keyword directory hits first (precise), then semantic-only additions, deduped.
+function mergeDirHits(primary: Pick[], extra: Pick[], max = 8): Pick[] {
+  const out: Pick[] = [...primary];
+  const seen = new Set(primary.map((p) => p.slug));
+  for (const p of extra) { if (p.slug && !seen.has(p.slug)) { out.push(p); seen.add(p.slug); } }
+  return out.slice(0, max);
+}
+
 // ── Assemble the grounded context for one turn (from the latest user message) ──
 export async function assembleContext(locale: string, latestUser: string): Promise<ConciergeContext> {
   const kbKeyword = retrieveKnowledge(latestUser, 5);
-  const [candidates, kbVecIds] = await Promise.all([
+  // One embedding for the whole turn, computed alongside the keyword search; it
+  // feeds both semantic layers. null (no OPENAI_API_KEY) → keyword-only fallback.
+  const [keywordPicks, qvec] = await Promise.all([
     searchDirectory(locale, latestUser, 8),
-    vectorKbIds(latestUser), // [] unless OPENAI_API_KEY + embeddings exist → keyword-only fallback
+    embedText(latestUser),
   ]);
+  const [kbVecIds, vecPicks] = await Promise.all([
+    vectorKbIds(qvec),
+    vectorDirectory(locale, qvec, 8),
+  ]);
+  let candidates = mergeDirHits(keywordPicks, vecPicks, 8);
+  if (candidates.length < 4) candidates = mergeDirHits(candidates, await topRated(locale, 8), 8);
+
   const kb = mergeKbHits(kbKeyword, kbVecIds);
   const guides: GuideLink[] = kb.slice(0, 4).map((h) => ({ label: localizedIntent(h.item.id, locale).q, path: guideHref(h.item.id) }));
   const canRoute = candidates.length > 0 || kb.some((h) => h.item.connect.length > 0);
