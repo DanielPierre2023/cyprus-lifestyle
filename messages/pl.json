@@ -204,7 +204,9 @@
     "searchPlaces": "Szukaj miejsc, lokali, wydarzeń…",
     "inView": "widocznych",
     "noMatches": "Nic nie pasuje do tych filtrów.",
-    "mapAria": "Mapa"
+    "mapAria": "Mapa",
+    "browseByCategory": "Przeglądaj według kategorii",
+    "getARide": "Zamów taksówkę"
   },
   "membership": {
     "kicker": "Członkostwo",
@@ -305,5 +307,19 @@
     "title": "Kolekcja Luksusu",
     "intro": "To, co najlepsze na wyspie, w każdej kategorii — adresy warte przemierzenia całego Cypru.",
     "strip": "To, co najlepsze na wyspie — wyselekcjonowane"
+  },
+  "groups": {
+    "hospitality": "Gastronomia & Nocne życie",
+    "stays": "Noclegi",
+    "realestate": "Nieruchomości & Dom",
+    "professional": "Biznes & Usługi profesjonalne",
+    "services": "Usługi codzienne",
+    "health": "Zdrowie & Wellness",
+    "retail": "Zakupy",
+    "food": "Wino & Kuchnia",
+    "nature": "Plaże & Natura",
+    "culture": "Kultura & Doświadczenia",
+    "community": "Edukacja & Społeczność",
+    "mobility": "Transport"
   }
 }

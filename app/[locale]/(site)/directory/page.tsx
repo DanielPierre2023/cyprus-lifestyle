@@ -3,7 +3,8 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { DIRECTORY_TYPES, getListings, getDirectoryMapPoints, getDirectoryCounts } from '@/lib/queries';
+import { DIRECTORY_TYPES, getListings, getDirectoryMapPoints, getDirectoryCounts, getGroupCounts } from '@/lib/queries';
+import { TAXONOMY, groupColor } from '@/lib/taxonomy';
 import { breadcrumbJsonLd, itemListJsonLd, ld, pageMetadata } from '@/lib/seo';
 import DirectoryMap from '@/components/DirectoryMap';
 import CoverImage from '@/components/CoverImage';
@@ -29,11 +30,13 @@ export default async function DirectoryIndex({ params }: { params: Promise<{ loc
   const t = await getTranslations();
   // Map = every published listing (paginated past the 1000 cap). Chips = true head
   // counts. Sections = a small preview per category (the full list lives on /directory/[type]).
-  const [rawPoints, counts, previews] = await Promise.all([
+  const [rawPoints, counts, groupCounts, previews] = await Promise.all([
     getDirectoryMapPoints(l),
     getDirectoryCounts(),
+    getGroupCounts(),
     Promise.all(DIRECTORY_TYPES.map(async (ty) => ({ ty, items: await getListings(l, ty, PREVIEW) }))),
   ]);
+  const catGroups = TAXONOMY.filter((g) => (groupCounts[g.key] || 0) > 0);
   const points = rawPoints.map((p) => ({ lat: p.lat, lng: p.lng, name: p.name, type: p.type, image: p.image, href: `/${l}/directory/${p.type}/${p.slug}` }));
   const typeLabels: Record<string, string> = Object.fromEntries(DIRECTORY_TYPES.map((ty) => [ty, t(`directory.${ty}`)]));
   const groups = previews.map((g) => ({ ...g, count: counts[g.ty] || 0 })).filter((g) => g.count > 0);
@@ -82,6 +85,29 @@ export default async function DirectoryIndex({ params }: { params: Promise<{ loc
           .dir-lux-s{font-family:var(--sans);font-size:13px;letter-spacing:.02em;color:#d7cdb8;margin-left:auto}
         `}</style>
       </div>
+
+      {catGroups.length ? (
+        <div className="wrap section">
+          <h2 className="dir-groups-h">{t('directory.browseByCategory')}</h2>
+          <div className="dir-groups">
+            {catGroups.map((g) => (
+              <Link key={g.key} href={`/directory/g/${g.key}`} className="dir-gchip">
+                <span className="d" style={{ background: groupColor(g.key) }} />
+                {t(`groups.${g.key}`)}
+                <span className="n">{groupCounts[g.key]}</span>
+              </Link>
+            ))}
+          </div>
+          <style>{`
+            .dir-groups-h{font-family:var(--disp);font-weight:600;font-size:22px;margin:0 0 14px}
+            .dir-groups{display:flex;flex-wrap:wrap;gap:10px}
+            .dir-gchip{display:inline-flex;align-items:center;gap:9px;padding:9px 15px;border:1px solid var(--line,#e0d6c1);border-radius:999px;background:#fff;font-family:var(--sans);font-size:15px;color:var(--ink,#171310)}
+            .dir-gchip:hover{background:var(--paper-2,#efe8d8);text-decoration:none;border-color:#C9A24C}
+            .dir-gchip .d{width:9px;height:9px;border-radius:50%;display:inline-block}
+            .dir-gchip .n{font-size:12px;color:var(--ink-soft,#5b5346);background:var(--paper-2,#efe8d8);border-radius:999px;padding:1px 8px}
+          `}</style>
+        </div>
+      ) : null}
 
       <div className="wrap section">
         <div className="dir-concierge">

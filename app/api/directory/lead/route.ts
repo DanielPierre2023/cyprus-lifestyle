@@ -57,6 +57,23 @@ export async function POST(req: NextRequest) {
     }).then(() => {}, () => {});
   }
 
+  // Route the lead to the BUSINESS itself, if we hold a contact address — the
+  // heart of the flywheel: a verified business receives real enquiries. Replies
+  // go straight to the enquirer.
+  try {
+    const { data: L } = await sb.from('directory_listings').select('email').eq('slug', listingSlug).maybeSingle();
+    const bizEmail = ((L?.email as string) || '').trim();
+    if (bizEmail && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(bizEmail)) {
+      const bizHtml = brandedEmail({
+        locale,
+        heading: 'A new enquiry via Cyprus Lifestyle',
+        bodyHtml: `<p><strong>${esc(name)}</strong><br>${esc(email)}</p>` + (message ? `<p>${esc(message)}</p>` : '') + '<p style="color:#8a5b12">Reply to this email to respond directly.</p>',
+        preheader: `New enquiry for ${listingName || listingSlug}`,
+      });
+      await sendEmail({ to: bizEmail, subject: `New enquiry — ${listingName || listingSlug}`, html: bizHtml, replyTo: email }).catch(() => {});
+    }
+  } catch { /* routing is best-effort — the lead is recorded regardless */ }
+
   // Notify the desk (best-effort; a failure never fails the submission).
   const to = process.env.DIRECTORY_INBOX || process.env.ADVERTISE_INBOX || process.env.EMAIL_FROM;
   if (to) {

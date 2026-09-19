@@ -33,10 +33,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       entries.push(entry(`/directory/${r.type}/${r.slug}`, r.updated_at ? new Date(r.updated_at) : undefined));
     }
     // Programmatic collection guides ("best restaurants in Paphos", …).
-    const { getCollectionFacets } = await import('@/lib/queries');
+    const { getCollectionFacets, getGroupCounts } = await import('@/lib/queries');
     for (const f of await getCollectionFacets()) {
       entries.push(entry(`/best/${f.slug}`));
     }
+    // Category-group hubs (the 12-group taxonomy).
+    const { GROUP_KEYS } = await import('@/lib/taxonomy');
+    const gc = await getGroupCounts();
+    for (const g of GROUP_KEYS) if ((gc[g] || 0) > 0) entries.push(entry(`/directory/g/${g}`));
   } catch {
     /* a sitemap of the static routes is still valid without the dynamic lists */
   }

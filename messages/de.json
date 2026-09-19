@@ -204,7 +204,9 @@
     "searchPlaces": "Orte, Locations, Events suchen…",
     "inView": "in Ansicht",
     "noMatches": "Nichts entspricht diesen Filtern.",
-    "mapAria": "Karte"
+    "mapAria": "Karte",
+    "browseByCategory": "Nach Kategorie stöbern",
+    "getARide": "Taxi bestellen"
   },
   "membership": {
     "kicker": "Mitgliedschaft",
@@ -305,5 +307,19 @@
     "title": "Die Luxus-Kollektion",
     "intro": "Das Feinste der Insel, in jeder Kategorie — die Adressen, für die sich der Weg quer durch Zypern lohnt.",
     "strip": "Das Feinste der Insel, kuratiert"
+  },
+  "groups": {
+    "hospitality": "Essen & Ausgehen",
+    "stays": "Unterkünfte",
+    "realestate": "Immobilien & Zuhause",
+    "professional": "Business & Dienstleistungen",
+    "services": "Alltagsdienste",
+    "health": "Gesundheit & Wellness",
+    "retail": "Shopping",
+    "food": "Wein & Kulinarik",
+    "nature": "Strände & Natur",
+    "culture": "Kultur & Erlebnisse",
+    "community": "Bildung & Gemeinschaft",
+    "mobility": "Mobilität"
   }
 }

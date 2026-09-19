@@ -4,6 +4,7 @@ import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Locale } from '@/lib/locales';
 import { MIN_COLLECTION_SIZE, collectionSlug, slugifyDistrict, type CollectionFacet } from '@/lib/collections';
+import { GROUP_KEYS } from '@/lib/taxonomy';
 
 export interface Card {
   id: string; slug: string; title: string; excerpt: string; category: string | null;
@@ -104,9 +105,10 @@ export interface Listing {
   url: string | null; phone: string | null; image: string | null;
   tags: string[]; featured: boolean; verified: boolean;
   rating: number | null; rating_count: number | null;
+  luxury: boolean; category_group: string | null; subtype: string | null;
 }
 const LISTING_COLS = (l: Locale) =>
-  `id, slug, type, district, address, lat, lng, price_band, url, phone, image, tags, featured, verified, rating, rating_count, name_${l}, name_en, summary_${l}, summary_en`;
+  `id, slug, type, district, address, lat, lng, price_band, url, phone, image, tags, featured, verified, rating, rating_count, luxury, category_group, subtype, name_${l}, name_en, summary_${l}, summary_en`;
 function toListing(r: Record<string, unknown>, l: Locale): Listing {
   return {
     id: String(r.id), slug: String(r.slug), type: String(r.type), district: (r.district as string) ?? null,
@@ -117,6 +119,7 @@ function toListing(r: Record<string, unknown>, l: Locale): Listing {
     phone: (r.phone as string) ?? null, image: (r.image as string) ?? null,
     tags: (r.tags as string[]) ?? [], featured: Boolean(r.featured), verified: Boolean(r.verified),
     rating: (r.rating as number) ?? null, rating_count: (r.rating_count as number) ?? null,
+    luxury: Boolean(r.luxury), category_group: (r.category_group as string) ?? null, subtype: (r.subtype as string) ?? null,
   };
 }
 // haversine distance in km between two lat/lng points
@@ -204,14 +207,43 @@ export async function getLuxuryListings(locale: Locale, limit = 30): Promise<Lis
     .order('rating', { ascending: false, nullsFirst: false })
     .limit(500);
   const tier = (b: string | null) => (b === '€€€€' ? 3 : b === '€€€' ? 2 : 0);
+  // The editor-set `luxury` flag leads; the signal-based net catches the rest.
   const rows = ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale))
-    .filter((x) => x.name && x.image && (tier(x.price_band) >= 2 || (x.rating != null && x.rating >= 4.7)));
+    .filter((x) => x.name && x.image && (x.luxury || tier(x.price_band) >= 2 || (x.rating != null && x.rating >= 4.7)));
   rows.sort((a, b) =>
-    Number(b.featured) - Number(a.featured)
+    Number(b.luxury) - Number(a.luxury)
+    || Number(b.featured) - Number(a.featured)
     || tier(b.price_band) - tier(a.price_band)
     || (b.rating ?? 0) - (a.rating ?? 0)
     || (b.rating_count ?? 0) - (a.rating_count ?? 0));
   return rows.slice(0, limit);
+}
+
+// ── Category groups (the 12-group taxonomy) ─────────────────────────────────
+// Published head-count per group, for the "browse by category" navigation.
+export async function getGroupCounts(): Promise<Record<string, number>> {
+  const sb = supabaseAdmin();
+  const out: Record<string, number> = {};
+  await Promise.all(GROUP_KEYS.map(async (g) => {
+    const { count } = await sb.from('directory_listings').select('id', { count: 'exact', head: true }).eq('status', 'published').eq('category_group', g);
+    out[g] = count || 0;
+  }));
+  return out;
+}
+// Every published listing in a group (paginated past the 1000-row cap).
+export async function getByGroup(locale: Locale, group: string): Promise<Listing[]> {
+  const out: Listing[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data } = await supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale))
+      .eq('status', 'published').eq('category_group', group)
+      .order('featured', { ascending: false }).order('rating', { ascending: false, nullsFirst: false }).order('name_en', { ascending: true })
+      .range(from, from + PAGE - 1);
+    const rows = (data || []) as unknown as Record<string, unknown>[];
+    out.push(...rows.map((r) => toListing(r, locale)).filter((x) => x.name));
+    if (rows.length < PAGE) break;
+  }
+  return out;
 }
 
 // ── Collections: type × district guide pages ("best restaurants in Paphos") ──

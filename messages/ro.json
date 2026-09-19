@@ -204,7 +204,9 @@
     "searchPlaces": "Caută locuri, spații, evenimente…",
     "inView": "vizibile",
     "noMatches": "Nimic nu corespunde acestor filtre.",
-    "mapAria": "Hartă"
+    "mapAria": "Hartă",
+    "browseByCategory": "Explorează pe categorii",
+    "getARide": "Comandă un taxi"
   },
   "membership": {
     "kicker": "Membri",
@@ -305,5 +307,19 @@
     "title": "Colecția de Lux",
     "intro": "Cele mai fine locuri ale insulei, în fiecare categorie — adresele pentru care merită să traversezi Ciprul.",
     "strip": "Cele mai fine locuri ale insulei, selectate"
+  },
+  "groups": {
+    "hospitality": "Restaurante & Viață de noapte",
+    "stays": "Cazare",
+    "realestate": "Imobiliare & Casă",
+    "professional": "Afaceri & Servicii profesionale",
+    "services": "Servicii zilnice",
+    "health": "Sănătate & Wellness",
+    "retail": "Cumpărături",
+    "food": "Vin & Gastronomie",
+    "nature": "Plaje & Natură",
+    "culture": "Cultură & Experiențe",
+    "community": "Educație & Comunitate",
+    "mobility": "Transport"
   }
 }

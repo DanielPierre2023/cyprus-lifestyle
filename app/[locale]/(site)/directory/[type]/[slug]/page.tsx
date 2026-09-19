@@ -10,6 +10,7 @@ import DirectoryMap from '@/components/DirectoryMap';
 import CoverImage from '@/components/CoverImage';
 import TrackView from '@/components/TrackView';
 import EnquiryForm, { type EnquiryLabels } from '@/components/EnquiryForm';
+import { TAXI_APPS } from '@/lib/mobility';
 
 export const revalidate = 300;
 
@@ -188,6 +189,12 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
               {x.url ? <a className="btn" href={x.url} target="_blank" rel="noopener nofollow">{t('directory.visit')}</a> : null}
               {directions ? <a className="btn ghost" href={directions} target="_blank" rel="noopener noreferrer">{t('directory.directions')}</a> : null}
             </div>
+            {directions ? (
+              <div className="lh-ride">
+                <span className="lh-ride-k">{t('directory.getARide')}</span>
+                <span className="lh-ride-apps">{TAXI_APPS.map((a) => <a key={a.name} href={a.url} target="_blank" rel="noopener nofollow">{a.name}</a>)}</span>
+              </div>
+            ) : null}
           </div>
           {points.length ? <div className="lh-map"><DirectoryMap points={points} height={300} locale={l} typeLabels={typeLabels} viewLabel={t('directory.view')} placesLabel={t('directory.places')} ariaLabel={t('directory.mapAria')} /></div> : null}
           <EnquiryForm listingSlug={x.slug} listingType={x.type} listingName={x.name} locale={l} labels={enqLabels} />
@@ -237,6 +244,11 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
         .lh-fact .v{font-family:var(--body);font-size:16px;color:var(--ink,#171310)}
         .lh-actions{display:flex;flex-direction:column;gap:9px}
         .lh-actions .btn{text-align:center}
+        .lh-ride{margin-top:14px;display:flex;flex-direction:column;gap:6px}
+        .lh-ride-k{font-family:var(--sans);text-transform:uppercase;letter-spacing:.12em;font-size:10.5px;color:var(--ink-soft,#5b5346)}
+        .lh-ride-apps{display:flex;flex-wrap:wrap;gap:8px}
+        .lh-ride-apps a{font-family:var(--sans);font-size:13px;color:#8a5b12;font-weight:600;border:1px solid var(--line,#e0d6c1);border-radius:999px;padding:3px 11px}
+        .lh-ride-apps a:hover{border-color:#C9A24C;text-decoration:none}
         .lh-map{border-radius:6px;overflow:hidden}
         .lh-trust{font-family:var(--sans);font-size:12px;color:var(--ink-soft,#5b5346);line-height:1.5;margin:2px 0 0}
         .lh-trust a{color:#8a5b12;font-weight:600}

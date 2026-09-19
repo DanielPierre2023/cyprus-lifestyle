@@ -204,7 +204,9 @@
     "searchPlaces": "Search places, venues, events…",
     "inView": "in view",
     "noMatches": "Nothing matches those filters.",
-    "mapAria": "Map"
+    "mapAria": "Map",
+    "browseByCategory": "Browse by category",
+    "getARide": "Order a taxi"
   },
   "membership": {
     "kicker": "Membership",
@@ -305,5 +307,19 @@
     "title": "The Luxury Collection",
     "intro": "The island's finest, across every category — the addresses worth crossing Cyprus for.",
     "strip": "The island's finest, curated"
+  },
+  "groups": {
+    "hospitality": "Dining & Nightlife",
+    "stays": "Stays",
+    "realestate": "Real Estate & Home",
+    "professional": "Business & Professional",
+    "services": "Everyday Services",
+    "health": "Health & Wellness",
+    "retail": "Shopping",
+    "food": "Wine & Food",
+    "nature": "Beaches & Nature",
+    "culture": "Culture & Experiences",
+    "community": "Education & Community",
+    "mobility": "Getting Around"
   }
 }
