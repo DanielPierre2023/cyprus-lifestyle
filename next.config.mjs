@@ -13,6 +13,9 @@ const csp = [
   "frame-ancestors 'self'",
   "form-action 'self'",
   "img-src 'self' data: blob: https:",
+  // The concierge plays its neural-voice reply from a blob: URL, so media-src must
+  // allow blob: (without this, default-src 'self' blocks the audio entirely).
+  "media-src 'self' blob: data:",
   "font-src 'self' data:",
   "style-src 'self' 'unsafe-inline'",
   "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com",
@@ -27,7 +30,9 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()' },
+  // microphone=(self) lets the concierge's speech-to-text work on our own origin;
+  // autoplay=(self) lets the neural-voice reply play. camera/geolocation stay off.
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=(), browsing-topics=(), autoplay=(self)' },
 ];
 
 /** @type {import('next').NextConfig} */
