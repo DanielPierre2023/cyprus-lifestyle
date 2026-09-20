@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
   const answer = String(body.answer || '').trim().slice(0, 2000) || null;
   const name = String(body.name || '').trim().slice(0, 120) || null;
   const email = String(body.email || '').trim().toLowerCase() || null;
+  const phone = String(body.phone || '').trim().slice(0, 40) || null;
   const note = String(body.note || '').trim().slice(0, 2000) || null;
   const locale: Locale = isLocale(String(body.locale)) ? (body.locale as Locale) : 'en';
   const rawPicks: Record<string, unknown>[] = Array.isArray(body.picks) ? (body.picks as Record<string, unknown>[]) : [];
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
   }
 
   const sb = supabaseAdmin();
-  const { error } = await sb.from('concierge_requests').insert({ query, answer, picks: picks.length ? picks : null, name, email, note, locale, status: 'new' });
+  const { error } = await sb.from('concierge_requests').insert({ query, answer, picks: picks.length ? picks : null, name, email, phone, note, locale, status: 'new' });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
 
   // Notify the desk (best-effort — the request is safely recorded either way).
@@ -49,7 +50,9 @@ export async function POST(req: NextRequest) {
       heading: 'New concierge request',
       bodyHtml:
         `<p style="font-size:17px"><strong>${esc(query)}</strong></p>` +
-        (name || email ? `<p>${esc(name || '')}${name && email ? ' · ' : ''}${email ? esc(email) : ''}</p>` : '<p><em>No contact left — demand signal.</em></p>') +
+        (name || email || phone
+          ? `<p>${[name, email, phone].filter(Boolean).map((v) => esc(String(v))).join(' · ')}</p>`
+          : '<p><em>No contact left — demand signal.</em></p>') +
         (note ? `<p>${esc(note)}</p>` : '') + picksHtml,
       preheader: `Concierge request: ${query.slice(0, 80)}`,
     });
