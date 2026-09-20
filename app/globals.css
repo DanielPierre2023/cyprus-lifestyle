@@ -242,6 +242,19 @@ html[lang="ar"] .article .prose p:first-of-type::first-letter { font-size: inher
 .legal-updated { font-family: var(--sans); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-top: 16px; }
 .contact-details { margin-bottom: 44px; }
 
+/* Specialist card — a luxury call-out embedded in article prose */
+.prose .specialist-card { background: var(--paper-2); border: 1px solid var(--line); border-inline-start: 3px solid var(--gold); border-radius: 6px; padding: 26px 30px; margin: 2.4em 0; }
+.specialist-card .sc-eyebrow { font-family: var(--sans); text-transform: uppercase; letter-spacing: .2em; font-size: 10.5px; color: var(--gold-deep); font-weight: 600; display: block; }
+.specialist-card .sc-title { font-family: var(--disp); font-size: 25px; margin: 10px 0 6px; letter-spacing: -.01em; }
+.specialist-card .sc-lead { font-family: var(--body); font-style: italic; color: var(--ink-soft); font-size: 15.5px; margin: 0 0 16px; }
+.specialist-card .sc-links { list-style: none; padding: 0; margin: 0 0 18px; display: grid; gap: 9px; }
+.specialist-card .sc-links li { margin: 0; }
+.specialist-card .sc-links a { font-family: var(--sans); font-size: 14.5px; color: var(--ink); text-decoration: none; display: inline-flex; align-items: baseline; gap: 9px; }
+.specialist-card .sc-links a::before { content: "—"; color: var(--gold); }
+.specialist-card .sc-links a:hover { color: var(--gold-deep); }
+.specialist-card .sc-cta { display: inline-block; font-family: var(--sans); font-size: 13px; letter-spacing: .05em; font-weight: 600; color: var(--obsidian); background: var(--gold); padding: 12px 22px; border-radius: 3px; text-decoration: none; }
+.specialist-card .sc-cta:hover { background: var(--gold-deep); color: #fff; }
+
 /* ── Newsletter ────────────────────────────────────────────────────────────── */
 .letter { background: var(--obsidian); color: var(--ivory); text-align: center; padding-block: 78px; }
 .letter .frame { max-width: 620px; margin: 0 auto; border: 1px solid var(--line-dark); padding: 50px 40px; position: relative; }
