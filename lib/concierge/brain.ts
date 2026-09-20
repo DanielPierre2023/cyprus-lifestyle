@@ -229,7 +229,18 @@ export async function assembleContext(locale: string, latestUser: string): Promi
   const kb = mergeKbHits(kbKeyword, kbVecIds);
   const guides: GuideLink[] = kb.slice(0, 4).map((h) => ({ label: localizedIntent(h.item.id, locale).q, path: guideHref(h.item.id) }));
   const canRoute = candidates.length > 0 || kb.some((h) => h.item.connect.length > 0);
-  return { candidates, picks: candidates.slice(0, 6), guides, kb, canRoute };
+  // Shown picks: never repeat the same brand (a chain in several districts would
+  // otherwise appear two or three times in one list). Keep the highest-ranked one.
+  const seenBrand = new Set<string>();
+  const picks: Pick[] = [];
+  for (const c of candidates) {
+    const bk = String(c.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (bk && seenBrand.has(bk)) continue;
+    if (bk) seenBrand.add(bk);
+    picks.push(c);
+    if (picks.length >= 6) break;
+  }
+  return { candidates, picks, guides, kb, canRoute };
 }
 
 // The context block appended to the system prompt for grounding.
@@ -277,11 +288,21 @@ export function latestUserText(messages: ChatMessage[]): string {
 
 interface AnthropicMessage { role: Role; content: string; }
 function buildAnthropicBody(system: string, messages: AnthropicMessage[], stream: boolean, maxTokens = 900) {
+  // NOTE: newer Claude models (sonnet-5 / opus-5) REJECT the `temperature` field
+  // with a 400 error, so it is intentionally not sent. Sending it was the second
+  // cause of "the concierge is busy" (the first was a wrong model id in lib/ai.ts).
   return {
     model: CONCIERGE_MODEL, max_tokens: maxTokens, system,
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
     stream,
   };
+}
+
+// Read ALL text blocks (sonnet-5/opus-5 may return a non-text block first).
+function extractText(data: unknown): string {
+  const blocks = (data as { content?: { type?: string; text?: string }[] })?.content;
+  if (!Array.isArray(blocks)) return '';
+  return blocks.filter((b) => b?.type === 'text' && b.text).map((b) => b.text).join('').trim();
 }
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 function anthropicHeaders(): Record<string, string> {
@@ -306,7 +327,8 @@ export async function runConcierge(
     signal: AbortSignal.timeout(60_000),
   });
   const data = await res.json().catch(() => ({}));
-  const text = data?.content?.[0]?.text || '';
+  if (!res.ok) console.error('[concierge] claude', res.status, JSON.stringify(data).slice(0, 300));
+  const text = extractText(data);
   return { text, ctx };
 }
 
@@ -347,6 +369,7 @@ export async function* streamConcierge(messages: ChatMessage[], locale: string, 
   yield { type: 'status', label: 'composing' };
 
   let gotText = false;
+  let errDetail = '';
 
   // Primary: stream the answer from Claude (needs CLAUDE_API_KEY on the Next side).
   if (process.env.CLAUDE_API_KEY) {
@@ -356,6 +379,10 @@ export async function* streamConcierge(messages: ChatMessage[], locale: string, 
         body: JSON.stringify(buildAnthropicBody(system, history, true)),
         signal: AbortSignal.timeout(90_000),
       });
+      if (!res.ok) {
+        errDetail = `claude ${res.status}: ${(await res.text().catch(() => '')).slice(0, 300)}`;
+        console.error('[concierge]', errDetail);
+      }
       if (res.ok && res.body) {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -381,7 +408,7 @@ export async function* streamConcierge(messages: ChatMessage[], locale: string, 
           }
         }
       }
-    } catch { /* fall through to the resilient fallback */ }
+    } catch (e) { errDetail = (e as Error).message; console.error('[concierge]', errDetail); }
   }
 
   // Fallback: no key here, an error, or an empty stream → the edge concierge
@@ -391,7 +418,7 @@ export async function* streamConcierge(messages: ChatMessage[], locale: string, 
     if (ans) { gotText = true; yield { type: 'delta', text: ans }; }
   }
 
-  if (!gotText) yield { type: 'error', error: 'unavailable' };
+  if (!gotText) yield { type: 'error', error: errDetail || 'unavailable' };
   yield { type: 'meta', picks: ctx.picks, guides: ctx.guides, canRoute: ctx.canRoute };
   yield { type: 'done' };
 }
