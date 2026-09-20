@@ -180,7 +180,12 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
 
   function toggleVoiceOut() {
     const turningOn = !voiceOut;
-    if (turningOn) primeAudio(); else stopSpeaking(); // unlock audio within this click
+    if (turningOn) {
+      primeAudio(); // unlock audio within this click
+      // Immediately read the latest reply so there is instant, audible proof it works.
+      const last = [...msgs].reverse().find((m) => m.role === 'assistant' && !m.streaming && m.content);
+      if (last) { spokenRef.current.add(msgs.indexOf(last)); speak(last.content, locale); }
+    } else stopSpeaking();
     setVoiceOut(turningOn);
     try { localStorage.setItem('cl_voiceout', turningOn ? '1' : '0'); } catch { /* ignore */ }
   }
@@ -378,6 +383,16 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
                       {m.content}{m.streaming && <span className="cc-caret" aria-hidden="true" />}
                     </div>
 
+                    {m.role === 'assistant' && !m.streaming && m.content && (
+                      <button type="button" className="cc-listen" aria-label={labels.voice.readAloud} title={labels.voice.readAloud}
+                        onClick={() => { primeAudio(); speak(m.content, locale); }}>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M11 5 6 9H3v6h3l5 4V5Z" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /><path d="M18.5 6a8 8 0 0 1 0 12" />
+                        </svg>
+                        {labels.voice.readAloud}
+                      </button>
+                    )}
+
                     {m.role === 'assistant' && !m.streaming && m.guides && m.guides.length > 0 && (
                       <div className="cc-guides">
                         <span className="cc-lbl">{labels.guidesTitle}</span>
@@ -516,6 +531,8 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
         .cc-user .cc-msg-body{display:flex;flex-direction:column;align-items:flex-end}
         .cc-bubble{font-family:var(--body,'Lora',serif);font-size:16px;line-height:1.6;color:var(--ink,#1C1710);white-space:pre-wrap;word-wrap:break-word}
         .cc-user .cc-bubble{background:var(--paper-2,#EAE1CC);border:1px solid var(--line,#DDD2BB);border-radius:14px;padding:10px 14px;font-size:15.5px}
+        .cc-listen{display:inline-flex;align-items:center;gap:5px;margin-top:8px;font-family:var(--sans,'Jost',sans-serif);font-size:11.5px;font-weight:600;letter-spacing:.02em;color:#8a5b12;background:none;border:1px solid var(--line,#DDD2BB);border-radius:999px;padding:4px 11px;cursor:pointer}
+        .cc-listen:hover{border-color:#C9A24C;background:var(--card-2,#F6F0E2)}
         .cc-caret{display:inline-block;width:2px;height:1.05em;background:#C9A24C;margin-inline-start:2px;vertical-align:-2px;animation:ccblink 1s steps(2) infinite}
         @keyframes ccblink{50%{opacity:0}}
 
