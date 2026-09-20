@@ -270,10 +270,11 @@ html[lang="ar"] .article .prose p:first-of-type::first-letter { font-size: inher
 /* ── Footer ────────────────────────────────────────────────────────────────── */
 .foot { background: var(--obsidian); color: var(--champagne); padding-block: 62px 92px; border-top: 3px solid var(--gold); }
 .foot .top { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 40px; }
-.foot .foot-mono { display: block; width: 96px; height: 96px; margin-bottom: 20px; filter: drop-shadow(0 2px 8px rgba(0,0,0,.55)); }
+.foot .foot-brand { text-align: center; }
+.foot .foot-mono { display: block; width: 96px; height: 96px; margin: 0 auto 20px; filter: drop-shadow(0 2px 8px rgba(0,0,0,.55)); }
 .foot .brand { font-family: var(--disp); font-size: 30px; color: var(--ivory); letter-spacing: .05em; }
-.foot .brand + p { font-family: var(--body); font-style: italic; color: #9a927f; font-size: 15px; max-width: 34ch; margin-top: 12px; }
-.foot .foot-owner { font-family: var(--sans); text-transform: none; letter-spacing: .02em; font-size: 12.5px; line-height: 1.65; color: #8b8371; margin-top: 18px; max-width: 42ch; font-style: normal; }
+.foot .brand + p { font-family: var(--body); font-style: italic; color: #9a927f; font-size: 15px; max-width: 34ch; margin: 12px auto 0; }
+.foot .foot-owner { font-family: var(--sans); text-transform: none; letter-spacing: .02em; font-size: 12.5px; line-height: 1.65; color: #8b8371; margin: 18px auto 0; max-width: 42ch; font-style: normal; }
 .foot h4 { font-family: var(--sans); text-transform: uppercase; letter-spacing: .2em; font-size: 11px; color: var(--gold); margin: 0 0 16px; }
 .foot a { display: block; color: var(--champagne); opacity: .8; padding-block: 5px; font-family: var(--sans); font-size: 13px; letter-spacing: .04em; }
 .foot a:hover { color: var(--gold); opacity: 1; }
