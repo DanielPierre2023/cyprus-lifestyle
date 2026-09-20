@@ -41,7 +41,6 @@ export default function Header() {
               ))}
             </div>
             <Link className="sub" href="/directory">{t('directory')}</Link>
-            <Link className="sub" href="/map">{locale === 'el' ? 'Χάρτης' : locale === 'ro' ? 'Hartă' : locale === 'ar' ? 'خريطة' : 'Map'}</Link>
             <Link className="sub hide" href="/search" aria-label={t('search')}>{t('search')}</Link>
             <Link className="sub" href="/membership">{t('membership')}</Link>
             <Link className="sub" href="/#letter">{th('subscribe')}</Link>

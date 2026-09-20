@@ -28,6 +28,11 @@ interface Msg { role: 'user' | 'assistant'; content: string; picks?: Pick[]; gui
 const TYPE_DOT: Record<string, string> = { restaurant: '#C0492E', winery: '#7B2D42', hotel: '#1F6F78', beach: '#2F86C4', development: '#8A6D3B', vendor: '#4E7A46' };
 
 const SPEECH_LANG: Record<string, string> = { en: 'en-GB', el: 'el-GR', ro: 'ro-RO', ar: 'ar-SA', de: 'de-DE', pl: 'pl-PL', ru: 'ru-RU' };
+// Launcher label shown beside the concierge bell, per edition.
+const LAUNCH: Record<string, string> = {
+  en: 'Ask your concierge', el: 'Ρωτήστε τον concierge', ro: 'Întreabă-ți concierge-ul',
+  ar: 'اسأل الكونسيرج', de: 'Fragen Sie Ihren Concierge', pl: 'Zapytaj concierge’a', ru: 'Спросите консьержа',
+};
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function getSR(): any { return typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null; }
 // Premium read-aloud: generate the reply as speech via our server TTS (OpenAI
@@ -60,11 +65,13 @@ function silentWav(): string {
 function primeAudio() {
   const a = getAudioEl(); if (!a || audioPrimed) return;
   try {
+    a.muted = true; // muted playback is always permitted → this unlocks the element for later real playback
     a.src = silentWav();
+    const done = () => { audioPrimed = true; try { a.pause(); a.currentTime = 0; } catch { /* no-op */ } a.muted = false; };
     const p = a.play();
-    if (p && typeof p.then === 'function') p.then(() => { audioPrimed = true; try { a.pause(); a.currentTime = 0; } catch { /* no-op */ } }).catch(() => { /* stays unprimed */ });
-    else audioPrimed = true;
-  } catch { /* no-op */ }
+    if (p && typeof p.then === 'function') p.then(done).catch(() => { try { a.muted = false; } catch { /* no-op */ } });
+    else done();
+  } catch { try { a.muted = false; } catch { /* no-op */ } }
 }
 function browserSpeak(text: string, locale: string) {
   try {
@@ -90,7 +97,9 @@ async function speak(text: string, locale: string) {
     if (ttsUrl) { try { URL.revokeObjectURL(ttsUrl); } catch { /* no-op */ } ttsUrl = null; }
     ttsUrl = URL.createObjectURL(blob);
     a.src = ttsUrl;
-    await a.play();
+    a.muted = false;
+    try { await a.play(); }
+    catch { await new Promise((r) => setTimeout(r, 140)); await a.play(); } // one retry — autoplay unlock can lag the first reply
   } catch {
     if (locale === 'en') browserSpeak(t, locale); // English only; never a wrong-language voice
   }
@@ -149,6 +158,13 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
   useEffect(() => {
     setVoiceSupported(!!getSR());
     try { if (localStorage.getItem('cl_voiceout') === '1') setVoiceOut(true); } catch { /* ignore */ }
+    // Unlock audio on the very first user interaction anywhere, so the neural voice
+    // can play the reply in ANY language (not just English's browser-voice fallback).
+    const unlock = () => { primeAudio(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); window.removeEventListener('touchend', unlock); };
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('touchend', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    return () => { window.removeEventListener('pointerdown', unlock); window.removeEventListener('touchend', unlock); window.removeEventListener('keydown', unlock); };
   }, []);
 
   // Read the concierge's replies aloud when voice output is on.
@@ -296,13 +312,16 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
   return (
     <div dir={rtl ? 'rtl' : 'ltr'}>
       {!open && (
-        <button className="cc-bell" aria-label={labels.open} onClick={() => setOpen(true)}>
-          <span className="cc-bell-halo" aria-hidden="true" />
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M12 3.5a1.3 1.3 0 0 1 1.3 1.3v.7a5.7 5.7 0 0 1 4.4 5.55V15l1.3 1.8H5L6.3 15v-3.95A5.7 5.7 0 0 1 10.7 5.5v-.7A1.3 1.3 0 0 1 12 3.5Z" />
-            <path d="M10 19a2 2 0 0 0 4 0" />
-          </svg>
-        </button>
+        <div className="cc-launch">
+          <button type="button" className="cc-launch-tag" onClick={() => { primeAudio(); setOpen(true); }}>{LAUNCH[locale] || LAUNCH.en}</button>
+          <button className="cc-bell" aria-label={LAUNCH[locale] || labels.open} onClick={() => { primeAudio(); setOpen(true); }}>
+            <span className="cc-bell-halo" aria-hidden="true" />
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 3.5a1.3 1.3 0 0 1 1.3 1.3v.7a5.7 5.7 0 0 1 4.4 5.55V15l1.3 1.8H5L6.3 15v-3.95A5.7 5.7 0 0 1 10.7 5.5v-.7A1.3 1.3 0 0 1 12 3.5Z" />
+              <path d="M10 19a2 2 0 0 0 4 0" />
+            </svg>
+          </button>
+        </div>
       )}
 
       {open && (
@@ -420,9 +439,9 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
                 </button>
               )}
               <textarea
-                ref={inputRef} className="cc-input" rows={1} value={input}
+                ref={inputRef} className="cc-input" rows={2} value={input}
                 placeholder={listening ? labels.voice.listening : labels.placeholder} enterKeyHint="send"
-                onChange={(e) => { setInput(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
+                onChange={(e) => { setInput(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 168) + 'px'; }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); } }}
               />
               <button className="cc-go" type="submit" disabled={busy || input.trim().length < 2} aria-label={labels.send}>
@@ -434,6 +453,13 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
       )}
 
       <style>{`
+        .cc-launch{position:fixed;inset-block-end:calc(22px + env(safe-area-inset-bottom,0px));inset-inline-end:22px;z-index:1200;display:flex;align-items:center;gap:10px}
+        .cc-launch-tag{order:-1;font-family:var(--sans,'Jost',sans-serif);font-size:13.5px;font-weight:600;letter-spacing:.01em;color:#1C1710;
+          background:var(--paper,#F3EDDF);border:1px solid rgba(201,162,76,.55);border-radius:999px;padding:9px 15px;cursor:pointer;white-space:nowrap;
+          box-shadow:0 6px 20px rgba(11,14,17,.16);transition:transform .16s cubic-bezier(.2,0,0,1)}
+        .cc-launch-tag:hover{transform:translateY(-1px);border-color:#C9A24C}
+        @media (max-width:360px){.cc-launch-tag{font-size:12.5px;padding:8px 12px}}
+        .cc-launch .cc-bell{position:static;inset:auto}
         .cc-bell{position:fixed;inset-block-end:calc(22px + env(safe-area-inset-bottom,0px));inset-inline-end:22px;z-index:1200;
           width:60px;height:60px;border-radius:50%;border:1px solid rgba(201,162,76,.55);cursor:pointer;
           background:radial-gradient(120% 120% at 30% 25%, #1f1a12, #0b0e11);color:#E9C978;display:flex;align-items:center;justify-content:center;
@@ -533,7 +559,7 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
 
         .cc-composer{display:flex;gap:9px;align-items:flex-end;padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line,#DDD2BB);
           background:color-mix(in srgb, var(--paper,#F3EDDF) 82%, transparent);backdrop-filter:blur(8px)}
-        .cc-input{flex:1;resize:none;font-family:var(--body,'Lora',serif);font-size:16px;line-height:1.4;padding:11px 14px;border:1px solid var(--line,#DDD2BB);border-radius:14px;background:var(--card,#fff);color:var(--ink,#1C1710);max-height:120px}
+        .cc-input{flex:1;resize:none;font-family:var(--body,'Lora',serif);font-size:16px;line-height:1.5;padding:12px 14px;border:1px solid var(--line,#DDD2BB);border-radius:14px;background:var(--card,#fff);color:var(--ink,#1C1710);min-height:52px;max-height:168px;overflow-y:auto}
         .cc-input:focus{outline:none;border-color:#C9A24C;box-shadow:0 0 0 3px rgba(201,162,76,.16)}
         .cc-go{flex:none;width:44px;height:44px;border-radius:50%;border:0;background:#C9A24C;color:#0b0e11;cursor:pointer;display:flex;align-items:center;justify-content:center}
         .cc-go:hover{background:#b8912f}.cc-go:disabled{opacity:.45;cursor:default}

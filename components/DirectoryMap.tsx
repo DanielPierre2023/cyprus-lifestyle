@@ -124,6 +124,11 @@ export default function DirectoryMap({
     return !off[key];
   }).length;
 
+  // Map temporarily disabled site-wide until the luxury-grade map is ready
+  // (editorial decision). Flip MAP_ENABLED back to true to restore it everywhere.
+  const MAP_ENABLED = false;
+  if (!MAP_ENABLED) return null;
+
   return (
     // isolate: keep Leaflet's internal z-indexes (panes 400–700, controls up to
     // 1000) inside this box so they can't render over the fixed concierge chat.

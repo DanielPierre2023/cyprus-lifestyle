@@ -89,6 +89,11 @@ export default function LiveMap({ items, locale = 'en', labels, ui }: { items: L
     if (m) m.openPopup();
   }
 
+  // Map temporarily disabled until the luxury-grade map is ready (editorial
+  // decision). Flip MAP_ENABLED back to true to restore it.
+  const MAP_ENABLED = false;
+  if (!MAP_ENABLED) return null;
+
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', minHeight: 'calc(100vh - 120px)', border: '1px solid #1c2128', borderRadius: 6, overflow: 'hidden', isolation: 'isolate' }}>
       {/* Sidebar */}

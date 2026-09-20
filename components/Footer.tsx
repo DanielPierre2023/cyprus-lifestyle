@@ -1,10 +1,28 @@
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, getLocale } from 'next-intl/server';
 import { Link } from '@/lib/i18n/routing';
+import LocaleSwitch from '@/components/LocaleSwitch';
+import type { Locale } from '@/lib/locales';
 
 const CATS = ['property', 'relocation', 'culture', 'cyprus', 'business', 'escapes', 'table', 'agenda', 'people', 'world'] as const;
 
+// Cyprus Lifestyle is the media title of ADD Individual Solutions Ltd.
+const OWNER: Record<Locale, string> = {
+  en: 'Cyprus Lifestyle is part of the Media department of ADD Individual Solutions Ltd.',
+  el: 'Το Cyprus Lifestyle αποτελεί μέρος του τμήματος Media της ADD Individual Solutions Ltd.',
+  ro: 'Cyprus Lifestyle face parte din departamentul Media al ADD Individual Solutions Ltd.',
+  ar: 'Cyprus Lifestyle جزء من قسم الإعلام في شركة ADD Individual Solutions Ltd.',
+  de: 'Cyprus Lifestyle ist Teil der Media-Abteilung der ADD Individual Solutions Ltd.',
+  pl: 'Cyprus Lifestyle jest częścią działu Media firmy ADD Individual Solutions Ltd.',
+  ru: 'Cyprus Lifestyle — часть медиаотдела компании ADD Individual Solutions Ltd.',
+};
+const MADE: Record<Locale, string> = {
+  en: 'Made with ❤ in Cyprus', el: 'Φτιαγμένο με ❤ στην Κύπρο', ro: 'Creat cu ❤ în Cipru',
+  ar: 'صُنع بحب ❤ في قبرص', de: 'Mit ❤ in Zypern gemacht', pl: 'Zrobione z ❤ na Cyprze', ru: 'Сделано с ❤ на Кипре',
+};
+
 export default async function Footer() {
   const t = await getTranslations();
+  const locale = (await getLocale()) as Locale;
   const year = new Date().getFullYear();
   return (
     <footer className="foot">
@@ -39,7 +57,11 @@ export default async function Footer() {
         </div>
         <div className="fine">
           <span>© {year} {t('brand.name')} · Nicosia</span>
-          <span>EN · ΕΛ · RO · ع</span>
+          <LocaleSwitch />
+        </div>
+        <div className="fine fine-owner" style={{ marginTop: 8, gap: 10, opacity: 0.85, fontSize: 13 }}>
+          <span>{OWNER[locale] || OWNER.en}</span>
+          <span style={{ whiteSpace: 'nowrap' }}>{MADE[locale] || MADE.en}</span>
         </div>
       </div>
     </footer>
