@@ -28,9 +28,11 @@ export default async function Footer() {
     <footer className="foot">
       <div className="wrap">
         <div className="top">
-          <div>
+          <div className="foot-brand">
+            <img src="/brand/monogram.svg" alt="" className="foot-mono" aria-hidden="true" width={96} height={96} />
             <div className="brand">{t('brand.name')}</div>
-            <p>{t('home.footerBlurb')}</p>
+            <p className="foot-blurb">{t('home.footerBlurb')}</p>
+            <p className="foot-owner">{OWNER[locale] || OWNER.en}</p>
           </div>
           <div>
             <h4>{t('footer.sections')}</h4>
@@ -56,12 +58,9 @@ export default async function Footer() {
           </div>
         </div>
         <div className="fine">
-          <span>© {year} {t('brand.name')} · Nicosia</span>
-          <LocaleSwitch />
-        </div>
-        <div className="fine fine-owner" style={{ marginTop: 8, gap: 10, opacity: 0.85, fontSize: 13 }}>
-          <span>{OWNER[locale] || OWNER.en}</span>
-          <span style={{ whiteSpace: 'nowrap' }}>{MADE[locale] || MADE.en}</span>
+          <span className="foot-copy">© {year} {t('brand.name')} · Nicosia</span>
+          <span className="foot-made">{MADE[locale] || MADE.en}</span>
+          <LocaleSwitch placement="up" variant="foot" />
         </div>
       </div>
     </footer>

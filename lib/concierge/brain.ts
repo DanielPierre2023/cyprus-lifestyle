@@ -25,7 +25,7 @@ export interface ChatMessage { role: Role; content: string; }
 export interface Pick {
   slug: string; type: string; name: string; district: string | null;
   rating: number | null; rating_count: number | null; price_band: string | null;
-  image: string | null; verified?: boolean;
+  image: string | null; verified?: boolean; subtype?: string | null;
 }
 export interface GuideLink { label: string; path: string; }
 export interface ConciergeContext {
@@ -37,7 +37,6 @@ export interface ConciergeContext {
 }
 
 const LOCALES = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'];
-const DISTRICTS = ['paphos', 'limassol', 'larnaca', 'nicosia', 'famagusta', 'ayia napa', 'protaras', 'paralimni'];
 export const isConciergeLocale = (l: string) => LOCALES.includes(l);
 
 const LANG_NAME: Record<string, string> = {
@@ -74,28 +73,67 @@ const CY_FACTS =
   "Sea is swimmable roughly late May to early November, warmest (~27°C) in Aug–Sep; October is still very swimmable; winter is mild and green, better for villages and hiking than the beach. Northern Cyprus is never recommended.";
 
 // ── Directory retrieval (grounded candidates) ─────────────────────────────────
-function readIntent(q: string): { types: string[]; districts: string[] } {
-  const s = q.toLowerCase();
+// Multilingual intent detection. Guests write in ANY of the seven languages, so
+// the matcher recognises service terms in all of them — the old English-only
+// version silently missed e.g. Romanian "imobiliare" / "chirii auto", so a guest
+// asking (in their own language) for real estate or a hire car got nothing and
+// the concierge wrongly said "no listings". Each intent maps to one of the five
+// content `type`s or to a canonical `category_group` (which surfaces the service
+// directory: estate agents, car rental, movers, banks, insurance, lawyers, …).
+interface IntentDef { key: string; kind: 'type' | 'group'; words: string[]; }
+const INTENTS: IntentDef[] = [
+  { key: 'restaurant', kind: 'type', words: ['restaurant', 'dinner', 'lunch', 'dining', 'taverna', 'cuisine', 'brunch', 'εστιατόριο', 'φαγητό', 'ταβέρνα', 'mâncare', 'cină', 'tavernă', 'essen', 'abendessen', 'küche', 'restauracja', 'jedzenie', 'kolacja', 'ресторан', 'еда', 'ужин', 'مطعم', 'عشاء', 'مطاعم'] },
+  { key: 'hotel', kind: 'type', words: ['hotel', 'resort', 'accommodation', 'suite', 'ξενοδοχείο', 'διαμονή', 'θέρετρο', 'cazare', 'stațiune', 'unterkunft', 'ferienwohnung', 'nocleg', 'zakwaterowanie', 'отель', 'гостиниц', 'проживание', 'فندق', 'إقامة', 'منتجع'] },
+  { key: 'beach', kind: 'type', words: ['beach', 'seaside', 'sandy', 'παραλία', 'plajă', 'strand', 'plaża', 'пляж', 'شاطئ'] },
+  { key: 'winery', kind: 'type', words: ['winery', 'vineyard', 'wine tasting', 'οινοποιείο', 'αμπελών', 'cramă', 'podgorie', 'weingut', 'weinprobe', 'winnica', 'winiarnia', 'винодельн', 'виноградник', 'مصنع نبيذ', 'كرم'] },
+  { key: 'realestate', kind: 'group', words: ['real estate', 'property', 'apartment', 'estate agent', 'broker', 'letting', 'mortgage', 'new build', 'ακίνητα', 'ακίνητο', 'διαμέρισμα', 'μεσίτ', 'κτηματομεσίτ', 'imobiliar', 'proprietate', 'apartament', 'dezvoltator', 'immobilie', 'wohnung', 'makler', 'miete', 'nieruchomość', 'nieruchomości', 'mieszkanie', 'pośrednik', 'deweloper', 'недвижимост', 'квартир', 'риелтор', 'застройщик', 'عقار', 'شقة', 'وسيط عقاري'] },
+  { key: 'mobility', kind: 'group', words: ['car rental', 'rent a car', 'car hire', 'hire car', 'rent car', 'rental car', 'transfer', 'yacht charter', 'scooter', 'ενοικίαση αυτοκιν', 'αυτοκίνητο', 'μεταφορά', 'inchiriere auto', 'inchirieri auto', 'inchirier auto', 'chirii auto', 'masina de inchir', 'masini de inchir', 'mietwagen', 'auto mieten', 'autovermietung', 'wynajem samochod', 'wypozyczalnia', 'аренда авто', 'арендовать авто', 'арендовать машин', 'прокат авто', 'прокат автомобил', 'машину напрокат', 'напрокат', 'تأجير سيارات', 'استئجار سيارة'] },
+  { key: 'services', kind: 'group', words: ['mover', 'movers', 'moving', 'removal', 'relocation', 'cleaning', 'storage', 'handyman', 'plumber', 'μετακόμιση', 'μεταφορές', 'καθαρισμός', 'αποθήκευση', 'mutare', 'mutări', 'mutat', 'relocare', 'curățenie', 'depozitare', 'umzug', 'reinigung', 'lagerung', 'przeprowadzk', 'sprzątanie', 'magazynowanie', 'переезд', 'грузчик', 'уборк', 'хранение', 'نقل أثاث', 'انتقال', 'تخزين'] },
+  { key: 'professional', kind: 'group', words: ['lawyer', 'law firm', 'attorney', 'solicitor', 'accountant', 'accounting', 'audit', ' tax', 'bank', 'banking', 'insurance', 'company formation', 'immigration', 'residency', 'visa', 'non-dom', 'ip box', 'δικηγόρ', 'λογιστ', 'φόρο', 'τράπεζα', 'ασφάλ', 'μετανάστευση', 'avocat', 'contabil', 'impozit', 'bancă', 'asigurare', 'imigrare', 'rezidenț', 'înființare', 'company formation', 'anwalt', 'rechtsanwalt', 'steuerberater', 'buchhaltung', 'steuer', 'versicherung', 'einwanderung', 'aufenthalt', 'firmengründung', 'prawnik', 'adwokat', 'księgow', 'podatek', 'ubezpieczenie', 'imigracja', 'rezydencja', 'spółk', 'юрист', 'адвокат', 'бухгалтер', 'налог', 'банк', 'страхован', 'иммиграц', 'резидентств', 'محامي', 'محاسب', 'ضريبة', 'بنك', 'تأمين', 'هجرة', 'تأسيس شركة'] },
+  { key: 'health', kind: 'group', words: ['clinic', 'hospital', 'doctor', 'dentist', 'pharmacy', 'physio', 'κλινική', 'νοσοκομείο', 'γιατρός', 'οδοντίατρ', 'φαρμακείο', 'clinică', 'spital', 'dentist', 'farmacie', 'klinik', 'krankenhaus', 'arzt', 'zahnarzt', 'apotheke', 'klinika', 'szpital', 'lekarz', 'apteka', 'клиник', 'больниц', 'врач', 'стоматолог', 'аптек', 'عيادة', 'مستشفى', 'طبيب', 'صيدلية'] },
+];
+// District aliases include short STEMS so inflected forms match after de-accenting
+// (e.g. Polish "Larnace", Greek "Λεμεσό", Russian "Ларнаке").
+const DISTRICT_ALIASES: Record<string, string[]> = {
+  paphos: ['paph', 'pafos', 'παφ', 'بافوس', 'паф', 'polis', 'πολ'],
+  limassol: ['limass', 'lemes', 'λεμεσ', 'ليماسول', 'лимасол', 'germasogeia'],
+  larnaca: ['larnac', 'larnak', 'λαρνακ', 'لارنكا', 'ларнак', 'aradippou'],
+  nicosia: ['nicos', 'nikos', 'nikoz', 'lefkos', 'λευκωσ', 'نيقوسيا', 'никос', 'strovolos'],
+  famagusta: ['famagust', 'αμμοχωστ', 'فاماغوستا', 'фамагуст', 'ayia napa', 'agia napa', 'protaras', 'paralimni', 'kapparis', 'deryneia'],
+};
+
+// Strip accents/diacritics so matching is robust to how a guest actually types —
+// e.g. Romanian "inchirieri" (no diacritics, plural) must still match, as must
+// Greek with/without tonos and Arabic with/without harakat.
+const deacc = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+function readIntent(q: string): { types: string[]; groups: string[]; districts: string[] } {
+  const s = deacc(q.toLowerCase());
   const types: string[] = [];
-  const add = (t: string, ...w: string[]) => { if (w.some((x) => s.includes(x)) && !types.includes(t)) types.push(t); };
-  add('restaurant', 'restaurant', 'dinner', 'lunch', 'eat', 'dining', 'food', 'meze', 'taverna', 'cuisine', 'brunch');
-  add('hotel', 'hotel', 'stay', 'resort', 'accommodation', 'spa', 'suite', 'room', 'villa');
-  add('beach', 'beach', 'sea', 'swim', 'sand', 'coast', 'bay');
-  add('winery', 'wine', 'winery', 'vineyard', 'tasting');
-  add('development', 'apartment', 'property', 'real estate', 'developer', 'buy', 'invest', 'new build');
-  add('vendor', 'rent', 'car', 'service', 'furniture', 'builder', 'lawyer', 'gym', 'clinic', 'shop', 'pool', 'plumber');
-  const districts = DISTRICTS.filter((d) => s.includes(d));
-  return { types, districts };
+  const groups: string[] = [];
+  for (const it of INTENTS) {
+    if (!it.words.some((w) => s.includes(deacc(w)))) continue;
+    if (it.kind === 'type') { if (!types.includes(it.key)) types.push(it.key); }
+    else if (!groups.includes(it.key)) groups.push(it.key);
+  }
+  // Real-estate wording should ALSO surface developer listings (the `development` type)
+  // alongside estate agents (category_group='realestate'), so the guest sees both.
+  if (groups.includes('realestate') && !types.includes('development')) types.push('development');
+  const districts = Object.entries(DISTRICT_ALIASES)
+    .filter(([, aliases]) => aliases.some((a) => s.includes(deacc(a))))
+    .map(([canon]) => canon);
+  return { types, groups, districts };
 }
 
 // The directory columns we surface as a Pick (locale-aware, with English fallback).
 const dirCols = (locale: string) =>
-  `slug,type,district,price_band,rating,rating_count,verified,image,name_${locale},name_en,summary_${locale},summary_en`;
+  `slug,type,subtype,district,price_band,rating,rating_count,verified,image,name_${locale},name_en,summary_${locale},summary_en`;
 
 function rowToPick(r: Record<string, unknown>, locale: string): Pick {
   return {
     slug: String(r.slug || ''),
     type: String(r.type || ''),
+    subtype: (r.subtype as string) ?? null,
     name: String(r[`name_${locale}`] || r.name_en || ''),
     district: (r.district as string) ?? null,
     rating: (r.rating as number) ?? null,
@@ -120,7 +158,7 @@ export async function searchDirectory(locale: string, q: string, limit = 8): Pro
       out.push(rowToPick(r, locale));
     }
   };
-  const { types, districts } = readIntent(q);
+  const { types, groups, districts } = readIntent(q);
   const terms = q.replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter((w) => w.length > 3).slice(0, 5);
 
   try {
@@ -137,6 +175,17 @@ export async function searchDirectory(locale: string, q: string, limit = 8): Pro
       let query = sb.from('directory_listings').select(cols).eq('status', 'published').eq('type', ty);
       if (districts.length === 1) query = query.eq('district', districts[0]);
       const { data } = await query.order('rating', { ascending: false, nullsFirst: false }).limit(10);
+      push(data as Record<string, unknown>[] | null);
+    }
+    // Category-group retrieval — the service directory (estate agents, car rental,
+    // movers, banks, insurance, lawyers, accountants, clinics) lives under
+    // category_group, not the five content `type`s. This is what makes a request
+    // like "imobiliare la Larnaca" or "wynajem samochodu" actually return listings.
+    for (const g of groups) {
+      let query = sb.from('directory_listings').select(cols).eq('status', 'published').eq('category_group', g);
+      if (districts.length === 1) query = query.eq('district', districts[0]);
+      const { data } = await query.order('verified', { ascending: false, nullsFirst: false })
+        .order('rating', { ascending: false, nullsFirst: false }).limit(12);
       push(data as Record<string, unknown>[] | null);
     }
   } catch { /* directory unavailable — the KB still grounds the answer */ }
@@ -257,9 +306,10 @@ export function groundingBlock(ctx: ConciergeContext, locale: string): string {
     }
   }
   if (ctx.candidates.length) {
-    parts.push('\nDirectory — real published listings you may recommend BY NAME (never name a place not in this list):');
+    parts.push('\nDirectory — real published listings you may recommend BY NAME (never name a place not in this list). The kind label distinguishes, e.g., an estate agent/broker from a property developer, so match it to what the guest actually needs:');
     for (const c of ctx.candidates) {
-      parts.push(`• ${c.name} — ${c.type}${c.district ? `, ${c.district}` : ''}${c.rating ? `, ${c.rating}★${c.rating_count ? ` (${c.rating_count})` : ''}` : ''}${c.price_band ? `, ${c.price_band}` : ''}${c.verified ? ', verified' : ''}`);
+      const kind = (c.subtype && c.subtype.replace(/-/g, ' ')) || c.type;
+      parts.push(`• ${c.name} — ${kind}${c.district ? `, ${c.district}` : ''}${c.rating ? `, ${c.rating}★${c.rating_count ? ` (${c.rating_count})` : ''}` : ''}${c.price_band ? `, ${c.price_band}` : ''}${c.verified ? ', verified' : ''}`);
     }
   }
   if (!ctx.kb.length && !ctx.candidates.length) {

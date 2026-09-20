@@ -1,22 +1,17 @@
 'use client';
 import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { Link, usePathname } from '@/lib/i18n/routing';
-import { LOCALES, type Locale } from '@/lib/locales';
+import { Link } from '@/lib/i18n/routing';
+import LocaleSwitch from '@/components/LocaleSwitch';
 
 // Order echoes the print masthead: lead with the marquee sections.
 const CATS = ['property', 'relocation', 'culture', 'cyprus', 'business', 'escapes', 'table', 'agenda', 'people', 'world'] as const;
-
-function langLabel(l: Locale) {
-  return l === 'el' ? 'ΕΛ' : l === 'ar' ? 'ع' : l.toUpperCase();
-}
 
 export default function Header() {
   const t = useTranslations('nav');
   const th = useTranslations('home');
   const tb = useTranslations('brand');
   const locale = useLocale();
-  const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
   const date = new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : locale, {
@@ -34,12 +29,7 @@ export default function Header() {
             <span className="hide" suppressHydrationWarning>{date}</span>
           </div>
           <div className="r">
-            <div className="langs" aria-label={t('editions')}>
-              {LOCALES.map((l: Locale) => (
-                <Link key={l} href={pathname} locale={l} hrefLang={l}
-                  className={l === locale ? 'active' : ''}>{langLabel(l)}</Link>
-              ))}
-            </div>
+            <LocaleSwitch placement="down" variant="util" />
             <Link className="sub" href="/directory">{t('directory')}</Link>
             <Link className="sub hide" href="/search" aria-label={t('search')}>{t('search')}</Link>
             <Link className="sub" href="/membership">{t('membership')}</Link>
@@ -50,7 +40,7 @@ export default function Header() {
 
       {/* Masthead */}
       <div className="mast">
-        <img src="/brand/monogram.svg" alt="" width={52} height={52} className="mono" aria-hidden="true" />
+        <img src="/brand/monogram.svg" alt="" width={76} height={76} className="mono" aria-hidden="true" />
         <Link href="/" className="brand" onClick={() => setOpen(false)}>{tb('name')}</Link>
         <div className="tag">{th('tagline')}</div>
         <div className="navwrap">
