@@ -17,6 +17,7 @@ export default async function ContactPage({ params }: { params: Promise<{ locale
   if (!isLocale(locale)) notFound();
   setRequestLocale(locale);
   const t = await getTranslations();
+  const sections = t.raw('pages.contact.sections') as { h?: string; p: string[] }[];
   return (
     <div className="page wrap">
       <div className="page-head">
@@ -24,6 +25,14 @@ export default async function ContactPage({ params }: { params: Promise<{ locale
         <h1>{t('pages.contact.title')}</h1>
         <p className="dek">{t('pages.contact.dek')}</p>
         <div className="rule-orn orn"><span className="diamond" /></div>
+      </div>
+      <div className="prose legal contact-details">
+        {sections.map((s, i) => (
+          <section key={i} className="legal-sec">
+            {s.h ? <h2>{s.h}</h2> : null}
+            {s.p.map((para, j) => <p key={j}>{para}</p>)}
+          </section>
+        ))}
       </div>
       <ContactForm />
     </div>

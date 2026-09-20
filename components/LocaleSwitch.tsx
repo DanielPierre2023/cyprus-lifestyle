@@ -21,6 +21,14 @@ export default function LocaleSwitch(
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
+  // Remember an explicit choice for one year so the middleware's auto-detection
+  // defers to it — including a deliberate "stay in English". Written client-side
+  // only (no Set-Cookie header), so page caching is unaffected.
+  const choose = (l: Locale) => {
+    try { document.cookie = `NEXT_LOCALE=${l}; path=/; max-age=31536000; SameSite=Lax`; } catch { /* private mode */ }
+    setOpen(false);
+  };
+
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
@@ -43,7 +51,7 @@ export default function LocaleSwitch(
       <ul className="lang-menu" role="listbox" aria-label="Language / Γλώσσα">
         {LOCALES.map((l: Locale) => (
           <li key={l} role="option" aria-selected={l === locale}>
-            <Link href={pathname} locale={l} hrefLang={l} className={l === locale ? 'active' : ''} onClick={() => setOpen(false)}>
+            <Link href={pathname} locale={l} hrefLang={l} className={l === locale ? 'active' : ''} onClick={() => choose(l)}>
               <span className="lang-native" lang={l} dir={l === 'ar' ? 'rtl' : 'ltr'}>{NATIVE[l]}</span>
               <span className="lang-code">{SHORT[l]}</span>
             </Link>

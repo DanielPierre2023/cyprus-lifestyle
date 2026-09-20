@@ -16,7 +16,7 @@ export default async function StandardsPage({ params }: { params: Promise<{ loca
   if (!isLocale(locale)) notFound();
   setRequestLocale(locale);
   const t = await getTranslations();
-  const body = t.raw('pages.standards.body') as string[];
+  const sections = t.raw('pages.standards.sections') as { h?: string; p: string[] }[];
   return (
     <div className="page wrap">
       <div className="page-head">
@@ -25,7 +25,14 @@ export default async function StandardsPage({ params }: { params: Promise<{ loca
         <p className="dek">{t('pages.standards.dek')}</p>
         <div className="rule-orn orn"><span className="diamond" /></div>
       </div>
-      <div className="prose">{body.map((p, i) => <p key={i}>{p}</p>)}</div>
+      <div className="prose legal">
+        {sections.map((s, i) => (
+          <section key={i} className="legal-sec">
+            {s.h ? <h2>{s.h}</h2> : null}
+            {s.p.map((para, j) => <p key={j}>{para}</p>)}
+          </section>
+        ))}
+      </div>
     </div>
   );
 }

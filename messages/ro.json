@@ -103,11 +103,32 @@
     "about": {
       "kicker": "Despre",
       "title": "Insula, în culori depline",
-      "dek": "O revistă premium de imobiliare, cultură și viața bună din Cipru.",
-      "body": [
-        "Cyprus Lifestyle este cronica felului în care insula trăiește, investește și se bucură de viață la cel mai înalt nivel. Ciprul se află acolo unde se întâlnesc Europa, Levantul și Golful, iar aceasta este publicația acelei răscruci — elegantă precum revistele de modă, autoritară precum marile titluri de lifestyle și multilingvă din naștere.",
-        "Publicăm în șapte limbi: engleza ca ediție internațională, greaca ca ediție locală, araba pentru Golf, precum și româna, rusa, germana și poloneza pentru comunitățile de rezidenți și investitori care fac Ciprul ceea ce este. Fiecare articol de referință este tradus în toate cele șapte, de la dreapta la stânga pentru ediția arabă.",
-        "Redacțiile noastre acoperă Ciprul și politica, afacerile și investițiile, imobiliarele și arhitectura, cultura și patrimoniul, escapadele și marea, și masa cipriotă. Sobrietatea se citește ca lux; detaliile se citesc ca adevăr."
+      "dek": "O revistă premium, un director și un concierge pentru viața în Republica Cipru — în șapte limbi.",
+      "sections": [
+        {
+          "p": [
+            "Cyprus Lifestyle este ghidul definitiv pentru a vizita, a locui și a investi în Republica Cipru. Acoperim întregul sud al insulei — de la tavernele din poalele Munților Troodos până la marinele din Limassol și nisipurile din est — cu ochiul unui rezident și standardele unei publicații internaționale.",
+            "Suntem trei lucruri deodată: o revistă cu texte îngrijite despre imobiliare, cultură și viața frumoasă; un director de afaceri reale, verificate; și un concierge care răspunde, în limba dumneavoastră, la întrebările practice ale sosirii și instalării."
+          ]
+        },
+        {
+          "h": "Publicat în șapte limbi",
+          "p": [
+            "Fiecare articol, listare și răspuns este disponibil în engleză, greacă, română, arabă, germană, poloneză și rusă — traduse integral, niciodată ghicite automat în momentul citirii. Ciprul este o insulă cu adevărat internațională, iar noi ne adresăm cititorilor în limba în care gândesc."
+          ]
+        },
+        {
+          "h": "Parte din ADD Individual Solutions Ltd",
+          "p": [
+            "Cyprus Lifestyle este titlul de presă al departamentului Media al ADD Individual Solutions Ltd, cu sediul în Nicosia, Cipru. Deciziile noastre editoriale sunt luate independent de relațiile comerciale; Standardele noastre editoriale explică modul în care păstrăm această linie clară."
+          ]
+        },
+        {
+          "h": "Scrieți-ne",
+          "p": [
+            "Primim cu plăcere sugestii, corecturi, propuneri de parteneriat și cititori care vor pur și simplu să salute. Veți găsi fiecare adresă relevantă pe pagina de Contact, iar concierge-ul nostru este întotdeauna la distanță de un mesaj."
+          ]
+        }
       ]
     },
     "advertise": {
@@ -122,27 +143,144 @@
     },
     "privacy": {
       "kicker": "Juridic",
-      "title": "Confidențialitate",
-      "dek": "",
-      "body": [
-        "Cyprus Lifestyle colectează strictul necesar pentru a funcționa: adresa de e-mail pe care ne-o oferiți pentru newsletter și date analitice anonime, agregate, despre modul în care este citit site-ul. Nu vindem date personale.",
-        "Vă puteți dezabona de la newsletter oricând, prin linkul din fiecare e-mail. Pentru a solicita ștergerea datelor, contactați-ne prin pagina de contact. Această notă este un punct de plecare; vă rugăm să o supuneți unui consilier juridic înainte de lansare și să o adaptați la GDPR și la legislația cipriotă."
+      "title": "Confidențialitate și protecția datelor",
+      "dek": "Cum colectează, utilizează și protejează Cyprus Lifestyle datele dumneavoastră personale, în conformitate cu Regulamentul general privind protecția datelor al UE (RGPD) și cu legislația cipriotă.",
+      "updated": "Ultima actualizare: 20 septembrie 2026",
+      "sections": [
+        {
+          "h": "Cine suntem (operatorul de date)",
+          "p": [
+            "Cyprus Lifestyle este titlul de presă al ADD Individual Solutions Ltd (departamentul Media), o companie cu sediul în Nicosia, în Republica Cipru, care este operatorul de date pentru datele personale descrise aici. Pentru orice chestiune de protecție a datelor ne puteți contacta la privacy@cypruslifestyle.com."
+          ]
+        },
+        {
+          "h": "Ce date personale colectăm",
+          "p": [
+            "Colectăm doar ceea ce ne este necesar. Când ne contactați, vă abonați la Saturday Letter sau cereți concierge-ului nostru să organizeze ceva, colectăm datele pe care le furnizați — de regulă numele, adresa de email și orice număr de telefon sau mesaj pe care alegeți să îl împărtășiți. Dacă deveniți membru, păstrăm informațiile de cont și de facturare necesare pentru a furniza serviciul. Când navigați, colectăm statistici limitate, prietenoase cu confidențialitatea, despre modul în care este utilizat site-ul."
+          ]
+        },
+        {
+          "h": "De ce le utilizăm și temeiurile noastre legale",
+          "p": [
+            "Utilizăm datele pentru a vă răspunde, pentru a trimite Saturday Letter pe care l-ați solicitat, pentru a direcționa și îndeplini cererile de concierge, pentru a furniza abonamentul și pentru a menține site-ul sigur și a-l îmbunătăți. Temeiurile noastre legale sunt consimțământul dumneavoastră (pentru buletinul informativ și pentru cererile de concierge pe care le trimiteți), executarea unui contract (pentru abonament) și interesele noastre legitime (pentru securitate, prevenirea fraudei și înțelegerea modului de utilizare a site-ului). Vă puteți retrage consimțământul oricând."
+          ]
+        },
+        {
+          "h": "Cookie-uri și statistici",
+          "p": [
+            "Reducem cookie-urile la minimum. Folosim statistici prietenoase cu confidențialitatea, fără cookie-uri, care nu vă urmăresc pe alte site-uri. Un mic cookie de preferință reține limba pe care o alegeți, astfel încât site-ul să se deschidă în ea data viitoare. Nu folosim cookie-uri de publicitate sau de urmărire între site-uri."
+          ]
+        },
+        {
+          "h": "Serviciile care prelucrează date pentru noi",
+          "p": [
+            "Ne bazăm pe un număr restrâns de procesatori de încredere, fiecare obligat printr-un acord de prelucrare a datelor: Supabase (baza de date și autentificarea), Vercel (găzduire și statistici fără cookie-uri), Resend (email tranzacțional), Stripe (plăți) și OpenAI și Anthropic (care alimentează concierge-ul multilingv). Aceștia prelucrează datele doar la instrucțiunile noastre și doar în măsura necesară pentru furnizarea serviciului lor."
+          ]
+        },
+        {
+          "h": "Transferuri internaționale",
+          "p": [
+            "Unii dintre acești furnizori pot prelucra date în afara Spațiului Economic European. Acolo unde se întâmplă acest lucru, transferul este protejat prin garanții adecvate — precum Clauzele contractuale standard ale Comisiei Europene — astfel încât datele dumneavoastră să continue să beneficieze de o protecție la nivelul RGPD."
+          ]
+        },
+        {
+          "h": "Cât timp păstrăm datele",
+          "p": [
+            "Păstrăm datele personale doar atât timp cât este necesar pentru scopul în care au fost colectate: cererile de concierge și de contact atât cât este nevoie pentru a le gestiona și o perioadă rezonabilă după aceea; datele buletinului informativ până când vă dezabonați; iar datele de abonament pe durata contului și orice perioadă impusă de lege. Apoi le ștergem sau le anonimizăm."
+          ]
+        },
+        {
+          "h": "Drepturile dumneavoastră",
+          "p": [
+            "În temeiul RGPD aveți dreptul de a accesa datele personale pe care le deținem despre dumneavoastră, de a le corecta sau șterge, de a restricționa sau de a vă opune prelucrării lor, de a le primi într-un format portabil și de a vă retrage orice consimțământ acordat. Exercitarea acestor drepturi este gratuită și nu vă va dezavantaja."
+          ]
+        },
+        {
+          "h": "Cum să vă exercitați drepturile",
+          "p": [
+            "Scrieți la privacy@cypruslifestyle.com și spuneți-ne ce doriți. Vom răspunde în termen de o lună, așa cum impune RGPD. Pentru a vă proteja, este posibil să fie nevoie să vă confirmăm identitatea înainte de a da curs unei cereri."
+          ]
+        },
+        {
+          "h": "Plângeri",
+          "p": [
+            "Dacă nu sunteți mulțumit de modul în care am gestionat datele dumneavoastră, aveți dreptul de a depune o plângere la autoritatea de supraveghere cipriotă: Biroul Comisarului pentru Protecția Datelor cu Caracter Personal, strada Kypranoros 15, 1061 Nicosia, Cipru — telefon +357 22 818 456, email commissioner@dataprotection.gov.cy."
+          ]
+        },
+        {
+          "h": "Modificări ale acestei politici",
+          "p": [
+            "Este posibil să actualizăm această politică pe măsură ce serviciile noastre sau legea evoluează. Când facem o modificare semnificativă, vom actualiza data de mai sus și, acolo unde este cazul, vă vom informa direct."
+          ]
+        }
       ]
     },
     "contact": {
       "kicker": "Cyprus Lifestyle",
       "title": "Contact",
-      "dek": "Redacție, abonamente sau parteneriate — scrieți-ne."
+      "dek": "Oricum ați dori să ne contactați — biroul este deschis.",
+      "sections": [
+        {
+          "h": "Editor",
+          "p": [
+            "Cyprus Lifestyle este publicat de ADD Individual Solutions Ltd (departamentul Media), Nicosia, Cipru. Întrebări generale: hello@cypruslifestyle.com."
+          ]
+        },
+        {
+          "h": "Redacție și corecturi",
+          "p": [
+            "Sugestii de subiecte, feedback și cereri de corectură: newsroom@cypruslifestyle.com."
+          ]
+        },
+        {
+          "h": "Publicitate și parteneriate",
+          "p": [
+            "Pentru a face publicitate, a fi listat sau a colabora cu noi: advertise@cypruslifestyle.com."
+          ]
+        },
+        {
+          "h": "Protecția datelor",
+          "p": [
+            "Pentru orice întrebare privind datele dumneavoastră personale sau pentru a vă exercita drepturile, scrieți la privacy@cypruslifestyle.com. Detaliile complete se află pe pagina de Confidențialitate."
+          ]
+        }
+      ]
     },
     "standards": {
-      "kicker": "Redacție",
-      "title": "Principii Editoriale",
-      "dek": "Cum documentează, scrie, traduce și corectează Cyprus Lifestyle.",
-      "body": [
-        "Cyprus Lifestyle este independent editorial. Acoperirea noastră nu este de vânzare; materialele sponsorizate sunt întotdeauna semnalate ca atare, iar relațiile comerciale nu decid niciodată ce acoperim sau cum.",
-        "Scriem din redacții cu nume și preferăm faptele concrete în locul adjectivelor. Când un articol se bazează pe o altă publicație sau pe un document primar, o spunem și trimitem la sursă.",
-        "Folosim instrumente AI pentru documentare, redactare și traducere — dar fiecare articol de referință este editat de un om înainte de publicare, iar fiecare dintre cele șapte ediții (engleză, greacă, română, arabă, germană, poloneză și rusă) este verificată pentru acuratețe și ton, de la dreapta la stânga pentru ediția arabă.",
-        "Corectăm greșelile prompt și vizibil. Dacă ceva este greșit, scrieți-ne prin pagina de contact și vom îndrepta lucrurile."
+      "kicker": "Editorial",
+      "title": "Standarde editoriale",
+      "dek": "Cum alegem ce publicăm și cum păstrăm totul onest.",
+      "sections": [
+        {
+          "h": "Acuratețe și verificare",
+          "p": [
+            "Fiecare afacere pe care o listăm este o întreprindere reală, în funcțiune, pe care am verificat-o comparând-o cu propriul site și cu registrele publice. Nu inventăm locuri, prețuri, evaluări sau date de contact și corectăm orice greșeală. Acolo unde menționăm un preț sau o cifră practică, oferim precizările oneste — pentru servicii, recomandăm obținerea a două sau trei oferte."
+          ]
+        },
+        {
+          "h": "Independență față de publicitate",
+          "p": [
+            "Acoperirea editorială nu este niciodată de vânzare. Reclamele și plasările sponsorizate, acolo unde apar, sunt marcate clar ca atare și sunt decise separat de textele și recomandările noastre. O afacere nu poate cumpăra o recenzie favorabilă sau o poziție mai bună în director."
+          ]
+        },
+        {
+          "h": "Cum se construiește directorul",
+          "p": [
+            "Listările sunt selectate pe merit — reputație, istoric și relevanță pentru cititorii noștri — și îmbogățite de redactorii noștri. Includerea este gratuită și nu este condiționată de nicio relație comercială. O afacere poate solicita oricând să fie listată, corectată sau eliminată."
+          ]
+        },
+        {
+          "h": "Corecturi",
+          "p": [
+            "Dacă credeți că ceva ce am publicat este inexact, vă rugăm să ne spuneți. Analizăm prompt fiecare solicitare și, acolo unde o corectură este justificată, o facem în mod deschis."
+          ]
+        },
+        {
+          "h": "Republica Cipru",
+          "p": [
+            "Sfera noastră editorială este Republica Cipru. Nu acoperim și nu listăm afaceri din nordul ocupat. Aceasta este o decizie factuală privind teritoriul pe care îl cunoaștem și îl deservim."
+          ]
+        }
       ]
     },
     "author": {

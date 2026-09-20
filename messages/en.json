@@ -103,11 +103,32 @@
     "about": {
       "kicker": "About",
       "title": "The island, in full colour",
-      "dek": "A premium magazine of property, culture and the good life across Cyprus.",
-      "body": [
-        "Cyprus Lifestyle is the record of how the island lives, invests and enjoys itself at the top end. Cyprus sits where Europe, the Levant and the Gulf meet, and this is the publication of that crossroads — glamorous like the fashion books, authoritative like the great living titles, and multilingual by birth.",
-        "We publish in seven languages: English as the international lead, Greek as the home edition, Arabic for the Gulf, and Romanian, Russian, German and Polish for the resident and investor communities that make Cyprus what it is. Every canonical story is translated across all seven, right-to-left for the Arabic edition.",
-        "Our desks cover Cyprus and politics, business and investment, property and architecture, culture and heritage, escapes and the sea, and the Cypriot table. Restraint reads as expensive; specifics read as true."
+      "dek": "A premium magazine, directory and concierge for life in the Republic of Cyprus — in seven languages.",
+      "sections": [
+        {
+          "p": [
+            "Cyprus Lifestyle is the definitive guide to visiting, living and investing in the Republic of Cyprus. We cover the whole of the island's south — from the tavernas of the Troodos foothills to the marinas of Limassol and the sands of the east — with the eye of a resident and the standards of an international title.",
+            "We are three things at once: a magazine of considered writing on property, culture and the good life; a directory of real, verified businesses; and a concierge that answers, in your language, the practical questions of arriving and settling in."
+          ]
+        },
+        {
+          "h": "Published in seven languages",
+          "p": [
+            "Every article, listing and answer is available in English, Greek, Romanian, Arabic, German, Polish and Russian — fully translated, never machine-guessed at the moment of reading. Cyprus is a genuinely international island, and we address its readers in the language they think in."
+          ]
+        },
+        {
+          "h": "Part of ADD Individual Solutions Ltd",
+          "p": [
+            "Cyprus Lifestyle is the media title of the Media department of ADD Individual Solutions Ltd, based in Nicosia, Cyprus. Our editorial judgements are made independently of commercial relationships; our Editorial Standards explain how we keep that line clear."
+          ]
+        },
+        {
+          "h": "Write to us",
+          "p": [
+            "We welcome tips, corrections, partnership enquiries and readers simply saying hello. You will find every relevant address on our Contact page, and our concierge is always a message away."
+          ]
+        }
       ]
     },
     "advertise": {
@@ -122,27 +143,144 @@
     },
     "privacy": {
       "kicker": "Legal",
-      "title": "Privacy",
-      "dek": "",
-      "body": [
-        "Cyprus Lifestyle collects the minimum necessary to run the publication: the email address you give us to receive the newsletter, and anonymous, aggregated analytics about how the site is read. We do not sell personal data.",
-        "You can unsubscribe from the newsletter at any time using the link in every email. To request deletion of your data, contact us through the contact page. This notice is a starting point; please have it reviewed by counsel before launch and adapt it to GDPR and Cypriot law."
+      "title": "Privacy & Data Protection",
+      "dek": "How Cyprus Lifestyle collects, uses and protects your personal data, in line with the EU General Data Protection Regulation (GDPR) and Cypriot law.",
+      "updated": "Last updated: 20 September 2026",
+      "sections": [
+        {
+          "h": "Who we are (data controller)",
+          "p": [
+            "Cyprus Lifestyle is the media title of ADD Individual Solutions Ltd (Media department), a company based in Nicosia, in the Republic of Cyprus, which is the data controller for the personal data described here. For any data-protection matter you can reach us at privacy@cypruslifestyle.com."
+          ]
+        },
+        {
+          "h": "What personal data we collect",
+          "p": [
+            "We collect only what we need. When you contact us, subscribe to the Saturday Letter, or ask our concierge to arrange something, we collect the details you provide — typically your name, your email address, and any phone number or message you choose to share. If you become a member, we hold the account and billing information needed to provide the service. When you browse, we collect limited, privacy-friendly analytics about how the site is used."
+          ]
+        },
+        {
+          "h": "Why we use it, and our legal bases",
+          "p": [
+            "We use your data to reply to you, to send the Saturday Letter you asked for, to route and fulfil concierge requests, to provide membership, and to keep the site secure and improve it. Our legal bases are your consent (for the newsletter and for concierge requests you submit), the performance of a contract (for membership), and our legitimate interests (for security, fraud prevention and understanding how the site is used). You can withdraw consent at any time."
+          ]
+        },
+        {
+          "h": "Cookies and analytics",
+          "p": [
+            "We keep cookies to a minimum. We use privacy-friendly, cookieless analytics that do not track you across other websites. A small preference cookie remembers the language you choose, so the site opens in it next time. We do not use advertising or cross-site tracking cookies."
+          ]
+        },
+        {
+          "h": "The services that process data for us",
+          "p": [
+            "We rely on a small number of reputable processors, each bound by a data-processing agreement: Supabase (database and authentication), Vercel (hosting and cookieless analytics), Resend (transactional email), Stripe (payments), and OpenAI and Anthropic (which power the multilingual concierge). They process data only on our instructions and only as far as needed to provide their service."
+          ]
+        },
+        {
+          "h": "International transfers",
+          "p": [
+            "Some of these providers may process data outside the European Economic Area. Where they do, the transfer is protected by appropriate safeguards — such as the European Commission's Standard Contractual Clauses — so that your data continues to enjoy GDPR-level protection."
+          ]
+        },
+        {
+          "h": "How long we keep your data",
+          "p": [
+            "We keep personal data only for as long as necessary for the purpose it was collected: concierge and contact enquiries for as long as needed to handle them and a reasonable period afterwards; newsletter data until you unsubscribe; and membership data for the life of the account and any period required by law. We then delete or anonymise it."
+          ]
+        },
+        {
+          "h": "Your rights",
+          "p": [
+            "Under the GDPR you have the right to access the personal data we hold about you, to have it corrected or erased, to restrict or object to its processing, to receive it in a portable format, and to withdraw any consent you have given. Exercising these rights is free and will not disadvantage you."
+          ]
+        },
+        {
+          "h": "How to exercise your rights",
+          "p": [
+            "Write to privacy@cypruslifestyle.com and tell us what you would like. We will respond within one month, as the GDPR requires. To protect you, we may need to confirm your identity before acting on a request."
+          ]
+        },
+        {
+          "h": "Complaints",
+          "p": [
+            "If you are not satisfied with how we have handled your data, you have the right to complain to the Cypriot supervisory authority: the Office of the Commissioner for Personal Data Protection, 15 Kypranoros Street, 1061 Nicosia, Cyprus — telephone +357 22 818 456, email commissioner@dataprotection.gov.cy."
+          ]
+        },
+        {
+          "h": "Changes to this policy",
+          "p": [
+            "We may update this policy as our services or the law evolve. When we make a material change we will update the date above and, where appropriate, tell you directly."
+          ]
+        }
       ]
     },
     "contact": {
       "kicker": "Cyprus Lifestyle",
       "title": "Contact",
-      "dek": "Editorial, membership, or partnerships — write to us."
+      "dek": "However you would like to reach us — the desk is open.",
+      "sections": [
+        {
+          "h": "Publisher",
+          "p": [
+            "Cyprus Lifestyle is published by ADD Individual Solutions Ltd (Media department), Nicosia, Cyprus. General enquiries: hello@cypruslifestyle.com."
+          ]
+        },
+        {
+          "h": "Editorial and corrections",
+          "p": [
+            "Story tips, feedback and correction requests: newsroom@cypruslifestyle.com."
+          ]
+        },
+        {
+          "h": "Advertising and partnerships",
+          "p": [
+            "To advertise, be listed or partner with us: advertise@cypruslifestyle.com."
+          ]
+        },
+        {
+          "h": "Data protection",
+          "p": [
+            "For any question about your personal data, or to exercise your rights, write to privacy@cypruslifestyle.com. Full details are on our Privacy page."
+          ]
+        }
+      ]
     },
     "standards": {
       "kicker": "Editorial",
       "title": "Editorial Standards",
-      "dek": "How Cyprus Lifestyle is reported, written, translated and corrected.",
-      "body": [
-        "Cyprus Lifestyle is editorially independent. Our coverage is not for sale; sponsored features are always labelled as such, and commercial relationships never determine what we cover or how.",
-        "We report from named desks and value specifics over adjectives. Where a story draws on another publication or a primary document, we say so and link to the source.",
-        "We use AI tools to help gather, draft and translate — but every canonical story is edited by a person before it publishes, and each of our seven editions (English, Greek, Romanian, Arabic, German, Polish and Russian) is reviewed for accuracy and tone, right-to-left for the Arabic edition.",
-        "We correct mistakes promptly and visibly. If something is wrong, write to us through the contact page and we will put it right."
+      "dek": "How we choose what to publish, and how we keep it honest.",
+      "sections": [
+        {
+          "h": "Accuracy and verification",
+          "p": [
+            "Every business we list is a real, operating enterprise that we have checked against its own website and public records. We do not invent places, prices, ratings or contact details, and we correct anything we get wrong. Where we quote a price or a practical figure we give the honest caveats — for services, we advise obtaining two or three quotes."
+          ]
+        },
+        {
+          "h": "Independence from advertising",
+          "p": [
+            "Editorial coverage is never for sale. Advertising and sponsored placements, where they appear, are clearly marked as such and are decided separately from our writing and our recommendations. A business cannot buy a favourable review or a higher position in the directory."
+          ]
+        },
+        {
+          "h": "How the directory is built",
+          "p": [
+            "Listings are selected on merit — reputation, track record and relevance to our readers — and enriched by our editors. Inclusion is free and is not conditional on any commercial relationship. A business may ask to be listed, corrected or removed at any time."
+          ]
+        },
+        {
+          "h": "Corrections",
+          "p": [
+            "If you believe something we have published is inaccurate, please tell us. We review every request promptly and, where a correction is warranted, we make it openly."
+          ]
+        },
+        {
+          "h": "The Republic of Cyprus",
+          "p": [
+            "Our editorial scope is the Republic of Cyprus. We do not cover or list businesses in the occupied north. This is a factual decision about the territory we know and serve."
+          ]
+        }
       ]
     },
     "author": {

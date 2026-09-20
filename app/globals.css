@@ -234,6 +234,14 @@ html[lang="ar"] .article .prose p:first-of-type::first-letter { font-size: inher
 .prose ul, .prose ol { padding-inline-start: 24px; }
 .prose img { margin: 1.4em 0; }
 
+/* Legal & info pages (About, Editorial Standards, Contact, Privacy) */
+.prose.legal { max-width: 760px; margin-inline: auto; }
+.prose.legal .legal-sec { margin-bottom: 6px; }
+.prose.legal h2 { font-size: 23px; margin-top: 1.7em; }
+.prose.legal .legal-sec:first-child h2 { margin-top: 0; }
+.legal-updated { font-family: var(--sans); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-top: 16px; }
+.contact-details { margin-bottom: 44px; }
+
 /* ── Newsletter ────────────────────────────────────────────────────────────── */
 .letter { background: var(--obsidian); color: var(--ivory); text-align: center; padding-block: 78px; }
 .letter .frame { max-width: 620px; margin: 0 auto; border: 1px solid var(--line-dark); padding: 50px 40px; position: relative; }

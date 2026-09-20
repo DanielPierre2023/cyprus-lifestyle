@@ -102,12 +102,33 @@
   "pages": {
     "about": {
       "kicker": "O nas",
-      "title": "Wyspa w pełnej barwie",
-      "dek": "Ekskluzywny magazyn o nieruchomościach, kulturze i dobrym życiu na Cyprze.",
-      "body": [
-        "Cyprus Lifestyle to zapis tego, jak wyspa żyje, inwestuje i cieszy się życiem na najwyższym poziomie. Cypr leży tam, gdzie spotykają się Europa, Lewant i Zatoka, i jest to publikacja tego skrzyżowania — olśniewająca jak wielkie tytuły mody, autorytatywna jak najważniejsze magazyny lifestyle'owe i wielojęzyczna od urodzenia.",
-        "Publikujemy w siedmiu językach: angielskim jako wydaniu międzynarodowym, greckim jako wydaniu krajowym, arabskim dla Zatoki oraz rumuńskim, rosyjskim, niemieckim i polskim dla społeczności mieszkańców i inwestorów, które tworzą Cypr. Każdy kanoniczny tekst trafia do wszystkich siedmiu wydań, w wydaniu arabskim od prawej do lewej.",
-        "Nasze działy obejmują Cypr i politykę, biznes i inwestycje, nieruchomości i architekturę, kulturę i dziedzictwo, podróże i morze oraz cypryjski stół. Powściągliwość brzmi ekskluzywnie; konkret brzmi prawdziwie."
+      "title": "Wyspa w pełni barw",
+      "dek": "Ekskluzywny magazyn, katalog i concierge dla życia w Republice Cypryjskiej — w siedmiu językach.",
+      "sections": [
+        {
+          "p": [
+            "Cyprus Lifestyle to najlepszy przewodnik po zwiedzaniu, mieszkaniu i inwestowaniu w Republice Cypryjskiej. Opisujemy całe południe wyspy — od tawern u podnóża gór Trodos po mariny Limassol i piaski wschodu — okiem mieszkańca i według standardów międzynarodowego tytułu.",
+            "Jesteśmy trzema rzeczami naraz: magazynem z przemyślanymi tekstami o nieruchomościach, kulturze i dobrym życiu; katalogiem prawdziwych, zweryfikowanych firm; oraz conciergem, który odpowiada, w Twoim języku, na praktyczne pytania związane z przyjazdem i zadomowieniem się."
+          ]
+        },
+        {
+          "h": "Publikowany w siedmiu językach",
+          "p": [
+            "Każdy artykuł, wpis i odpowiedź są dostępne po angielsku, grecku, rumuńsku, arabsku, niemiecku, polsku i rosyjsku — w pełni przetłumaczone, nigdy zgadywane maszynowo w chwili czytania. Cypr jest naprawdę międzynarodową wyspą, a my zwracamy się do czytelników w języku, w którym myślą."
+          ]
+        },
+        {
+          "h": "Część ADD Individual Solutions Ltd",
+          "p": [
+            "Cyprus Lifestyle to tytuł medialny działu Media firmy ADD Individual Solutions Ltd z siedzibą w Nikozji na Cyprze. Nasze decyzje redakcyjne podejmujemy niezależnie od relacji handlowych; nasze Standardy redakcyjne wyjaśniają, jak utrzymujemy tę granicę wyraźną."
+          ]
+        },
+        {
+          "h": "Napisz do nas",
+          "p": [
+            "Chętnie przyjmujemy wskazówki, sprostowania, zapytania o współpracę i czytelników, którzy chcą po prostu się przywitać. Wszystkie odpowiednie adresy znajdziesz na stronie Kontakt, a nasz concierge jest zawsze o jedną wiadomość dalej."
+          ]
+        }
       ]
     },
     "advertise": {
@@ -122,27 +143,144 @@
     },
     "privacy": {
       "kicker": "Informacje prawne",
-      "title": "Prywatność",
-      "dek": "",
-      "body": [
-        "Cyprus Lifestyle zbiera tylko to, co niezbędne do prowadzenia publikacji: adres e-mail podany do newslettera oraz anonimowe, zbiorcze statystyki dotyczące czytania strony. Nie sprzedajemy danych osobowych.",
-        "Z newslettera możesz zrezygnować w każdej chwili, korzystając z linku w każdym e-mailu. Aby zażądać usunięcia danych, skontaktuj się z nami przez stronę kontaktu. Niniejsza informacja jest punktem wyjścia; przed startem prosimy o jej weryfikację przez prawnika oraz dostosowanie do RODO i prawa cypryjskiego."
+      "title": "Prywatność i ochrona danych",
+      "dek": "Jak Cyprus Lifestyle zbiera, wykorzystuje i chroni Twoje dane osobowe, zgodnie z Ogólnym rozporządzeniem UE o ochronie danych (RODO) oraz prawem cypryjskim.",
+      "updated": "Ostatnia aktualizacja: 20 września 2026",
+      "sections": [
+        {
+          "h": "Kim jesteśmy (administrator danych)",
+          "p": [
+            "Cyprus Lifestyle to tytuł medialny ADD Individual Solutions Ltd (dział Media), spółki z siedzibą w Nikozji w Republice Cypryjskiej, która jest administratorem danych osobowych opisanych tutaj. We wszelkich sprawach dotyczących ochrony danych możesz się z nami skontaktować pod adresem privacy@cypruslifestyle.com."
+          ]
+        },
+        {
+          "h": "Jakie dane osobowe zbieramy",
+          "p": [
+            "Zbieramy tylko to, czego potrzebujemy. Gdy się z nami kontaktujesz, zapisujesz się na Saturday Letter lub prosisz naszego concierge o zorganizowanie czegoś, zbieramy podane przez Ciebie dane — zwykle imię i nazwisko, adres e-mail oraz każdy numer telefonu lub wiadomość, którą zdecydujesz się udostępnić. Jeśli zostaniesz członkiem, przechowujemy dane konta i rozliczeń niezbędne do świadczenia usługi. Podczas przeglądania zbieramy ograniczone, przyjazne prywatności statystyki dotyczące sposobu korzystania z witryny."
+          ]
+        },
+        {
+          "h": "Dlaczego z nich korzystamy i nasze podstawy prawne",
+          "p": [
+            "Wykorzystujemy Twoje dane, aby Ci odpowiadać, wysyłać zamówiony Saturday Letter, kierować i realizować prośby concierge, świadczyć członkostwo oraz utrzymywać witrynę bezpieczną i ją ulepszać. Naszymi podstawami prawnymi są Twoja zgoda (na newsletter i na przesyłane przez Ciebie prośby concierge), wykonanie umowy (dla członkostwa) oraz nasze prawnie uzasadnione interesy (bezpieczeństwo, zapobieganie oszustwom i zrozumienie sposobu korzystania z witryny). Zgodę możesz wycofać w każdej chwili."
+          ]
+        },
+        {
+          "h": "Pliki cookie i statystyki",
+          "p": [
+            "Ograniczamy pliki cookie do minimum. Używamy przyjaznych prywatności statystyk bez plików cookie, które nie śledzą Cię na innych stronach. Mały plik preferencji zapamiętuje wybrany przez Ciebie język, aby witryna otwierała się w nim następnym razem. Nie stosujemy reklamowych ani międzywitrynowych plików śledzących."
+          ]
+        },
+        {
+          "h": "Usługi, które przetwarzają dane w naszym imieniu",
+          "p": [
+            "Opieramy się na niewielkiej liczbie renomowanych podmiotów przetwarzających, z których każdy jest związany umową powierzenia przetwarzania danych: Supabase (baza danych i uwierzytelnianie), Vercel (hosting i statystyki bez cookie), Resend (e-maile transakcyjne), Stripe (płatności) oraz OpenAI i Anthropic (które napędzają wielojęzycznego concierge). Przetwarzają dane wyłącznie zgodnie z naszymi instrukcjami i tylko w zakresie niezbędnym do świadczenia usługi."
+          ]
+        },
+        {
+          "h": "Przekazywanie danych za granicę",
+          "p": [
+            "Niektórzy z tych dostawców mogą przetwarzać dane poza Europejskim Obszarem Gospodarczym. Tam, gdzie to następuje, przekazywanie jest chronione odpowiednimi zabezpieczeniami — takimi jak Standardowe klauzule umowne Komisji Europejskiej — aby Twoje dane nadal korzystały z ochrony na poziomie RODO."
+          ]
+        },
+        {
+          "h": "Jak długo przechowujemy Twoje dane",
+          "p": [
+            "Dane osobowe przechowujemy tylko tak długo, jak to konieczne do celu, w jakim zostały zebrane: prośby concierge i kontaktowe tak długo, jak potrzeba do ich obsługi, oraz przez rozsądny okres później; dane newslettera do momentu wypisania się; a dane członkostwa przez czas trwania konta i każdy okres wymagany prawem. Następnie je usuwamy lub anonimizujemy."
+          ]
+        },
+        {
+          "h": "Twoje prawa",
+          "p": [
+            "Na mocy RODO masz prawo dostępu do przechowywanych przez nas danych osobowych, ich sprostowania lub usunięcia, ograniczenia lub sprzeciwu wobec ich przetwarzania, otrzymania ich w formacie przenośnym oraz wycofania udzielonej zgody. Korzystanie z tych praw jest bezpłatne i nie postawi Cię w gorszej sytuacji."
+          ]
+        },
+        {
+          "h": "Jak skorzystać ze swoich praw",
+          "p": [
+            "Napisz na privacy@cypruslifestyle.com i powiedz nam, czego sobie życzysz. Odpowiemy w ciągu miesiąca, zgodnie z wymogami RODO. Dla Twojej ochrony przed realizacją prośby możemy potrzebować potwierdzenia Twojej tożsamości."
+          ]
+        },
+        {
+          "h": "Skargi",
+          "p": [
+            "Jeśli nie jesteś zadowolony ze sposobu, w jaki postąpiliśmy z Twoimi danymi, masz prawo złożyć skargę do cypryjskiego organu nadzorczego: Biuro Komisarza ds. Ochrony Danych Osobowych, ul. Kypranoros 15, 1061 Nikozja, Cypr — telefon +357 22 818 456, e-mail commissioner@dataprotection.gov.cy."
+          ]
+        },
+        {
+          "h": "Zmiany w niniejszej polityce",
+          "p": [
+            "Możemy aktualizować niniejszą politykę wraz z rozwojem naszych usług lub zmianami prawa. Przy istotnej zmianie zaktualizujemy powyższą datę i, tam gdzie to właściwe, poinformujemy Cię bezpośrednio."
+          ]
+        }
       ]
     },
     "contact": {
       "kicker": "Cyprus Lifestyle",
       "title": "Kontakt",
-      "dek": "Redakcja, członkostwo lub współpraca — napisz do nas."
+      "dek": "Jakkolwiek chcesz się z nami skontaktować — biuro jest otwarte.",
+      "sections": [
+        {
+          "h": "Wydawca",
+          "p": [
+            "Cyprus Lifestyle jest wydawany przez ADD Individual Solutions Ltd (dział Media), Nikozja, Cypr. Zapytania ogólne: hello@cypruslifestyle.com."
+          ]
+        },
+        {
+          "h": "Redakcja i sprostowania",
+          "p": [
+            "Propozycje tematów, uwagi i prośby o sprostowania: newsroom@cypruslifestyle.com."
+          ]
+        },
+        {
+          "h": "Reklama i partnerstwa",
+          "p": [
+            "Aby reklamować się, uzyskać wpis lub nawiązać z nami współpracę: advertise@cypruslifestyle.com."
+          ]
+        },
+        {
+          "h": "Ochrona danych",
+          "p": [
+            "W sprawie wszelkich pytań dotyczących Twoich danych osobowych lub aby skorzystać ze swoich praw, napisz na privacy@cypruslifestyle.com. Pełne informacje znajdują się na stronie Prywatność."
+          ]
+        }
+      ]
     },
     "standards": {
       "kicker": "Redakcja",
-      "title": "Zasady redakcyjne",
-      "dek": "Jak powstaje Cyprus Lifestyle — jak zbieramy materiały, piszemy, tłumaczymy i poprawiamy.",
-      "body": [
-        "Cyprus Lifestyle jest niezależny redakcyjnie. Nasze treści nie są na sprzedaż; materiały sponsorowane są zawsze oznaczone, a relacje handlowe nigdy nie decydują o tym, o czym i jak piszemy.",
-        "Piszemy z imiennie wskazanych działów i cenimy konkret ponad przymiotniki. Gdy tekst opiera się na innej publikacji lub dokumencie źródłowym, mówimy o tym i podajemy link do źródła.",
-        "Korzystamy z narzędzi AI przy zbieraniu materiałów, redagowaniu i tłumaczeniu — ale każdy kanoniczny tekst przed publikacją redaguje człowiek, a każde z naszych siedmiu wydań (angielskie, greckie, rumuńskie, arabskie, niemieckie, polskie i rosyjskie) jest sprawdzane pod kątem rzetelności i tonu, w wydaniu arabskim od prawej do lewej.",
-        "Błędy poprawiamy szybko i w sposób widoczny. Jeśli coś jest nie tak, napisz do nas przez stronę kontaktu, a naprawimy to."
+      "title": "Standardy redakcyjne",
+      "dek": "Jak wybieramy, co publikujemy, i jak zachowujemy uczciwość.",
+      "sections": [
+        {
+          "h": "Dokładność i weryfikacja",
+          "p": [
+            "Każda firma, którą umieszczamy w katalogu, to realne, działające przedsiębiorstwo, które sprawdziliśmy na podstawie jej własnej strony i rejestrów publicznych. Nie wymyślamy miejsc, cen, ocen ani danych kontaktowych i poprawiamy każdy nasz błąd. Gdy podajemy cenę lub praktyczną liczbę, dodajemy uczciwe zastrzeżenia — w przypadku usług radzimy uzyskać dwie lub trzy oferty."
+          ]
+        },
+        {
+          "h": "Niezależność od reklamy",
+          "p": [
+            "Treści redakcyjne nigdy nie są na sprzedaż. Reklamy i lokowania sponsorowane, tam gdzie się pojawiają, są wyraźnie oznaczone jako takie i decydowane oddzielnie od naszych tekstów i rekomendacji. Firma nie może kupić przychylnej recenzji ani wyższej pozycji w katalogu."
+          ]
+        },
+        {
+          "h": "Jak powstaje katalog",
+          "p": [
+            "Wpisy dobierane są na podstawie zasług — reputacji, historii działalności i znaczenia dla naszych czytelników — i wzbogacane przez naszą redakcję. Umieszczenie jest bezpłatne i nie jest uzależnione od żadnej relacji handlowej. Firma może w każdej chwili poprosić o wpis, poprawkę lub usunięcie."
+          ]
+        },
+        {
+          "h": "Sprostowania",
+          "p": [
+            "Jeśli uważasz, że coś, co opublikowaliśmy, jest niedokładne, daj nam znać. Rozpatrujemy każdą prośbę bezzwłocznie i tam, gdzie sprostowanie jest uzasadnione, wprowadzamy je jawnie."
+          ]
+        },
+        {
+          "h": "Republika Cypryjska",
+          "p": [
+            "Naszym obszarem redakcyjnym jest Republika Cypryjska. Nie opisujemy ani nie umieszczamy firm na okupowanej północy. Jest to decyzja oparta na faktach, dotycząca terytorium, które znamy i któremu służymy."
+          ]
+        }
       ]
     },
     "author": {
