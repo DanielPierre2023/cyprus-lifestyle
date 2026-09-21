@@ -419,3 +419,29 @@ category is findable, in the guest's language, whatever its front-end group.
   probes match. Front-end groups are untouched — a business can stay ungrouped there yet still
   be in the concierge's reach. (Reminder: scraped rows arrive as **drafts**; approve them in
   Admin → Directory and they become answerable.)
+
+## True neighbourhood radius (requires 0082)
+The guest gives a street, area or postcode (no house number) and the concierge answers what's
+actually around that point — nearest first, with distances, our own clients led but honestly
+labelled.
+- `supabase/migrations/0082_neighbourhood_geo.sql` **(new)** — `geocode_cache` (resolve a place
+  once, then it's free) + a `directory_listings(lat,lng)` index for bounding-box radius queries.
+  No PostGIS needed. Idempotent, tested on UTF-8 PG.
+- `lib/geo.ts` **(new)** — `geocode()` turns a street/area/postcode into a point, cached, and
+  Cyprus-bounded (a stray non-Cyprus match is rejected). Uses Google Geocoding when
+  `GOOGLE_MAPS_KEY` (or the existing `PLACES_KEY`) is set, otherwise free OpenStreetMap/Nominatim.
+  `haversineMeters()` + `bbox()` do the distance maths. **11/11 unit cases pass.**
+- `lib/concierge/brain.ts` — `extractLocationPhrase()` spots a place or postcode in the query
+  (EN/EL/RU/DE/PL/RO; "near me" with no place returns nothing, so the concierge asks). When one
+  resolves, `searchNear()` finds listings within `NEIGHBOURHOOD_RADIUS_M` (default 2,500 m) of the
+  point — bounding-box prefilter + exact haversine — narrowed to the query's category, and ranks
+  **our featured clients first, then verified, then nearest, then best-rated**. Distances and an
+  "our featured partner" marker flow into the grounding, and the persona now asks for a
+  street/area/postcode (no house number) and answers honestly, comparing ratings, partners
+  labelled — never hiding a nearer or clearly better-rated place. (10/10 classifier, 14/14
+  category probes, 16/16 mail guardrails still pass.)
+- **After deploy:** run **0082**. Works immediately for listings that have coordinates — the
+  scraper captures them from each business's map, and `enrich-directory` adds them via Places, so
+  radius coverage grows as the directory fills. Optional: set `GOOGLE_MAPS_KEY` for the most
+  reliable Cyprus geocoding (otherwise the free OSM fallback is used); tune `NEIGHBOURHOOD_RADIUS_M`
+  if you want a tighter/wider "neighbourhood".

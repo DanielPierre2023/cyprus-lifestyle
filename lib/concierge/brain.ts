@@ -18,8 +18,10 @@ import { CLAUDE_SONNET } from '@/lib/ai';
 import { retrieveKnowledge, guideHref, QA_INDEX, type QAHit } from '@/lib/knowledge/qa';
 import { localizedIntent } from '@/lib/knowledge/qa.i18n';
 import { embedText } from '@/lib/concierge/embed';
+import { geocode, haversineMeters, bbox } from '@/lib/geo';
 
 export const CONCIERGE_MODEL = process.env.SONNET_MODEL || CLAUDE_SONNET;
+const NEIGHBOURHOOD_RADIUS_M = Number(process.env.NEIGHBOURHOOD_RADIUS_M || 2500);
 
 export type Role = 'user' | 'assistant';
 export interface ChatMessage { role: Role; content: string; }
@@ -33,6 +35,9 @@ export interface Pick {
   priceFrom?: number | null; priceTo?: number | null; devStatus?: string | null;
   completion?: string | null; bedrooms?: string | null;
   partnerPitch?: string | null; // the business's OWN note about its services/offers
+  distanceM?: number | null;    // metres from the guest's neighbourhood point, when known
+  featured?: boolean;           // our own client / paid placement — surfaced first, but labelled
+  lat?: number | null; lng?: number | null;
 }
 export interface GuideLink { label: string; path: string; }
 export interface ArticleLink { slug: string; title: string; category: string | null; }
@@ -44,6 +49,7 @@ export interface ConciergeContext {
   kb: QAHit[];
   canRoute: boolean;
   luxury: boolean;
+  near?: { label: string; radiusM: number } | null; // set when a neighbourhood point was resolved
 }
 
 const LOCALES = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'];
@@ -70,6 +76,7 @@ export function conciergeSystem(locale: string): string {
     "You are the concierge for Cyprus Lifestyle — the definitive luxury guide to visiting and living in the Republic of Cyprus (the south; never Northern Cyprus). " +
     "Your manner is that of an exceptional private concierge crossed with a Condé Nast Traveller editor: warm, cultivated, precise, discreet and genuinely useful. You have taste. You recommend a considered few, each with a reason — never a long undifferentiated list. " +
     "\n\nGROUNDING — this is absolute. You may name a business, price, rating or fact ONLY if it appears in the CONTEXT provided for this turn (the knowledge base and the directory candidates). NEVER invent a place, a price, a phone number or an availability. If the context doesn't cover something, say so honestly and offer to connect the guest to the right people, or ask a clarifying question. Use the euro prices from the knowledge base when relevant, and give the honest caveats (for services, advise getting two or three quotes; note when insurance matters). " +
+    "\n\nNEIGHBOURHOOD — when the guest wants something 'near me' or nearby but hasn't said where, warmly ask for a street, an area/neighbourhood name, or a postcode — and reassure them a house number isn't needed. When the context includes a NEIGHBOURHOOD block with distances, recommend the closest good options, compare their ratings honestly, and lead with any 'our featured partner' (naming them as a featured partner) without ever hiding a nearer or clearly better-rated place. " +
     "\n\nSTYLE — reply in " + lang + " (the visitor's language), in flowing prose, not bullet lists. Keep most answers to 2–5 sentences; for a trip plan or a multi-part request you may write more, structured as a short day-by-day or step-by-step. Refer to places by name; do not paste URLs (the interface shows the cards and links). When a request is actionable — a table, a transfer, a villa, a quote, a lawyer, a pool clean — offer warmly to arrange it or connect them to the right business. Offer a real human concierge for anything bespoke or high-stakes. " +
     "\n\nCAPTURING THE REQUEST — when the guest wants you to arrange, book, quote or connect them to something, or when they clearly want a human to follow up, warmly ask for the ONE thing you need to make it happen: a name and either an email or a WhatsApp/phone number, plus the key detail (dates, party size, budget, district) in a sentence. Ask naturally, never as a form — e.g. 'I'd be glad to arrange that. May I take a name and a WhatsApp or email so our concierge desk can come back to you with two or three options?' Ask only once; if they've already given a contact, don't ask again — confirm you'll pass it to the desk. If they'd rather not share one, tell them exactly which listings to look at and offer the guide page instead. Never promise a specific price, availability or confirmed booking yourself — you gather the request and hand it to the human desk, which replies. " +
     "\n\nSELLING CYPRUS LIFESTYLE — you may also explain and gently recommend our own offering when it's relevant: the free Saturday Letter (our weekly editorial dispatch), membership and its concierge service for residents and frequent visitors, and — for businesses — being listed or advertising with us. Explain the value plainly and honestly, invite them to sign up or ask for details, and capture a contact the same way; never pressure, and never invent prices or plan features that aren't in the context. " +
@@ -193,7 +200,7 @@ export function classifyRequest(q: string): { category: string | null; district:
 
 // The directory columns we surface as a Pick (locale-aware, with English fallback).
 const dirCols = (locale: string) =>
-  `slug,type,subtype,district,price_band,rating,rating_count,verified,luxury,image,price_from,price_to,dev_status,completion,bedrooms,partner_pitch,name_${locale},name_en,summary_${locale},summary_en`;
+  `slug,type,subtype,district,price_band,rating,rating_count,verified,luxury,featured,lat,lng,image,price_from,price_to,dev_status,completion,bedrooms,partner_pitch,name_${locale},name_en,summary_${locale},summary_en`;
 
 function rowToPick(r: Record<string, unknown>, locale: string): Pick {
   return {
@@ -214,6 +221,9 @@ function rowToPick(r: Record<string, unknown>, locale: string): Pick {
     completion: (r.completion as string) ?? null,
     bedrooms: (r.bedrooms as string) ?? null,
     partnerPitch: (r.partner_pitch as string) ?? null,
+    featured: Boolean(r.featured),
+    lat: (r.lat as number) ?? null,
+    lng: (r.lng as number) ?? null,
   };
 }
 
@@ -255,6 +265,18 @@ export function categoryProbes(q: string): string[] {
   const out: string[] = [];
   for (const c of CATEGORY_PROBES) if (c.rx.test(s)) out.push(...c.probes);
   return Array.from(new Set(out)).slice(0, 6);
+}
+
+// Pull a location phrase (street / area / postcode) from a query, for neighbourhood
+// search. Returns null for "near me"/"here" (the concierge then asks for a place).
+const LOC_STOP = new Set(['me', 'us', 'here', 'there', 'mine', 'nearby', 'close', 'around', 'home']);
+export function extractLocationPhrase(q: string): string | null {
+  const zip = q.match(/\b(\d{4})\b/);
+  if (zip) return zip[1];
+  const m = q.match(/(?:near(?:by)?|around|close to|next to|beside|in|at|κοντ[άα](?:\s+(?:σε|στην|στη|στο))?|στην|στη|στο|возле|рядом с|в районе|in der n[äa]he von|w pobli[żz]u|l[âa]ng[ăa])\s+(.{2,60}?)\s*[.?!,;]?\s*$/i);
+  if (!m) return null;
+  const phrase = m[1].trim().replace(/^(the|a|my)\s+/i, '').trim();
+  return phrase.length >= 2 && !LOC_STOP.has(phrase.toLowerCase()) ? phrase : null;
 }
 
 export async function searchDirectory(locale: string, q: string, limit = 8, opts?: { luxuryFirst?: boolean }): Promise<Pick[]> {
@@ -336,6 +358,43 @@ export async function searchDirectory(locale: string, q: string, limit = 8, opts
     }
   } catch { /* directory unavailable — the KB still grounds the answer */ }
   return out.slice(0, limit);
+}
+
+// Neighbourhood radius search: everything within `radiusM` of a point, narrowed to
+// the query's category when it names one, ranked with OUR clients (featured) first —
+// then verified, then nearest, then best-rated. Bounding-box prefilter (indexed) +
+// exact haversine distance. This is what answers "a pharmacy near Mackenzie".
+async function searchNear(locale: string, point: { lat: number; lng: number }, radiusM: number, q: string, limit = 10): Promise<Pick[]> {
+  const sb = supabaseAdmin();
+  const cols = dirCols(locale);
+  const box = bbox(point.lat, point.lng, radiusM);
+  const { types, groups, subtypes } = readIntent(q);
+  const probes = categoryProbes(q);
+  let query = sb.from('directory_listings').select(cols).eq('status', 'published')
+    .gte('lat', box.minLat).lte('lat', box.maxLat).gte('lng', box.minLng).lte('lng', box.maxLng);
+  const orParts: string[] = [];
+  for (const st of subtypes) orParts.push(`subtype.eq.${st}`);
+  for (const g of groups) orParts.push(`category_group.eq.${g}`);
+  for (const ty of types) orParts.push(`type.eq.${ty}`);
+  for (const p of probes) { orParts.push(`subtype.ilike.*${p}*`); orParts.push(`name_en.ilike.*${p}*`); }
+  if (orParts.length) query = query.or(orParts.join(','));
+  try {
+    const { data } = await query.limit(200);
+    const near = ((data as Record<string, unknown>[] | null) || [])
+      .map((r) => {
+        const p = rowToPick(r, locale);
+        const d = (p.lat != null && p.lng != null) ? haversineMeters(point.lat, point.lng, p.lat, p.lng) : Infinity;
+        return { ...p, distanceM: isFinite(d) ? Math.round(d) : null };
+      })
+      .filter((p) => p.distanceM != null && p.distanceM <= radiusM);
+    // Our clients first (labelled downstream), then verified, then nearest, then rating.
+    near.sort((a, b) =>
+      (Number(!!b.featured) - Number(!!a.featured)) ||
+      (Number(!!b.verified) - Number(!!a.verified)) ||
+      ((a.distanceM as number) - (b.distanceM as number)) ||
+      ((b.rating || 0) - (a.rating || 0)));
+    return near.slice(0, limit);
+  } catch { return []; }
 }
 
 // Server-side specialist matching for the request pipeline. Given a captured
@@ -447,6 +506,26 @@ export async function assembleContext(locale: string, latestUser: string): Promi
     vectorDirectory(locale, qvec, 8),
   ]);
   let candidates = mergeDirHits(keywordPicks, vecPicks, 8);
+
+  // Neighbourhood radius: if the guest named a street / area / postcode, resolve it
+  // and LEAD with what's actually within a short distance — our clients first.
+  let near: { label: string; radiusM: number } | null = null;
+  const locPhrase = extractLocationPhrase(latestUser);
+  if (locPhrase) {
+    const hasCategory = readIntent(latestUser).types.length || readIntent(latestUser).groups.length ||
+      readIntent(latestUser).subtypes.length || categoryProbes(latestUser).length;
+    const strong = /near|around|close to|next to|beside|κοντ|\b\d{4}\b/i.test(latestUser);
+    if (strong || hasCategory) {
+      const point = await geocode(locPhrase).catch(() => null);
+      if (point) {
+        const nearPicks = await searchNear(locale, point, NEIGHBOURHOOD_RADIUS_M, latestUser, 10);
+        if (nearPicks.length) {
+          candidates = mergeDirHits(nearPicks, candidates, 10); // near results lead
+          near = { label: point.label, radiusM: NEIGHBOURHOOD_RADIUS_M };
+        }
+      }
+    }
+  }
   if (candidates.length < 4) candidates = mergeDirHits(candidates, await topRated(locale, 8), 8);
 
   const kb = mergeKbHits(kbKeyword, kbVecIds);
@@ -465,7 +544,7 @@ export async function assembleContext(locale: string, latestUser: string): Promi
   }
   const articles: ArticleLink[] = (related || []).map((a) => ({ slug: a.slug, title: a.title, category: a.category }));
   const luxury = luxuryIntent(latestUser);
-  return { candidates, picks, guides, articles, kb, canRoute, luxury };
+  return { candidates, picks, guides, articles, kb, canRoute, luxury, near };
 }
 
 // The context block appended to the system prompt for grounding.
@@ -485,9 +564,13 @@ export function groundingBlock(ctx: ConciergeContext, locale: string): string {
       if (h.item.source) parts.push(`  (official source, cite it for anything regulatory or financial: ${h.item.source})`);
     }
   }
+  if (ctx.near) {
+    parts.push(`\nNEIGHBOURHOOD — the guest is asking about the area near "${ctx.near.label}". The listings below are the real ones within about ${Math.round(ctx.near.radiusM / 100) / 10} km, closest first with their distance. Recommend the nearest good options and compare their ratings HONESTLY. Any marked "our featured partner" is one of our own clients — mention them first and label them as featured/partner, but never claim they are the best if a closer or clearly better-rated listing exists; be truthful. If the guest gave only a rough area, that's fine — you do NOT need a house number.`);
+  }
   if (ctx.candidates.length) {
     parts.push('\nDirectory — real published listings you may recommend BY NAME (never name a place not in this list). The kind label distinguishes, e.g., an estate agent/broker from a property developer, so match it to what the guest actually needs:');
     const money = (n: number) => '€' + Math.round(n).toLocaleString('en-US');
+    const dist = (m: number) => m < 950 ? `${Math.round(m / 50) * 50}m` : `${(m / 1000).toFixed(1)}km`;
     for (const c of ctx.candidates) {
       const kind = (c.subtype && c.subtype.replace(/-/g, ' ')) || c.type;
       // Real, dated development facts so the concierge can quote the actual figure.
@@ -501,7 +584,9 @@ export function groundingBlock(ctx: ConciergeContext, locale: string): string {
         if (c.completion) bits.push(`ready ${c.completion}`);
         if (bits.length) dev = `, ${bits.join(', ')}`;
       }
-      parts.push(`• ${c.name} — ${kind}${c.district ? `, ${c.district}` : ''}${c.rating ? `, ${c.rating}★${c.rating_count ? ` (${c.rating_count})` : ''}` : ''}${c.price_band ? `, ${c.price_band}` : ''}${dev}${c.verified ? ', verified' : ''}`);
+      const dm = (c.distanceM != null) ? `, ~${dist(c.distanceM)} away` : '';
+      const partner = c.featured ? ' — ★ our featured partner' : '';
+      parts.push(`• ${c.name} — ${kind}${c.district ? `, ${c.district}` : ''}${dm}${c.rating ? `, ${c.rating}★${c.rating_count ? ` (${c.rating_count})` : ''}` : ''}${c.price_band ? `, ${c.price_band}` : ''}${dev}${c.verified ? ', verified' : ''}${partner}`);
       // The business's own note about its services/offers — you MAY relay this, but
       // attribute it as their own words ("they say…"), and never state it as our fact.
       if (c.partnerPitch) parts.push(`    ↳ ${c.name} says: ${String(c.partnerPitch).slice(0, 320)}`);
