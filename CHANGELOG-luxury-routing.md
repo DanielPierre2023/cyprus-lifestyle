@@ -12,6 +12,14 @@
   key + a final idempotent collapse + a UNIQUE index, so future imports can't
   re-introduce duplicates. Preserves real chains (branches at different coordinates)
   and different businesses sharing a building. Idempotent, tested on Postgres 16.
+- `supabase/migrations/0075_articles_doing_business.sql`
+  5 flagship **doing-business articles** in all 7 languages (company setup; tax &
+  VAT; regulated professions & licensing; social insurance & hiring; funding &
+  grants), fact-checked against the government portal with the official source
+  cited in each. Category 'business', branded placeholder covers (no image cost),
+  idempotent (`on conflict (slug) do nothing`). Tested on a UTF-8 Postgres — all
+  7 editions insert correctly. Searchable immediately via the generated index; the
+  concierge will surface them as related articles.
 
 ## 2 · Code — then deploy once to Vercel
 Files changed / added:
