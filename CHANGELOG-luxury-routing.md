@@ -2,11 +2,16 @@
 
 **One deploy + one SQL migration.** Run the SQL first, then deploy the code.
 
-## 1 · SQL — run this in the Supabase SQL editor FIRST
+## 1 · SQL — run these in the Supabase SQL editor FIRST (in order)
 - `supabase/migrations/0073_concierge_request_tier.sql`
   Adds a `tier` column (premium | standard, default standard) + index to
   `concierge_requests`. **Required before deploy** — the request pipeline now
   writes `tier`, and the admin inbox reads it. Idempotent, tested on Postgres 16.
+- `supabase/migrations/0074_directory_dedup_guard.sql`
+  Makes directory de-duplication **durable** (CTO audit P1): an immutable identity
+  key + a final idempotent collapse + a UNIQUE index, so future imports can't
+  re-introduce duplicates. Preserves real chains (branches at different coordinates)
+  and different businesses sharing a building. Idempotent, tested on Postgres 16.
 
 ## 2 · Code — then deploy once to Vercel
 Files changed / added:
@@ -39,6 +44,10 @@ Files changed / added:
     connected to the request's topic, in the guest's language.
 - `app/[locale]/(site)/article/[slug]/page.tsx`
   - Internal article links are localized to the reader's edition (no jump back to English).
+- `components/LocaleSwitch.tsx` + `app/globals.css`
+  - **Accessibility (CTO audit P2):** full keyboard model in the language menu —
+    Arrow Up/Down (with wrap), Home/End, Escape returns focus to the trigger,
+    open-from-trigger via Arrow/Enter/Space — plus visible focus states.
 
 ## 3 · Optional environment variables (recommended)
 - `CONCIERGE_INBOX` — the standard concierge desk email.

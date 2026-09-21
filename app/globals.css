@@ -223,10 +223,12 @@ html[lang="ar"] .display, html[lang="ar"] .disp, html[lang="ar"] .brand { font-f
 .article figure.cover figcaption { font-family: var(--sans); font-size: 12px; letter-spacing: .04em; color: var(--ink-soft); margin-top: 8px; text-transform: uppercase; }
 .prose > * { margin: 0 0 1.2em; }
 .prose p { font-size: 19px; }
-.article .prose p:first-of-type::first-letter { font-family: var(--disp); font-size: 4.2em; line-height: .8; float: inline-start; padding-inline-end: .08em; padding-top: .04em; color: var(--copper); font-weight: 600; }
+/* Drop cap only on the article's first DIRECT paragraph — never on paragraphs
+   nested inside a specialist card or other embedded block. */
+.article .prose > p:first-of-type::first-letter { font-family: var(--disp); font-size: 4.2em; line-height: .8; float: inline-start; padding-inline-end: .08em; padding-top: .04em; color: var(--copper); font-weight: 600; }
 /* Arabic script joins cursively — a drop cap would detach the first letter, so disable it */
-[dir="rtl"] .article .prose p:first-of-type::first-letter,
-html[lang="ar"] .article .prose p:first-of-type::first-letter { font-size: inherit; float: none; padding: 0; color: inherit; font-weight: inherit; line-height: inherit; }
+[dir="rtl"] .article .prose > p:first-of-type::first-letter,
+html[lang="ar"] .article .prose > p:first-of-type::first-letter { font-size: inherit; float: none; padding: 0; color: inherit; font-weight: inherit; line-height: inherit; }
 .prose h2 { font-family: var(--disp); font-size: 30px; margin-top: 1.6em; letter-spacing: -.01em; }
 .prose h3 { font-family: var(--disp); font-size: 23px; margin-top: 1.4em; }
 .prose blockquote { border-inline-start: 3px solid var(--gold); margin-inline: 0; padding-inline-start: 22px; font-style: italic; color: var(--aegean); font-size: 23px; font-family: var(--disp); }
@@ -321,6 +323,11 @@ html[lang="ar"] .article .prose p:first-of-type::first-letter { font-size: inher
 .lang-menu li a { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 10px 12px; border-radius: 4px;
   color: var(--champagne); font-family: var(--sans); font-size: 13.5px; letter-spacing: .02em; text-transform: none; opacity: .82; }
 .lang-menu li a:hover { background: rgba(201,162,76,.12); color: var(--ivory); opacity: 1; }
+/* Visible keyboard focus (a11y): the arrow-key-focused edition is clearly marked,
+   distinct from hover, in both the footer and header switchers. */
+.lang-menu li a:focus-visible { background: rgba(201,162,76,.18); color: var(--ivory); opacity: 1;
+  outline: 2px solid var(--gold); outline-offset: -2px; }
+.lang-trigger:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 3px; }
 .lang-menu li a.active { color: var(--gold); opacity: 1; }
 .lang-menu li a.active .lang-code { color: var(--gold); opacity: .8; }
 .lang-menu .lang-native { font-size: 14px; }
