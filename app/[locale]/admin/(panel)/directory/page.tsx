@@ -28,7 +28,7 @@ const BLANK: Row = {
   name_en: '', name_el: '', name_ro: '', name_ar: '', name_de: '', name_pl: '', name_ru: '',
   summary_en: '', summary_el: '', summary_ro: '', summary_ar: '', summary_de: '', summary_pl: '', summary_ru: '',
   address: '', lat: '', lng: '', price_band: '', url: '', phone: '', image: '',
-  tags: '', featured: false, status: 'published',
+  tags: '', featured: false, status: 'published', partner_pitch: '',
 };
 
 // Turn "a, b, c" into a Postgres text[] and vice-versa.
@@ -118,6 +118,8 @@ export default function DirectoryAdmin() {
       address: form.address || null, lat: num(form.lat), lng: num(form.lng),
       price_band: form.price_band || null, url: form.url || null, phone: form.phone || null, image: form.image || null,
       tags: parseTags(form.tags || ''), featured: !!form.featured, status: form.status || 'published',
+      partner_pitch: (form.partner_pitch || '').trim() || null,
+      partner_pitch_at: (form.partner_pitch || '').trim() ? new Date().toISOString() : null,
     };
     const res = form.id
       ? await sb.from('directory_listings').update(payload).eq('id', form.id)
@@ -186,6 +188,13 @@ export default function DirectoryAdmin() {
                 placeholder={l === 'en' ? 'One or two sentences.' : 'Optional — falls back to English.'} />
             </div>
           ))}
+        </div>
+        <div className="row" style={{ alignItems: 'flex-start' }}>
+          <div style={{ flex: '1 1 100%' }}>
+            <label className="fl">Business note — the partner’s own words <span style={{ color: '#8a8371', fontWeight: 400 }}>— their services, current offers or projects. The concierge may relay this, attributed to them (“they say…”), never as our fact. Leave blank if none.</span></label>
+            <textarea rows={3} value={form.partner_pitch} onChange={(e) => set('partner_pitch', e.target.value)}
+              placeholder="e.g. We specialise in seafront villas in Larnaca; two new projects launching this autumn; free legal introduction for international buyers." />
+          </div>
         </div>
         <details style={{ marginBottom: 10 }}>
           <summary style={{ cursor: 'pointer', color: '#8a5b12', fontSize: 13 }}>Localised names (EL / RO / AR / DE / PL / RU) — optional</summary>

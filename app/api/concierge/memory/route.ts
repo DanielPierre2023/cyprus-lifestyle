@@ -4,14 +4,15 @@
 // fully clearable by the guest — the privacy control for the concierge memory.
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/ratelimit';
-import { loadMemory, clearMemory, isValidCid, isProfileEmpty } from '@/lib/concierge/memory';
+import { isValidCid, isProfileEmpty } from '@/lib/concierge/memory';
+import { loadProfileForCid, clearProfileForCid } from '@/lib/concierge/subscriber';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
   const cid = String(req.nextUrl.searchParams.get('cid') || '');
   if (!isValidCid(cid)) return NextResponse.json({ profile: {}, has: false });
-  const profile = await loadMemory(cid);
+  const profile = await loadProfileForCid(cid); // durable member profile + this browser's memory
   return NextResponse.json({ profile, has: !isProfileEmpty(profile) });
 }
 
@@ -21,6 +22,6 @@ export async function DELETE(req: NextRequest) {
   }
   const cid = String(req.nextUrl.searchParams.get('cid') || '');
   if (!isValidCid(cid)) return NextResponse.json({ ok: false }, { status: 400 });
-  await clearMemory(cid);
+  await clearProfileForCid(cid);
   return NextResponse.json({ ok: true });
 }

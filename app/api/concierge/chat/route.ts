@@ -7,8 +7,9 @@
 import { NextRequest, after } from 'next/server';
 import { rateLimit } from '@/lib/ratelimit';
 import { streamConcierge, latestUserText, type ChatMessage } from '@/lib/concierge/brain';
-import { loadMemory, renderMemory, updateMemory, isValidCid, type MemoryProfile } from '@/lib/concierge/memory';
+import { renderMemory, updateMemory, isValidCid, type MemoryProfile } from '@/lib/concierge/memory';
 import { isMemberCid, MEMBER_BLOCK } from '@/lib/concierge/membership';
+import { loadProfileForCid, syncMemberProfile } from '@/lib/concierge/subscriber';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [memory, member] = await Promise.all([
-    cid ? loadMemory(cid) : Promise.resolve({} as MemoryProfile),
+    cid ? loadProfileForCid(cid) : Promise.resolve({} as MemoryProfile),
     cid ? isMemberCid(cid) : Promise.resolve(false),
   ]);
   const memoryBlock = renderMemory(memory);
@@ -52,7 +53,11 @@ export async function POST(req: NextRequest) {
   });
 
   // After the reply is sent, quietly update what we remember about this guest.
-  if (cid) after(async () => { if (collected.trim()) await updateMemory(cid, lastUser, collected, memory); });
+  if (cid) after(async () => {
+    if (!collected.trim()) return;
+    await updateMemory(cid, lastUser, collected, memory);
+    await syncMemberProfile(cid); // fold newly-learned prefs into the member's durable, cross-device profile
+  });
 
   return new Response(stream, {
     headers: {

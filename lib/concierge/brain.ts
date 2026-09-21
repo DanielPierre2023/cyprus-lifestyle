@@ -32,6 +32,7 @@ export interface Pick {
   // real number and status — "from €280k, delivery Q4 2026" — not just a band.
   priceFrom?: number | null; priceTo?: number | null; devStatus?: string | null;
   completion?: string | null; bedrooms?: string | null;
+  partnerPitch?: string | null; // the business's OWN note about its services/offers
 }
 export interface GuideLink { label: string; path: string; }
 export interface ArticleLink { slug: string; title: string; category: string | null; }
@@ -192,7 +193,7 @@ export function classifyRequest(q: string): { category: string | null; district:
 
 // The directory columns we surface as a Pick (locale-aware, with English fallback).
 const dirCols = (locale: string) =>
-  `slug,type,subtype,district,price_band,rating,rating_count,verified,luxury,image,price_from,price_to,dev_status,completion,bedrooms,name_${locale},name_en,summary_${locale},summary_en`;
+  `slug,type,subtype,district,price_band,rating,rating_count,verified,luxury,image,price_from,price_to,dev_status,completion,bedrooms,partner_pitch,name_${locale},name_en,summary_${locale},summary_en`;
 
 function rowToPick(r: Record<string, unknown>, locale: string): Pick {
   return {
@@ -212,6 +213,7 @@ function rowToPick(r: Record<string, unknown>, locale: string): Pick {
     devStatus: (r.dev_status as string) ?? null,
     completion: (r.completion as string) ?? null,
     bedrooms: (r.bedrooms as string) ?? null,
+    partnerPitch: (r.partner_pitch as string) ?? null,
   };
 }
 
@@ -220,6 +222,41 @@ function rowToPick(r: Record<string, unknown>, locale: string): Pick {
 // isn't luxury: used when the CLIENT is premium, so the tier travels with the
 // client, not just the words (a premium guest asking for "a driver" still gets
 // the chauffeur/limousine houses first).
+// Everyday categories the concierge must find by a business's OWN label (subtype/
+// name), so it can answer "a pharmacy / gym / pet shop / bakery / supermarket near
+// me" for ANY of the thousands of directory categories — not just the fixed intent
+// list above. `rx` recognises what the guest types (multilingual, incl. short words
+// filtered out of free-text search); `probes` are English stems matched with ILIKE
+// against subtype + name (scraped categories are stored as English subtype slugs).
+const CATEGORY_PROBES: { rx: RegExp; probes: string[] }[] = [
+  { rx: /\bgyms?\b|fitness|γυμναστ|фитнес|спортзал|silowni|sala de fitness/, probes: ['gym', 'fitness'] },
+  { rx: /pharmac|φαρμακ|аптек|apotheke|farmaci|apteka|صيدل/, probes: ['pharmac'] },
+  { rx: /\bpets?\b|pet ?shop|\bvet\b|veterin|κτηνιατ|ζωοτροφ|зоомаг|ветеринар|tierarzt|بيطر/, probes: ['pet', 'vet', 'animal'] },
+  { rx: /supermarket|grocery|mini ?market|υπεραγορ|παντοπ|μπακαλ|супермаркет|продукт|supermarkt|spozywcz/, probes: ['supermarket', 'grocery', 'market'] },
+  { rx: /bakery|baker|φουρν|αρτοπ|пекарн|backerei|piekarni|brutari/, probes: ['baker', 'bakery'] },
+  { rx: /hairdress|barber|\bsalon\b|κομμωτ|κουρ|парикмахер|friseur|fryzjer/, probes: ['hair', 'barber', 'salon'] },
+  { rx: /\bbeauty\b|\bspa\b|manicure|μανικιουρ|καλλωπ|nail|νυχ/, probes: ['beauty', 'spa', 'nail'] },
+  { rx: /florist|flower ?shop|ανθοπ|λουλουδ|цвет|blumen|kwiaci/, probes: ['florist', 'flower'] },
+  { rx: /furnitur|επιπλ|мебел|mobel|meble/, probes: ['furnitur'] },
+  { rx: /optic|οπτικ|очк|okulist/, probes: ['optic'] },
+  { rx: /jewel|κοσμηματ|χρυσοχ|ювелир|juwel|bizuteri/, probes: ['jewel'] },
+  { rx: /laundr|dry ?clean|καθαριστηρ|πλυντηρ|прачечн|wascherei|pralni/, probes: ['laundr', 'clean'] },
+  { rx: /nursery|kinderg|preschool|νηπιαγ|παιδικ ?σταθμ|детск|przedszkol/, probes: ['nursery', 'kinderg'] },
+  { rx: /auto ?part|car ?part|spare ?part|ανταλλακτ|автозапчаст|autoteile/, probes: ['auto', 'part'] },
+  { rx: /petrol|fuel|gas ?station|βενζιν|πρατηρ|заправк|tankstelle/, probes: ['petrol', 'fuel'] },
+  { rx: /booksell|bookshop|stationer|βιβλιοπ|χαρτικ|книжн|buchhandl/, probes: ['book', 'stationer'] },
+  { rx: /electronic|ηλεκτρονικ|электрон|elektronik/, probes: ['electronic'] },
+  { rx: /aquarium|ενυδρ/, probes: ['aquarium'] },
+  { rx: /advertis|marketing|διαφημ|реклам|werbe|web ?design|ιστοσελιδ/, probes: ['advertis', 'marketing', 'web'] },
+  { rx: /architect|αρχιτεκτ|arhitect|architekt/, probes: ['architect'] },
+];
+export function categoryProbes(q: string): string[] {
+  const s = deacc(q.toLowerCase());
+  const out: string[] = [];
+  for (const c of CATEGORY_PROBES) if (c.rx.test(s)) out.push(...c.probes);
+  return Array.from(new Set(out)).slice(0, 6);
+}
+
 export async function searchDirectory(locale: string, q: string, limit = 8, opts?: { luxuryFirst?: boolean }): Promise<Pick[]> {
   const sb = supabaseAdmin();
   const cols = dirCols(locale);
@@ -257,10 +294,25 @@ export async function searchDirectory(locale: string, q: string, limit = 8, opts
         push(wide as Record<string, unknown>[] | null);
       }
     }
+    // Everyday-category retrieval — match the guest's words against each business's
+    // OWN label (subtype + name), so "a pharmacy / gym / pet shop in Larnaca" returns
+    // real listings whatever their category_group, across all scraped categories.
+    const probes = categoryProbes(q);
+    if (probes.length) {
+      const por = probes.flatMap((p) => [`subtype.ilike.*${p}*`, `name_en.ilike.*${p}*`, `name_${locale}.ilike.*${p}*`]).join(',');
+      let pq = sb.from('directory_listings').select(cols).eq('status', 'published').or(por);
+      if (districts.length === 1) pq = pq.eq('district', districts[0]);
+      const { data } = await ordered(pq).limit(12);
+      push(data as Record<string, unknown>[] | null);
+      if (!(data && data.length) && districts.length === 1) { // widen island-wide
+        const { data: wide } = await ordered(sb.from('directory_listings').select(cols).eq('status', 'published').or(por)).limit(8);
+        push(wide as Record<string, unknown>[] | null);
+      }
+    }
     if (terms.length) {
       const or = terms.flatMap((t) => {
         const v = t.replace(/[(),*]/g, '');
-        return [`name_${locale}.ilike.*${v}*`, `name_en.ilike.*${v}*`, `summary_${locale}.ilike.*${v}*`, `summary_en.ilike.*${v}*`];
+        return [`name_${locale}.ilike.*${v}*`, `name_en.ilike.*${v}*`, `summary_${locale}.ilike.*${v}*`, `summary_en.ilike.*${v}*`, `subtype.ilike.*${v}*`];
       }).join(',');
       const { data } = await sb.from('directory_listings').select(cols).eq('status', 'published').or(or)
         .order('rating', { ascending: false, nullsFirst: false }).limit(16);
@@ -450,6 +502,9 @@ export function groundingBlock(ctx: ConciergeContext, locale: string): string {
         if (bits.length) dev = `, ${bits.join(', ')}`;
       }
       parts.push(`• ${c.name} — ${kind}${c.district ? `, ${c.district}` : ''}${c.rating ? `, ${c.rating}★${c.rating_count ? ` (${c.rating_count})` : ''}` : ''}${c.price_band ? `, ${c.price_band}` : ''}${dev}${c.verified ? ', verified' : ''}`);
+      // The business's own note about its services/offers — you MAY relay this, but
+      // attribute it as their own words ("they say…"), and never state it as our fact.
+      if (c.partnerPitch) parts.push(`    ↳ ${c.name} says: ${String(c.partnerPitch).slice(0, 320)}`);
     }
   }
   if (ctx.articles.length) {

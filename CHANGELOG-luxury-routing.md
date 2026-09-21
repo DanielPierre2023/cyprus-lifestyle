@@ -363,3 +363,59 @@ Admin → Agenda (with the existing translate-on-approve).
 
 _All three living-knowledge phases now share one engine (`scrape_sources` + `lib/scrape/http.ts`):
 developer projects, regulation watch, and the agenda — each opt-in, each fully sourced._
+
+## Living knowledge — Phase 4: personalization (requires 0081)
+The concierge now gets to know each subscriber, and businesses can teach it about
+themselves — both built only from what people actually volunteer, both fully clearable.
+- `supabase/migrations/0081_personalization.sql` **(new)** — `concierge_members.profile`
+  (+ `profile_updated_at`): a durable preference profile per **subscriber** that follows
+  them across devices (unlike the anonymous per-browser memory); `directory_listings.partner_pitch`
+  (+ `partner_pitch_at`): a business's own note about its services/offers/projects.
+  Additive, idempotent, tested on UTF-8 PG (jsonb round-trip verified).
+- `lib/concierge/memory.ts` — the profile it learns is now richer: adds **goals**
+  (visiting / buying property / relocating / investing), **budget**, **districts of interest**,
+  and **buyer_type** (EU / non-EU, which drives property-permit & residency guidance) — still
+  volunteered-only, still clearable. Rendered into the concierge's grounding.
+- `lib/concierge/subscriber.ts` **(new)** — composes the two layers: `loadProfileForCid`
+  (member's durable profile + this browser's latest memory), `syncMemberProfile` (folds newly
+  learned preferences back to the member so they persist across sessions/devices),
+  `clearProfileForCid` ("Forget me" wipes both). `mergeProfiles` unions interests/districts
+  and lets the latest session's facts win — **11/11 unit cases pass**.
+- `app/api/concierge/chat/route.ts` — personalises from the merged subscriber profile and
+  syncs what it learns back to the member after each turn.
+- `app/api/concierge/memory/route.ts` — the memory drawer + "Forget me" now cover the durable
+  member profile too, not just the browser.
+- `lib/concierge/brain.ts` — a listing's `partner_pitch` now reaches the concierge grounding,
+  clearly attributed ("<business> says: …") so it's relayed as the business's own words, never
+  as our fact. (Classifier 10/10, mail guardrails 16/16, dev 26/26, events 7/7 still pass.)
+- `app/[locale]/admin/(panel)/directory/page.tsx` — a **"Business note — the partner's own
+  words"** field in the listing editor, so a partner's services/offers/projects can be captured
+  now (a partner self-service portal, with an ownership claim, is the natural next increment).
+- **After deploy:** run **0081**. Subscriber personalization works immediately — a recognised
+  member's preferences now persist across devices and deepen over time (goals, budget, districts,
+  EU/non-EU). To let a business teach the concierge, fill the **Business note** on its listing in
+  Admin → Directory; the concierge will relay it, attributed, when that business is relevant.
+
+_Living knowledge is complete: developer projects, regulation watch, the agenda, and now the
+people — subscribers the concierge remembers, and businesses that can speak for themselves —
+all on one sourced, opt-in engine._
+
+## Concierge everyday-category retrieval (code only)
+Fixes "the concierge can't tell me a gym / pharmacy / pet shop / bakery near me." Retrieval
+previously only recognised a fixed keyword list mapped to a `type`/`group`/exact `subtype`, so
+the thousands of other directory categories were invisible even when present. Now the concierge
+also matches the guest's words against each business's OWN label — `subtype` + name — so any
+category is findable, in the guest's language, whatever its front-end group.
+- `lib/concierge/brain.ts` — new `categoryProbes()` recognises ~20 everyday categories
+  (gym/fitness, pharmacy, pet/vet, supermarket, bakery, hairdresser, beauty/spa, florist,
+  furniture, optician, jeweller, laundry, nursery, auto parts, petrol, bookshop, electronics,
+  aquarium, advertising/web, architect) across EN/EL/RU/DE/PL — including short words the
+  free-text search drops (gym, vet, spa) — and `searchDirectory` now runs a `subtype`/name
+  ILIKE probe (district-first, then island-wide). Free-text search also matches `subtype` now,
+  so longer uncovered categories resolve too. **14/14 probe tests pass; classifier 10/10 and
+  mail guardrails 16/16 unchanged.**
+- This is what makes the scraped businesses answerable: the generic scraper stores each business
+  with its real category as `subtype` (e.g. `pharmacies`, `gyms`, `pet-shops`), which these
+  probes match. Front-end groups are untouched — a business can stay ungrouped there yet still
+  be in the concierge's reach. (Reminder: scraped rows arrive as **drafts**; approve them in
+  Admin → Directory and they become answerable.)
