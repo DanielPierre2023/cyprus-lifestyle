@@ -293,3 +293,36 @@ ready Q4 2026") with the developer's contact. One shared engine; regulation watc
   then **Scrape developer projects now** — review the drafts in Directory and, when happy,
   turn on **Developer-projects scraper** (daily rotation) and optionally **Publish scraped
   projects live**. Next: Phase 2 regulation watch, Phase 3 events actualiser + article links.
+
+## Living knowledge — Phase 2: regulation watch (requires 0079)
+Keeps the concierge's tax / residency / buyer / employment advice honest: the official
+Cyprus pages that govern it are checked on the same daily rotation, and when one
+**materially changes** you get a reviewable alert with an AI "what changed" summary —
+so a human folds the change into the knowledge base. Legal/financial answers are never
+silently rewritten by a scrape; the watch's job is to make sure you're told the moment
+the law moves. Same `scrape_sources` registry as Phase 1.
+- `lib/scrape/http.ts` **(new)** — the shared fetch / robots.txt / HTML→text / hash
+  primitives, now used by every phase (Phase 1 refactored onto it; 26/26 dev tests still pass).
+- `supabase/migrations/0079_regulation_watch.sql` **(new)** — `regulation_snapshots` (one
+  text snapshot per source, to diff against), `regulation_alerts` (the reviewable change
+  feed: title, summary, severity info/minor/major, status new/reviewed/dismissed),
+  `automation_settings.regulation_watch_enabled` (**off by default**). Additive, idempotent,
+  tested on UTF-8 PG (FK + snapshot upsert + alert insert verified).
+- `lib/scrape/regulations.ts` **(new)** — the watch. Seeds **only validated official URLs
+  already cited in our knowledge base** (company setup, tax & VAT, premises, planning,
+  building, running/growing, funding, exit — never an invented URL). First check per page
+  is a silent **baseline**; after that, a real content change triggers a strict old-vs-new
+  AI diff → an alert with severity. Respects robots.txt; content-hash change-detection keeps
+  it cheap. **6/6 seed-list guard tests pass.**
+- `app/api/cron/tick/route.ts` — the daily cron now also drains a small batch of due
+  regulation pages (2/run, 10s budget), guarded by `regulation_watch_enabled`.
+- `app/api/admin/scrape/regulations/route.ts` **(new)** — admin: GET status + recent alerts;
+  POST `seed`, `run` (baseline/check now, optional `force`), and `review`/`dismiss` an alert.
+- `app/[locale]/admin/(panel)/ai/page.tsx` — a **Regulation watch** panel: the toggle,
+  **Seed official pages**, **Check for changes now**, **Force re-check**, open-alert count,
+  and a change feed with a link to the source and Reviewed/Dismiss actions.
+- **After deploy:** run **0079**. Then Admin → AI newsroom → **Seed official pages** →
+  **Check for changes now** (this baselines them; no alerts on the first pass). Turn on
+  **Regulation watch** for the daily rotation. From then on, when an official page changes
+  you'll see an alert to fold into the knowledge base. Next: Phase 3 — events actualiser
+  + article↔agenda links with the concierge embedded.

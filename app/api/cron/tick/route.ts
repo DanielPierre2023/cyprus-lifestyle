@@ -11,6 +11,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { scrapeAllActive } from '@/lib/scraper';
 import { runOutreach } from '@/lib/outreach';
 import { runDevelopmentsScrape } from '@/lib/scrape/developments';
+import { runRegulationWatch } from '@/lib/scrape/regulations';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap
@@ -41,12 +42,15 @@ export async function GET(req: NextRequest) {
   // rotation refreshes every source over a few days within the 60s Hobby cap. Only
   // runs when switched on; content-hash change-detection keeps it cheap.
   try {
-    const { data: a } = await sb.from('automation_settings').select('developments_enabled, developments_autopublish').eq('id', 1).maybeSingle();
-    const s = a as { developments_enabled?: boolean; developments_autopublish?: boolean } | null;
+    const { data: a } = await sb.from('automation_settings').select('developments_enabled, developments_autopublish, regulation_watch_enabled').eq('id', 1).maybeSingle();
+    const s = a as { developments_enabled?: boolean; developments_autopublish?: boolean; regulation_watch_enabled?: boolean } | null;
     if (s?.developments_enabled) {
       out.developments = await runDevelopmentsScrape(sb, { deadlineMs: 12_000, maxSources: 2, autopublish: !!s?.developments_autopublish });
     }
-  } catch (e) { out.developmentsError = (e as Error).message; }
+    if (s?.regulation_watch_enabled) {
+      out.regulations = await runRegulationWatch(sb, { deadlineMs: 10_000, maxSources: 2 });
+    }
+  } catch (e) { out.livingKnowledgeError = (e as Error).message; }
 
   return NextResponse.json(out);
 }

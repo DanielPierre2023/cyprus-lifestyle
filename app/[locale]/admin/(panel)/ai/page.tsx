@@ -4,7 +4,7 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 
 export default function AiTab() {
   const sb = supabaseBrowser();
-  const [auto, setAuto] = useState<{ scraper_enabled: boolean; processor_enabled: boolean; auto_publish: boolean; mail_autoack_enabled: boolean; developments_enabled: boolean; developments_autopublish: boolean }>({ scraper_enabled: false, processor_enabled: false, auto_publish: false, mail_autoack_enabled: false, developments_enabled: false, developments_autopublish: false });
+  const [auto, setAuto] = useState<{ scraper_enabled: boolean; processor_enabled: boolean; auto_publish: boolean; mail_autoack_enabled: boolean; developments_enabled: boolean; developments_autopublish: boolean; regulation_watch_enabled: boolean }>({ scraper_enabled: false, processor_enabled: false, auto_publish: false, mail_autoack_enabled: false, developments_enabled: false, developments_autopublish: false, regulation_watch_enabled: false });
   const [queue, setQueue] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [busy, setBusy] = useState('');
@@ -14,6 +14,8 @@ export default function AiTab() {
   const [bfMsg, setBfMsg] = useState('');
   const [dev, setDev] = useState<any>(null);       // developer-projects scraper status
   const [devMsg, setDevMsg] = useState('');
+  const [reg, setReg] = useState<any>(null);       // regulation watch status + alerts
+  const [regMsg, setRegMsg] = useState('');
 
   const load = useCallback(async () => {
     const [{ data: s }, { data: q }, { data: l }] = await Promise.all([
@@ -128,6 +130,38 @@ export default function AiTab() {
     setBusy(''); checkDev();
   }
 
+  // Regulation watch (living knowledge, Phase 2) — status, on-demand check, alert triage.
+  const checkReg = useCallback(async () => {
+    try { const res = await fetch('/api/admin/scrape/regulations', { credentials: 'same-origin' }); const d = await res.json(); if (d.ok) setReg(d); } catch { /* ignore */ }
+  }, []);
+  useEffect(() => { checkReg(); }, [checkReg]);
+
+  async function seedReg() {
+    setBusy('reg-seed'); setRegMsg('Registering the official pages to watch…');
+    try {
+      const res = await fetch('/api/admin/scrape/regulations', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'seed' }) });
+      const d = await res.json();
+      setRegMsg(d.ok ? `Registered ${d.added} official source${d.added === 1 ? '' : 's'}. Now press “Check now” to baseline them.` : 'Seed failed: ' + (d.error || res.status));
+    } catch (e) { setRegMsg('Seed error: ' + (e as Error).message); }
+    setBusy(''); checkReg();
+  }
+  async function runReg(force = false) {
+    setBusy('reg-run'); setRegMsg('Checking official pages for changes…');
+    try {
+      const res = await fetch('/api/admin/scrape/regulations', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'run', force }) });
+      const d = await res.json();
+      if (!d.ok) setRegMsg('Run failed: ' + (d.error || res.status));
+      else { const s = d.summary; setRegMsg(`Checked ${s.considered} page(s) · ${s.baselined} baselined · ${s.changed} changed · ${s.unchanged} unchanged${s.errors?.length ? ` · ${s.errors.length} error(s)` : ''}.`); }
+    } catch (e) { setRegMsg('Run error: ' + (e as Error).message); }
+    setBusy(''); checkReg();
+  }
+  async function setAlert(id: string, action: 'review' | 'dismiss') {
+    try {
+      await fetch('/api/admin/scrape/regulations', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, id }) });
+      checkReg();
+    } catch { /* ignore */ }
+  }
+
   return (
     <>
       <h1>AI newsroom</h1>
@@ -167,6 +201,7 @@ keys present:     ${Object.entries(report.keys_present || {}).map(([k, v]) => `$
         ['mail_autoack_enabled', 'Auto-acknowledge email', 'Send a polite branded receipt automatically to genuine first-contact enquiries, in the sender’s language. Substantive replies always stay a human decision — a draft is prepared, never sent. Guarded against auto-replies, bounces and no-reply senders.'],
         ['developments_enabled', 'Developer-projects scraper', 'On the daily rotation, refresh real developer projects from their own websites into the directory (name, price, status, contact — each stamped with its source). Content-hash change-detection keeps it cheap.'],
         ['developments_autopublish', 'Publish scraped projects live', 'Publish newly scraped projects immediately. Off = they land as drafts for review in Directory first (recommended until you trust a source).'],
+        ['regulation_watch_enabled', 'Regulation watch', 'On the daily rotation, check the official government pages (company setup, tax & VAT, permits, employment, funding) and raise a reviewable alert when the law changes. It never rewrites answers itself — a human folds confirmed changes into the knowledge base.'],
       ] as const).map(([k, label, desc]) => (
         <div className="toggle" key={k}>
           <input type="checkbox" checked={auto[k]} onChange={() => toggle(k)} style={{ width: 'auto', margin: 0 }} />
@@ -204,6 +239,45 @@ keys present:     ${Object.entries(report.keys_present || {}).map(([k, v]) => `$
                 <td style={{ whiteSpace: 'nowrap' }}>{r.last_fetched_at ? new Date(r.last_fetched_at).toLocaleDateString() : '—'}</td>
                 <td>{r.last_found ?? '—'}</td>
                 <td><span className={`pill ${r.status === 'active' ? 'confirmed' : 'pending'}`}>{r.status}{r.last_error ? `: ${String(r.last_error).slice(0, 40)}` : ''}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+
+      <h1 style={{ fontSize: 20, marginTop: 22 }}>Regulation watch (living knowledge)</h1>
+      <p className="sub" style={{ marginTop: 0 }}>The official Cyprus pages that govern our advice — company setup, tax &amp; VAT, permits, employment, funding — checked on a rotation. When the law moves you get an alert here to fold into the knowledge base. Nothing is rewritten automatically.</p>
+      {reg ? (
+        <div className="cards" style={{ marginBottom: 10 }}>
+          <div className="stat"><div className="n">{reg.sources}</div><div className="k">pages watched</div></div>
+          <div className="stat"><div className="n">{reg.open}</div><div className="k">open alerts</div></div>
+        </div>
+      ) : null}
+      <div className="row" style={{ marginBottom: 6, gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button className="abtn ghost" disabled={busy === 'reg-seed'} onClick={seedReg}>{busy === 'reg-seed' ? 'Registering…' : 'Seed official pages'}</button>
+        <button className="abtn gold" disabled={busy === 'reg-run'} onClick={() => runReg(false)}>{busy === 'reg-run' ? 'Checking…' : 'Check for changes now'}</button>
+        <button className="abtn ghost" disabled={busy === 'reg-run'} onClick={() => runReg(true)} title="Re-check even unchanged pages">Force re-check</button>
+        <span style={{ fontSize: 12, color: '#8a8371' }}>Seed once to baseline; after that only real changes raise an alert.</span>
+      </div>
+      {regMsg ? <p style={{ fontSize: 13, color: '#8a8371', margin: '0 0 6px' }}>{regMsg}</p> : null}
+      {reg?.alerts?.length ? (
+        <table className="adm-t" style={{ marginTop: 6 }}>
+          <thead><tr><th>When</th><th>What changed</th><th>Severity</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {reg.alerts.map((a: any) => (
+              <tr key={a.id}>
+                <td style={{ whiteSpace: 'nowrap' }}>{new Date(a.detected_at).toLocaleDateString()}</td>
+                <td><a href={a.url} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 600 }}>{a.title}</a><div style={{ fontSize: 12, opacity: .8 }}>{a.summary}</div></td>
+                <td><span className={`pill ${a.severity === 'major' ? 'pending' : 'confirmed'}`}>{a.severity}</span></td>
+                <td>{a.status}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  {a.status === 'new' ? (
+                    <>
+                      <button onClick={() => setAlert(a.id, 'review')} style={{ padding: '4px 8px', borderRadius: 6, cursor: 'pointer', border: '1px solid #C9A24C', background: 'rgba(201,162,76,.15)', color: 'inherit', fontSize: 12, marginRight: 6 }}>Reviewed</button>
+                      <button onClick={() => setAlert(a.id, 'dismiss')} style={{ padding: '4px 8px', borderRadius: 6, cursor: 'pointer', border: '1px solid var(--line,#e3d9c4)', background: 'transparent', color: 'inherit', fontSize: 12 }}>Dismiss</button>
+                    </>
+                  ) : null}
+                </td>
               </tr>
             ))}
           </tbody>
