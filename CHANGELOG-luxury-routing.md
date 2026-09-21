@@ -326,3 +326,40 @@ the law moves. Same `scrape_sources` registry as Phase 1.
   **Regulation watch** for the daily rotation. From then on, when an official page changes
   you'll see an alert to fold into the knowledge base. Next: Phase 3 — events actualiser
   + article↔agenda links with the concierge embedded.
+
+## Living knowledge — Phase 3: events actualiser + article↔agenda + concierge in articles (requires 0080)
+The agenda stays current, culture articles link to the real events, and every article
+carries the concierge. Reuses the existing `events-ingest` edge function and the events
+table's `ingest_key` dedupe; new events always land as **drafts** for approval in
+Admin → Agenda (with the existing translate-on-approve).
+- `supabase/migrations/0080_events_actualiser.sql` **(new)** — `events.source_url` +
+  `events.article_slug` (provenance for events introduced from our journalism),
+  `blog_posts.events_mined_at` (idempotent mining), `automation_settings.events_watch_enabled`
+  (**off by default**). Additive, idempotent, tested on UTF-8 PG.
+- `lib/scrape/events.ts` **(new)** — `refreshAgenda()` invokes the existing events-ingest
+  edge function (real external listings, with posters); `mineEventsFromArticles()` lifts the
+  concrete, **dated, future** events our own published culture articles describe into the
+  agenda as drafts, each stamped with the article it came from (`normalizeEvent` rejects
+  undated/past/nonsense entries — **7/7 unit cases pass**); `runEventsActualiser()` orchestrates
+  both, time-boxed. Nothing invented: an event is added only with a real name AND a real date.
+- `components/ConciergeChat.tsx` — now listens for a `concierge:ask` window event, so any
+  page can open the concierge with a seeded question.
+- `components/AskConcierge.tsx` **(new)** — the inline "Ask the concierge about this" block,
+  seeded from the article's topic, in the reader's language.
+- `app/[locale]/(site)/article/[slug]/page.tsx` — every article now carries the concierge
+  CTA; culture/events articles also show an **"In our Agenda"** block linking to the real,
+  dated events (district-first, then island-wide). Localised copy for all seven editions.
+- `app/api/cron/tick/route.ts` — the daily rotation runs the light **article-mining** step
+  (guarded by `events_watch_enabled`); the heavier external-listings refresh is the admin
+  button (to stay within the 60s Hobby cap alongside the other subsystems).
+- `app/api/admin/scrape/events/route.ts` **(new)** — admin: GET status (upcoming, drafts,
+  articles to mine); POST `refresh` (external listings), `mine` (from our articles), `run` (both).
+- `app/[locale]/admin/(panel)/ai/page.tsx` — an **Agenda actualiser** panel: the toggle,
+  **Refresh agenda now**, **Mine events from articles**, and live counts.
+- **After deploy:** run **0080**. Then Admin → AI newsroom → **Refresh agenda now** (external
+  listings) and **Mine events from articles** — approve the drafts in Admin → Agenda. Turn on
+  **Agenda actualiser** for the daily article-mining. Culture articles then link to the
+  approved events, and the "Ask the concierge" block appears on every article.
+
+_All three living-knowledge phases now share one engine (`scrape_sources` + `lib/scrape/http.ts`):
+developer projects, regulation watch, and the agenda — each opt-in, each fully sourced._

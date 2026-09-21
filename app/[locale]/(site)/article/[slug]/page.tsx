@@ -3,12 +3,32 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { getArticle, getByCategory, getLatest, type Card } from '@/lib/queries';
+import { getArticle, getByCategory, getLatest, getEventsByDistrict, getUpcomingEvents, type Card, type EventItem } from '@/lib/queries';
 import { pageMetadata, articleJsonLd, breadcrumbJsonLd, ld } from '@/lib/seo';
 import ArticleCard from '@/components/ArticleCard';
 import CommentSection from '@/components/CommentSection';
 import CoverImage from '@/components/CoverImage';
 import NewsletterSignup from '@/components/NewsletterSignup';
+import AskConcierge from '@/components/AskConcierge';
+
+// Culture / events articles get an "In our Agenda" block linking to the real events.
+const CULTURE_CATS = ['culture', 'arts', 'events', 'event', 'music', 'festival', 'entertainment', 'nightlife', 'agenda'];
+const isCultureArticle = (category: string | null, tags: string[]): boolean =>
+  (!!category && CULTURE_CATS.includes(category.toLowerCase())) ||
+  (tags || []).some((tg) => /event|festival|concert|exhibition|agenda|culture|music|theatre|theater|art\b/i.test(tg));
+
+// Localised copy for the two embedded blocks (all seven editions — no English fallback).
+const ASK: Record<string, { heading: string; label: string; q: (t: string) => string }> = {
+  en: { heading: 'Ask the Cyprus Lifestyle concierge', label: 'Ask about this', q: (t) => `I'm reading "${t}". Can you help me with this and suggest what to do next?` },
+  el: { heading: 'Ρωτήστε τον concierge του Cyprus Lifestyle', label: 'Ρωτήστε σχετικά', q: (t) => `Διαβάζω «${t}». Μπορείτε να με βοηθήσετε και να μου προτείνετε τι να κάνω;` },
+  ro: { heading: 'Întreabă concierge-ul Cyprus Lifestyle', label: 'Întreabă despre asta', q: (t) => `Citesc „${t}”. Mă poți ajuta și îmi poți sugera ce să fac mai departe?` },
+  ar: { heading: 'اسأل كونسيرج Cyprus Lifestyle', label: 'اسأل عن هذا', q: (t) => `أقرأ "${t}". هل يمكنك مساعدتي واقتراح الخطوات التالية؟` },
+  de: { heading: 'Fragen Sie den Cyprus-Lifestyle-Concierge', label: 'Dazu fragen', q: (t) => `Ich lese „${t}“. Können Sie mir helfen und vorschlagen, was ich als Nächstes tun sollte?` },
+  pl: { heading: 'Zapytaj concierge Cyprus Lifestyle', label: 'Zapytaj o to', q: (t) => `Czytam „${t}”. Czy możesz mi pomóc i podpowiedzieć, co dalej?` },
+  ru: { heading: 'Спросите консьержа Cyprus Lifestyle', label: 'Спросить об этом', q: (t) => `Я читаю «${t}». Помогите, пожалуйста, и подскажите, что делать дальше.` },
+};
+const AGENDA_LABEL: Record<string, string> = { en: 'In our Agenda', el: 'Στην Ατζέντα μας', ro: 'În Agenda noastră', ar: 'في أجندتنا', de: 'In unserem Kalender', pl: 'W naszej Agendzie', ru: 'В нашей Афише' };
+const eventWhen = (iso: string, l: string) => { try { return new Date(iso).toLocaleDateString(l === 'ar' ? 'ar' : l, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
 
 export const revalidate = 300;
 
@@ -77,6 +97,19 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
   }
   more = more.slice(0, 3);
 
+  // Article ↔ Agenda: for culture/events pieces, surface the real, dated events from
+  // our agenda (the district's first, then island-wide) so the reader can act on them.
+  let events: EventItem[] = [];
+  if (isCultureArticle(a.category, a.tags)) {
+    events = a.county ? await getEventsByDistrict(l, a.county, 3) : [];
+    if (events.length < 2) {
+      const upcoming = await getUpcomingEvents(l, 4);
+      for (const e of upcoming) { if (events.length >= 3) break; if (!events.some((x) => x.slug === e.slug)) events.push(e); }
+    }
+    events = events.slice(0, 3);
+  }
+  const ask = ASK[l] || ASK.en;
+
   const artLd = articleJsonLd({
     locale: l, slug: a.slug, title: a.title, description: a.excerpt,
     image: a.cover_image, author: a.author_name, authorSlug: a.author_slug,
@@ -133,8 +166,31 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
               {t('common.source')}: <a href={a.source_url} target="_blank" rel="noopener nofollow">{a.source_url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}</a>
             </p>
           ) : null}
+
+          <AskConcierge question={ask.q(a.title)} heading={ask.heading} label={ask.label} />
         </div>
       </article>
+
+      {events.length ? (
+        <section className="related wrap section">
+          <div className="sec-head">
+            <div className="rule-orn"><span className="diamond" /></div>
+            <div className="lbl">{AGENDA_LABEL[l] || AGENDA_LABEL.en}</div>
+          </div>
+          <div className="grid g3">
+            {events.map((e) => (
+              <Link key={e.slug} href={`/agenda/${e.slug}`} className="card" style={{ display: 'block', padding: 16, border: '1px solid var(--line,#e3d9c4)', borderRadius: 8, textDecoration: 'none', color: 'inherit' }}>
+                <div style={{ fontSize: 12, letterSpacing: '.06em', textTransform: 'uppercase', color: '#C9A24C', marginBottom: 6 }}>
+                  {eventWhen(e.starts_at, l)}{e.district ? ` · ${e.district}` : ''}
+                </div>
+                <div style={{ fontFamily: 'Georgia, serif', fontSize: 18, lineHeight: 1.3, marginBottom: 6 }}>{e.title}</div>
+                {e.venue ? <div style={{ fontSize: 13, opacity: .7 }}>{e.venue}</div> : null}
+                {e.price ? <div style={{ fontSize: 13, opacity: .7, marginTop: 2 }}>{e.price}</div> : null}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {more.length ? (
         <section className="related wrap section">

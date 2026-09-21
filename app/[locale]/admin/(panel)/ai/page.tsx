@@ -4,7 +4,7 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 
 export default function AiTab() {
   const sb = supabaseBrowser();
-  const [auto, setAuto] = useState<{ scraper_enabled: boolean; processor_enabled: boolean; auto_publish: boolean; mail_autoack_enabled: boolean; developments_enabled: boolean; developments_autopublish: boolean; regulation_watch_enabled: boolean }>({ scraper_enabled: false, processor_enabled: false, auto_publish: false, mail_autoack_enabled: false, developments_enabled: false, developments_autopublish: false, regulation_watch_enabled: false });
+  const [auto, setAuto] = useState<{ scraper_enabled: boolean; processor_enabled: boolean; auto_publish: boolean; mail_autoack_enabled: boolean; developments_enabled: boolean; developments_autopublish: boolean; regulation_watch_enabled: boolean; events_watch_enabled: boolean }>({ scraper_enabled: false, processor_enabled: false, auto_publish: false, mail_autoack_enabled: false, developments_enabled: false, developments_autopublish: false, regulation_watch_enabled: false, events_watch_enabled: false });
   const [queue, setQueue] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [busy, setBusy] = useState('');
@@ -16,6 +16,8 @@ export default function AiTab() {
   const [devMsg, setDevMsg] = useState('');
   const [reg, setReg] = useState<any>(null);       // regulation watch status + alerts
   const [regMsg, setRegMsg] = useState('');
+  const [ev, setEv] = useState<any>(null);         // events actualiser status
+  const [evMsg, setEvMsg] = useState('');
 
   const load = useCallback(async () => {
     const [{ data: s }, { data: q }, { data: l }] = await Promise.all([
@@ -162,6 +164,24 @@ export default function AiTab() {
     } catch { /* ignore */ }
   }
 
+  // Events actualiser (living knowledge, Phase 3) — status + on-demand refresh/mine.
+  const checkEv = useCallback(async () => {
+    try { const res = await fetch('/api/admin/scrape/events', { credentials: 'same-origin' }); const d = await res.json(); if (d.ok) setEv(d); } catch { /* ignore */ }
+  }, []);
+  useEffect(() => { checkEv(); }, [checkEv]);
+
+  async function runEvents(action: 'refresh' | 'mine' | 'run') {
+    setBusy('ev-' + action);
+    setEvMsg(action === 'refresh' ? 'Pulling real events from listings…' : action === 'mine' ? 'Lifting events from our culture articles…' : 'Refreshing the agenda…');
+    try {
+      const res = await fetch('/api/admin/scrape/events', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) });
+      const d = await res.json();
+      if (!d.ok) setEvMsg('Failed: ' + (d.error || res.status));
+      else { const s = d.summary; setEvMsg(`${s.agenda_refreshed ? 'Listings refreshed. ' : ''}Scanned ${s.articles_scanned} article(s) · ${s.events_added} event(s) added as drafts${s.errors?.length ? ` · ${s.errors.length} note(s)` : ''}. Review & approve in Agenda.`); }
+    } catch (e) { setEvMsg('Error: ' + (e as Error).message); }
+    setBusy(''); checkEv();
+  }
+
   return (
     <>
       <h1>AI newsroom</h1>
@@ -202,6 +222,7 @@ keys present:     ${Object.entries(report.keys_present || {}).map(([k, v]) => `$
         ['developments_enabled', 'Developer-projects scraper', 'On the daily rotation, refresh real developer projects from their own websites into the directory (name, price, status, contact — each stamped with its source). Content-hash change-detection keeps it cheap.'],
         ['developments_autopublish', 'Publish scraped projects live', 'Publish newly scraped projects immediately. Off = they land as drafts for review in Directory first (recommended until you trust a source).'],
         ['regulation_watch_enabled', 'Regulation watch', 'On the daily rotation, check the official government pages (company setup, tax & VAT, permits, employment, funding) and raise a reviewable alert when the law changes. It never rewrites answers itself — a human folds confirmed changes into the knowledge base.'],
+        ['events_watch_enabled', 'Agenda actualiser', 'On the daily rotation, lift the dated events our published culture articles describe into the Agenda (as drafts for approval). The heavier external-listings refresh is the “Refresh agenda now” button below.'],
       ] as const).map(([k, label, desc]) => (
         <div className="toggle" key={k}>
           <input type="checkbox" checked={auto[k]} onChange={() => toggle(k)} style={{ width: 'auto', margin: 0 }} />
@@ -283,6 +304,22 @@ keys present:     ${Object.entries(report.keys_present || {}).map(([k, v]) => `$
           </tbody>
         </table>
       ) : null}
+
+      <h1 style={{ fontSize: 20, marginTop: 22 }}>Agenda actualiser (living knowledge)</h1>
+      <p className="sub" style={{ marginTop: 0 }}>Keeps the Agenda current: real events from public listings (with posters), and the dated events our own culture articles describe — lifted in as drafts you approve. Approved events are what articles link to, and what the concierge can point guests toward.</p>
+      {ev ? (
+        <div className="cards" style={{ marginBottom: 10 }}>
+          <div className="stat"><div className="n">{ev.upcoming}</div><div className="k">upcoming (live)</div></div>
+          <div className="stat"><div className="n">{ev.drafts}</div><div className="k">drafts to approve</div></div>
+          <div className="stat"><div className="n">{ev.unmined_articles}</div><div className="k">articles to mine</div></div>
+        </div>
+      ) : null}
+      <div className="row" style={{ marginBottom: 6, gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button className="abtn gold" disabled={busy.startsWith('ev-')} onClick={() => runEvents('refresh')}>{busy === 'ev-refresh' ? 'Refreshing…' : 'Refresh agenda now'}</button>
+        <button className="abtn ghost" disabled={busy.startsWith('ev-')} onClick={() => runEvents('mine')}>{busy === 'ev-mine' ? 'Mining…' : 'Mine events from articles'}</button>
+        <span style={{ fontSize: 12, color: '#8a8371' }}>Everything lands as drafts — approve in Admin → Agenda (translate-on-approve fills all seven editions).</span>
+      </div>
+      {evMsg ? <p style={{ fontSize: 13, color: '#8a8371', margin: '0 0 6px' }}>{evMsg}</p> : null}
 
       <h1 style={{ fontSize: 20, marginTop: 22 }}>Scrape queue ({queue.length})</h1>
       {msg ? <p style={{ fontSize: 13, color: msg.startsWith('Generation') ? '#b00020' : '#8a8371', margin: '0 0 10px' }}>{msg}</p> : null}

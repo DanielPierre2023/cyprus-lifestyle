@@ -299,6 +299,19 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
     } finally { setBusy(false); setStatus(''); }
   }
 
+  // Let any page open the concierge with a seeded question — e.g. an article's inline
+  // "Ask the concierge about this". Dispatched as window CustomEvent 'concierge:ask'
+  // with { detail: { q } }. A ref keeps the handler pointed at the latest send().
+  const sendRef = useRef(send); sendRef.current = send;
+  useEffect(() => {
+    const onAsk = (e: Event) => {
+      const q = (e as CustomEvent).detail?.q;
+      if (typeof q === 'string' && q.trim().length >= 2) { setOpen(true); setTimeout(() => sendRef.current(q.trim().slice(0, 400)), 500); }
+    };
+    window.addEventListener('concierge:ask', onAsk);
+    return () => window.removeEventListener('concierge:ask', onAsk);
+  }, []);
+
   async function sendRequest() {
     if (!req || req.state !== 'idle') return;
     setReq({ ...req, state: 'sending' });
