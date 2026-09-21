@@ -10,6 +10,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { runInboundAssist } from '@/lib/mail/assist';
+import { logServerError } from '@/lib/monitor.server';
 
 export const runtime = 'nodejs';
 // We respond to the webhook immediately (Resend/Svix want a fast 200) and let the
@@ -155,7 +156,8 @@ export async function POST(req: NextRequest) {
   // narrow branded receipt). Runs after the 200 so the webhook stays fast.
   if (inserted?.id) {
     after(async () => {
-      try { await runInboundAssist(inserted); } catch { /* best-effort; the mail is safely stored either way */ }
+      try { await runInboundAssist(inserted); }
+      catch (e) { await logServerError('mail-inbound:assist', e, { emailId: inserted.id }); /* the mail is safely stored either way */ }
     });
   }
   return NextResponse.json({ ok: true });

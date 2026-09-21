@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "test": "node scripts/tests/run.mjs",
     "eval:antiai": "tsx scripts/eval-antiai.ts"
   },
   "dependencies": {

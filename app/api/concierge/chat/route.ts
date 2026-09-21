@@ -10,6 +10,8 @@ import { streamConcierge, latestUserText, type ChatMessage } from '@/lib/concier
 import { renderMemory, updateMemory, isValidCid, type MemoryProfile } from '@/lib/concierge/memory';
 import { isMemberCid, MEMBER_BLOCK } from '@/lib/concierge/membership';
 import { loadProfileForCid, syncMemberProfile } from '@/lib/concierge/subscriber';
+import { logConciergeTurn } from '@/lib/concierge/analytics';
+import { logServerError } from '@/lib/monitor.server';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -36,27 +38,41 @@ export async function POST(req: NextRequest) {
 
   const encoder = new TextEncoder();
   let collected = '';
+  const t0 = Date.now();
+  const meta = { picks: 0, kb: 0, near: false, recommended: [] as string[] };
   const stream = new ReadableStream({
     async start(controller) {
       const send = (obj: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
       try {
         for await (const evt of streamConcierge(rawMessages, locale, memoryBlock, memberBlock)) {
           if (evt.type === 'delta') collected += evt.text;
+          else if (evt.type === 'meta') {
+            meta.picks = evt.picks.length; meta.kb = evt.kb; meta.near = evt.near;
+            meta.recommended = evt.picks.map((p) => p.slug).filter(Boolean);
+          }
           send(evt);
         }
       } catch (e) {
         send({ type: 'error', error: (e as Error).message });
+        await logServerError('concierge-chat', e, { locale });
       } finally {
         controller.close();
       }
     },
   });
 
-  // After the reply is sent, quietly update what we remember about this guest.
-  if (cid) after(async () => {
+  // After the reply is sent: log the turn's coverage (item 02) and, for a known
+  // guest, update memory. Both are best-effort and never affect the reply.
+  after(async () => {
     if (!collected.trim()) return;
-    await updateMemory(cid, lastUser, collected, memory);
-    await syncMemberProfile(cid); // fold newly-learned prefs into the member's durable, cross-device profile
+    await logConciergeTurn({
+      cid: cid || null, locale, channel: 'web', question: lastUser, answer: collected,
+      picks: meta.picks, kb: meta.kb, near: meta.near, recommended: meta.recommended, latencyMs: Date.now() - t0,
+    });
+    if (cid) {
+      await updateMemory(cid, lastUser, collected, memory);
+      await syncMemberProfile(cid);
+    }
   });
 
   return new Response(stream, {

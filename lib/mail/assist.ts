@@ -15,6 +15,7 @@ import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { callClaude, CLAUDE_HAIKU } from '@/lib/ai';
 import { conciergeSystem, assembleContext, groundingBlock, detectLocale, CONCIERGE_MODEL, type ConciergeContext } from '@/lib/concierge/brain';
+import { logConciergeTurn } from '@/lib/concierge/analytics';
 import { deskFor, signatureFor } from '@/lib/signatures';
 import { brandedEmail, sendEmail } from '@/lib/email';
 import { isLocale, type Locale } from '@/lib/locales';
@@ -104,7 +105,19 @@ export async function composeReply(
   let lastError = '';
   for (const model of [CONCIERGE_MODEL, CLAUDE_HAIKU]) {
     const { text, error } = await callClaude({ systemInstruction: system, userMessage, model, maxTokens: 1400, fn: 'mail-compose' });
-    if (!error && text.trim()) return { body: text.trim(), locale, desk: desk.name, grounded: grounded(ctx) };
+    if (!error && text.trim()) {
+      // Log the email turn's coverage (item 02) so inbound questions feed the same
+      // answer-coverage rate and unanswered backlog as the web chat. Compose only —
+      // a human 'polish' isn't a coverage event. Best-effort; never blocks the reply.
+      if (opts.mode === 'compose') {
+        await logConciergeTurn({
+          locale, channel: 'email', question: `${subject}\n${guestText}`.trim(), answer: text,
+          picks: ctx?.picks.length || 0, kb: ctx?.kb.length || 0, near: !!ctx?.near,
+          recommended: (ctx?.picks || []).map((p) => p.slug).filter(Boolean),
+        });
+      }
+      return { body: text.trim(), locale, desk: desk.name, grounded: grounded(ctx) };
+    }
     lastError = error || 'the model returned an empty reply';
   }
   return { locale, desk: desk.name, grounded: grounded(ctx), error: lastError };

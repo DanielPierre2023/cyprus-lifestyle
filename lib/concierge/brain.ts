@@ -114,7 +114,7 @@ const INTENTS: IntentDef[] = [
   { key: 'hotel', kind: 'type', words: ['hotel', 'resort', 'accommodation', 'suite', 'guest house', 'guesthouse', 'bed and breakfast', 'ξενοδοχείο', 'διαμονή', 'θέρετρο', 'cazare', 'stațiune', 'unterkunft', 'ferienwohnung', 'nocleg', 'zakwaterowanie', 'отель', 'гостиниц', 'проживание', 'فندق', 'إقامة', 'منتجع'] },
   { key: 'beach', kind: 'type', words: ['beach', 'seaside', 'sandy', 'παραλία', 'plajă', 'strand', 'plaża', 'пляж', 'شاطئ'] },
   { key: 'winery', kind: 'type', words: ['winery', 'vineyard', 'wine tasting', 'οινοποιείο', 'αμπελών', 'cramă', 'podgorie', 'weingut', 'weinprobe', 'winnica', 'winiarnia', 'винодельн', 'виноградник', 'مصنع نبيذ', 'كرم'] },
-  { key: 'realestate', kind: 'group', words: ['real estate', 'property', 'apartment', 'estate agent', 'broker', 'letting', 'mortgage', 'new build', 'penthouse', 'villa', 'villas', 'mansion', 'plot', 'land for sale', 'seafront', 'ακίνητα', 'ακίνητο', 'διαμέρισμα', 'μεσίτ', 'κτηματομεσίτ', 'βίλα', 'βιλα', 'ρετιρέ', 'imobiliar', 'proprietate', 'apartament', 'dezvoltator', 'vila', 'vilă', 'immobilie', 'wohnung', 'makler', 'miete', 'villa', 'penthouse-wohnung', 'nieruchomość', 'nieruchomości', 'mieszkanie', 'pośrednik', 'deweloper', 'willa', 'apartament', 'недвижимост', 'квартир', 'риелтор', 'застройщик', 'вилл', 'пентхаус', 'عقار', 'شقة', 'وسيط عقاري', 'فيلا', 'بنتهاوس',
+  { key: 'realestate', kind: 'group', words: ['real estate', 'property', 'apartment', 'estate agent', 'broker', 'letting', 'mortgage', 'new build', 'penthouse', 'villa', 'villas', 'mansion', 'plot', 'land for sale', 'ακίνητα', 'ακίνητο', 'διαμέρισμα', 'μεσίτ', 'κτηματομεσίτ', 'βίλα', 'βιλα', 'ρετιρέ', 'imobiliar', 'proprietate', 'apartament', 'dezvoltator', 'vila', 'vilă', 'immobilie', 'wohnung', 'makler', 'miete', 'villa', 'penthouse-wohnung', 'nieruchomość', 'nieruchomości', 'mieszkanie', 'pośrednik', 'deweloper', 'willa', 'apartament', 'недвижимост', 'квартир', 'риелтор', 'застройщик', 'вилл', 'пентхаус', 'عقار', 'شقة', 'وسيط عقاري', 'فيلا', 'بنتهاوس',
     // natural buyer wording (a guest rarely types "real estate"; they say "buy a house").
     // Phrase forms, not bare "house", so "guesthouse"/"warehouse" don't misfire.
     'a house', 'a home', 'house for sale', 'home for sale', 'houses for sale', 'buy a house', 'buy a home', 'buy property', 'buy a property', 'buying a house', 'buying property', 'townhouse', 'bungalow', 'maisonette',
@@ -597,7 +597,7 @@ export function groundingBlock(ctx: ConciergeContext, locale: string): string {
     for (const a of ctx.articles) parts.push(`• ${a.title}`);
   }
   if (!ctx.kb.length && !ctx.candidates.length) {
-    parts.push('\n(No specific matches were found for this message. Answer from the Cyprus facts if you can, be honest about what you don’t have, and offer to connect the guest to the right people or ask a clarifying question.)');
+    parts.push('\n(No specific matches were found for this message. Do NOT dead-end — follow the always-answer ladder: (1) answer what you genuinely can from the Cyprus facts above and sound general knowledge of the Republic of Cyprus (south), clearly and honestly, never inventing a specific business, price or number; (2) give the guest a real next step — point them to the most relevant category or guide page; (3) ALWAYS offer to have our concierge desk find it for them, and warmly take a name and an email or WhatsApp so a person can follow up. Be honest about what you don’t have, and ask one clarifying question if that would let you help better. Never simply say you cannot help.)');
   }
   return parts.join('\n');
 }
@@ -691,7 +691,7 @@ async function edgeAnswer(q: string, locale: string): Promise<string> {
 export type StreamEvent =
   | { type: 'status'; label: string }
   | { type: 'delta'; text: string }
-  | { type: 'meta'; picks: Pick[]; guides: GuideLink[]; articles: ArticleLink[]; canRoute: boolean }
+  | { type: 'meta'; picks: Pick[]; guides: GuideLink[]; articles: ArticleLink[]; canRoute: boolean; kb: number; near: boolean }
   | { type: 'error'; error: string }
   | { type: 'done' };
 
@@ -755,6 +755,6 @@ export async function* streamConcierge(messages: ChatMessage[], locale: string, 
   }
 
   if (!gotText) yield { type: 'error', error: errDetail || 'unavailable' };
-  yield { type: 'meta', picks: ctx.picks, guides: ctx.guides, articles: ctx.articles, canRoute: ctx.canRoute };
+  yield { type: 'meta', picks: ctx.picks, guides: ctx.guides, articles: ctx.articles, canRoute: ctx.canRoute, kb: ctx.kb.length, near: !!ctx.near };
   yield { type: 'done' };
 }

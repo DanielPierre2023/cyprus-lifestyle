@@ -13,6 +13,7 @@ import { runOutreach } from '@/lib/outreach';
 import { runDevelopmentsScrape } from '@/lib/scrape/developments';
 import { runRegulationWatch } from '@/lib/scrape/regulations';
 import { runEventsActualiser } from '@/lib/scrape/events';
+import { logServerError } from '@/lib/monitor.server';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
     if ((data as { scraper_enabled?: boolean } | null)?.scraper_enabled) {
       out.scrape = await scrapeAllActive(sb, { deadlineMs: 30_000 });
     }
-  } catch (e) { out.scrapeError = (e as Error).message; }
+  } catch (e) { out.scrapeError = (e as Error).message; await logServerError('cron-tick:scrape', e); }
 
   // Outreach cadence — only actually sends when sending is switched on in
   // crm_settings (otherwise runOutreach no-ops on commit).
@@ -57,7 +58,10 @@ export async function GET(req: NextRequest) {
     if (s?.events_watch_enabled) {
       out.events = await runEventsActualiser(sb, { refresh: false, mine: true, mineLimit: 2, deadlineMs: 10_000 });
     }
-  } catch (e) { out.livingKnowledgeError = (e as Error).message; }
+  } catch (e) { out.livingKnowledgeError = (e as Error).message; await logServerError('cron-tick:living-knowledge', e); }
+
+  // Self-maintain the error log (keep 90 days). Best-effort.
+  try { await sb.rpc('prune_error_log'); } catch { /* function not migrated yet — ignore */ }
 
   return NextResponse.json(out);
 }
