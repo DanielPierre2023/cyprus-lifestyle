@@ -20,6 +20,14 @@
   idempotent (`on conflict (slug) do nothing`). Tested on a UTF-8 Postgres — all
   7 editions insert correctly. Searchable immediately via the generated index; the
   concierge will surface them as related articles.
+- `supabase/migrations/0076_inbound_mail.sql` — the `inbound_emails` table + admin RLS
+  (backend mailroom; also described below). Run it before 0077. Tested on Postgres 16.
+- `supabase/migrations/0077_mail_assist.sql`
+  Draft-on-arrival + opt-in auto-acknowledgement. Adds `suggested_reply`,
+  `suggested_at` and `auto_sent` to `inbound_emails`, and `mail_autoack_enabled`
+  (**default false — opt-in, off**) to `automation_settings`. Additive & idempotent;
+  requires 0076 first. Tested on a UTF-8 Postgres 16 (idempotent re-run, correct
+  types, both booleans NOT NULL default false).
 
 ## 2 · Code — then deploy once to Vercel
 Files changed / added:
@@ -88,6 +96,50 @@ Files changed / added:
   in the luxury style (serif name, gold role line, contact line). Wired into
   `app/api/admin/mail/reply/route.ts`, so a reply is signed automatically by whichever
   desk address it's sent from — no one has to remember.
+
+## AI-drafted correspondence — the concierge writes the replies
+- `app/api/admin/mail/draft/route.ts` **(new)** — AI drafts (or polishes) a reply to any
+  inbound email using the SAME concierge brain as the chat: detects the guest's language,
+  grounds on the real directory + knowledge base (prices/places/facts are true, never
+  invented), writes in the Cyprus Lifestyle voice, and as the desk the mail was addressed
+  to. `compose` writes a full reply from your notes; `polish` rewrites your rough text.
+  Returns plain text to review — it never sends on its own.
+- `app/[locale]/admin/(panel)/mail/page.tsx` — a notes field + "✦ Draft with AI" and
+  "Polish" buttons above the reply box. You write rough notes (or nothing), the AI drafts,
+  you review/edit, then Send (which formats + signs via the luxury template). Human-in-the-
+  loop by design. Draft-on-arrival and opt-in auto-send (below) are now built on top of this.
+
+## Draft-on-arrival + opt-in auto-acknowledgement (requires 0077)
+The inbox becomes a glance and a click, and — only if you switch it on — genuine
+first-contact enquiries get an instant, polite branded receipt in the sender's language.
+The substantive reply is **always** a human decision.
+- `lib/mail/assist.ts` **(new)** — the mailroom intelligence, shared by the whole system.
+  - `composeReply()` — the single grounded drafting function (language detection, real
+    directory + KB grounding, Cyprus Lifestyle voice, per-desk). `/api/admin/mail/draft`
+    now calls this too, so the reply that's waiting and the one the button writes are
+    produced by identical logic.
+  - `runInboundAssist(row)` — runs the moment mail lands: (1) **always** drafts a
+    suggested reply and stores it on the row; (2) auto-acknowledge only if the opt-in
+    switch is on **and** strict guardrails pass.
+  - `autoAckEligible(row)` — the guardrails. Auto-send fires only for a real
+    first-contact enquiry: it blocks no-reply/mailer-daemon/postmaster/notifications/
+    newsletter and other role/automated senders, our own domain (loop guard), any reply
+    within a thread (`In-Reply-To` set), auto-reply/out-of-office/bounce subjects, empty
+    or trivially short bodies, and malformed senders. **16/16 unit cases pass.**
+  - The auto-message is a **receipt only** ("we have your message, a person will reply"),
+    localized to all 7 editions, sent from the desk it was addressed to and signed — so
+    even a misclassification can only ever send a polite holding note, never a wrong fact
+    or commitment. The thread stays **open**; a human still owes the real reply.
+- `app/api/email/inbound/route.ts` — on a genuinely new insert (duplicate Message-ID
+  re-deliveries are skipped), schedules `runInboundAssist` via `after()` so the webhook
+  still returns its fast 200; `maxDuration = 60`.
+- `app/[locale]/admin/(panel)/mail/page.tsx` — opening a message **pre-fills the reply box
+  with the AI's suggestion** (review, edit, send — it never sends itself); "✦ Draft ready"
+  and "Auto-acked" badges in the list.
+- `app/[locale]/admin/(panel)/ai/page.tsx` — a new **"Auto-acknowledge email"** switch
+  (off by default). Draft-on-arrival needs no switch; it's always on and always safe.
+- **After deploy:** run 0077. Draft-on-arrival works immediately. To turn on auto-receipts,
+  Admin → AI newsroom → enable **Auto-acknowledge email**.
 
 ## Backend mailroom — send AND receive @cypruslifestyle.eu from the admin panel
 Email is now administered from the backend, both directions, through Resend. No Zoho.

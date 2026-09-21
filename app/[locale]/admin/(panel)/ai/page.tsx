@@ -4,7 +4,7 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 
 export default function AiTab() {
   const sb = supabaseBrowser();
-  const [auto, setAuto] = useState<{ scraper_enabled: boolean; processor_enabled: boolean; auto_publish: boolean }>({ scraper_enabled: false, processor_enabled: false, auto_publish: false });
+  const [auto, setAuto] = useState<{ scraper_enabled: boolean; processor_enabled: boolean; auto_publish: boolean; mail_autoack_enabled: boolean }>({ scraper_enabled: false, processor_enabled: false, auto_publish: false, mail_autoack_enabled: false });
   const [queue, setQueue] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [busy, setBusy] = useState('');
@@ -132,13 +132,16 @@ keys present:     ${Object.entries(report.keys_present || {}).map(([k, v]) => `$
         </pre>
       ) : null}
 
-      {(['scraper_enabled', 'processor_enabled', 'auto_publish'] as const).map((k) => (
+      {(['scraper_enabled', 'processor_enabled', 'auto_publish', 'mail_autoack_enabled'] as const).map((k) => (
         <div className="toggle" key={k}>
           <input type="checkbox" checked={auto[k]} onChange={() => toggle(k)} style={{ width: 'auto', margin: 0 }} />
           <div>
-            <strong>{k === 'scraper_enabled' ? 'RSS scraper' : k === 'processor_enabled' ? 'AI processor' : 'Auto-publish'}</strong>
+            <strong>{k === 'scraper_enabled' ? 'RSS scraper' : k === 'processor_enabled' ? 'AI processor' : k === 'auto_publish' ? 'Auto-publish' : 'Auto-acknowledge email'}</strong>
             <div style={{ fontSize: 12, color: '#8a8371' }}>
-              {k === 'scraper_enabled' ? 'Hourly cron pulls new items from active feeds.' : k === 'processor_enabled' ? 'Cron rewrites queued items into 7-language drafts.' : 'Publish automatically instead of leaving drafts for review.'}
+              {k === 'scraper_enabled' ? 'Hourly cron pulls new items from active feeds.'
+                : k === 'processor_enabled' ? 'Cron rewrites queued items into 7-language drafts.'
+                : k === 'auto_publish' ? 'Publish automatically instead of leaving drafts for review.'
+                : 'Send a polite branded receipt automatically to genuine first-contact enquiries, in the sender’s language. Substantive replies always stay a human decision — a draft is prepared, never sent. Guarded against auto-replies, bounces and no-reply senders.'}
             </div>
           </div>
         </div>

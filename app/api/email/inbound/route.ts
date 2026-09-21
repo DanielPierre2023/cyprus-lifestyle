@@ -6,11 +6,15 @@
 // headers, and store the complete message in inbound_emails. That makes the whole
 // of @cypruslifestyle.eu administrable from Admin → Mail (read + reply via Resend).
 // Idempotent on Message-ID. Secure by default: refuses without RESEND_INBOUND_SECRET.
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { runInboundAssist } from '@/lib/mail/assist';
 
 export const runtime = 'nodejs';
+// We respond to the webhook immediately (Resend/Svix want a fast 200) and let the
+// AI draft-on-arrival + guarded auto-acknowledge run in the background via after().
+export const maxDuration = 60;
 
 // Verify a Svix-signed webhook (Resend uses Svix). signedContent is
 // `${id}.${timestamp}.${rawBody}`, HMAC-SHA256 with the base64 secret after
@@ -133,9 +137,26 @@ export async function POST(req: NextRequest) {
     status: 'new',
   };
 
-  const { error } = await supabaseAdmin().from('inbound_emails').insert(row);
-  if (error && error.code !== '23505') { // duplicate Message-ID (re-delivery) is success
+  const { data: inserted, error } = await supabaseAdmin()
+    .from('inbound_emails')
+    .insert(row)
+    .select('id, from_email, from_name, to_email, subject, text_body, html_body, in_reply_to, message_id')
+    .single();
+  if (error) {
+    // Duplicate Message-ID (a Resend/Svix re-delivery) is a success — and NOT a new
+    // arrival, so it must never re-draft or re-acknowledge. Only a genuinely new row
+    // triggers the mailroom assist.
+    if (error.code === '23505') return NextResponse.json({ ok: true, duplicate: true });
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
+
+  // Draft-on-arrival: the moment mail lands, prepare a suggested reply (and, if the
+  // opt-in auto-acknowledge switch is on and the strict guardrails pass, send a
+  // narrow branded receipt). Runs after the 200 so the webhook stays fast.
+  if (inserted?.id) {
+    after(async () => {
+      try { await runInboundAssist(inserted); } catch { /* best-effort; the mail is safely stored either way */ }
+    });
   }
   return NextResponse.json({ ok: true });
 }
