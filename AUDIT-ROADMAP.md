@@ -10,6 +10,109 @@ code once** to keep Vercel deployments minimal (audit operating principle).
 
 ---
 
+## Item 08 · Attribution + advertiser ROI report  ✅ 2026-09-21
+
+**Why (from the audit):** advertisers should see what their placement earns them, and
+we should see which listings deserve an upsell. This measures the funnel end-to-end.
+
+### 1 · SQL — run first
+- `supabase/migrations/0088_attribution.sql` — `attribution_clicks` (click log) plus
+  three views: `listing_recommendations` (impressions from the concierge turn log),
+  `listing_attribution` (per-listing impressions → clicks → CTR, featured flagged), and
+  `advertiser_roi` (per-account revenue, orders, CRM leads, revenue-per-lead). Additive,
+  idempotent; funnel math verified on Postgres 16 (3 recs, 1 click → 33.3% CTR).
+
+### 2 · Code — deploy once
+- `app/api/track/rec-click/route.ts` **(new)** — a lightweight, rate-limited beacon that
+  logs a click on a recommended listing.
+- `components/ConciergeChat.tsx` — each concierge pick now fires that beacon (with the
+  slug + anonymous cid) on click, using `keepalive` so it survives the navigation.
+- `app/[locale]/admin/(panel)/attribution/page.tsx` **(new)** + AdminNav — an
+  "Attribution & ROI" tab: advertiser ROI (revenue / orders / leads / €-per-lead),
+  the exposure the concierge gave each **featured** listing (recs, clicks, CTR), and the
+  most-recommended listings that are **not** featured — ready-made upsell candidates.
+
+### What it reuses
+Recommendation impressions need no new logging — they come from the `recommended`
+slugs item 02 already writes on every concierge turn. Revenue/leads come from the
+existing `ad_orders` / `concierge_requests`.
+
+### Verification summary
+`tsc` clean · `npm test` 117 / 9 suites · all 85 migrations apply · funnel + ROI views
+verified against fixtures on Postgres 16.
+
+---
+
+## Item 07 · Close the acquisition loop  ✅ 2026-09-21
+
+**Why (from the audit):** prospect → outreach → reply → checkout → onboarding should
+run as one loop. Most of it already existed; one segment was open.
+
+### What already existed (verified, no change)
+- **Prospecting:** the OSM importer + `crm_upsert_account` bring businesses into CRM.
+- **Consent/deliverability:** outreach already checks `crm_suppression`, `consent_status`
+  and `opt_out`, and every send carries an unsubscribe token.
+- **Checkout → onboarding:** the advertise Stripe webhook already, on payment, matches
+  or creates the CRM account, logs the win, opens a won/live deal, auto-provisions the
+  placement (`fulfil_ad_order`) and emails the onboarding intake.
+
+### The gap this closes — code only, no migration
+- `lib/crm/inbound.ts` **(new)** — when an inbound email's sender matches a CRM
+  contact, it logs the reply on the deal timeline (`crm_activities`, `inbound_reply`),
+  **pauses any active outreach sequence** for that account (a human takes over on a
+  reply), and flags the deal (`next_action_at`) for follow-up. Wildcard-safe email
+  match (an address with `_`/`%` can't match the wrong contact).
+- `app/api/email/inbound/route.ts` — calls the linker after storing the mail and, on a
+  match, routes the ticket to the **partnerships** desk and tags it `prospect-reply`.
+
+### Verification summary
+CRM operations verified against fixtures on Postgres 16 (reply logged, sequence
+paused, deal flagged, case-insensitive match); `likeEscape` unit-tested. `tsc` clean;
+`npm test` 117 assertions / 9 suites.
+
+---
+
+## Item 06 · Mailroom ticketing + expanded safe auto-send  ✅ 2026-09-21
+
+**Why (from the audit):** inbound mail had a read-state but no ownership, priority,
+SLA or routing, so things could sit unanswered; and only a receipt was ever
+auto-sent. This adds ticketing and a *carefully* widened auto-send.
+
+### 1 · SQL — run first
+- `supabase/migrations/0087_mailroom_tickets.sql` — adds `desk`, `assignee`,
+  `priority`, `sla_due`, `first_response_at`, `resolved_at`, `thread_key`, `tags` to
+  `inbound_emails` (with a sensible backfill), the `mailroom_stats` and
+  `mailroom_tickets` views, a second opt-in switch `mail_autoanswer_enabled`
+  (**default OFF**), and the `kb_candidates` table (resolved Q/A → KB review queue).
+  Tested on Postgres 16: idempotent; views compute open/breached/SLA correctly and
+  order tickets worst-first.
+
+### 2 · Code — deploy once
+- `lib/mail/tickets.ts` **(new, pure, 24 unit tests)** — reply-prefix-stripping
+  thread keys (7 languages), multilingual `computePriority` + `routeDesk`, SLA
+  `slaDue`/`slaState`, and `isSafeAutoAnswer` (a deliberately narrow FAQ whitelist).
+- `app/api/email/inbound/route.ts` — on arrival, every email is triaged: desk,
+  priority, SLA deadline and thread key are set automatically.
+- `lib/mail/assist.ts` — **expanded safe auto-send**, doubly gated: only when
+  `mail_autoanswer_enabled` is on AND the strict first-contact guardrails pass AND the
+  question is on the informational FAQ whitelist AND the drafted reply is grounded. It
+  sends a real answer and records the first response; everything else (advice, prices,
+  bookings, high/urgent) still waits for a human. The receipt-only auto-ack is unchanged.
+- `app/api/admin/mail/reply/route.ts` — records the FIRST human response for the SLA.
+- `app/[locale]/admin/(panel)/mail/page.tsx` — a Desk column plus priority and
+  SLA-breach / due-soon badges on each ticket.
+
+### Safety note
+Auto-send stays conservative by design (the audit keeps a human gate for substantive
+advice). `isSafeAutoAnswer` never returns true for prices, quotes, legal/tax/visa,
+bookings, complaints or anything high/urgent — and it is off until you switch it on.
+
+### Verification summary
+`tsc` clean · `npm test` 113 assertions / 8 suites (24 new for ticketing) · all 84
+migrations apply in order · ticket views verified on Postgres 16.
+
+---
+
 ## Item 05 · Always-answer ladder + quality-eval harness  ✅ 2026-09-21
 
 **Why (from the audit):** prove the concierge "answers everything" and never

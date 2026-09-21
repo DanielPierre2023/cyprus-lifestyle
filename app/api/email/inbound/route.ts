@@ -11,6 +11,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { runInboundAssist } from '@/lib/mail/assist';
 import { logServerError } from '@/lib/monitor.server';
+import { threadKey, computePriority, routeDesk, slaDue } from '@/lib/mail/tickets';
+import { linkInboundToCrm } from '@/lib/crm/inbound';
 
 export const runtime = 'nodejs';
 // We respond to the webhook immediately (Resend/Svix want a fast 200) and let the
@@ -121,21 +123,30 @@ export async function POST(req: NextRequest) {
 
   const headers = src.headers;
   const messageId = String(src.message_id || meta.message_id || headerValue(headers, 'message-id') || '') || null;
+  const subject = (src.subject as string) || '(no subject)';
+  const textBody = (src.text as string) || null;
+  const toEmail = firstTo(src.to);
+  // Ticketing (item 06): desk, priority, SLA and thread key computed at arrival.
+  const priority = computePriority(subject, textBody || '');
   const row = {
     received_at: (src.created_at as string) || (meta.created_at as string) || new Date().toISOString(),
     message_id: messageId,
     in_reply_to: headerValue(headers, 'in-reply-to'),
     from_email: from.email,
     from_name: from.name,
-    to_email: firstTo(src.to),
+    to_email: toEmail,
     cc: joinAddrs(src.cc),
-    subject: (src.subject as string) || '(no subject)',
-    text_body: (src.text as string) || null,
+    subject,
+    text_body: textBody,
     html_body: (src.html as string) || null,
     headers: headers ?? null,
     attachments: (src.attachments as unknown) ?? (meta.attachments as unknown) ?? null,
     spam_score: typeof src.spam_score === 'number' ? (src.spam_score as number) : null,
     status: 'new',
+    desk: routeDesk(toEmail || '', subject, textBody || ''),
+    priority,
+    sla_due: slaDue(priority).toISOString(),
+    thread_key: threadKey(from.email, subject),
   };
 
   const { data: inserted, error } = await supabaseAdmin()
@@ -158,6 +169,18 @@ export async function POST(req: NextRequest) {
     after(async () => {
       try { await runInboundAssist(inserted); }
       catch (e) { await logServerError('mail-inbound:assist', e, { emailId: inserted.id }); /* the mail is safely stored either way */ }
+      // Close the acquisition loop (item 07): if the sender is a known prospect, link
+      // the reply to their CRM record (log it, pause the sequence, flag the deal) and
+      // route the ticket to partnerships.
+      try {
+        const link = await linkInboundToCrm(supabaseAdmin(), {
+          fromEmail: inserted.from_email, subject: inserted.subject, body: inserted.text_body, emailId: inserted.id,
+        });
+        if (link.matched) {
+          await supabaseAdmin().from('inbound_emails')
+            .update({ desk: 'partnerships', tags: ['prospect-reply'] }).eq('id', inserted.id);
+        }
+      } catch (e) { await logServerError('mail-inbound:crm-link', e, { emailId: inserted.id }); }
     });
   }
   return NextResponse.json({ ok: true });

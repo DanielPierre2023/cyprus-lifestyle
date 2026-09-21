@@ -436,7 +436,7 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
                         <span className="cc-lbl cc-lbl-picks">{labels.picksTitle}</span>
                         <div className="cc-picks">
                           {m.picks.map((p) => (
-                            <Link key={p.slug} href={`/directory/${p.type}/${p.slug}`} className="cc-pick" onClick={() => setOpen(false)}>
+                            <Link key={p.slug} href={`/directory/${p.type}/${p.slug}`} className="cc-pick" onClick={() => { try { fetch('/api/track/rec-click', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug: p.slug, source: 'concierge', cid: cidRef.current, locale }) }); } catch { /* best-effort attribution */ } setOpen(false); }}>
                               <span className="cc-pick-img"><CoverImage src={p.image} seed={p.slug} alt={p.name} className="ph-img" sizes="72px" fallbackKind="brand" /></span>
                               <span className="cc-pick-b">
                                 <span className="cc-pick-meta"><span className="d" style={{ background: TYPE_DOT[p.type] || '#C9A24C' }} />{p.district || p.type}{p.rating != null ? <span className="cc-rate"> · ★ {p.rating.toFixed(1)}</span> : null}{p.verified ? <span className="cc-seal">✓</span> : null}</span>

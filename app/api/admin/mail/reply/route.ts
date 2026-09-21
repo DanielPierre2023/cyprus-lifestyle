@@ -44,7 +44,10 @@ export async function POST(req: NextRequest) {
   const res = await sendEmail({ to, subject, html, from });
   if (!res.ok) return NextResponse.json({ ok: false, error: res.error || 'send failed' }, { status: 502 });
 
-  await supabaseAdmin().from('inbound_emails')
-    .update({ status: 'replied', handled_at: new Date().toISOString() }).eq('id', id);
+  const now = new Date().toISOString();
+  const sb = supabaseAdmin();
+  await sb.from('inbound_emails').update({ status: 'replied', handled_at: now }).eq('id', id);
+  // Record the FIRST human response for SLA (item 06) — only if not already set.
+  await sb.from('inbound_emails').update({ first_response_at: now }).eq('id', id).is('first_response_at', null);
   return NextResponse.json({ ok: true, id: res.id });
 }

@@ -4,12 +4,14 @@
 // administered from the backend. Admin RLS (0076).
 import { useEffect, useState, useCallback, Fragment } from 'react';
 import { supabaseBrowser } from '@/lib/supabase/client';
+import { slaState } from '@/lib/mail/tickets';
 
 interface Row {
   id: string; created_at: string; received_at: string | null; from_email: string; from_name: string | null;
   to_email: string | null; subject: string | null; text_body: string | null; html_body: string | null;
   cc: string | null; status: string;
   suggested_reply: string | null; suggested_at: string | null; auto_sent: boolean | null;
+  priority: string | null; desk: string | null; sla_due: string | null; first_response_at: string | null; resolved_at: string | null;
 }
 
 export default function MailInbox() {
@@ -27,7 +29,7 @@ export default function MailInbox() {
   const load = useCallback(async () => {
     setLoading(true);
     const { data } = await sb.from('inbound_emails')
-      .select('id, created_at, received_at, from_email, from_name, to_email, subject, text_body, html_body, cc, status, suggested_reply, suggested_at, auto_sent')
+      .select('id, created_at, received_at, from_email, from_name, to_email, subject, text_body, html_body, cc, status, suggested_reply, suggested_at, auto_sent, priority, desk, sla_due, first_response_at, resolved_at')
       .order('created_at', { ascending: false }).limit(500);
     setRows((data as Row[]) || []);
     setLoading(false);
@@ -109,16 +111,21 @@ export default function MailInbox() {
       </div>
 
       <table className="adm-t">
-        <thead><tr><th>When</th><th>From</th><th>To</th><th>Subject</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>When</th><th>From</th><th>Desk</th><th>Subject</th><th>Status</th><th></th></tr></thead>
         <tbody>
-          {shown.map((r) => (
+          {shown.map((r) => {
+            const sla = r.resolved_at ? 'responded' : slaState(r.sla_due, r.first_response_at);
+            const slaColor = sla === 'breached' ? '#B00020' : sla === 'due_soon' ? '#b8860b' : '#1f7a3f';
+            return (
             <Fragment key={r.id}>
               <tr style={{ cursor: 'pointer' }} onClick={() => openMsg(r)}>
                 <td style={{ whiteSpace: 'nowrap' }}>{new Date(r.received_at || r.created_at).toLocaleDateString()}</td>
                 <td>{r.from_name ? <div>{r.from_name}</div> : null}<div style={{ fontSize: 12, opacity: .7 }}>{r.from_email}</div></td>
-                <td style={{ fontSize: 12, opacity: .8 }}>{r.to_email || '—'}</td>
+                <td style={{ fontSize: 12, opacity: .8, whiteSpace: 'nowrap' }}>{r.desk || '—'}</td>
                 <td style={{ fontWeight: r.status === 'new' ? 700 : 400 }}>
+                  {(r.priority === 'urgent' || r.priority === 'high') ? <span title={`Priority: ${r.priority}`} style={{ marginRight: 8, fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: r.priority === 'urgent' ? '#B00020' : '#b8860b', border: `1px solid ${r.priority === 'urgent' ? '#B00020' : '#b8860b'}`, borderRadius: 999, padding: '1px 7px', whiteSpace: 'nowrap' }}>{r.priority}</span> : null}
                   {r.subject || '(no subject)'}
+                  {(sla === 'breached' || sla === 'due_soon') && r.status !== 'replied' ? <span title={`First-response SLA: ${sla}`} style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: slaColor, border: `1px solid ${slaColor}`, borderRadius: 999, padding: '1px 7px', whiteSpace: 'nowrap' }}>{sla === 'breached' ? 'SLA breached' : 'due soon'}</span> : null}
                   {r.suggested_reply && r.status !== 'replied' ? <span title="An AI reply is drafted and waiting" style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: '#8a6d1f', background: 'rgba(201,162,76,.16)', border: '1px solid rgba(201,162,76,.5)', borderRadius: 999, padding: '1px 7px', whiteSpace: 'nowrap' }}>✦ Draft ready</span> : null}
                   {r.auto_sent ? <span title="A branded acknowledgement was sent automatically; a personal reply is still owed" style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: '#5a5344', background: 'rgba(0,0,0,.05)', border: '1px solid var(--line,#e3d9c4)', borderRadius: 999, padding: '1px 7px', whiteSpace: 'nowrap' }}>Auto-acked</span> : null}
                 </td>
@@ -156,7 +163,8 @@ export default function MailInbox() {
                 </tr>
               ) : null}
             </Fragment>
-          ))}
+          );
+          })}
           {!loading && shown.length === 0 ? <tr><td colSpan={6}>No mail in this view.</td></tr> : null}
           {loading ? <tr><td colSpan={6}>Loading…</td></tr> : null}
         </tbody>

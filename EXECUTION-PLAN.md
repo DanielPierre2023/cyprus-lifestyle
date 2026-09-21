@@ -54,12 +54,29 @@
   fixed a real bug — "seafront restaurant" was routing to real estate. The bounded cited
   web-search tier is deliberately deferred as an opt-in (per-turn cost + fabrication risk;
   needs an explicit switch given the cost mandate) — noted in AUDIT-ROADMAP.md.*
-- [ ] **06 · Mailroom ticketing + expanded safe auto-send.** status/owner/SLA/thread;
+- [x] **06 · Mailroom ticketing + expanded safe auto-send.** status/owner/SLA/thread;
   confirmations/FAQ auto-send behind guardrails; desk routing; escalation; resolved → KB.
-- [ ] **07 · Close the acquisition loop.** OSINT prospect enrichment from the scraper →
+  *Shipped 2026-09-21: migration 0087 (ticket columns desk/assignee/priority/SLA/thread on
+  inbound_emails + mailroom_stats/mailroom_tickets views + kb_candidates), `lib/mail/tickets.ts`
+  (thread/priority/desk/SLA + safe-auto-answer whitelist, 24 unit tests), inbound arrival now
+  sets desk/priority/SLA/thread, first-response tracked, admin mail page shows desk + priority +
+  SLA badges. Expanded safe auto-send behind a 2nd default-OFF switch + narrow FAQ whitelist +
+  full guardrails + grounding. kb_candidates is the resolved→KB review queue (promotion UI = follow-up).*
+- [x] **07 · Close the acquisition loop.** OSINT prospect enrichment from the scraper →
   reply handling in the mailroom → self-serve checkout + automated onboarding; consent/deliverability gates.
-- [ ] **08 · Attribution + advertiser ROI report.** recommendation → click → lead →
+  *Shipped 2026-09-21: the open middle — inbound REPLIES never reached CRM — is closed by
+  `lib/crm/inbound.ts` (matches sender → logs the reply, pauses the sequence, flags the deal,
+  routes to partnerships), wired into the inbound webhook. Prospecting (OSM importer +
+  crm_upsert_account), checkout→onboarding (advertise webhook: account, deal, provisioning,
+  onboarding email) and consent/suppression gates already existed — so the loop is now closed
+  end-to-end. Verified against CRM fixtures; code-only, no migration.*
+- [x] **08 · Attribution + advertiser ROI report.** recommendation → click → lead →
   conversion; per-advertiser ROI; upsell/retention.
+  *Shipped 2026-09-21: migration 0088 (attribution_clicks + listing_recommendations /
+  listing_attribution / advertiser_roi views), `/api/track/rec-click` + a concierge pick-click
+  beacon, admin "Attribution & ROI" tab (per-advertiser revenue/leads/€-per-lead, featured-listing
+  exposure + CTR, and most-recommended-not-featured = upsell candidates). Impressions reuse item
+  02's logged recommendations; funnel verified (CTR math) on Postgres 16.*
 
 ## 60–90 day (the moat)
 - [ ] **09 · Partner self-service portal.** ownership claim + moderation; partners maintain
@@ -130,4 +147,38 @@
   property; removed it (property queries always carry a property noun), with a gold regression
   guard. `tsc` clean; `npm test` now 89/89 across 7 suites. The bounded cited web-search rung
   is deliberately deferred (opt-in; per-turn cost + fabrication risk vs the cost mandate).
-  Next: item 06 (mailroom ticketing + expanded safe auto-send).
+- 2026-09-21 — **Item 06 shipped.** The mailroom is now a ticketing system: migration 0087 adds
+  desk, assignee, priority, first-response SLA, thread key and tags to inbound_emails, with
+  `mailroom_stats` (open / breached / due-soon / median first-response) and `mailroom_tickets`
+  (worst-first) views. `lib/mail/tickets.ts` holds the pure logic — reply-prefix-stripping thread
+  keys, multilingual priority + desk routing, SLA computation, and a deliberately narrow
+  safe-auto-answer whitelist — with 24 unit tests. Inbound mail is now auto-triaged on arrival
+  (desk/priority/SLA/thread), first human response is timestamped for SLA, and the admin mail
+  page shows desk, priority and SLA-breach badges. Expanded safe auto-send is live but doubly
+  gated: a second default-OFF switch (`mail_autoanswer_enabled`) + the strict first-contact
+  guardrails + a purely-informational FAQ whitelist + a grounding requirement — so only things
+  like "how do I unsubscribe/subscribe" ever auto-answer; advice, prices, bookings and anything
+  high/urgent always wait for a human. `kb_candidates` is the resolved→KB review queue. `tsc`
+  clean; `npm test` 113/113 across 8 suites; all 84 migrations apply.
+- 2026-09-21 — **Item 07 shipped.** The acquisition loop is now closed end-to-end. The two ends
+  already existed — prospecting (OSM importer + `crm_upsert_account`) and checkout→onboarding
+  (the advertise Stripe webhook already creates the CRM account, opens a won/live deal,
+  auto-provisions the placement via `fulfil_ad_order`, and sends an onboarding email), plus
+  consent/suppression gates on outreach. The missing middle was reply handling: a prospect's
+  reply landed in the mailroom but never touched CRM. `lib/crm/inbound.ts` (wired into the
+  inbound webhook) matches the sender to a contact, logs the reply on the deal timeline, PAUSES
+  the automated sequence so a human takes over, flags the deal for follow-up, and routes the
+  ticket to partnerships. Verified against CRM fixtures on Postgres 16 (reply logged, sequence
+  paused, deal flagged, case-insensitive email match); wildcard-escape unit-tested. Code-only,
+  no migration. `tsc` clean; `npm test` 117/117 across 9 suites.
+- 2026-09-21 — **Item 08 shipped.** Attribution funnel + advertiser ROI. Migration 0088 stitches
+  recommendation impressions (reusing item-02's logged `recommended` slugs) → clicks (new
+  `attribution_clicks`, fed by `/api/track/rec-click` + a beacon on each concierge pick) →
+  leads/revenue (CRM `concierge_requests` + `ad_orders`, by advertiser). Three views:
+  `listing_recommendations`, `listing_attribution` (per-listing impressions/clicks/CTR, featured
+  flagged), `advertiser_roi` (per-account revenue, orders, leads, €/lead). New admin
+  "Attribution & ROI" tab shows advertiser ROI, what exposure the concierge gave each featured
+  listing, and — nicely — the most-recommended listings that are NOT featured as concrete upsell
+  candidates. Funnel math verified on Postgres 16 (3 recs, 1 click → 33.3% CTR). `tsc` clean;
+  `npm test` 117/117; all 85 migrations apply. Also added a "CI only — do not run on Supabase"
+  banner to `supabase/ci/prelude.sql`. Next: item 09 (partner self-service portal).
