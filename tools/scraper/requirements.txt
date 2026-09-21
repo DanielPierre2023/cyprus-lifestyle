@@ -1,0 +1,6 @@
+# Cyprus Lifestyle generic scraper (companion Python worker)
+scrapling[fetchers]>=0.2
+requests>=2.31
+pyyaml>=6.0
+# After install, run once if any profile uses `fetcher: browser`:
+#   scrapling install

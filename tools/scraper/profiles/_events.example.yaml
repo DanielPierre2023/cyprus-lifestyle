@@ -1,0 +1,21 @@
+# TEMPLATE — an events / what's-on site → the Agenda (events, drafts).
+# Copy to <name>.yaml, set base_url + selectors, then: python scrape.py --site <name> --dry-run
+name: example-events
+base_url: https://EXAMPLE-EVENTS.com
+target: events
+fetcher: http                # use "browser" if the calendar is JS-rendered
+delay: 2.0
+ai_fallback: true             # recommended — lifts the date/venue when not in schema.org data
+
+discovery:
+  listings:
+    - url: /events
+      page_param: "?page={n}"
+      max_pages: 3
+      detail_link_selector: 'a[href*="/event"]::attr(href)'
+
+extract:
+  name: "h1::text"
+  starts_at: 'time::attr(datetime)'   # a selector holding the ISO date, if the site has one
+  price: ".price::text"
+  # Events with no real date are skipped automatically (never invented).

@@ -1,0 +1,23 @@
+# Cyprus Atlas — business directory → directory_listings (drafts).
+# Run:  python scrape.py --site cyprusatlas --query restaurants,hotels --dry-run
+name: cyprusatlas
+base_url: https://cyprusatlas.com
+target: directory
+fetcher: http           # "browser" only if a page needs JS rendering
+delay: 2.0
+ai_fallback: false      # set true (+ CLAUDE_API_KEY) to also lift a clean address + summary
+
+discovery:
+  listings:
+    - url: /category/{q}                 # {q} comes from --query, or `queries` below
+      page_param: "?page={n}"
+      max_pages: 5
+      detail_link_selector: 'a[href*="/company/"]::attr(href)'
+  queries: [restaurants, hotels]         # default if --query not given
+
+extract:
+  name: "h1::text"
+  phone: 'a[href^="tel:"]::attr(href)'
+  categories: 'a[href*="/category/"]::text'
+  maps_iframe: 'iframe[src*="google.com/maps"]::attr(src)'
+  website_exclude: [cyprusatlas.com]

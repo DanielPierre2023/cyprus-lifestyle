@@ -1,0 +1,35 @@
+# Example scheduled run for the generic scraper.
+# Copy to .github/workflows/scraper.yml in a repo that holds tools/scraper, and add
+# repo secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (+ CLAUDE_API_KEY if used).
+name: cl-scraper
+
+on:
+  workflow_dispatch:
+    inputs:
+      site:   { description: "Profile name (e.g. cyprusatlas)", required: true, default: "cyprusatlas" }
+      query:  { description: "Listing query values (comma-separated)", required: false, default: "" }
+      limit:  { description: "Max pages this run", required: false, default: "150" }
+  schedule:
+    - cron: "0 4 * * 1"   # Mondays 04:00 UTC
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - working-directory: tools/scraper
+        run: pip install -r requirements.txt
+      - name: Restore resume state
+        uses: actions/cache@v4
+        with: { path: tools/scraper/.state_*.json, key: cl-scraper-state }
+      - working-directory: tools/scraper
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+        run: |
+          python scrape.py --site "${{ github.event.inputs.site || 'cyprusatlas' }}" \
+            --query "${{ github.event.inputs.query || '' }}" \
+            --limit "${{ github.event.inputs.limit || '150' }}" --delay 2.5

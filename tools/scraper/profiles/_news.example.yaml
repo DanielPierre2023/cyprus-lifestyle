@@ -1,0 +1,22 @@
+# TEMPLATE — a news / source site → the AI newsroom queue (scraped_articles).
+# Items land as status='scraped' for the AI processor to rewrite into 7-language
+# drafts (Admin → AI newsroom). Copy to <name>.yaml, set base_url + selectors:
+#   python scrape.py --site <name> --dry-run
+name: example-news
+base_url: https://EXAMPLE-NEWS.com
+target: news
+fetcher: http
+delay: 2.0
+ai_fallback: false
+
+discovery:
+  listings:
+    - url: /news
+      page_param: "?page={n}"
+      max_pages: 2
+      detail_link_selector: 'a.article-link::attr(href)'
+
+extract:
+  name: "h1::text"                              # headline
+  summary: 'meta[name="description"]::attr(content)'
+  # The article body is captured from the page text automatically.

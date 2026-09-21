@@ -1,0 +1,30 @@
+# TEMPLATE — a property developer's own site → development projects.
+# Copy to <name>.yaml (drop the leading underscore), set base_url + selectors, then:
+#   python scrape.py --site <name> --dry-run
+name: example-developer
+base_url: https://EXAMPLE-DEVELOPER.com
+target: developments
+developer_slug: example-developer     # ties projects to this developer's directory listing (optional)
+fetcher: http
+delay: 2.0
+ai_fallback: true                      # recommended — lifts price_from/to, status, bedrooms, completion
+
+discovery:
+  # A) collect project links from a portfolio/listing page:
+  listings:
+    - url: /projects
+      page_param: "?page={n}"
+      max_pages: 3
+      detail_link_selector: 'a[href*="/project"]::attr(href)'
+  # B) OR a sitemap (comment out `listings` and use these instead):
+  # sitemap: /sitemap.xml
+  # detail_url_pattern: "/project/"
+  # C) OR explicit URLs:
+  # seeds:
+  #   - https://EXAMPLE-DEVELOPER.com/project/blue-marine
+
+extract:
+  name: "h1::text"
+  # Optionally pin fields if AI shouldn't guess them:
+  # summary: ".project-intro::text"
+  # maps_iframe: 'iframe[src*="maps"]::attr(src)'
