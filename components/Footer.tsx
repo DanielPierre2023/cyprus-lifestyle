@@ -55,6 +55,7 @@ export default async function Footer() {
             <Link href="/standards">{t('footer.standards')}</Link>
             <Link href="/contact">{t('footer.contact')}</Link>
             <Link href="/privacy">{t('footer.privacy')}</Link>
+            <Link href="/sourcing">{t('footer.sourcing')}</Link>
           </div>
         </div>
         <div className="fine">

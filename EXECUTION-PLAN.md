@@ -100,8 +100,13 @@
   Insights (consent-gated). The new piece: CTA conversion instrumentation — migration 0091
   (`label` on attribution_clicks + `cta_by_listing` view), a `TrackedCTA` component wired into
   the listing website/phone/directions CTAs, and a CTA breakdown in the admin Attribution tab.*
-- [ ] **12 · GDPR/privacy register + data-sourcing statement.** lawful-basis, provenance,
+- [x] **12 · GDPR/privacy register + data-sourcing statement.** lawful-basis, provenance,
   retention, subject-request flow; public sourcing statement.
+  *Shipped 2026-09-21: migration 0092 (`dsar_requests` with the 1-month deadline +
+  `data_processing_register` seeded with 7 real ROPA entries), `/api/privacy/request` +
+  `PrivacyRequestForm`, a public 7-language data-sourcing statement at `/sourcing` (footer link +
+  sitemap), and an admin "Privacy · GDPR" tab (DSAR queue + ROPA). Retention is recorded per
+  activity in the ROPA and enforced by the prune functions from items 01/03.*
 
 ## KPIs to instrument (definition of "automated")
 - Concierge **answer-coverage rate** + groundedness; **unanswered-question count** by topic (must fall).
@@ -226,5 +231,16 @@
   on `attribution_clicks` + the `cta_by_listing` view), a reusable `TrackedCTA` client component
   now on the listing website/phone/directions buttons (logs source=directory + which CTA), the
   beacon endpoint stores the label, and the admin Attribution tab shows a CTA-clicks breakdown.
-  `tsc` clean; `npm test` 147/147 across 11 suites; all 88 migrations apply. Next: item 12
-  (GDPR/privacy register + data-sourcing statement).
+  `tsc` clean; `npm test` 147/147 across 11 suites; all 88 migrations apply.
+- 2026-09-21 — **Item 12 shipped — THE 12-ITEM ROADMAP IS COMPLETE.** GDPR compliance:
+  migration 0092 adds `dsar_requests` (data-subject requests, each with the GDPR 1-month
+  response deadline) and `data_processing_register` (the ROPA, seeded with the platform's seven
+  real processing activities — directory, concierge, mailroom, outreach, newsletter,
+  membership/payments, analytics — each with purpose, lawful basis, data categories, recipients,
+  retention). A public **data-sourcing statement** at `/sourcing` explains, in all seven
+  languages, where the directory data comes from, how it's kept accurate (with a link to the
+  item-09 partner portal), and privacy rights — with an inline data-request form. `/api/privacy/
+  request` files the request and notifies the privacy desk; a new admin "Privacy · GDPR" tab
+  runs the DSAR queue (overdue flagged) and shows the ROPA. Footer + sitemap updated; 7 message
+  files extended. `tsc` clean; `npm test` 147/147 across 11 suites; all 89 migrations apply.
+  ── **All of items 01–12 are now shipped, each tested and delivered as its own minimal bundle.**

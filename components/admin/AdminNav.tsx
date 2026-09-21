@@ -31,6 +31,7 @@ const TABS = [
   { href: '/admin/advertising', label: 'Advertising' },
   { href: '/admin/attribution', label: 'Attribution & ROI' },
   { href: '/admin/analytics', label: 'Analytics (Observabilitate)' },
+  { href: '/admin/privacy', label: 'Privacy · GDPR' },
   { href: '/admin/settings', label: 'Settings (Setări)' },
 ];
 

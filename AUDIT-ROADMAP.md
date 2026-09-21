@@ -10,6 +10,41 @@ code once** to keep Vercel deployments minimal (audit operating principle).
 
 ---
 
+## Item 12 · GDPR/privacy register + data-sourcing statement  ✅ 2026-09-21
+
+**Why (from the audit):** provenance, lawful basis, retention and a subject-request
+route — and a public statement of where the directory data comes from.
+
+### 1 · SQL — run first
+- `supabase/migrations/0092_privacy_register.sql` — `dsar_requests` (access / erasure /
+  correction / objection / portability, each with the GDPR 1-month `due_at`) and
+  `data_processing_register` (the ROPA), **seeded** with the platform's seven real
+  activities (directory, concierge, mailroom, outreach, newsletter, membership/payments,
+  analytics) with purpose, lawful basis, data categories, recipients and retention.
+  Idempotent (7 ROPA rows, upserted).
+
+### 2 · Code — deploy once
+- `app/[locale]/(site)/sourcing/page.tsx` **(new)** — the public **data-sourcing
+  statement in all seven languages** (sources, how we keep it accurate + a link to the
+  partner portal, privacy rights, OpenStreetMap attribution) with an inline request form.
+- `components/PrivacyRequestForm.tsx` **(new)** + `app/api/privacy/request/route.ts`
+  **(new)** — the data-subject request flow: files a `dsar_requests` row and notifies
+  the privacy desk.
+- `app/[locale]/admin/(panel)/privacy/page.tsx` **(new)** + AdminNav — the DSAR queue
+  (overdue flagged red) and the ROPA.
+- `components/Footer.tsx` + 7 `messages/*.json` + `app/sitemap.ts` — a localized
+  "Data & sources" footer link, discoverable and in the sitemap.
+
+### Retention
+Recorded per activity in the ROPA; enforced by the `prune_error_log` (item 03) and
+`job_prune` (item 01) functions the daily worker calls.
+
+### Verification summary
+`tsc` clean · `npm test` 147 / 11 suites · all 89 migrations apply · 7 locale files
+valid · ROPA seed idempotent.
+
+---
+
 ## Item 11 · Programmatic SEO at scale + CTA instrumentation  ✅ 2026-09-21
 
 **Why (from the audit):** category × district pages at scale, a CWV budget, and
