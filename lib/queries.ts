@@ -153,13 +153,30 @@ export async function getNearby(locale: Locale, lat: number, lng: number, exclud
   }
   return out;
 }
-// Peers for comparison: same type + district, ranked by rating then featured.
-export async function getPeers(locale: Locale, type: string, district: string | null, excludeSlug: string, limit = 5): Promise<Listing[]> {
-  let q = supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale)).eq('status', 'published').eq('type', type);
-  if (district) q = q.eq('district', district);
-  const { data } = await q.order('rating', { ascending: false, nullsFirst: false }).order('featured', { ascending: false }).limit(limit + 1);
-  return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale))
-    .filter((x) => x.name && x.slug !== excludeSlug).slice(0, limit);
+// Peers for comparison: genuinely SIMILAR businesses, not just the same broad `type`.
+// A security firm, an architect and an estate agent are all type='vendor', so matching
+// by type alone compared a security company with architects. We match by the finer
+// category_group (falling back to type), then rank so the SAME subtype and SAME
+// district float to the top — a security company is compared with security companies.
+export async function getPeers(
+  locale: Locale,
+  opts: { type: string; subtype: string | null; category_group: string | null; district: string | null },
+  excludeSlug: string,
+  limit = 5,
+): Promise<Listing[]> {
+  const sb = supabaseAdmin();
+  let q = sb.from('directory_listings').select(LISTING_COLS(locale)).eq('status', 'published');
+  q = opts.category_group ? q.eq('category_group', opts.category_group) : q.eq('type', opts.type);
+  const { data } = await q.order('rating', { ascending: false, nullsFirst: false }).limit(80);
+  const rows = ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale))
+    .filter((x) => x.name && x.slug !== excludeSlug);
+  // Stable re-rank (V8 sort is stable, so rating order is kept within equal scores):
+  // same subtype (+2) outweighs same district (+1).
+  const score = (x: Listing) =>
+    (opts.subtype && x.subtype === opts.subtype ? 2 : 0) +
+    (opts.district && x.district === opts.district ? 1 : 0);
+  rows.sort((a, b) => score(b) - score(a));
+  return rows.slice(0, limit);
 }
 // Upcoming events in a district — "what's on nearby".
 export async function getEventsByDistrict(locale: Locale, district: string | null, limit = 3): Promise<EventItem[]> {

@@ -23,7 +23,14 @@ export interface ConciergeChatLabels {
 interface MemoryProfile { name?: string; language?: string; interests?: string[]; base?: string; party?: string; dates?: string; dietary?: string; status?: string; notes?: string; }
 interface Pick { slug: string; type: string; name: string; district: string | null; rating: number | null; rating_count: number | null; price_band: string | null; image: string | null; verified?: boolean; }
 interface GuideLink { label: string; path: string; }
-interface Msg { role: 'user' | 'assistant'; content: string; picks?: Pick[]; guides?: GuideLink[]; canRoute?: boolean; streaming?: boolean; }
+interface ArticleLink { slug: string; title: string; category: string | null; }
+interface Msg { role: 'user' | 'assistant'; content: string; picks?: Pick[]; guides?: GuideLink[]; articles?: ArticleLink[]; canRoute?: boolean; streaming?: boolean; }
+
+// "On Cyprus Lifestyle" heading for the related-articles block, per edition.
+const ARTICLES_TITLE: Record<string, string> = {
+  en: 'On Cyprus Lifestyle', el: 'Στο Cyprus Lifestyle', ro: 'Pe Cyprus Lifestyle', ar: 'على Cyprus Lifestyle',
+  de: 'Auf Cyprus Lifestyle', pl: 'Na Cyprus Lifestyle', ru: 'На Cyprus Lifestyle',
+};
 
 const TYPE_DOT: Record<string, string> = { restaurant: '#C0492E', winery: '#7B2D42', hotel: '#1F6F78', beach: '#2F86C4', development: '#8A6D3B', vendor: '#4E7A46' };
 
@@ -280,7 +287,7 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
           let evt: Record<string, unknown>; try { evt = JSON.parse(raw); } catch { continue; }
           if (evt.type === 'status') setStatus(evt.label === 'composing' ? labels.composing : labels.searching);
           else if (evt.type === 'delta') { acc += String(evt.text || ''); setStatus(''); setLast({ content: acc, streaming: true }); }
-          else if (evt.type === 'meta') setLast({ picks: (evt.picks as Pick[]) || [], guides: (evt.guides as GuideLink[]) || [], canRoute: Boolean(evt.canRoute) });
+          else if (evt.type === 'meta') setLast({ picks: (evt.picks as Pick[]) || [], guides: (evt.guides as GuideLink[]) || [], articles: (evt.articles as ArticleLink[]) || [], canRoute: Boolean(evt.canRoute) });
           else if (evt.type === 'error') { if (!acc) setLast({ content: labels.error }); }
           else if (evt.type === 'done') setLast({ streaming: false });
         }
@@ -398,6 +405,15 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
                         <span className="cc-lbl">{labels.guidesTitle}</span>
                         <div className="cc-guide-row">
                           {m.guides.map((g) => <Link key={g.path} href={g.path} className="cc-guide" onClick={() => setOpen(false)}>{g.label} →</Link>)}
+                        </div>
+                      </div>
+                    )}
+
+                    {m.role === 'assistant' && !m.streaming && m.articles && m.articles.length > 0 && (
+                      <div className="cc-guides">
+                        <span className="cc-lbl">{ARTICLES_TITLE[locale] || ARTICLES_TITLE.en}</span>
+                        <div className="cc-guide-row">
+                          {m.articles.map((a) => <Link key={a.slug} href={`/article/${a.slug}`} className="cc-guide" onClick={() => setOpen(false)}>{a.title} →</Link>)}
                         </div>
                       </div>
                     )}

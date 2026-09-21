@@ -12,6 +12,8 @@
 // ============================================================================
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { searchArticles } from '@/lib/queries';
+import type { Locale } from '@/lib/locales';
 import { CLAUDE_SONNET } from '@/lib/ai';
 import { retrieveKnowledge, guideHref, QA_INDEX, type QAHit } from '@/lib/knowledge/qa';
 import { localizedIntent } from '@/lib/knowledge/qa.i18n';
@@ -25,15 +27,18 @@ export interface ChatMessage { role: Role; content: string; }
 export interface Pick {
   slug: string; type: string; name: string; district: string | null;
   rating: number | null; rating_count: number | null; price_band: string | null;
-  image: string | null; verified?: boolean; subtype?: string | null;
+  image: string | null; verified?: boolean; subtype?: string | null; luxury?: boolean;
 }
 export interface GuideLink { label: string; path: string; }
+export interface ArticleLink { slug: string; title: string; category: string | null; }
 export interface ConciergeContext {
   candidates: Pick[];
   picks: Pick[];
   guides: GuideLink[];
+  articles: ArticleLink[];
   kb: QAHit[];
   canRoute: boolean;
+  luxury: boolean;
 }
 
 const LOCALES = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'];
@@ -97,7 +102,7 @@ const INTENTS: IntentDef[] = [
   { key: 'hotel', kind: 'type', words: ['hotel', 'resort', 'accommodation', 'suite', 'ξενοδοχείο', 'διαμονή', 'θέρετρο', 'cazare', 'stațiune', 'unterkunft', 'ferienwohnung', 'nocleg', 'zakwaterowanie', 'отель', 'гостиниц', 'проживание', 'فندق', 'إقامة', 'منتجع'] },
   { key: 'beach', kind: 'type', words: ['beach', 'seaside', 'sandy', 'παραλία', 'plajă', 'strand', 'plaża', 'пляж', 'شاطئ'] },
   { key: 'winery', kind: 'type', words: ['winery', 'vineyard', 'wine tasting', 'οινοποιείο', 'αμπελών', 'cramă', 'podgorie', 'weingut', 'weinprobe', 'winnica', 'winiarnia', 'винодельн', 'виноградник', 'مصنع نبيذ', 'كرم'] },
-  { key: 'realestate', kind: 'group', words: ['real estate', 'property', 'apartment', 'estate agent', 'broker', 'letting', 'mortgage', 'new build', 'ακίνητα', 'ακίνητο', 'διαμέρισμα', 'μεσίτ', 'κτηματομεσίτ', 'imobiliar', 'proprietate', 'apartament', 'dezvoltator', 'immobilie', 'wohnung', 'makler', 'miete', 'nieruchomość', 'nieruchomości', 'mieszkanie', 'pośrednik', 'deweloper', 'недвижимост', 'квартир', 'риелтор', 'застройщик', 'عقار', 'شقة', 'وسيط عقاري'] },
+  { key: 'realestate', kind: 'group', words: ['real estate', 'property', 'apartment', 'estate agent', 'broker', 'letting', 'mortgage', 'new build', 'penthouse', 'villa', 'villas', 'mansion', 'plot', 'land for sale', 'seafront', 'ακίνητα', 'ακίνητο', 'διαμέρισμα', 'μεσίτ', 'κτηματομεσίτ', 'βίλα', 'βιλα', 'ρετιρέ', 'imobiliar', 'proprietate', 'apartament', 'dezvoltator', 'vila', 'vilă', 'immobilie', 'wohnung', 'makler', 'miete', 'villa', 'penthouse-wohnung', 'nieruchomość', 'nieruchomości', 'mieszkanie', 'pośrednik', 'deweloper', 'willa', 'apartament', 'недвижимост', 'квартир', 'риелтор', 'застройщик', 'вилл', 'пентхаус', 'عقار', 'شقة', 'وسيط عقاري', 'فيلا', 'بنتهاوس'] },
   { key: 'mobility', kind: 'group', words: ['car rental', 'rent a car', 'car hire', 'hire car', 'rent car', 'rental car', 'transfer', 'yacht charter', 'scooter', 'ενοικίαση αυτοκιν', 'αυτοκίνητο', 'μεταφορά', 'inchiriere auto', 'inchirieri auto', 'inchirier auto', 'chirii auto', 'masina de inchir', 'masini de inchir', 'mietwagen', 'auto mieten', 'autovermietung', 'wynajem samochod', 'wypozyczalnia', 'аренда авто', 'арендовать авто', 'арендовать машин', 'прокат авто', 'прокат автомобил', 'машину напрокат', 'напрокат', 'تأجير سيارات', 'استئجار سيارة'] },
   { key: 'services', kind: 'group', words: ['mover', 'movers', 'moving', 'removal', 'relocation', 'cleaning', 'storage', 'handyman', 'plumber', 'μετακόμιση', 'μεταφορές', 'καθαρισμός', 'αποθήκευση', 'mutare', 'mutări', 'mutat', 'relocare', 'curățenie', 'depozitare', 'umzug', 'reinigung', 'lagerung', 'przeprowadzk', 'sprzątanie', 'magazynowanie', 'переезд', 'грузчик', 'уборк', 'хранение', 'نقل أثاث', 'انتقال', 'تخزين'] },
   { key: 'professional', kind: 'group', words: ['lawyer', 'law firm', 'attorney', 'solicitor', 'accountant', 'accounting', 'audit', ' tax', 'bank', 'banking', 'insurance', 'company formation', 'immigration', 'residency', 'visa', 'non-dom', 'ip box', 'δικηγόρ', 'λογιστ', 'φόρο', 'τράπεζα', 'ασφάλ', 'μετανάστευση', 'avocat', 'contabil', 'impozit', 'bancă', 'asigurare', 'imigrare', 'rezidenț', 'înființare', 'company formation', 'anwalt', 'rechtsanwalt', 'steuerberater', 'buchhaltung', 'steuer', 'versicherung', 'einwanderung', 'aufenthalt', 'firmengründung', 'prawnik', 'adwokat', 'księgow', 'podatek', 'ubezpieczenie', 'imigracja', 'rezydencja', 'spółk', 'юрист', 'адвокат', 'бухгалтер', 'налог', 'банк', 'страхован', 'иммиграц', 'резидентств', 'محامي', 'محاسب', 'ضريبة', 'بنك', 'تأمين', 'هجرة', 'تأسيس شركة'] },
@@ -107,7 +112,7 @@ const INTENTS: IntentDef[] = [
 // (e.g. Polish "Larnace", Greek "Λεμεσό", Russian "Ларнаке").
 const DISTRICT_ALIASES: Record<string, string[]> = {
   paphos: ['paph', 'pafos', 'παφ', 'بافوس', 'паф', 'polis', 'πολ'],
-  limassol: ['limass', 'lemes', 'λεμεσ', 'ليماسول', 'лимасол', 'germasogeia'],
+  limassol: ['limass', 'lemes', 'λεμεσ', 'ليماسول', 'лимас', 'germasogeia'],
   larnaca: ['larnac', 'larnak', 'λαρνακ', 'لارنكا', 'ларнак', 'aradippou'],
   nicosia: ['nicos', 'nikos', 'nikoz', 'lefkos', 'λευκωσ', 'نيقوسيا', 'никос', 'strovolos'],
   famagusta: ['famagust', 'αμμοχωστ', 'فاماغوستا', 'фамагуст', 'ayia napa', 'agia napa', 'protaras', 'paralimni', 'kapparis', 'deryneia'],
@@ -118,7 +123,34 @@ const DISTRICT_ALIASES: Record<string, string[]> = {
 // Greek with/without tonos and Arabic with/without harakat.
 const deacc = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-function readIntent(q: string): { types: string[]; groups: string[]; districts: string[] } {
+// Luxury / high-end intent (multilingual). When a guest signals the top tier, we
+// surface luxury-flagged listings first and tell the concierge to lead with the finest.
+const LUX_WORDS = [
+  'villa', 'private', 'vip', 'yacht', 'superyacht', 'chauffeur', 'limousine', 'limo', 'luxury', 'luxurious',
+  'exclusive', 'penthouse', 'first class', 'five star', '5 star', 'bespoke', 'prestige', 'high end', 'high-end',
+  'fine dining', 'michelin', 'designer', 'couture', 'jeweller', 'jewellery', 'jewelry',
+  'βιλα', 'πολυτελ', 'ιδιωτικ', 'γιωτ', 'vila de lux', 'de lux', 'privat', 'exclusiv', 'iaht',
+  'luxus', 'exklusiv', 'luksus', 'luksusow', 'prywatn', 'jacht', 'ekskluzyw',
+  'люкс', 'вилла', 'вилл', 'пентхаус', 'частн', 'яхта', 'лимузин', 'премиум', 'эксклюзив',
+  'فيلا', 'فاخر', 'فخم', 'خاص', 'يخت', 'ليموزين', 'حصري',
+];
+const luxuryIntent = (q: string) => { const s = deacc(q.toLowerCase()); return LUX_WORDS.some((w) => s.includes(deacc(w))); };
+
+// Precise SUBTYPE detection (multilingual). When a guest names a specific service —
+// "an accountant in Larnaca", "un avocat", "риелтор" — we must return exactly that
+// subtype, not the whole professional/realestate group (which could bury the match
+// under the candidate cap). These map to the subtypes used in the directory data.
+const SUBTYPE_INTENTS: { key: string; words: string[] }[] = [
+  { key: 'accounting', words: ['accountant', 'accounting', 'auditor', 'audit', 'bookkeep', 'λογιστ', 'ελεγκτ', 'contabil', 'audit', 'buchhalt', 'steuerberat', 'wirtschaftsprüf', 'księgow', 'rachunkow', 'бухгалтер', 'аудит', 'محاسب', 'تدقيق'] },
+  { key: 'law-firm', words: ['lawyer', 'law firm', 'attorney', 'solicitor', 'legal', 'δικηγόρ', 'νομικ', 'avocat', 'juridic', 'anwalt', 'rechtsanwalt', 'kanzlei', 'prawnik', 'adwokat', 'kancelaria', 'юрист', 'адвокат', 'محام'] },
+  { key: 'banking', words: ['bank', 'banking', 'τράπεζα', 'bancă', 'bankkonto', 'банк', 'بنك', 'مصرف'] },
+  { key: 'insurance', words: ['insurance', 'insurer', 'ασφάλ', 'asigurare', 'versicherung', 'ubezpieczen', 'страхован', 'تأمين'] },
+  { key: 'agency', words: ['estate agent', 'realtor', 'real estate agent', 'letting agent', 'μεσίτ', 'κτηματομεσίτ', 'agent imobiliar', 'makler', 'immobilienmakler', 'pośrednik nieruchom', 'риелтор', 'риэлтор', 'وسيط عقاري'] },
+  { key: 'car-rental', words: ['car rental', 'rent a car', 'car hire', 'rental car', 'ενοικίαση αυτοκιν', 'inchirieri auto', 'inchiriere auto', 'mietwagen', 'autovermietung', 'wynajem samochod', 'прокат авто', 'аренда авто', 'تأجير سيارات'] },
+  { key: 'movers', words: ['mover', 'removal', 'relocation company', 'μετακόμιση', 'mutare', 'mutări', 'umzug', 'przeprowadzk', 'переезд', 'грузчик', 'نقل أثاث'] },
+];
+
+function readIntent(q: string): { types: string[]; groups: string[]; subtypes: string[]; districts: string[] } {
   const s = deacc(q.toLowerCase());
   const types: string[] = [];
   const groups: string[] = [];
@@ -127,18 +159,31 @@ function readIntent(q: string): { types: string[]; groups: string[]; districts: 
     if (it.kind === 'type') { if (!types.includes(it.key)) types.push(it.key); }
     else if (!groups.includes(it.key)) groups.push(it.key);
   }
+  const subtypes: string[] = [];
+  for (const st of SUBTYPE_INTENTS) {
+    if (st.words.some((w) => s.includes(deacc(w))) && !subtypes.includes(st.key)) subtypes.push(st.key);
+  }
   // Real-estate wording should ALSO surface developer listings (the `development` type)
   // alongside estate agents (category_group='realestate'), so the guest sees both.
   if (groups.includes('realestate') && !types.includes('development')) types.push('development');
   const districts = Object.entries(DISTRICT_ALIASES)
     .filter(([, aliases]) => aliases.some((a) => s.includes(deacc(a))))
     .map(([canon]) => canon);
-  return { types, groups, districts };
+  return { types, groups, subtypes, districts };
+}
+
+// Lightweight request classifier, used by the request pipeline to auto-tag an
+// incoming concierge request: best-guess category (subtype → group → type), district,
+// and whether it reads as a high-end / luxury request. Pure, no I/O.
+export function classifyRequest(q: string): { category: string | null; district: string | null; tier: 'premium' | 'standard' } {
+  const { types, groups, subtypes, districts } = readIntent(q);
+  const category = subtypes[0] || groups[0] || types[0] || null;
+  return { category, district: districts[0] || null, tier: luxuryIntent(q) ? 'premium' : 'standard' };
 }
 
 // The directory columns we surface as a Pick (locale-aware, with English fallback).
 const dirCols = (locale: string) =>
-  `slug,type,subtype,district,price_band,rating,rating_count,verified,image,name_${locale},name_en,summary_${locale},summary_en`;
+  `slug,type,subtype,district,price_band,rating,rating_count,verified,luxury,image,name_${locale},name_en,summary_${locale},summary_en`;
 
 function rowToPick(r: Record<string, unknown>, locale: string): Pick {
   return {
@@ -152,11 +197,16 @@ function rowToPick(r: Record<string, unknown>, locale: string): Pick {
     price_band: (r.price_band as string) ?? null,
     image: (r.image as string) ?? null,
     verified: Boolean(r.verified),
+    luxury: Boolean(r.luxury),
   };
 }
 
 // Keyword + intent retrieval — precise on exact names, types and districts.
-export async function searchDirectory(locale: string, q: string, limit = 8): Promise<Pick[]> {
+// `opts.luxuryFirst` forces luxury-first ordering even when the wording itself
+// isn't luxury: used when the CLIENT is premium, so the tier travels with the
+// client, not just the words (a premium guest asking for "a driver" still gets
+// the chauffeur/limousine houses first).
+export async function searchDirectory(locale: string, q: string, limit = 8, opts?: { luxuryFirst?: boolean }): Promise<Pick[]> {
   const sb = supabaseAdmin();
   const cols = dirCols(locale);
   const seen = new Set<string>();
@@ -169,10 +219,30 @@ export async function searchDirectory(locale: string, q: string, limit = 8): Pro
       out.push(rowToPick(r, locale));
     }
   };
-  const { types, groups, districts } = readIntent(q);
+  const { types, groups, subtypes, districts } = readIntent(q);
+  const lux = luxuryIntent(q) || Boolean(opts?.luxuryFirst);
+  // Apply luxury-first ordering when the guest signals the high end.
+  const ordered = <T extends { order: (c: string, o: { ascending: boolean; nullsFirst: boolean }) => T }>(query: T): T => {
+    let x = query;
+    if (lux) x = x.order('luxury', { ascending: false, nullsFirst: false });
+    return x.order('verified', { ascending: false, nullsFirst: false }).order('rating', { ascending: false, nullsFirst: false });
+  };
   const terms = q.replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter((w) => w.length > 3).slice(0, 5);
 
   try {
+    // Subtype-exact FIRST (highest precision): "an accountant in Larnaca" must return
+    // accountants, not the whole professional group — so they always lead the picks.
+    for (const st of subtypes) {
+      let query = sb.from('directory_listings').select(cols).eq('status', 'published').eq('subtype', st);
+      if (districts.length === 1) query = query.eq('district', districts[0]);
+      const { data } = await ordered(query).limit(10);
+      push(data as Record<string, unknown>[] | null);
+      // If a district filter found nothing, widen to island-wide for that subtype.
+      if (!(data && data.length) && districts.length === 1) {
+        const { data: wide } = await ordered(sb.from('directory_listings').select(cols).eq('status', 'published').eq('subtype', st)).limit(6);
+        push(wide as Record<string, unknown>[] | null);
+      }
+    }
     if (terms.length) {
       const or = terms.flatMap((t) => {
         const v = t.replace(/[(),*]/g, '');
@@ -185,7 +255,7 @@ export async function searchDirectory(locale: string, q: string, limit = 8): Pro
     for (const ty of types) {
       let query = sb.from('directory_listings').select(cols).eq('status', 'published').eq('type', ty);
       if (districts.length === 1) query = query.eq('district', districts[0]);
-      const { data } = await query.order('rating', { ascending: false, nullsFirst: false }).limit(10);
+      const { data } = await ordered(query).limit(10);
       push(data as Record<string, unknown>[] | null);
     }
     // Category-group retrieval — the service directory (estate agents, car rental,
@@ -195,11 +265,35 @@ export async function searchDirectory(locale: string, q: string, limit = 8): Pro
     for (const g of groups) {
       let query = sb.from('directory_listings').select(cols).eq('status', 'published').eq('category_group', g);
       if (districts.length === 1) query = query.eq('district', districts[0]);
-      const { data } = await query.order('verified', { ascending: false, nullsFirst: false })
-        .order('rating', { ascending: false, nullsFirst: false }).limit(12);
+      const { data } = await ordered(query).limit(12);
       push(data as Record<string, unknown>[] | null);
     }
   } catch { /* directory unavailable — the KB still grounds the answer */ }
+  return out.slice(0, limit);
+}
+
+// Server-side specialist matching for the request pipeline. Given a captured
+// request and its classified tier, return the best specialists to connect it to —
+// luxury-flagged houses first for premium clients. This is what makes every
+// request actionable in the backend even when the guest submitted it "cold"
+// (without going through the chat), and it powers the smart client↔service link:
+// the top of Cyprus for the top tier, in the right category and district.
+export async function matchForRequest(
+  locale: string,
+  query: string,
+  tier: 'premium' | 'standard',
+  limit = 6,
+): Promise<Pick[]> {
+  const picks = await searchDirectory(locale, query, limit, { luxuryFirst: tier === 'premium' });
+  // De-dupe by brand so one chain across districts doesn't fill the shortlist.
+  const seenBrand = new Set<string>();
+  const out: Pick[] = [];
+  for (const p of picks) {
+    const bk = String(p.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (bk && seenBrand.has(bk)) continue;
+    if (bk) seenBrand.add(bk);
+    out.push(p);
+  }
   return out.slice(0, limit);
 }
 
@@ -277,9 +371,10 @@ export async function assembleContext(locale: string, latestUser: string): Promi
   const kbKeyword = retrieveKnowledge(latestUser, 5);
   // One embedding for the whole turn, computed alongside the keyword search; it
   // feeds both semantic layers. null (no OPENAI_API_KEY) → keyword-only fallback.
-  const [keywordPicks, qvec] = await Promise.all([
+  const [keywordPicks, qvec, related] = await Promise.all([
     searchDirectory(locale, latestUser, 8),
     embedText(latestUser),
+    searchArticles(locale as Locale, latestUser, 3).catch(() => []),
   ]);
   const [kbVecIds, vecPicks] = await Promise.all([
     vectorKbIds(qvec),
@@ -302,12 +397,17 @@ export async function assembleContext(locale: string, latestUser: string): Promi
     picks.push(c);
     if (picks.length >= 6) break;
   }
-  return { candidates, picks, guides, kb, canRoute };
+  const articles: ArticleLink[] = (related || []).map((a) => ({ slug: a.slug, title: a.title, category: a.category }));
+  const luxury = luxuryIntent(latestUser);
+  return { candidates, picks, guides, articles, kb, canRoute, luxury };
 }
 
 // The context block appended to the system prompt for grounding.
 export function groundingBlock(ctx: ConciergeContext, locale: string): string {
   const parts: string[] = ['\n\nCONTEXT FOR THIS TURN (the ONLY places, prices and facts you may use):'];
+  if (ctx.luxury) {
+    parts.push('\nThe guest is signalling the HIGH END. Lead with the finest, luxury-flagged options; assume elevated taste and budget; offer bespoke arrangements and, warmly, the dedicated human concierge. Never downgrade them to the ordinary.');
+  }
   if (ctx.kb.length) {
     parts.push('\nKnowledge base (accurate practical answers with prices — use these facts, and you may point the guest to the matching guide page):');
     for (const h of ctx.kb) {
@@ -322,6 +422,10 @@ export function groundingBlock(ctx: ConciergeContext, locale: string): string {
       const kind = (c.subtype && c.subtype.replace(/-/g, ' ')) || c.type;
       parts.push(`• ${c.name} — ${kind}${c.district ? `, ${c.district}` : ''}${c.rating ? `, ${c.rating}★${c.rating_count ? ` (${c.rating_count})` : ''}` : ''}${c.price_band ? `, ${c.price_band}` : ''}${c.verified ? ', verified' : ''}`);
     }
+  }
+  if (ctx.articles.length) {
+    parts.push('\nCyprus Lifestyle articles relevant to this request — mention and recommend these BY TITLE where it fits (the interface links them), tying your answer to our own journalism:');
+    for (const a of ctx.articles) parts.push(`• ${a.title}`);
   }
   if (!ctx.kb.length && !ctx.candidates.length) {
     parts.push('\n(No specific matches were found for this message. Answer from the Cyprus facts if you can, be honest about what you don’t have, and offer to connect the guest to the right people or ask a clarifying question.)');
@@ -418,7 +522,7 @@ async function edgeAnswer(q: string, locale: string): Promise<string> {
 export type StreamEvent =
   | { type: 'status'; label: string }
   | { type: 'delta'; text: string }
-  | { type: 'meta'; picks: Pick[]; guides: GuideLink[]; canRoute: boolean }
+  | { type: 'meta'; picks: Pick[]; guides: GuideLink[]; articles: ArticleLink[]; canRoute: boolean }
   | { type: 'error'; error: string }
   | { type: 'done' };
 
@@ -482,6 +586,6 @@ export async function* streamConcierge(messages: ChatMessage[], locale: string, 
   }
 
   if (!gotText) yield { type: 'error', error: errDetail || 'unavailable' };
-  yield { type: 'meta', picks: ctx.picks, guides: ctx.guides, canRoute: ctx.canRoute };
+  yield { type: 'meta', picks: ctx.picks, guides: ctx.guides, articles: ctx.articles, canRoute: ctx.canRoute };
   yield { type: 'done' };
 }

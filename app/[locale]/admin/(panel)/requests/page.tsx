@@ -8,7 +8,7 @@ interface Pick { slug?: string; name?: string; why?: string }
 interface Row {
   id: string; created_at: string; locale: string; query: string; answer: string | null;
   picks: Pick[] | null; name: string | null; email: string | null; phone: string | null;
-  note: string | null; category: string | null; district: string | null; status: string;
+  note: string | null; category: string | null; district: string | null; tier: string | null; status: string;
 }
 const STATUSES = ['new', 'routed', 'fulfilled', 'closed'] as const;
 const NEXT: Record<string, string> = { new: 'routed', routed: 'fulfilled', fulfilled: 'closed', closed: 'new' };
@@ -22,7 +22,7 @@ export default function RequestsInbox() {
   const load = useCallback(async () => {
     setLoading(true);
     const { data } = await sb.from('concierge_requests')
-      .select('id, created_at, locale, query, answer, picks, name, email, phone, note, category, district, status')
+      .select('id, created_at, locale, query, answer, picks, name, email, phone, note, category, district, tier, status')
       .order('created_at', { ascending: false }).limit(500);
     setRows((data as Row[]) || []);
     setLoading(false);
@@ -38,9 +38,16 @@ export default function RequestsInbox() {
   rows.forEach((r) => { counts[r.status] = (counts[r.status] || 0) + 1; });
   const withContact = rows.filter((r) => r.email || r.phone).length;
   const gaps = rows.filter((r) => !r.picks || r.picks.length === 0).length;
+  const premium = rows.filter((r) => r.tier === 'premium').length;
 
-  const shown = rows.filter((r) =>
-    filter === 'all' ? true : filter === 'open' ? (r.status === 'new' || r.status === 'routed') : r.status === filter);
+  const shown = rows.filter((r) => {
+    if (filter === 'all') return true;
+    if (filter === 'open') return r.status === 'new' || r.status === 'routed';
+    if (filter === 'premium') return r.tier === 'premium';            // private-client desk
+    if (filter === 'leads') return !!(r.email || r.phone);            // warm leads (contact left)
+    if (filter === 'gaps') return !r.picks || r.picks.length === 0;   // demand backlog — what to add next
+    return r.status === filter;
+  });
 
   return (
     <>
@@ -51,12 +58,13 @@ export default function RequestsInbox() {
         <div className="stat"><div className="n">{counts['new'] || 0}</div><div className="k">new</div></div>
         <div className="stat"><div className="n">{counts['routed'] || 0}</div><div className="k">routed</div></div>
         <div className="stat"><div className="n">{counts['fulfilled'] || 0}</div><div className="k">fulfilled</div></div>
+        <div className="stat"><div className="n" style={{ color: '#C9A24C' }}>{premium}</div><div className="k">premium</div></div>
         <div className="stat"><div className="n">{withContact}</div><div className="k">with contact</div></div>
         <div className="stat"><div className="n">{gaps}</div><div className="k">demand gaps</div></div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, margin: '14px 0' }}>
-        {['open', 'new', 'routed', 'fulfilled', 'closed', 'all'].map((f) => (
+      <div style={{ display: 'flex', gap: 8, margin: '14px 0', flexWrap: 'wrap' }}>
+        {['open', 'premium', 'leads', 'gaps', 'new', 'routed', 'fulfilled', 'closed', 'all'].map((f) => (
           <button key={f} onClick={() => setFilter(f)}
             style={{ padding: '6px 12px', borderRadius: 999, cursor: 'pointer', textTransform: 'capitalize',
               border: `1px solid ${filter === f ? '#C9A24C' : 'var(--line,#e3d9c4)'}`,
@@ -72,7 +80,10 @@ export default function RequestsInbox() {
             <tr key={r.id}>
               <td style={{ whiteSpace: 'nowrap' }}>{new Date(r.created_at).toLocaleDateString()}<br /><span style={{ opacity: .6, fontSize: 12 }}>{new Date(r.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></td>
               <td style={{ maxWidth: 360 }}>
-                <div style={{ fontWeight: 600 }}>{r.query}</div>
+                <div style={{ fontWeight: 600 }}>
+                  {r.tier === 'premium' ? <span title="Premium / private-client request" style={{ display: 'inline-block', marginInlineEnd: 6, padding: '1px 7px', borderRadius: 999, fontSize: 11, fontWeight: 700, color: '#0B0E11', background: 'linear-gradient(180deg,#E4D2AC,#C9A24C)', verticalAlign: 'middle' }}>★ Premium</span> : null}
+                  {r.query}
+                </div>
                 {r.note ? <div style={{ fontSize: 13, opacity: .8, marginTop: 3 }}>{r.note}</div> : null}
                 {(r.category || r.district) ? <div style={{ fontSize: 11, opacity: .6, marginTop: 3 }}>{[r.category, r.district].filter(Boolean).join(' · ')}</div> : null}
               </td>

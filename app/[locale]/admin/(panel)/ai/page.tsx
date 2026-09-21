@@ -10,6 +10,8 @@ export default function AiTab() {
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
   const [report, setReport] = useState<any>(null);
+  const [bf, setBf] = useState<any>(null);        // de/pl/ru backfill backlog
+  const [bfMsg, setBfMsg] = useState('');
 
   const load = useCallback(async () => {
     const [{ data: s }, { data: q }, { data: l }] = await Promise.all([
@@ -65,10 +67,54 @@ export default function AiTab() {
     setBusy('');
   }
 
+  // Legacy backfill — fill missing German/Polish/Russian editions of older
+  // articles (structure-preserving translation of the stored English). GET shows
+  // the backlog for free; the run fills it in bounded batches until clear.
+  const checkBackfill = useCallback(async () => {
+    setBusy('bf-check'); setBfMsg('Counting the backlog…');
+    try {
+      const res = await fetch('/api/admin/backfill-translations', { credentials: 'same-origin' });
+      const d = await res.json();
+      if (!res.ok || !d.ok) setBfMsg('Check failed: ' + (d.error || res.status));
+      else { setBf(d); setBfMsg(d.tasks_remaining ? `${d.tasks_remaining} editions to fill across ${d.articles_with_gaps} articles.` : 'All articles already carry all seven editions.'); }
+    } catch (e) { setBfMsg('Check error: ' + (e as Error).message); }
+    setBusy('');
+  }, []);
+
+  async function runBackfill() {
+    setBusy('bf-run'); setBfMsg('Filling editions…');
+    let filled = 0;
+    try {
+      for (let i = 0; i < 400; i++) {
+        const res = await fetch('/api/admin/backfill-translations', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limit: 3 }),
+        });
+        const d = await res.json();
+        if (!res.ok || !d.ok) { setBfMsg('Run stopped: ' + (d.error || res.status)); break; }
+        filled += d.filled || 0;
+        setBfMsg(`Filled ${filled} so far · ${d.tasks_remaining} remaining…`);
+        if (!d.tasks_remaining) { setBfMsg(`Done — filled ${filled} editions. Every article now ships all seven.`); break; }
+      }
+    } catch (e) { setBfMsg('Run error: ' + (e as Error).message); }
+    setBusy(''); checkBackfill();
+  }
+
   return (
     <>
       <h1>AI newsroom</h1>
       <p className="sub">Automation switches, the rewrite queue and desk telemetry.</p>
+
+      <div className="row" style={{ marginBottom: 6, gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button className="abtn ghost" disabled={busy === 'bf-check'} onClick={checkBackfill}>
+          {busy === 'bf-check' ? 'Checking…' : 'Check de/pl/ru backlog'}
+        </button>
+        <button className="abtn gold" disabled={busy === 'bf-run' || !(bf && bf.tasks_remaining)} onClick={runBackfill}>
+          {busy === 'bf-run' ? 'Filling…' : 'Backfill missing editions'}
+        </button>
+        <span style={{ fontSize: 12, color: '#8a8371' }}>Translates older articles into German, Polish and Russian — no English fallback left behind.</span>
+      </div>
+      {bfMsg ? <p style={{ fontSize: 13, color: '#8a8371', margin: '0 0 14px' }}>{bfMsg}{bf && bf.edition_gaps ? ` (de ${bf.edition_gaps.de} · pl ${bf.edition_gaps.pl} · ru ${bf.edition_gaps.ru})` : ''}</p> : null}
 
       <div className="row" style={{ marginBottom: 14 }}>
         <button className="abtn ghost" disabled={busy === 'selftest'} onClick={selfTest}>

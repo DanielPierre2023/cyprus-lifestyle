@@ -46,7 +46,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
 
   const [nearby, peers, events, collection] = await Promise.all([
     x.lat != null && x.lng != null ? getNearby(l, x.lat, x.lng, x.slug) : Promise.resolve([]),
-    getPeers(l, x.type, x.district, x.slug, 4),
+    getPeers(l, { type: x.type, subtype: x.subtype, category_group: x.category_group, district: x.district }, x.slug, 4),
     getEventsByDistrict(l, x.district, 3),
     x.district ? getCollectionBySlug(collectionSlug(x.type, slugifyDistrict(x.district))) : Promise.resolve(null),
   ]);

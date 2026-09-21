@@ -9,12 +9,15 @@ import AdvertiseFunnel, { type RateItem } from '@/components/AdvertiseFunnel';
 export const revalidate = 300;
 
 // FAQ structured data (en edition) — targets "advertise in Cyprus" search intent.
+// Kept in step with the live rate card (ad_pricing): Listed €490/yr, Featured
+// €850/mo, Partner bespoke, plus à-la-carte placements.
 const ADVERTISE_FAQ: { q: string; a: string }[] = [
-  { q: 'How much does it cost to advertise in Cyprus with Cyprus Lifestyle?', a: 'Founding rates start at €49 per month for the full Featured presence and €149 per year for a verified listing, across all seven language editions. Prices exclude VAT.' },
+  { q: 'How much does it cost to advertise in Cyprus with Cyprus Lifestyle?', a: 'A verified Listed profile is €490 per year and a Featured placement is €850 per month, both running across all seven language editions. Bespoke Partner packages and à-la-carte placements — banners, sponsored features and newsletter slots — are quoted on request. Prices exclude VAT.' },
   { q: 'What languages will my advertisement appear in?', a: 'Every placement runs across all seven editions — English, Greek, Russian, Arabic, Romanian, Polish and German — with translation included at no extra cost.' },
   { q: 'Who reads Cyprus Lifestyle?', a: 'Residents, relocators, property buyers and high-spending visitors. Nearly a quarter of people living in Cyprus were born abroad, and Cyprus Lifestyle reaches them in their own language.' },
-  { q: 'Can I pay for advertising online?', a: 'Yes. Listings, sponsored features, banners and newsletter placements can be purchased instantly by card. Category-exclusive partnerships are arranged by request.' },
-  { q: 'What is the founding-partner offer?', a: 'The first 100 businesses to join lock a launch rate — a fraction of the published price — for as long as they remain partners, even after prices rise.' },
+  { q: 'Is paid placement labelled?', a: 'Yes. Listed and Featured profiles and any sponsored feature are always clearly labelled as a partner placement. Editorial coverage is never for sale — the two stay separate — but any business can place its own profile in the directory.' },
+  { q: 'Can I pay for advertising online?', a: 'Yes — a Listed profile can be purchased instantly by card. Featured placements and bespoke Partner packages are arranged with our team so we can tailor the creative, category exclusivity and concierge routing.' },
+  { q: 'What is the Partner tier?', a: 'Partner is a bespoke annual package for businesses that want category exclusivity, editorial-grade features and priority concierge routing across all seven editions. It is tailored to your goals and quoted individually.' },
 ];
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {

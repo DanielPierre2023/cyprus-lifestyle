@@ -12,6 +12,20 @@ import NewsletterSignup from '@/components/NewsletterSignup';
 
 export const revalidate = 300;
 
+// Article HTML is stored with root-relative links (/directory/g/…, /ask). next-intl
+// serves non-English editions under a locale prefix, so rewrite internal links to the
+// reader's locale — otherwise a click (e.g. from a specialist card) would drop them
+// into the English edition instead of the proper localized category.
+const LOCALE_SEGMENTS = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'];
+function localizeHtml(html: string, locale: Locale): string {
+  if (locale === 'en') return html;
+  return html.replace(/(href=)(["'])\/(?!\/)([^"']*)\2/g, (m, p1, q, path) => {
+    const first = String(path).split('/')[0];
+    if (LOCALE_SEGMENTS.includes(first)) return m; // already locale-prefixed
+    return `${p1}${q}/${locale}/${path}${q}`;
+  });
+}
+
 // Ad-disclosure label for sponsored features, per edition (legally conspicuous).
 const SPONSORED: Record<string, { s: string; p: string }> = {
   en: { s: 'Sponsored', p: 'Presented by' },
@@ -104,7 +118,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
 
         <div className="article wrap">
           <div className="rule-orn lead-orn"><span className="diamond" /></div>
-          <div className="prose" dangerouslySetInnerHTML={{ __html: a.content }} />
+          <div className="prose" dangerouslySetInnerHTML={{ __html: localizeHtml(a.content, l) }} />
 
           {a.tags?.length ? (
             <div className="tags">
