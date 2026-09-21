@@ -15,6 +15,7 @@ const TABS = [
   { grp: 'Listings' },
   { href: '/admin/directory', label: 'Directory' },
   { href: '/admin/coverage', label: 'Coverage' },
+  { href: '/admin/partners', label: 'Partners' },
   { href: '/admin/agenda', label: 'Agenda / events' },
   { grp: 'Audience' },
   { href: '/admin/social', label: 'Social' },

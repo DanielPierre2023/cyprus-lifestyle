@@ -79,8 +79,13 @@
   02's logged recommendations; funnel verified (CTR math) on Postgres 16.*
 
 ## 60–90 day (the moat)
-- [ ] **09 · Partner self-service portal.** ownership claim + moderation; partners maintain
+- [x] **09 · Partner self-service portal.** ownership claim + moderation; partners maintain
   their own services/projects/offers.
+  *Shipped 2026-09-21: migration 0089 (listing_claims + listing_edit_requests + the SECURITY
+  `apply_listing_edit` whitelist function), token-based claim flow (no new accounts:
+  `emailMatchesListing` anti-spoofing → emailed one-time link), moderated edits (whitelisted
+  fields only), `/partner` public portal, admin "Partners" moderation tab. Injection-safety of
+  the apply function verified on Postgres 16; pure logic 16 unit tests.*
 - [ ] **10 · Proactive + transactional concierge.** personalised nudges; book/arrange/hold
   with desk/partner routing; saved-items / trip plan.
 - [ ] **11 · Programmatic SEO at scale.** category × district pages from the directory;
@@ -181,4 +186,16 @@
   listing, and — nicely — the most-recommended listings that are NOT featured as concrete upsell
   candidates. Funnel math verified on Postgres 16 (3 recs, 1 click → 33.3% CTR). `tsc` clean;
   `npm test` 117/117; all 85 migrations apply. Also added a "CI only — do not run on Supabase"
-  banner to `supabase/ci/prelude.sql`. Next: item 09 (partner self-service portal).
+  banner to `supabase/ci/prelude.sql`.
+- 2026-09-21 — **Item 09 shipped.** Partner self-service, token-based (no new account system).
+  Migration 0089 adds `listing_claims`, `listing_edit_requests`, and the security-critical
+  `apply_listing_edit()` — which writes ONLY a whitelist of fields (contact + 7-language
+  descriptions + the partner's own pitch), so a crafted payload can't touch status, featured,
+  ratings or coordinates (verified against fixtures: an injected `featured/status/rating` was
+  ignored). Flow: a business owner enters their listing + the email on file → `emailMatchesListing`
+  (same address / email domain / site domain) gates it → a one-time link is emailed → they edit
+  the whitelisted fields → the change lands in a MODERATION queue → an admin approves → it
+  publishes. `/partner` is the public portal; a new admin "Partners" tab moderates claims and
+  edits. Pure logic (sanitize + anti-spoofing) has 16 unit tests. Per the owner's request, this
+  bundle contains ONLY the files changed for item 09. `tsc` clean; `npm test` 133/133 across 10
+  suites; all 86 migrations apply. Next: item 10 (proactive + transactional concierge).

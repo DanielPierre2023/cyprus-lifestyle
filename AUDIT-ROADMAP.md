@@ -10,6 +10,41 @@ code once** to keep Vercel deployments minimal (audit operating principle).
 
 ---
 
+## Item 09 · Partner self-service portal  ✅ 2026-09-21
+
+**Why (from the audit):** let business owners maintain their own listing without the
+editorial team hand-editing every change — safely, behind moderation.
+
+### 1 · SQL — run first
+- `supabase/migrations/0089_partner_portal.sql` — `listing_claims` (ownership,
+  token + expiry) and `listing_edit_requests` (moderation queue), plus
+  `apply_listing_edit(request_id)` which writes **only a whitelist** (phone, email,
+  url, partner_pitch, the seven `summary_*`) to the live listing. Verified on
+  Postgres 16: an edit payload that also set `featured`/`status`/`rating` had those
+  keys ignored; re-applying an approved request is a no-op.
+
+### 2 · Code — deploy once
+- `lib/partners/claims.ts` **(new, 16 unit tests)** — `sanitizeEdit` (whitelist +
+  trim + cap), `emailMatchesListing` (anti-spoofing: same address / email domain /
+  site domain), token helper.
+- `app/api/partner/{claim,verify,edit}/route.ts` **(new)** — the token flow: request
+  (generic response, no address enumeration) → verify link → submit edit to moderation.
+- `app/api/admin/partner/moderate/route.ts` **(new)** — admin approve/reject; approve
+  calls `apply_listing_edit`.
+- `app/[locale]/(site)/partner/page.tsx` **(new)** — the public portal (claim → edit).
+- `app/[locale]/admin/(panel)/partners/page.tsx` **(new)** + AdminNav — moderation.
+
+### Design note
+No new auth system: a partner proves control of the on-file email via a one-time
+link, and every change is moderated before it goes live — so the portal can't be used
+to hijack or vandalise a listing.
+
+### Verification summary
+`tsc` clean · `npm test` 133 / 10 suites (16 new) · all 86 migrations apply ·
+apply-whitelist injection-safety verified on Postgres 16.
+
+---
+
 ## Item 08 · Attribution + advertiser ROI report  ✅ 2026-09-21
 
 **Why (from the audit):** advertisers should see what their placement earns them, and
