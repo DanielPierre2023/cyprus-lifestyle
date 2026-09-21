@@ -7,12 +7,14 @@ type Roi = { org_id: string; name: string | null; status: string | null; revenue
 
 export default async function AttributionTab() {
   const sb = await supabaseServer();
-  const [{ data: attrData }, { data: roiData }] = await Promise.all([
+  const [{ data: attrData }, { data: roiData }, { data: ctaData }] = await Promise.all([
     sb.from('listing_attribution').select('*').order('impressions', { ascending: false }).limit(50),
     sb.from('advertiser_roi').select('*').limit(50),
+    sb.from('cta_by_listing').select('*').order('clicks', { ascending: false }).limit(25),
   ]);
   const attr = (attrData as Attr[] | null) || [];
   const roi = (roiData as Roi[] | null) || [];
+  const cta = (ctaData as { slug: string; cta: string; clicks: number; last_click: string }[] | null) || [];
   const totalImpr = attr.reduce((s, a) => s + (a.impressions || 0), 0);
   const totalClicks = attr.reduce((s, a) => s + (a.clicks || 0), 0);
   const totalRev = roi.reduce((s, r) => s + Number(r.revenue_eur || 0), 0);
@@ -66,6 +68,18 @@ export default async function AttributionTab() {
             </tr>
           ))}
           {featured.length === 0 ? <tr><td colSpan={6}>No featured listings with concierge exposure yet.</td></tr> : null}
+        </tbody>
+      </table>
+
+      <h1 style={{ fontSize: 18 }}>CTA conversions — what visitors clicked</h1>
+      <p className="sub">Actions taken on listing pages (website, phone, directions) — the SEO → action signal, last 90 days.</p>
+      <table className="adm-t">
+        <thead><tr><th>Listing</th><th>CTA</th><th>Clicks</th><th>Last</th></tr></thead>
+        <tbody>
+          {cta.map((c, i) => (
+            <tr key={i}><td>{c.slug}</td><td>{c.cta}</td><td>{c.clicks}</td><td>{c.last_click ? new Date(c.last_click).toLocaleDateString() : '—'}</td></tr>
+          ))}
+          {cta.length === 0 ? <tr><td colSpan={4}>No CTA clicks logged yet.</td></tr> : null}
         </tbody>
       </table>
 

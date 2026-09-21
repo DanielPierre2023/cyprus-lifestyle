@@ -10,6 +10,33 @@ code once** to keep Vercel deployments minimal (audit operating principle).
 
 ---
 
+## Item 11 · Programmatic SEO at scale + CTA instrumentation  ✅ 2026-09-21
+
+**Why (from the audit):** category × district pages at scale, a CWV budget, and
+measuring conversions on those pages. Two of the three were already in place.
+
+### Already built (verified, no change)
+- **Category × district pages:** `/best/[slug]` renders "best {type} in {district}"
+  from directory facets; `/directory/g/[group]` are the 12-group hubs; `/guide/[slug]`
+  and `/for/[market]` add practical and audience hubs. **All are enumerated in
+  `app/sitemap.ts`** (with every article + listing), so they're discoverable at scale.
+- **CWV:** Vercel Speed Insights is wired (consent-gated) in `ConsentAnalytics`.
+
+### The gap this closes — CTA conversion instrumentation
+- `supabase/migrations/0091_cta_instrumentation.sql` — a `label` column on
+  `attribution_clicks` + the `cta_by_listing` view (clicks per listing per CTA, 90d).
+- `components/TrackedCTA.tsx` **(new)** — a drop-in `<a>` that logs the click
+  (source=directory, which CTA) before navigating.
+- `app/[locale]/(site)/directory/[type]/[slug]/page.tsx` — the website, phone and
+  directions buttons now use `TrackedCTA`.
+- `app/api/track/rec-click/route.ts` — stores the CTA `label`.
+- `app/[locale]/admin/(panel)/attribution/page.tsx` — a "CTA conversions" table.
+
+### Verification summary
+`tsc` clean · `npm test` 147 / 11 suites · all 88 migrations apply · CTA view verified.
+
+---
+
 ## Item 10 · Proactive + transactional concierge  ✅ 2026-09-21
 
 **Why (from the audit):** let guests keep a trip plan the concierge can act on, and

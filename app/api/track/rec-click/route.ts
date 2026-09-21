@@ -17,8 +17,9 @@ export async function POST(req: NextRequest) {
   const source = ['concierge', 'directory', 'banner'].includes(String(body.source)) ? String(body.source) : 'concierge';
   const cid = isValidCid(String(body.cid || '')) ? String(body.cid) : null;
   const locale = String(body.locale || '').slice(0, 5) || null;
+  const label = body.label ? String(body.label).slice(0, 40) : null; // which CTA (website|phone|directions|email)
   try {
-    await supabaseAdmin().from('attribution_clicks').insert({ slug, source, cid, locale });
+    await supabaseAdmin().from('attribution_clicks').insert({ slug, source, cid, locale, label });
   } catch { /* best-effort telemetry */ }
   return NextResponse.json({ ok: true });
 }

@@ -9,6 +9,7 @@ import { breadcrumbJsonLd, ld, listingJsonLd, pageMetadata } from '@/lib/seo';
 import DirectoryMap from '@/components/DirectoryMap';
 import CoverImage from '@/components/CoverImage';
 import TrackView from '@/components/TrackView';
+import TrackedCTA from '@/components/TrackedCTA';
 import EnquiryForm, { type EnquiryLabels } from '@/components/EnquiryForm';
 import { TAXI_APPS } from '@/lib/mobility';
 
@@ -183,11 +184,11 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
               {x.district ? <div className="lh-fact"><span className="k">{t('directory.district')}</span><span className="v" style={{ textTransform: 'capitalize' }}>{x.district}</span></div> : null}
               {x.price_band ? <div className="lh-fact"><span className="k">{t('directory.price')}</span><span className="v">{x.price_band}</span></div> : null}
               {x.rating != null ? <div className="lh-fact"><span className="k">{t('directory.rating')}</span><span className="v">{x.rating.toFixed(1)} / 5{x.rating_count ? ` · ${x.rating_count.toLocaleString(l)}` : ''}</span></div> : null}
-              {x.phone ? <div className="lh-fact"><span className="k">{t('directory.phone')}</span><span className="v"><a href={`tel:${x.phone.replace(/\s+/g, '')}`}>{x.phone}</a></span></div> : null}
+              {x.phone ? <div className="lh-fact"><span className="k">{t('directory.phone')}</span><span className="v"><TrackedCTA slug={x.slug} label="phone" href={`tel:${x.phone.replace(/\s+/g, '')}`}>{x.phone}</TrackedCTA></span></div> : null}
             </div>
             <div className="lh-actions">
-              {x.url ? <a className="btn" href={x.url} target="_blank" rel="noopener nofollow">{t('directory.visit')}</a> : null}
-              {directions ? <a className="btn ghost" href={directions} target="_blank" rel="noopener noreferrer">{t('directory.directions')}</a> : null}
+              {x.url ? <TrackedCTA slug={x.slug} label="website" className="btn" href={x.url} target="_blank" rel="noopener nofollow">{t('directory.visit')}</TrackedCTA> : null}
+              {directions ? <TrackedCTA slug={x.slug} label="directions" className="btn ghost" href={directions} target="_blank" rel="noopener noreferrer">{t('directory.directions')}</TrackedCTA> : null}
             </div>
             {directions ? (
               <div className="lh-ride">

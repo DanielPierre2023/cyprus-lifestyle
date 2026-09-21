@@ -93,8 +93,13 @@
   flows into the concierge context so it references saved places and offers to arrange them (via the
   existing request-capture → desk/partner routing). Proactive opener + request capture already
   existed. Dedup + 14 unit tests; all 87 migrations apply.*
-- [ ] **11 · Programmatic SEO at scale.** category × district pages from the directory;
+- [x] **11 · Programmatic SEO at scale.** category × district pages from the directory;
   CWV budget; CTA conversion instrumentation.
+  *Shipped 2026-09-21: category×district pages (`/best/[slug]`), group hubs, guides and market
+  hubs already exist and are all in the sitemap (verified); CWV is monitored via Vercel Speed
+  Insights (consent-gated). The new piece: CTA conversion instrumentation — migration 0091
+  (`label` on attribution_clicks + `cta_by_listing` view), a `TrackedCTA` component wired into
+  the listing website/phone/directions CTAs, and a CTA breakdown in the admin Attribution tab.*
 - [ ] **12 · GDPR/privacy register + data-sourcing statement.** lawful-basis, provenance,
   retention, subject-request flow; public sourcing statement.
 
@@ -211,4 +216,15 @@
   it can reference the saved places by name and warmly offer to arrange or book them — routed to
   the desk through the request capture that already exists. The proactive opener and tier-aware
   request routing were already in place. `tsc` clean; `npm test` 147/147 across 11 suites; all 87
-  migrations apply. Next: item 11 (programmatic SEO at scale).
+  migrations apply.
+- 2026-09-21 — **Item 11 shipped.** Most of "programmatic SEO at scale" was already built and
+  verified: category×district landing pages (`/best/[slug]` via facets), the 12-group hubs
+  (`/directory/g/[group]`), KB guides and per-market hubs (`/for/[id]`) — all enumerated in
+  `app/sitemap.ts` alongside every article and listing. Core Web Vitals are already monitored by
+  Vercel Speed Insights (consent-gated in `ConsentAnalytics`). The genuine gap was measuring what
+  visitors DO on those pages, so this adds CTA conversion instrumentation: migration 0091 (`label`
+  on `attribution_clicks` + the `cta_by_listing` view), a reusable `TrackedCTA` client component
+  now on the listing website/phone/directions buttons (logs source=directory + which CTA), the
+  beacon endpoint stores the label, and the admin Attribution tab shows a CTA-clicks breakdown.
+  `tsc` clean; `npm test` 147/147 across 11 suites; all 88 migrations apply. Next: item 12
+  (GDPR/privacy register + data-sourcing statement).
