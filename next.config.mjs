@@ -42,10 +42,24 @@ const nextConfig = {
     return [{ source: '/:path*', headers: securityHeaders }];
   },
   images: {
-    // Cover images come from Unsplash and the sites we cite. Allow remote.
+    // Narrowed from a wildcard to the ONLY hosts next/image actually loads, so the
+    // Vercel image optimiser can never be pointed at an arbitrary third-party host
+    // (an SSRF-ish surface and a cost leak). Every cover and listing photo is one of:
+    //   • our Supabase Storage buckets  (listings/ and blog-images/) — enrich-directory
+    //     downloads Google Places / og:image bytes INTO storage, it never hot-links;
+    //   • images.unsplash.com           — the Unsplash cover fallback (writer + picker);
+    //   • picsum.photos                 — the seeded editorial cover fallback.
+    // Advertiser banners and the directory map use a plain <img>/CSS background, so
+    // they don't pass through next/image and are unaffected by this list.
     remotePatterns: [
-      { protocol: 'https', hostname: '**' },
+      { protocol: 'https', hostname: '*.supabase.co' },
+      { protocol: 'https', hostname: 'images.unsplash.com' },
+      { protocol: 'https', hostname: 'picsum.photos' },
     ],
+    // Cost discipline: serve AVIF/WebP and keep optimised variants cached a month so
+    // the same image isn't re-optimised on every request.
+    formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 2678400, // 31 days
   },
   // The AI desk routes call external model APIs and can run long; give them room.
   experimental: {

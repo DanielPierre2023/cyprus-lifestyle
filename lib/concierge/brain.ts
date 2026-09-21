@@ -414,6 +414,9 @@ export function groundingBlock(ctx: ConciergeContext, locale: string): string {
       const tx = localizedIntent(h.item.id, locale);
       parts.push(`• ${tx.q}\n  ${h.item.a}`); // English facts; you re-express in the visitor's language
       if (h.item.connect.length) parts.push(`  (we can connect the guest to: ${h.item.connect.join(', ')})`);
+      // Official source (e.g. a government page) — cite it for regulatory/financial
+      // facts so the guest can verify, and note it stays authoritative for exact figures.
+      if (h.item.source) parts.push(`  (official source, cite it for anything regulatory or financial: ${h.item.source})`);
     }
   }
   if (ctx.candidates.length) {

@@ -12,6 +12,13 @@ export const revalidate = 86400;
 // One practical guide page per knowledge-base intent. Content comes from the KB
 // (English source in qa.ts, translations in qa.i18n.ts) so every locale is
 // fully localized — never mixed-language.
+// "Official source" label per edition — for guide pages sourced from an external
+// authority (e.g. a government portal), so the citation reads naturally in all seven.
+const SOURCE_LABEL: Record<string, string> = {
+  en: 'Official source', el: 'Επίσημη πηγή', ro: 'Sursă oficială', ar: 'المصدر الرسمي',
+  de: 'Offizielle Quelle', pl: 'Źródło urzędowe', ru: 'Официальный источник',
+};
+
 export function generateStaticParams() {
   return ALL_INTENTS.map((h) => ({ slug: h.item.id }));
 }
@@ -94,6 +101,17 @@ export default async function GuidePage({ params }: { params: Promise<{ locale: 
               ))}
             </div>
           </section>
+        ) : null}
+
+        {/* Official source citation — shown when the answer is sourced from an
+            external authority (e.g. the government business portal). */}
+        {hit.item.source ? (
+          <p className="gd-source" style={{ fontSize: 13, opacity: .7, margin: '4px 0 8px' }}>
+            {SOURCE_LABEL[l] || SOURCE_LABEL.en}:{' '}
+            <a href={hit.item.source} target="_blank" rel="noopener noreferrer nofollow">
+              {(() => { try { return new URL(hit.item.source).hostname.replace(/^www\./, ''); } catch { return hit.item.source; } })()}
+            </a>
+          </p>
         ) : null}
 
         {/* Connector CTA — the platform's promise, fully localized */}

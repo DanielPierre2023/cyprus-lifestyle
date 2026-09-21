@@ -19,6 +19,8 @@
 // Republic of Cyprus (south) only.
 // ============================================================================
 
+import { DOING_BUSINESS_DOMAINS } from './doing-business';
+
 export type ResStatus = 'live' | 'plan';
 
 export interface QAResource {
@@ -34,6 +36,7 @@ export interface QAItem {
   resources: QAResource[];
   links: string[];    // ids of related intents (the cross-link graph)
   connect: string[];  // vendor categories we route the person to (the connector)
+  source?: string;    // optional external authority URL (e.g. an official government page) for citation / fact-check
 }
 
 export interface QADomain {
@@ -47,7 +50,7 @@ export interface QADomain {
   intents: QAItem[];
 }
 
-export const QA_DOMAINS: QADomain[] = [
+const BASE_QA_DOMAINS: QADomain[] = [
   {
     id: 'plan', group: 'mobility', num: '01', title: 'Plan & Arrive', tag: 'Plan', color: '--d1',
     blurb: 'The first questions of any trip — when to come, where to base, and how to move around.',
@@ -451,6 +454,12 @@ export const QA_DOMAINS: QADomain[] = [
   },
 ];
 
+// The lifestyle/relocation spine (above) plus the official government-sourced
+// "Doing Business" and "Licences & Regulated Professions" domains. Keeping them in
+// one QA_DOMAINS means retrieval, grounding, embeddings and the guide graph all
+// pick them up automatically.
+export const QA_DOMAINS: QADomain[] = [...BASE_QA_DOMAINS, ...DOING_BUSINESS_DOMAINS];
+
 // ---------------------------------------------------------------------------
 // Derived indexes & helpers
 // ---------------------------------------------------------------------------
@@ -514,6 +523,7 @@ export interface ConciergeKnowledge {
   a: string;
   res: { l: string; p: string }[]; // live resources only (label, path)
   connect: string[];
+  source?: string; // official authority URL (e.g. a government page) for citation
 }
 
 export function compactForConcierge(hits: QAHit[]): ConciergeKnowledge[] {
@@ -523,6 +533,7 @@ export function compactForConcierge(hits: QAHit[]): ConciergeKnowledge[] {
     a: item.a,
     res: liveResources(item).map((r) => ({ l: r.label, p: r.path })),
     connect: item.connect,
+    ...(item.source ? { source: item.source } : {}),
   }));
 }
 
