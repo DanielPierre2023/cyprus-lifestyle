@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { sendEmail, brandedEmail } from '@/lib/email';
+import { signatureFor } from '@/lib/signatures';
 
 export const runtime = 'nodejs';
 
@@ -28,11 +29,15 @@ export async function POST(req: NextRequest) {
   const domain = (process.env.EMAIL_FROM || '').split('@')[1]?.replace(/>$/, '') || 'cypruslifestyle.eu';
   const fromAddr = original && original.endsWith(`@${domain}`) ? original : undefined;
   const from = fromAddr ? `Cyprus Lifestyle <${fromAddr}>` : undefined;
+  // Sign as the desk the reply is sent FROM: privacy@ signs as Data Protection,
+  // advertise@/sales@ as Partnerships, hello@ as the reader desk, and so on.
+  const signAddr = fromAddr || `hello@${domain}`;
 
   const html = brandedEmail({
     locale: 'en',
     heading: subject.replace(/^re:\s*/i, '') || 'Cyprus Lifestyle',
     bodyHtml: message.split(/\n{2,}/).map((p) => `<p>${p.replace(/\n/g, '<br>').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string))}</p>`).join(''),
+    signature: signatureFor(signAddr),
     preheader: subject,
   });
 

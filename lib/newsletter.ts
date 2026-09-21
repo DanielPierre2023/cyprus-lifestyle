@@ -131,7 +131,7 @@ export async function weeklyDigest(sb: SupabaseClient, only?: Locale): Promise<{
     const sp = sponsorFor(locale);
     const sponsorHtml = sp ? sponsorBlockHtml(sp) : '';
     if (sp && sponsorHtml) usedSponsorIds.add(String(sp.id));
-    const html = brandedEmail({ locale, heading: subject, bodyHtml: sponsorHtml + digestHtml(locale, cards), preheader: cards[0]?.title });
+    const html = brandedEmail({ locale, heading: subject, bodyHtml: sponsorHtml + digestHtml(locale, cards), preheader: cards[0]?.title, unsubscribe: true });
     let sent = 0;
     for (const to of recipients) {
       const r = await sendEmail({ to, subject, html });

@@ -67,14 +67,38 @@ Files changed / added:
     (a real Supabase round-trip → 200 up / 503 down — the uptime target), a `HEAD`
     handler, and a 503 status when the core website integration is absent.
 
+## Luxury email template — every message, every address
+- `lib/email.ts` — `brandedEmail` redesigned to the house luxury look (obsidian/gold/
+  ivory, serif wordmark masthead with gold hairline rules, gold rule under the heading,
+  refined CTA, ownership line in the footer). Typographic masthead — **no remote logo
+  image**, which is what showed as a broken box; it now renders identically in Gmail,
+  Apple Mail and Outlook, and is RTL-aware for Arabic. One shared function, so it lifts
+  EVERY email from EVERY address (concierge acks, lead alerts, admin replies, fulfilment,
+  newsletter) at once. Added an opt-in `unsubscribe` param so 1:1 replies don't carry one.
+- `lib/newsletter.ts` — the digest send passes `unsubscribe: true` (keeps the required
+  unsubscribe on the broadcast; transactional mail no longer shows a stray one).
+- **Logo in the masthead.** Email clients don't support SVG (Gmail/Outlook strip it),
+  so the crest was rendered from `monogram.svg` to `public/brand/monogram-email.png`
+  (gold "CL" on transparent) and placed above the wordmark, with the typographic
+  wordmark kept as the fallback when a client blocks images. Ship the PNG in `public/brand/`.
+- **Per-desk signatures — `lib/signatures.ts` (new).** Each address signs itself:
+  hello@ → the reader desk, concierge@ → Concierge Services, private@ → Private Client
+  Desk, privacy@ → Data Protection, advertise@/sales@ → Partnerships, newsroom@ →
+  the Newsroom (plus aliases: gdpr→privacy, press→newsroom, vip→private, …). Rendered
+  in the luxury style (serif name, gold role line, contact line). Wired into
+  `app/api/admin/mail/reply/route.ts`, so a reply is signed automatically by whichever
+  desk address it's sent from — no one has to remember.
+
 ## Backend mailroom — send AND receive @cypruslifestyle.eu from the admin panel
 Email is now administered from the backend, both directions, through Resend. No Zoho.
 - `supabase/migrations/0076_inbound_mail.sql` **(new)** — `inbound_emails` table +
   admin RLS + a unique index on Message-ID (idempotent delivery). Tested on Postgres 16.
-- `app/api/email/inbound/route.ts` **(new)** — Resend inbound webhook. Svix-signature
-  verified (matches Svix's published test vector), replay-guarded, defensively parses
-  from/to/subject/body/headers, inserts idempotently. Secure by default (refuses without
-  `RESEND_INBOUND_SECRET`).
+- `app/api/email/inbound/route.ts` **(new)** — Resend inbound webhook (`email.received`).
+  Svix-signature verified (matches Svix's published test vector), replay-guarded. Because
+  Resend's webhook is metadata-only, it then calls Resend's Retrieve Received Email API
+  (`GET /emails/receiving/{id}`) with `RESEND_API_KEY` to pull the full body/headers,
+  ignores non-`email.received` events, and inserts idempotently. Secure by default
+  (refuses without `RESEND_INBOUND_SECRET`).
 - `app/[locale]/admin/(panel)/mail/page.tsx` **(new)** — Admin → Mail: read every
   received message and reply inline; reply sends via Resend from your own address.
 - `app/api/admin/mail/reply/route.ts` **(new)** — admin-gated reply (Resend), marks replied.
