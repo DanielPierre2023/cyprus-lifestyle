@@ -20,6 +20,7 @@ const TABS = [
   { href: '/admin/newsletter', label: 'Newsletter' },
   { href: '/admin/subscribers', label: 'Subscribers (Abonați)' },
   { href: '/admin/inbox', label: 'Inbox' },
+  { href: '/admin/mail', label: 'Mail (Email)' },
   { grp: 'Revenue & ops' },
   { href: '/admin/requests', label: 'Requests (Cereri)' },
   { href: '/admin/crm', label: 'CRM' },

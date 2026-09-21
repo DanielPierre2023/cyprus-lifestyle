@@ -13,7 +13,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const GRAPH = `https://graph.facebook.com/${process.env.WHATSAPP_API_VERSION || 'v21.0'}`;
-const SITE = (process.env.NEXT_PUBLIC_SITE_URL || 'https://cyprus-lifestyle.vercel.app').replace(/\/$/, '');
+const SITE = (process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.eu').replace(/\/$/, '');
 
 // ── Meta webhook verification ─────────────────────────────────────────────────
 export async function GET(req: NextRequest) {

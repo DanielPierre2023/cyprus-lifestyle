@@ -16,7 +16,7 @@ export interface PostForSocial {
 interface PublishResult { ok: boolean; external_id?: string; permalink?: string; error?: string }
 
 function articleUrl(slug: string, locale: Locale): string {
-  const base = process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.com';
+  const base = process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.eu';
   const path = locale === 'en' ? '' : `/${locale}`;
   return `${base}${path}/article/${slug}`;
 }

@@ -72,7 +72,7 @@ export async function runOutreach(sb: SupabaseClient, opts: { commit: boolean; m
 
   const cap = Math.min(opts.max ?? Number(settings.daily_cap) ?? 40, MAX_CAP);
   const gaps: number[] = Array.isArray(settings.gap_days) ? settings.gap_days : GAP_DEFAULT;
-  const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://cyprus-lifestyle.vercel.app';
+  const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.eu';
   const senderName = settings.from_name || 'Cyprus Lifestyle';
   const fromAddr = settings.from_email
     ? (settings.from_name ? `${settings.from_name} <${settings.from_email}>` : String(settings.from_email))

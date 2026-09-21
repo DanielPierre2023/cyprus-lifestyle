@@ -8,7 +8,7 @@ const BRAND = { obsidian: '#0B0E11', paper: '#F6F1E7', ink: '#16181C', gold: '#C
 export function brandedEmail(opts: { locale: Locale; heading: string; bodyHtml: string; ctaLabel?: string; ctaUrl?: string; preheader?: string }): string {
   const rtl = dir(opts.locale) === 'rtl';
   const align = rtl ? 'right' : 'left';
-  const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.com';
+  const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.eu';
   const cta = opts.ctaLabel && opts.ctaUrl
     ? `<tr><td style="padding:8px 32px 32px;text-align:${align}"><a href="${opts.ctaUrl}" style="display:inline-block;background:${BRAND.gold};color:${BRAND.obsidian};text-decoration:none;font-weight:700;padding:12px 22px;border-radius:2px;font-family:Georgia,serif">${opts.ctaLabel}</a></td></tr>`
     : '';
@@ -18,8 +18,8 @@ export function brandedEmail(opts: { locale: Locale; heading: string; bodyHtml: 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BRAND.paper};padding:24px 0">
 <tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border:1px solid #e7e0d2">
-<tr><td style="background:${BRAND.obsidian};padding:22px 32px;text-align:center">
-<a href="${site}" style="color:${BRAND.gold};text-decoration:none;font-size:22px;letter-spacing:3px;font-weight:700">CYPRUS&nbsp;LIFESTYLE</a>
+<tr><td style="background:${BRAND.obsidian};padding:24px 32px;text-align:center">
+<a href="${site}" style="text-decoration:none"><img src="${site}/brand/wordmark-email.png" alt="Cyprus Lifestyle" width="260" style="display:inline-block;border:0;width:260px;max-width:72%;height:auto" /></a>
 </td></tr>
 <tr><td style="padding:32px 32px 8px;text-align:${align}"><h1 style="margin:0;font-size:24px;color:${BRAND.ink};font-weight:700">${opts.heading}</h1></td></tr>
 <tr><td style="padding:8px 32px 8px;text-align:${align};font-size:16px;line-height:1.6">${opts.bodyHtml}</td></tr>
@@ -33,7 +33,7 @@ Cyprus Lifestyle · ${site.replace(/^https?:\/\//, '')}<br>
 
 export async function sendEmail(opts: { to: string | string[]; subject: string; html: string; replyTo?: string; from?: string }): Promise<{ ok: boolean; id?: string; error?: string }> {
   const key = process.env.RESEND_API_KEY;
-  const from = opts.from || process.env.EMAIL_FROM || 'Cyprus Lifestyle <newsroom@cypruslifestyle.com>';
+  const from = opts.from || process.env.EMAIL_FROM || 'Cyprus Lifestyle <newsroom@cypruslifestyle.eu>';
   if (!key) return { ok: false, error: 'RESEND_API_KEY not configured' };
   try {
     const res = await fetch('https://api.resend.com/emails', {

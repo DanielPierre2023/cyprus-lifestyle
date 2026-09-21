@@ -41,7 +41,7 @@ const CORS = {
 
 const FETCH_TIMEOUT_MS = 20000
 const ARTICLE_TIMEOUT_MS = 15000
-const USER_AGENT = 'Mozilla/5.0 (compatible; CyprusLifestyle/1.0; +https://cypruslifestyle.com)'
+const USER_AGENT = 'Mozilla/5.0 (compatible; CyprusLifestyle/1.0; +https://cypruslifestyle.eu)'
 
 // =============================================================================
 // RSS parsing utilities  (verbatim from TT v7 — proven against real feeds)

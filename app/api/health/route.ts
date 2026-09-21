@@ -116,7 +116,7 @@ export async function GET(req: Request) {
       label: 'Canonical site URL',
       ready: has(env.NEXT_PUBLIC_SITE_URL),
       needs: ['NEXT_PUBLIC_SITE_URL'],
-      unlocks: 'Correct checkout return links, sitemap and share URLs. Set it to https://cyprus-lifestyle.vercel.app (or your domain).',
+      unlocks: 'Correct checkout return links, sitemap and share URLs. Set it to https://cypruslifestyle.eu (or your domain).',
     },
     {
       key: 'email',
@@ -124,6 +124,13 @@ export async function GET(req: Request) {
       ready: has(env.RESEND_API_KEY) && has(env.EMAIL_FROM),
       needs: ['RESEND_API_KEY', 'EMAIL_FROM'],
       unlocks: 'Quote-request and onboarding emails. The site works without it; you just won’t get email alerts.',
+    },
+    {
+      key: 'email_inbound',
+      label: 'Inbound email (backend mailroom)',
+      ready: has(env.RESEND_INBOUND_SECRET) || has(env.RESEND_WEBHOOK_SECRET),
+      needs: ['RESEND_INBOUND_SECRET'],
+      unlocks: 'Receiving @cypruslifestyle.eu mail into the admin panel (Resend inbound → /api/email/inbound → Admin → Mail). Set the signing secret from the Resend webhook.',
     },
     {
       key: 'whatsapp',

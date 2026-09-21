@@ -10,7 +10,7 @@ import { LOCALES, isLocale, type Locale } from '@/lib/locales';
 function token(): string {
   return (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, '');
 }
-function site(): string { return process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.com'; }
+function site(): string { return process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.eu'; }
 
 const CONFIRM_COPY: Record<Locale, { subject: string; heading: string; body: string; cta: string }> = {
   en: { subject: 'Confirm your Cyprus Lifestyle subscription', heading: 'One tap to confirm', body: 'Confirm your email to start receiving The Dispatch — property, money and culture from the island, every Friday.', cta: 'Confirm subscription' },

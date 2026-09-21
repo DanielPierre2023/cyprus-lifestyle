@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
   // an elevated line. Best-effort.
   if (email) {
     const t = ACK[locale] || ACK.en;
-    const base = (process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.com').replace(/\/$/, '');
+    const base = (process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.eu').replace(/\/$/, '');
     const ctaUrl = locale === 'en' ? base : `${base}/${locale}`;
     const greeting = name ? t.greetingNamed.replace('{name}', esc(name)) : t.greeting;
     const premiumLine = tier === 'premium' ? `<p style="margin-top:14px">${t.premium}</p>` : '';

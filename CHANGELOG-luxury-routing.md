@@ -67,6 +67,36 @@ Files changed / added:
     (a real Supabase round-trip → 200 up / 503 down — the uptime target), a `HEAD`
     handler, and a 503 status when the core website integration is absent.
 
+## Backend mailroom — send AND receive @cypruslifestyle.eu from the admin panel
+Email is now administered from the backend, both directions, through Resend. No Zoho.
+- `supabase/migrations/0076_inbound_mail.sql` **(new)** — `inbound_emails` table +
+  admin RLS + a unique index on Message-ID (idempotent delivery). Tested on Postgres 16.
+- `app/api/email/inbound/route.ts` **(new)** — Resend inbound webhook. Svix-signature
+  verified (matches Svix's published test vector), replay-guarded, defensively parses
+  from/to/subject/body/headers, inserts idempotently. Secure by default (refuses without
+  `RESEND_INBOUND_SECRET`).
+- `app/[locale]/admin/(panel)/mail/page.tsx` **(new)** — Admin → Mail: read every
+  received message and reply inline; reply sends via Resend from your own address.
+- `app/api/admin/mail/reply/route.ts` **(new)** — admin-gated reply (Resend), marks replied.
+- `components/admin/AdminNav.tsx` — adds the "Mail (Email)" tab.
+- `app/api/health/route.ts` — adds an inbound-email readiness line.
+- **Setup (after deploy):** run 0076; in Resend enable Receiving on the domain and add
+  the MX it shows at NameSilo (root); add a Resend webhook to
+  `https://cypruslifestyle.eu/api/email/inbound`; put its signing secret in
+  `RESEND_INBOUND_SECRET` (Vercel) and redeploy. Then mail to hello@ etc. lands in Admin → Mail.
+
+## Domain switch → cypruslifestyle.eu (code + env)
+Every reference now points to the real domain. The env var is the live lever; the
+code fallbacks were updated to match so nothing defaults to the old placeholder.
+- Code fallbacks updated (`.com` / `vercel.app` → `cypruslifestyle.eu`): `lib/seo.ts`,
+  `lib/email.ts` (incl. the `newsroom@` sender), `lib/social.ts`, `lib/newsletter.ts`,
+  `lib/outreach.ts`, `app/api/whatsapp/route.ts`, `app/api/concierge/request/route.ts`,
+  `app/api/health/route.ts`, and the two edge-function user-agents.
+- `messages/{en,el,ro,ar,de,pl,ru}.json` — the legal-page contact addresses
+  (hello@, newsroom@, advertise@, privacy@) are now `@cypruslifestyle.eu`.
+- **Action:** set `NEXT_PUBLIC_SITE_URL=https://cypruslifestyle.eu` in Vercel and
+  **redeploy** (it bakes at build time). Full DNS/email steps in the go-live runbook.
+
 ## Government knowledge base — concierge grounding + fact-checker (code only)
 Extracted the official Republic of Cyprus business portal (businessincyprus.gov.cy,
 Point of Single Contact) into the concierge knowledge base. No scraping of anyone —

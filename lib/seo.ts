@@ -2,7 +2,7 @@
 // Routing is next-intl `as-needed` — the default locale (en) has no path prefix.
 import { LOCALES, DEFAULT_LOCALE, LOCALE_NAME, type Locale } from '@/lib/locales';
 
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://cyprus-lifestyle.vercel.app').replace(/\/+$/, '');
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.eu').replace(/\/+$/, '');
 export const SITE_NAME = 'Cyprus Lifestyle';
 
 /** Locale-prefixed path. path is like '/', '/property', '/article/slug'. */

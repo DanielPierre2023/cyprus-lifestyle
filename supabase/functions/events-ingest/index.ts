@@ -9,9 +9,17 @@
 //   1. pull the event detail-page links
 //   2. fetch each detail page, parse its schema.org/Event (or Festival/
 //      MusicEvent/TheaterEvent…) JSON-LD  — the same structured data Google reads
-//   3. download the poster and self-host it in Supabase Storage (bucket "listings",
-//      path events/<slug>.jpg), storing provenance in image_credit
-//   4. upsert as status='draft', source='allevents', deduped by source_url
+//   3. store the poster: self-host it in Supabase Storage (bucket "listings",
+//      path events/<slug>.jpg) when the edge can fetch it; otherwise HOTLINK the
+//      poster URL directly. allevents' image CDN (cdn-az.allevents.in) sits behind
+//      Cloudflare and refuses datacenter/server fetches, so self-hosting fails from
+//      the edge — but visitors' browsers load the same URL fine, so we store the URL
+//      and the reader <img> fetches it client-side. Provenance in image_credit.
+//   4. upsert as status='draft', source='allevents', deduped by ingest_key
+//      (its own unique key — never source_url, which is a shareable human citation)
+//
+// Backfill: ?backfill=1 re-reads already-imported events that have no image and
+// fills their poster (for rows created before the hotlink fallback existed).
 //
 // Nothing is published automatically. A human approves each draft in Admin →
 // Agenda (and translate-on-approve fills the six non-English editions). No SDK
@@ -35,7 +43,7 @@ const ENRICH_SECRET = Deno.env.get('ENRICH_SECRET') || '';
 const BUCKET = Deno.env.get('ENRICH_BUCKET') || 'listings';
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type' };
-const UA = 'Mozilla/5.0 (compatible; CyprusLifestyle/1.0; +https://cypruslifestyle.com)';
+const UA = 'Mozilla/5.0 (compatible; CyprusLifestyle/1.0; +https://cypruslifestyle.eu)';
 const DEFAULT_CITIES = ['limassol', 'nicosia', 'larnaca', 'paphos', 'ayia-napa'];
 
 // ── the six Cyprus districts we file under ──────────────────────────────────
@@ -298,6 +306,17 @@ async function uploadToStorage(slug: string, buf: ArrayBuffer, ct: string): Prom
   return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`;
 }
 
+// Turn a poster URL into a stored image: self-host if the CDN lets the edge
+// fetch it, otherwise hotlink the URL directly (browsers can load it). Returns
+// nulls when there is no poster URL at all.
+async function resolvePoster(slug: string, src: string | null): Promise<{ image: string | null; image_credit: string | null }> {
+  if (!src) return { image: null, image_credit: null };
+  const img = await downloadImage(src);
+  const hosted = img ? await uploadToStorage(slug, img.buf, img.ct) : null;
+  const image = hosted || src; // hotlink fallback
+  return { image, image_credit: image ? 'Poster via allevents.in' : null };
+}
+
 // ── ingest one city ─────────────────────────────────────────────────────────
 async function collectFromCity(city: string, perCity: number): Promise<Array<{ url: string; city: string }>> {
   const pages = [`https://allevents.in/${city}/all`, `https://allevents.in/${city}`];
@@ -323,13 +342,13 @@ async function ingestOne(target: { url: string; city: string }, existing: Set<st
 
   if (dryRun) return { title: p.title_en, slug: p.slug, status: 'would-insert', image: !!p.image_src, district: p.district };
 
-  // poster → self-hosted image
-  let image: string | null = null;
-  let image_credit: string | null = null;
-  if (p.image_src) {
-    const img = await downloadImage(p.image_src);
-    if (img) { image = await uploadToStorage(p.slug, img.buf, img.ct); if (image) image_credit = 'Poster via allevents.in'; }
-  }
+  // poster → self-host if we can; otherwise hotlink the poster URL directly.
+  // The poster CDN (cdn-az.allevents.in) sits behind Cloudflare and refuses
+  // server-side fetches, so downloadImage fails from the edge — but visitors'
+  // browsers load the same URL fine. So when self-hosting is blocked we store the
+  // poster URL itself; the reader <img> fetches it client-side. (source_url is
+  // kept, so a later run can still self-host it if the CDN ever allows it.)
+  const { image, image_credit } = await resolvePoster(p.slug, p.image_src);
 
   const row = {
     slug: p.slug, title_en: p.title_en, summary_en: p.summary_en,
@@ -338,15 +357,17 @@ async function ingestOne(target: { url: string; city: string }, existing: Set<st
     url: p.url, image, image_credit,
     lat: p.lat, lng: p.lng,
     tags: p.tags,
-    status: 'draft', source: 'allevents', source_url: p.source_url,
+    status: 'draft', source: 'allevents',
+    source_url: p.source_url,   // human citation (the event's public page)
+    ingest_key: p.source_url,   // machine dedupe key (unique index; ON CONFLICT target)
     coords_precision: (p.lat && p.lng) ? 'exact' : 'town',
     date_confidence: 'confirmed',
     enrich_status: image ? 'ok' : 'partial',
   };
 
-  // insert-if-new: ON CONFLICT (source_url) DO NOTHING, so re-runs never clobber
+  // insert-if-new: ON CONFLICT (ingest_key) DO NOTHING, so re-runs never clobber
   // an editor's edits and never double-import.
-  const ins = await rest('events?on_conflict=source_url', {
+  const ins = await rest('events?on_conflict=ingest_key', {
     method: 'POST',
     headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
     body: JSON.stringify(row),
@@ -363,6 +384,33 @@ async function ingestOne(target: { url: string; city: string }, existing: Set<st
   return { title: p.title_en, slug: p.slug, status: 'inserted', image: !!image, district: p.district };
 }
 
+// Backfill posters onto already-imported events that have none (e.g. rows from a
+// build before the hotlink fallback existed). Re-reads each event's source page,
+// re-parses its poster URL, and stores it (self-host or hotlink). Never touches
+// any other field. Run once via ?backfill=1.
+async function backfillImages(limit: number, dryRun: boolean): Promise<Record<string, unknown>> {
+  const sel = await rest(`events?select=id,slug,source_url&source=eq.allevents&image=is.null&limit=${limit}`);
+  const rows = sel.ok ? await sel.json().catch(() => []) as Array<{ id: string; slug: string; source_url: string }> : [];
+  const results: RowResult[] = [];
+  let updated = 0;
+  for (const r of rows) {
+    if (!r.source_url) { results.push({ slug: r.slug, status: 'no-source' }); continue; }
+    const html = await getHtml(r.source_url);
+    const ev = html ? collectEvents(extractJsonLdBlocks(html))[0] : null;
+    const src = ev ? firstUrl((ev as Record<string, unknown>).image) : null;
+    if (!src) { results.push({ slug: r.slug, status: 'no-image' }); continue; }
+    const { image, image_credit } = await resolvePoster(r.slug, src);
+    if (!image) { results.push({ slug: r.slug, status: 'no-image' }); continue; }
+    if (dryRun) { updated++; results.push({ slug: r.slug, status: 'would-set', image: true }); continue; }
+    const up = await rest(`events?id=eq.${r.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ image, image_credit }) });
+    if (up.ok) { updated++; results.push({ slug: r.slug, status: 'set', image: true }); }
+    else results.push({ slug: r.slug, status: 'patch-error' });
+  }
+  const head = await rest(`events?select=id&source=eq.allevents&image=is.null`, { method: 'HEAD', headers: { Prefer: 'count=exact' } });
+  const still_missing = Number((head.headers.get('content-range') || '*/0').split('/')[1] || 0);
+  return { mode: 'backfill', processed: rows.length, updated, still_missing, results };
+}
+
 async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
   const u = new URL(req.url);
@@ -375,6 +423,12 @@ async function handler(req: Request): Promise<Response> {
   const dryRun = u.searchParams.get('dryRun') === '1';
   const redo = u.searchParams.get('redo') === '1';
 
+  // one-shot poster backfill for already-imported events
+  if (u.searchParams.get('backfill') === '1') {
+    const r = await backfillImages(limit, dryRun);
+    return new Response(JSON.stringify({ ok: true, dryRun, ...r }, null, 2), { headers: { ...CORS, 'Content-Type': 'application/json' } });
+  }
+
   // 1) gather candidate detail URLs across cities
   let targets: Array<{ url: string; city: string }> = [];
   for (const c of cities) {
@@ -386,12 +440,14 @@ async function handler(req: Request): Promise<Response> {
   for (const t of targets) if (!byUrl.has(t.url)) byUrl.set(t.url, t);
   targets = [...byUrl.values()].slice(0, limit);
 
-  // 2) which of these are already in the table (skip cheaply, no fetch/spend)
+  // 2) which of these are already in the table (skip cheaply, no fetch/spend).
+  //    We dedupe on ingest_key (== the detail URL for allevents rows), never on
+  //    source_url — distinct hand-entered events can share a source_url citation.
   const existing = new Set<string>();
   if (!redo && targets.length) {
     const inList = targets.map((t) => `"${t.url.replace(/"/g, '')}"`).join(',');
-    const sel = await rest(`events?select=source_url&source_url=in.(${encodeURIComponent(inList)})`);
-    if (sel.ok) { for (const r of (await sel.json().catch(() => [])) as Array<{ source_url: string }>) existing.add(r.source_url); }
+    const sel = await rest(`events?select=ingest_key&ingest_key=in.(${encodeURIComponent(inList)})`);
+    if (sel.ok) { for (const r of (await sel.json().catch(() => [])) as Array<{ ingest_key: string }>) existing.add(r.ingest_key); }
   }
 
   // 3) ingest
