@@ -12,6 +12,23 @@ import { isMemberCid, MEMBER_BLOCK } from '@/lib/concierge/membership';
 import { loadProfileForCid, syncMemberProfile } from '@/lib/concierge/subscriber';
 import { logConciergeTurn } from '@/lib/concierge/analytics';
 import { logServerError } from '@/lib/monitor.server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import { savedBlock, type SavedRow } from '@/lib/concierge/saved';
+
+// The guest's saved items / trip plan (item 10), hydrated with listing names, so the
+// concierge can reference and offer to arrange them. Best-effort; never blocks the reply.
+async function loadSavedBlock(cid: string): Promise<string> {
+  try {
+    const sb = supabaseAdmin();
+    const { data } = await sb.from('saved_items').select('slug, kind, note').eq('cid', cid).limit(30);
+    const rows = (data as { slug: string; kind: string; note: string | null }[] | null) || [];
+    if (!rows.length) return '';
+    const { data: meta } = await sb.from('directory_listings').select('slug, name_en, district').in('slug', rows.map((r) => r.slug));
+    const m: Record<string, { name_en: string | null; district: string | null }> = {};
+    for (const r of (meta as { slug: string; name_en: string | null; district: string | null }[] | null) || []) m[r.slug] = r;
+    return savedBlock(rows.map((r): SavedRow => ({ slug: r.slug, kind: r.kind === 'trip' ? 'trip' : 'saved', name: m[r.slug]?.name_en, district: m[r.slug]?.district })));
+  } catch { return ''; }
+}
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -28,11 +45,12 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'empty' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const [memory, member] = await Promise.all([
+  const [memory, member, saved] = await Promise.all([
     cid ? loadProfileForCid(cid) : Promise.resolve({} as MemoryProfile),
     cid ? isMemberCid(cid) : Promise.resolve(false),
+    cid ? loadSavedBlock(cid) : Promise.resolve(''),
   ]);
-  const memoryBlock = renderMemory(memory);
+  const memoryBlock = renderMemory(memory) + saved;
   const memberBlock = member ? MEMBER_BLOCK : '';
   const lastUser = latestUserText(rawMessages);
 

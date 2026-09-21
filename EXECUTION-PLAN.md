@@ -86,8 +86,13 @@
   `emailMatchesListing` anti-spoofing → emailed one-time link), moderated edits (whitelisted
   fields only), `/partner` public portal, admin "Partners" moderation tab. Injection-safety of
   the apply function verified on Postgres 16; pure logic 16 unit tests.*
-- [ ] **10 · Proactive + transactional concierge.** personalised nudges; book/arrange/hold
+- [x] **10 · Proactive + transactional concierge.** personalised nudges; book/arrange/hold
   with desk/partner routing; saved-items / trip plan.
+  *Shipped 2026-09-21: migration 0090 (saved_items, cid-keyed, cross-device), `/api/concierge/saved`
+  (GET/POST add·remove), a "＋ Trip" button on every concierge pick, and the guest's trip plan now
+  flows into the concierge context so it references saved places and offers to arrange them (via the
+  existing request-capture → desk/partner routing). Proactive opener + request capture already
+  existed. Dedup + 14 unit tests; all 87 migrations apply.*
 - [ ] **11 · Programmatic SEO at scale.** category × district pages from the directory;
   CWV budget; CTA conversion instrumentation.
 - [ ] **12 · GDPR/privacy register + data-sourcing statement.** lawful-basis, provenance,
@@ -198,4 +203,12 @@
   publishes. `/partner` is the public portal; a new admin "Partners" tab moderates claims and
   edits. Pure logic (sanitize + anti-spoofing) has 16 unit tests. Per the owner's request, this
   bundle contains ONLY the files changed for item 09. `tsc` clean; `npm test` 133/133 across 10
-  suites; all 86 migrations apply. Next: item 10 (proactive + transactional concierge).
+  suites; all 86 migrations apply.
+- 2026-09-21 — **Item 10 shipped.** Saved items / trip plan, server-persisted by the anonymous
+  cid so it survives across devices (unlike the localStorage "recently viewed"). Migration 0090
+  adds `saved_items`; `/api/concierge/saved` reads/writes it (dedup upsert); every concierge pick
+  now has a "＋ Trip" button; and the guest's trip plan is injected into the concierge context so
+  it can reference the saved places by name and warmly offer to arrange or book them — routed to
+  the desk through the request capture that already exists. The proactive opener and tier-aware
+  request routing were already in place. `tsc` clean; `npm test` 147/147 across 11 suites; all 87
+  migrations apply. Next: item 11 (programmatic SEO at scale).

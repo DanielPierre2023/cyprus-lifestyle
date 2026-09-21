@@ -10,6 +10,38 @@ code once** to keep Vercel deployments minimal (audit operating principle).
 
 ---
 
+## Item 10 · Proactive + transactional concierge  ✅ 2026-09-21
+
+**Why (from the audit):** let guests keep a trip plan the concierge can act on, and
+personalise nudges — turning the concierge from Q&A into something transactional.
+
+### 1 · SQL — run first
+- `supabase/migrations/0090_saved_items.sql` — `saved_items` (cid, slug, kind
+  saved|trip, note), unique per (cid, slug, kind) so a repeated save is one row. Keyed
+  by the anonymous cid, so a trip plan follows the guest across devices. Additive,
+  idempotent (dedup verified on Postgres 16).
+
+### 2 · Code — deploy once
+- `lib/concierge/saved.ts` **(new, 14 unit tests)** — kind/slug/action validation and
+  `savedBlock()`, the grounding text that tells the concierge what the guest saved.
+- `app/api/concierge/saved/route.ts` **(new)** — GET the trip plan (hydrated with
+  listing names), POST add/remove; cid-scoped, rate-limited.
+- `components/ConciergeChat.tsx` — a "＋ Trip" button on every recommended pick.
+- `app/api/concierge/chat/route.ts` — loads the guest's saved items and injects them
+  into the concierge context, so it references them by name and offers to arrange or
+  book them (routed to the desk via the existing request capture).
+
+### What it reuses
+The proactive opener (`/api/concierge/proactive`) and tier-aware request routing
+(`concierge_requests` + `matchForRequest`) already existed — this adds the saved/trip
+layer they can act on.
+
+### Verification summary
+`tsc` clean · `npm test` 147 / 11 suites (14 new) · all 87 migrations apply · saved
+dedup verified on Postgres 16.
+
+---
+
 ## Item 09 · Partner self-service portal  ✅ 2026-09-21
 
 **Why (from the audit):** let business owners maintain their own listing without the
