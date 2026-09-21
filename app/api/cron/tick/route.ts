@@ -10,6 +10,7 @@ import { isCronAuthorized } from '@/lib/cron';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { scrapeAllActive } from '@/lib/scraper';
 import { runOutreach } from '@/lib/outreach';
+import { runDevelopmentsScrape } from '@/lib/scrape/developments';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap
@@ -35,6 +36,17 @@ export async function GET(req: NextRequest) {
       out.outreach = await runOutreach(sb, { commit: true });
     }
   } catch { /* crm_settings not present yet — ignore */ }
+
+  // Living knowledge — developer projects. A small time-boxed batch each day so the
+  // rotation refreshes every source over a few days within the 60s Hobby cap. Only
+  // runs when switched on; content-hash change-detection keeps it cheap.
+  try {
+    const { data: a } = await sb.from('automation_settings').select('developments_enabled, developments_autopublish').eq('id', 1).maybeSingle();
+    const s = a as { developments_enabled?: boolean; developments_autopublish?: boolean } | null;
+    if (s?.developments_enabled) {
+      out.developments = await runDevelopmentsScrape(sb, { deadlineMs: 12_000, maxSources: 2, autopublish: !!s?.developments_autopublish });
+    }
+  } catch (e) { out.developmentsError = (e as Error).message; }
 
   return NextResponse.json(out);
 }

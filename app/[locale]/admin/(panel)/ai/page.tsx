@@ -4,7 +4,7 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 
 export default function AiTab() {
   const sb = supabaseBrowser();
-  const [auto, setAuto] = useState<{ scraper_enabled: boolean; processor_enabled: boolean; auto_publish: boolean; mail_autoack_enabled: boolean }>({ scraper_enabled: false, processor_enabled: false, auto_publish: false, mail_autoack_enabled: false });
+  const [auto, setAuto] = useState<{ scraper_enabled: boolean; processor_enabled: boolean; auto_publish: boolean; mail_autoack_enabled: boolean; developments_enabled: boolean; developments_autopublish: boolean }>({ scraper_enabled: false, processor_enabled: false, auto_publish: false, mail_autoack_enabled: false, developments_enabled: false, developments_autopublish: false });
   const [queue, setQueue] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [busy, setBusy] = useState('');
@@ -12,6 +12,8 @@ export default function AiTab() {
   const [report, setReport] = useState<any>(null);
   const [bf, setBf] = useState<any>(null);        // de/pl/ru backfill backlog
   const [bfMsg, setBfMsg] = useState('');
+  const [dev, setDev] = useState<any>(null);       // developer-projects scraper status
+  const [devMsg, setDevMsg] = useState('');
 
   const load = useCallback(async () => {
     const [{ data: s }, { data: q }, { data: l }] = await Promise.all([
@@ -100,6 +102,32 @@ export default function AiTab() {
     setBusy(''); checkBackfill();
   }
 
+  // Developer-projects scraper (living directory) — status + on-demand run.
+  const checkDev = useCallback(async () => {
+    try { const res = await fetch('/api/admin/scrape/developments', { credentials: 'same-origin' }); const d = await res.json(); if (d.ok) setDev(d); } catch { /* ignore */ }
+  }, []);
+  useEffect(() => { checkDev(); }, [checkDev]);
+
+  async function seedDev() {
+    setBusy('dev-seed'); setDevMsg('Registering developer & agent sites from your directory…');
+    try {
+      const res = await fetch('/api/admin/scrape/developments', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'seed' }) });
+      const d = await res.json();
+      setDevMsg(d.ok ? `Registered ${d.added} new source${d.added === 1 ? '' : 's'}. Now press “Scrape now”.` : 'Seed failed: ' + (d.error || res.status));
+    } catch (e) { setDevMsg('Seed error: ' + (e as Error).message); }
+    setBusy(''); checkDev();
+  }
+  async function runDev(force = false) {
+    setBusy('dev-run'); setDevMsg('Scraping developer projects — this can take up to a minute…');
+    try {
+      const res = await fetch('/api/admin/scrape/developments', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'run', force, maxSources: 6 }) });
+      const d = await res.json();
+      if (!d.ok) setDevMsg('Run failed: ' + (d.error || res.status));
+      else { const s = d.summary; setDevMsg(`Processed ${s.sources_processed} site${s.sources_processed === 1 ? '' : 's'} (${s.sources_unchanged} unchanged) · ${s.projects_upserted} projects saved${s.errors?.length ? ` · ${s.errors.length} error(s)` : ''}. ${d.autopublish ? 'Published live.' : 'Saved as drafts — review in Directory.'}`); }
+    } catch (e) { setDevMsg('Run error: ' + (e as Error).message); }
+    setBusy(''); checkDev();
+  }
+
   return (
     <>
       <h1>AI newsroom</h1>
@@ -132,20 +160,55 @@ keys present:     ${Object.entries(report.keys_present || {}).map(([k, v]) => `$
         </pre>
       ) : null}
 
-      {(['scraper_enabled', 'processor_enabled', 'auto_publish', 'mail_autoack_enabled'] as const).map((k) => (
+      {([
+        ['scraper_enabled', 'RSS scraper', 'Daily cron pulls new items from active feeds.'],
+        ['processor_enabled', 'AI processor', 'Cron rewrites queued items into 7-language drafts.'],
+        ['auto_publish', 'Auto-publish articles', 'Publish articles automatically instead of leaving drafts for review.'],
+        ['mail_autoack_enabled', 'Auto-acknowledge email', 'Send a polite branded receipt automatically to genuine first-contact enquiries, in the sender’s language. Substantive replies always stay a human decision — a draft is prepared, never sent. Guarded against auto-replies, bounces and no-reply senders.'],
+        ['developments_enabled', 'Developer-projects scraper', 'On the daily rotation, refresh real developer projects from their own websites into the directory (name, price, status, contact — each stamped with its source). Content-hash change-detection keeps it cheap.'],
+        ['developments_autopublish', 'Publish scraped projects live', 'Publish newly scraped projects immediately. Off = they land as drafts for review in Directory first (recommended until you trust a source).'],
+      ] as const).map(([k, label, desc]) => (
         <div className="toggle" key={k}>
           <input type="checkbox" checked={auto[k]} onChange={() => toggle(k)} style={{ width: 'auto', margin: 0 }} />
           <div>
-            <strong>{k === 'scraper_enabled' ? 'RSS scraper' : k === 'processor_enabled' ? 'AI processor' : k === 'auto_publish' ? 'Auto-publish' : 'Auto-acknowledge email'}</strong>
-            <div style={{ fontSize: 12, color: '#8a8371' }}>
-              {k === 'scraper_enabled' ? 'Hourly cron pulls new items from active feeds.'
-                : k === 'processor_enabled' ? 'Cron rewrites queued items into 7-language drafts.'
-                : k === 'auto_publish' ? 'Publish automatically instead of leaving drafts for review.'
-                : 'Send a polite branded receipt automatically to genuine first-contact enquiries, in the sender’s language. Substantive replies always stay a human decision — a draft is prepared, never sent. Guarded against auto-replies, bounces and no-reply senders.'}
-            </div>
+            <strong>{label}</strong>
+            <div style={{ fontSize: 12, color: '#8a8371' }}>{desc}</div>
           </div>
         </div>
       ))}
+
+      <h1 style={{ fontSize: 20, marginTop: 22 }}>Developer projects (living directory)</h1>
+      <p className="sub" style={{ marginTop: 0 }}>Real projects scraped from developers’ own sites into the directory, each stamped with its source and date — so the concierge can name a project, its price and status, and hand over the developer’s contact. Nothing invented.</p>
+      {dev ? (
+        <div className="cards" style={{ marginBottom: 10 }}>
+          <div className="stat"><div className="n">{dev.sources}</div><div className="k">sources</div></div>
+          <div className="stat"><div className="n">{dev.never_run}</div><div className="k">never run</div></div>
+          <div className="stat"><div className="n">{dev.projects}</div><div className="k">projects</div></div>
+          <div className="stat"><div className="n">{dev.drafts}</div><div className="k">drafts to review</div></div>
+        </div>
+      ) : null}
+      <div className="row" style={{ marginBottom: 6, gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button className="abtn ghost" disabled={busy === 'dev-seed'} onClick={seedDev}>{busy === 'dev-seed' ? 'Registering…' : 'Seed sources from directory'}</button>
+        <button className="abtn gold" disabled={busy === 'dev-run'} onClick={() => runDev(false)}>{busy === 'dev-run' ? 'Scraping…' : 'Scrape developer projects now'}</button>
+        <button className="abtn ghost" disabled={busy === 'dev-run'} onClick={() => runDev(true)} title="Re-scrape even sites that haven’t changed">Force re-scrape</button>
+        <span style={{ fontSize: 12, color: '#8a8371' }}>Seed once, then scrape. New projects appear in Directory (as drafts unless “publish live” is on).</span>
+      </div>
+      {devMsg ? <p style={{ fontSize: 13, color: '#8a8371', margin: '0 0 6px' }}>{devMsg}</p> : null}
+      {dev?.recent?.length ? (
+        <table className="adm-t" style={{ marginTop: 6 }}>
+          <thead><tr><th>Developer</th><th>Last run</th><th>Found</th><th>Status</th></tr></thead>
+          <tbody>
+            {dev.recent.map((r: any, i: number) => (
+              <tr key={i}>
+                <td>{r.name || r.url}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>{r.last_fetched_at ? new Date(r.last_fetched_at).toLocaleDateString() : '—'}</td>
+                <td>{r.last_found ?? '—'}</td>
+                <td><span className={`pill ${r.status === 'active' ? 'confirmed' : 'pending'}`}>{r.status}{r.last_error ? `: ${String(r.last_error).slice(0, 40)}` : ''}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
 
       <h1 style={{ fontSize: 20, marginTop: 22 }}>Scrape queue ({queue.length})</h1>
       {msg ? <p style={{ fontSize: 13, color: msg.startsWith('Generation') ? '#b00020' : '#8a8371', margin: '0 0 10px' }}>{msg}</p> : null}

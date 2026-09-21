@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   if (!row) return NextResponse.json({ ok: false, error: 'message not found' }, { status: 404 });
 
   const drafted = await composeReply(row, { mode, instruction, locale: localeHint });
-  if (!drafted) return NextResponse.json({ ok: false, error: 'no draft produced' }, { status: 502 });
+  if (!drafted.body) return NextResponse.json({ ok: false, error: drafted.error || 'no draft produced' }, { status: 502 });
 
   const subject = String(row.subject || '');
   return NextResponse.json({

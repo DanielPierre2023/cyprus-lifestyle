@@ -28,6 +28,10 @@ export interface Pick {
   slug: string; type: string; name: string; district: string | null;
   rating: number | null; rating_count: number | null; price_band: string | null;
   image: string | null; verified?: boolean; subtype?: string | null; luxury?: boolean;
+  // Structured development facts (type='development'), so the concierge can quote the
+  // real number and status — "from €280k, delivery Q4 2026" — not just a band.
+  priceFrom?: number | null; priceTo?: number | null; devStatus?: string | null;
+  completion?: string | null; bedrooms?: string | null;
 }
 export interface GuideLink { label: string; path: string; }
 export interface ArticleLink { slug: string; title: string; category: string | null; }
@@ -99,10 +103,15 @@ const CL_OFFERING =
 interface IntentDef { key: string; kind: 'type' | 'group'; words: string[]; }
 const INTENTS: IntentDef[] = [
   { key: 'restaurant', kind: 'type', words: ['restaurant', 'dinner', 'lunch', 'dining', 'taverna', 'cuisine', 'brunch', 'εστιατόριο', 'φαγητό', 'ταβέρνα', 'mâncare', 'cină', 'tavernă', 'essen', 'abendessen', 'küche', 'restauracja', 'jedzenie', 'kolacja', 'ресторан', 'еда', 'ужин', 'مطعم', 'عشاء', 'مطاعم'] },
-  { key: 'hotel', kind: 'type', words: ['hotel', 'resort', 'accommodation', 'suite', 'ξενοδοχείο', 'διαμονή', 'θέρετρο', 'cazare', 'stațiune', 'unterkunft', 'ferienwohnung', 'nocleg', 'zakwaterowanie', 'отель', 'гостиниц', 'проживание', 'فندق', 'إقامة', 'منتجع'] },
+  { key: 'hotel', kind: 'type', words: ['hotel', 'resort', 'accommodation', 'suite', 'guest house', 'guesthouse', 'bed and breakfast', 'ξενοδοχείο', 'διαμονή', 'θέρετρο', 'cazare', 'stațiune', 'unterkunft', 'ferienwohnung', 'nocleg', 'zakwaterowanie', 'отель', 'гостиниц', 'проживание', 'فندق', 'إقامة', 'منتجع'] },
   { key: 'beach', kind: 'type', words: ['beach', 'seaside', 'sandy', 'παραλία', 'plajă', 'strand', 'plaża', 'пляж', 'شاطئ'] },
   { key: 'winery', kind: 'type', words: ['winery', 'vineyard', 'wine tasting', 'οινοποιείο', 'αμπελών', 'cramă', 'podgorie', 'weingut', 'weinprobe', 'winnica', 'winiarnia', 'винодельн', 'виноградник', 'مصنع نبيذ', 'كرم'] },
-  { key: 'realestate', kind: 'group', words: ['real estate', 'property', 'apartment', 'estate agent', 'broker', 'letting', 'mortgage', 'new build', 'penthouse', 'villa', 'villas', 'mansion', 'plot', 'land for sale', 'seafront', 'ακίνητα', 'ακίνητο', 'διαμέρισμα', 'μεσίτ', 'κτηματομεσίτ', 'βίλα', 'βιλα', 'ρετιρέ', 'imobiliar', 'proprietate', 'apartament', 'dezvoltator', 'vila', 'vilă', 'immobilie', 'wohnung', 'makler', 'miete', 'villa', 'penthouse-wohnung', 'nieruchomość', 'nieruchomości', 'mieszkanie', 'pośrednik', 'deweloper', 'willa', 'apartament', 'недвижимост', 'квартир', 'риелтор', 'застройщик', 'вилл', 'пентхаус', 'عقار', 'شقة', 'وسيط عقاري', 'فيلا', 'بنتهاوس'] },
+  { key: 'realestate', kind: 'group', words: ['real estate', 'property', 'apartment', 'estate agent', 'broker', 'letting', 'mortgage', 'new build', 'penthouse', 'villa', 'villas', 'mansion', 'plot', 'land for sale', 'seafront', 'ακίνητα', 'ακίνητο', 'διαμέρισμα', 'μεσίτ', 'κτηματομεσίτ', 'βίλα', 'βιλα', 'ρετιρέ', 'imobiliar', 'proprietate', 'apartament', 'dezvoltator', 'vila', 'vilă', 'immobilie', 'wohnung', 'makler', 'miete', 'villa', 'penthouse-wohnung', 'nieruchomość', 'nieruchomości', 'mieszkanie', 'pośrednik', 'deweloper', 'willa', 'apartament', 'недвижимост', 'квартир', 'риелтор', 'застройщик', 'вилл', 'пентхаус', 'عقار', 'شقة', 'وسيط عقاري', 'فيلا', 'بنتهاوس',
+    // natural buyer wording (a guest rarely types "real estate"; they say "buy a house").
+    // Phrase forms, not bare "house", so "guesthouse"/"warehouse" don't misfire.
+    'a house', 'a home', 'house for sale', 'home for sale', 'houses for sale', 'buy a house', 'buy a home', 'buy property', 'buy a property', 'buying a house', 'buying property', 'townhouse', 'bungalow', 'maisonette',
+    'σπίτι', 'κατοικία', 'casă', 'locuință', 'hauskauf', 'haus kaufen', 'eigenheim', 'reihenhaus',
+    'dom na sprzedaż', 'kupno domu', 'kupię dom', 'kupić dom', 'domu', 'dom w', 'dom nad morzem', 'domek', 'купить дом', 'куплю дом', 'коттедж', 'дом у моря', 'منزل', 'بيت', 'شراء منزل'] },
   { key: 'mobility', kind: 'group', words: ['car rental', 'rent a car', 'car hire', 'hire car', 'rent car', 'rental car', 'transfer', 'yacht charter', 'scooter', 'ενοικίαση αυτοκιν', 'αυτοκίνητο', 'μεταφορά', 'inchiriere auto', 'inchirieri auto', 'inchirier auto', 'chirii auto', 'masina de inchir', 'masini de inchir', 'mietwagen', 'auto mieten', 'autovermietung', 'wynajem samochod', 'wypozyczalnia', 'аренда авто', 'арендовать авто', 'арендовать машин', 'прокат авто', 'прокат автомобил', 'машину напрокат', 'напрокат', 'تأجير سيارات', 'استئجار سيارة'] },
   { key: 'services', kind: 'group', words: ['mover', 'movers', 'moving', 'removal', 'relocation', 'cleaning', 'storage', 'handyman', 'plumber', 'μετακόμιση', 'μεταφορές', 'καθαρισμός', 'αποθήκευση', 'mutare', 'mutări', 'mutat', 'relocare', 'curățenie', 'depozitare', 'umzug', 'reinigung', 'lagerung', 'przeprowadzk', 'sprzątanie', 'magazynowanie', 'переезд', 'грузчик', 'уборк', 'хранение', 'نقل أثاث', 'انتقال', 'تخزين'] },
   { key: 'professional', kind: 'group', words: ['lawyer', 'law firm', 'attorney', 'solicitor', 'accountant', 'accounting', 'audit', ' tax', 'bank', 'banking', 'insurance', 'company formation', 'immigration', 'residency', 'visa', 'non-dom', 'ip box', 'δικηγόρ', 'λογιστ', 'φόρο', 'τράπεζα', 'ασφάλ', 'μετανάστευση', 'avocat', 'contabil', 'impozit', 'bancă', 'asigurare', 'imigrare', 'rezidenț', 'înființare', 'company formation', 'anwalt', 'rechtsanwalt', 'steuerberater', 'buchhaltung', 'steuer', 'versicherung', 'einwanderung', 'aufenthalt', 'firmengründung', 'prawnik', 'adwokat', 'księgow', 'podatek', 'ubezpieczenie', 'imigracja', 'rezydencja', 'spółk', 'юрист', 'адвокат', 'бухгалтер', 'налог', 'банк', 'страхован', 'иммиграц', 'резидентств', 'محامي', 'محاسب', 'ضريبة', 'بنك', 'تأمين', 'هجرة', 'تأسيس شركة'] },
@@ -183,7 +192,7 @@ export function classifyRequest(q: string): { category: string | null; district:
 
 // The directory columns we surface as a Pick (locale-aware, with English fallback).
 const dirCols = (locale: string) =>
-  `slug,type,subtype,district,price_band,rating,rating_count,verified,luxury,image,name_${locale},name_en,summary_${locale},summary_en`;
+  `slug,type,subtype,district,price_band,rating,rating_count,verified,luxury,image,price_from,price_to,dev_status,completion,bedrooms,name_${locale},name_en,summary_${locale},summary_en`;
 
 function rowToPick(r: Record<string, unknown>, locale: string): Pick {
   return {
@@ -198,6 +207,11 @@ function rowToPick(r: Record<string, unknown>, locale: string): Pick {
     image: (r.image as string) ?? null,
     verified: Boolean(r.verified),
     luxury: Boolean(r.luxury),
+    priceFrom: (r.price_from as number) ?? null,
+    priceTo: (r.price_to as number) ?? null,
+    devStatus: (r.dev_status as string) ?? null,
+    completion: (r.completion as string) ?? null,
+    bedrooms: (r.bedrooms as string) ?? null,
   };
 }
 
@@ -421,9 +435,21 @@ export function groundingBlock(ctx: ConciergeContext, locale: string): string {
   }
   if (ctx.candidates.length) {
     parts.push('\nDirectory — real published listings you may recommend BY NAME (never name a place not in this list). The kind label distinguishes, e.g., an estate agent/broker from a property developer, so match it to what the guest actually needs:');
+    const money = (n: number) => '€' + Math.round(n).toLocaleString('en-US');
     for (const c of ctx.candidates) {
       const kind = (c.subtype && c.subtype.replace(/-/g, ' ')) || c.type;
-      parts.push(`• ${c.name} — ${kind}${c.district ? `, ${c.district}` : ''}${c.rating ? `, ${c.rating}★${c.rating_count ? ` (${c.rating_count})` : ''}` : ''}${c.price_band ? `, ${c.price_band}` : ''}${c.verified ? ', verified' : ''}`);
+      // Real, dated development facts so the concierge can quote the actual figure.
+      let dev = '';
+      if (c.type === 'development') {
+        const bits: string[] = [];
+        if (c.priceFrom && c.priceTo) bits.push(`${money(c.priceFrom)}–${money(c.priceTo)}`);
+        else if (c.priceFrom) bits.push(`from ${money(c.priceFrom)}`);
+        if (c.bedrooms) bits.push(`${c.bedrooms} bed`);
+        if (c.devStatus) bits.push(c.devStatus.replace(/-/g, ' '));
+        if (c.completion) bits.push(`ready ${c.completion}`);
+        if (bits.length) dev = `, ${bits.join(', ')}`;
+      }
+      parts.push(`• ${c.name} — ${kind}${c.district ? `, ${c.district}` : ''}${c.rating ? `, ${c.rating}★${c.rating_count ? ` (${c.rating_count})` : ''}` : ''}${c.price_band ? `, ${c.price_band}` : ''}${dev}${c.verified ? ', verified' : ''}`);
     }
   }
   if (ctx.articles.length) {

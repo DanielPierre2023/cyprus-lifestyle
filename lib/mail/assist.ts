@@ -13,8 +13,8 @@
 // for the human follow-up.
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { callClaude, CLAUDE_SONNET } from '@/lib/ai';
-import { conciergeSystem, assembleContext, groundingBlock, detectLocale } from '@/lib/concierge/brain';
+import { callClaude, CLAUDE_HAIKU } from '@/lib/ai';
+import { conciergeSystem, assembleContext, groundingBlock, detectLocale, CONCIERGE_MODEL, type ConciergeContext } from '@/lib/concierge/brain';
 import { deskFor, signatureFor } from '@/lib/signatures';
 import { brandedEmail, sendEmail } from '@/lib/email';
 import { isLocale, type Locale } from '@/lib/locales';
@@ -30,11 +30,45 @@ const stripHtml = (h: string) => h.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, '
 const ourDomain = () =>
   ((process.env.EMAIL_FROM || '').split('@')[1] || (process.env.NEXT_PUBLIC_SITE_URL || 'cypruslifestyle.eu').replace(/^https?:\/\//, '')).replace(/[>/]/g, '') || 'cypruslifestyle.eu';
 
+// The reply is a private, admin-reviewed 1:1 email — unlike the public chat (which
+// captures the guest and routes to the human desk), here the concierge MAY hand the
+// guest the businesses' own published contact details. We pull them for the matched
+// listings and give them to the model so it can pass on real phone/email/website —
+// still strictly grounded: only what's listed here, never invented.
+async function contactsBlock(ctx: ConciergeContext | null, locale: string): Promise<string> {
+  const slugs = Array.from(new Set((ctx?.candidates || []).map((c) => c.slug).filter(Boolean))).slice(0, 8);
+  if (!slugs.length) return '';
+  try {
+    const { data } = await supabaseAdmin()
+      .from('directory_listings')
+      .select(`slug, name_${locale}, name_en, url, phone, email, address, contact_person, contact_role, district`)
+      .in('slug', slugs);
+    const rows = (data as Record<string, unknown>[] | null) || [];
+    const lines: string[] = [];
+    for (const r of rows) {
+      const name = String(r[`name_${locale}`] || r.name_en || '').trim();
+      if (!name) continue;
+      const bits: string[] = [];
+      if (r.phone) bits.push(`phone ${String(r.phone).trim()}`);
+      if (r.email) bits.push(`email ${String(r.email).trim()}`);
+      if (r.url) bits.push(`website ${String(r.url).trim()}`);
+      if (r.address) bits.push(String(r.address).trim());
+      const who = [r.contact_person, r.contact_role].filter(Boolean).map(String).join(', ');
+      if (!bits.length && !who) continue;
+      lines.push(`• ${name}${who ? ` (${who})` : ''}${bits.length ? ` — ${bits.join('; ')}` : ''}`);
+    }
+    if (!lines.length) return '';
+    return '\n\nPUBLISHED CONTACT DETAILS for the listings above (you MAY share these with the guest in this email so they can reach the business directly — but ONLY exactly what appears here; never invent or guess a phone, email or website):\n' + lines.join('\n');
+  } catch { return ''; }
+}
+
 // ── AI reply drafting (grounded, localised, per-desk voice) ────────────────────
+// Returns { body } on success, or { error } on failure (never a bare null) so the
+// caller can surface the real reason instead of a generic "no draft produced".
 export async function composeReply(
   row: InboundRow,
   opts: { mode: 'compose' | 'polish'; instruction?: string; locale?: string },
-): Promise<{ body: string; locale: string; desk: string; grounded: { picks: number; guides: number; articles: number } | null } | null> {
+): Promise<{ body?: string; locale: string; desk: string; grounded: { picks: number; guides: number; articles: number } | null; error?: string }> {
   const guestText = (row.text_body || (row.html_body ? stripHtml(String(row.html_body)) : '') || '').slice(0, 4000);
   const subject = String(row.subject || '').slice(0, 200);
   const instruction = String(opts.instruction || '').slice(0, 4000);
@@ -42,27 +76,38 @@ export async function composeReply(
   const language = LANG[locale] || 'English';
   const desk = deskFor(String(row.to_email || process.env.EMAIL_FROM || `hello@${ourDomain()}`));
   const guestName = row.from_name ? String(row.from_name) : '';
+  const grounded = (ctx: ConciergeContext | null) => (ctx ? { picks: ctx.picks.length, guides: ctx.guides.length, articles: ctx.articles.length } : null);
 
   const ctx = await assembleContext(locale, `${subject}\n${guestText}\n${instruction}`.slice(0, 2000)).catch(() => null);
+  const contacts = await contactsBlock(ctx, locale);
 
   const rules = [
     `\n\nYou are now drafting a personal EMAIL REPLY on behalf of ${desk.name} at Cyprus Lifestyle, answering a guest who wrote to us.`,
-    `Write a complete, warm, elegant reply in ${language} (the guest's language).`,
+    `Write a complete, warm, elegant reply in ${language} (the guest's language) that actually answers what they asked — do not merely acknowledge it or promise a later follow-up when the context lets you help now.`,
     `- Use ONLY the places, prices and facts in the context above; never invent a business, price, address or figure. If a specific fact isn't available, offer to find it out rather than guess.`,
+    `- When the context lists relevant specialists, RECOMMEND a considered few BY NAME with a reason, and — where the contact details are provided above — give the guest those details so they can reach them directly.`,
+    `- For property, relocation, residency, tax or other regulated matters, weave in the relevant guidance from the knowledge base and be explicit about the EU vs non-EU (local vs foreign / "Inländer vs Ausländer") differences where they apply — e.g. non-EU buyers needing Council of Ministers permission — and always advise using an independent lawyer and confirming clean, transferable title deeds before paying.`,
     guestName ? `- Address the guest naturally by name (${guestName}).` : `- Open with a natural, courteous greeting.`,
-    `- Keep it concise, refined and genuinely helpful — the Cyprus Lifestyle voice.`,
-    `- Do NOT write a subject line. Do NOT add a signature, your name, a "Regards, X" block, or contact details — the system appends the official ${desk.name} signature automatically.`,
-    `- Return PLAIN TEXT only: paragraphs separated by a blank line. No markdown, no headings, no bullet characters.`,
+    `- Refined and genuinely helpful — the Cyprus Lifestyle voice. Substantial where the guest needs substance, never padded.`,
+    `- Do NOT write a subject line. Do NOT add a signature, your name, a "Regards, X" block, or our own contact details — the system appends the official ${desk.name} signature automatically.`,
+    `- Return PLAIN TEXT only: paragraphs separated by a blank line. No markdown, no headings; you may put each named recommendation on its own line.`,
   ].join('\n');
-  const system = conciergeSystem(locale) + (ctx ? groundingBlock(ctx, locale) : '') + rules;
+  const system = conciergeSystem(locale) + (ctx ? groundingBlock(ctx, locale) : '') + contacts + rules;
 
   const userMessage = opts.mode === 'polish'
     ? `The guest wrote:\n"""${guestText || '(no readable body)'}"""\n\nThe concierge's rough draft. Improve wording, grammar, flow and tone, keep the meaning and any specific facts/commitments:\n"""${instruction}"""\n\nReturn the polished final reply.`
-    : `The guest wrote:\n"""${guestText || '(no readable body — reply to the subject: ' + subject + ')'}"""\n\nThe concierge's intent / notes for the reply:\n"""${instruction || 'Reply helpfully, accurately and warmly, addressing what the guest asked.'}"""\n\nWrite the full reply now.`;
+    : `The guest wrote:\n"""${guestText || '(no readable body — reply to the subject: ' + subject + ')'}"""\n\nThe concierge's intent / notes for the reply:\n"""${instruction || 'Reply helpfully, accurately and warmly, fully addressing what the guest asked, using the specialists and guidance in the context.'}"""\n\nWrite the full reply now.`;
 
-  const { text, error } = await callClaude({ systemInstruction: system, userMessage, model: CLAUDE_SONNET, temperature: 0.4, maxTokens: 1100, fn: 'mail-compose' });
-  if (error || !text.trim()) return null;
-  return { body: text.trim(), locale, desk: desk.name, grounded: ctx ? { picks: ctx.picks.length, guides: ctx.guides.length, articles: ctx.articles.length } : null };
+  // Use the SAME model the live chat uses (CONCIERGE_MODEL honours the SONNET_MODEL
+  // override); fall back to Haiku so a model-id or transient issue can't leave the
+  // desk with nothing. The real error is returned, never swallowed.
+  let lastError = '';
+  for (const model of [CONCIERGE_MODEL, CLAUDE_HAIKU]) {
+    const { text, error } = await callClaude({ systemInstruction: system, userMessage, model, maxTokens: 1400, fn: 'mail-compose' });
+    if (!error && text.trim()) return { body: text.trim(), locale, desk: desk.name, grounded: grounded(ctx) };
+    lastError = error || 'the model returned an empty reply';
+  }
+  return { locale, desk: desk.name, grounded: grounded(ctx), error: lastError };
 }
 
 // ── Auto-acknowledgement copy (receipt only), all seven editions ───────────────
@@ -101,10 +146,13 @@ export async function runInboundAssist(row: InboundRow): Promise<void> {
   const sb = supabaseAdmin();
 
   // 1) Draft-on-arrival: always prepare a suggested reply for the human.
-  const draft = await composeReply(row, { mode: 'compose' }).catch(() => null);
+  const draft = await composeReply(row, { mode: 'compose' }).catch((e) => ({ error: (e as Error).message } as Awaited<ReturnType<typeof composeReply>>));
   if (draft?.body) {
     try { await sb.from('inbound_emails').update({ suggested_reply: draft.body, suggested_at: new Date().toISOString() }).eq('id', row.id); }
     catch { /* the mail is safely stored; a missing suggestion just means the admin drafts by hand */ }
+  } else if (draft?.error) {
+    // Surfaced in the Vercel function logs so a drafting failure is never silent.
+    console.error('[mail-assist] draft-on-arrival failed:', draft.error);
   }
 
   // 2) Auto-acknowledge — opt-in and guarded.

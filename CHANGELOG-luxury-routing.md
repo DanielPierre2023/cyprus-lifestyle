@@ -141,6 +141,33 @@ The substantive reply is **always** a human decision.
 - **After deploy:** run 0077. Draft-on-arrival works immediately. To turn on auto-receipts,
   Admin → AI newsroom → enable **Auto-acknowledge email**.
 
+## Mailroom fixes — the concierge actually drafts, with real contacts (code only)
+Diagnosed from a live test where the reply box stayed empty and "AI: no draft produced"
+showed. `/api/health` confirmed `CLAUDE_API_KEY` **is** present (so not a key problem);
+the cause was that the mail path called the model with a hardcoded id while the working
+website chat uses the `SONNET_MODEL` override — and the drafting error was being swallowed.
+- `lib/mail/assist.ts` — `composeReply` now uses **`CONCIERGE_MODEL`** (the exact model the
+  live chat uses, honouring `SONNET_MODEL`) with a **Haiku fallback**, and **returns the real
+  error** instead of null. So the draft is produced even through a model-id or transient
+  hiccup, and if anything still fails the actual reason surfaces (in the UI and in the
+  function logs) rather than a generic message.
+- `app/api/admin/mail/draft/route.ts` — surfaces `composeReply`'s real error.
+- `lib/mail/assist.ts` — the mail draft now includes the matched listings' **published
+  contact details** (phone / email / website / address), pulled from the directory, and is
+  instructed to recommend a considered few specialists **by name and pass on those details**
+  so the guest can reach them directly (still strictly grounded — only what's listed, never
+  invented). For property/relocation/residency/tax it weaves in the KB guidance and is
+  explicit about **EU vs non-EU (local vs foreign) differences** — e.g. non-EU buyers needing
+  Council of Ministers permission — and always advises an independent lawyer + clean title deeds.
+- `lib/concierge/brain.ts` — natural buyer wording now maps to real estate in all 7 languages
+  ("buy a house / a home / house for sale / townhouse", plus German *Hauskauf*, Polish
+  *kupić dom*, Russian *купить дом*, Greek *σπίτι*, Romanian *casă*, Arabic *شراء منزل*, …),
+  so "I want to buy a house near the sea in Larnaca" surfaces the Larnaca estate agents and
+  developments instead of nothing. Guesthouse/hospital/restaurant queries are unaffected
+  (phrase forms avoid false matches). **10/10 classifier cases pass; 16/16 guardrail cases still pass.**
+- **After deploy:** no SQL. New mail auto-drafts on arrival; for the message already in the
+  box, open it and press **✦ Draft with AI** once (it will now produce the full reply).
+
 ## Backend mailroom — send AND receive @cypruslifestyle.eu from the admin panel
 Email is now administered from the backend, both directions, through Resend. No Zoho.
 - `supabase/migrations/0076_inbound_mail.sql` **(new)** — `inbound_emails` table +
@@ -229,3 +256,40 @@ Point any uptime service at the deep endpoint and alert on non-200:
 2. Admin → Concierge Requests → use the **premium** filter to work the private-client lane.
 
 See `cyprus-lifestyle-luxury-model.html` for the full model and roadmap.
+
+## Living knowledge — Phase 1: developer projects (requires 0078)
+A continuously-refreshed, fully-sourced concierge: real developer projects scraped
+from developers' own sites into the directory, each row stamped with its `source_url`
+and `fetched_at`. Nothing invented — the model may only record what the page states —
+and the concierge now quotes the real figure ("from €280k, 1–3 bed, under construction,
+ready Q4 2026") with the developer's contact. One shared engine; regulation watch
+(Phase 2) and events actualiser (Phase 3) reuse the same `scrape_sources` registry.
+- `supabase/migrations/0078_living_knowledge.sql` **(new)** — `scrape_sources` registry
+  (category, url, cadence, `content_hash`, `last_fetched_at`, per-source status); structured
+  fields + provenance on `directory_listings` (`price_from/price_to/dev_status/bedrooms/
+  completion/developer_slug/source_url/fetched_at`); `automation_settings.developments_enabled`
+  + `developments_autopublish` (both **off by default**). Additive, idempotent, tested on UTF-8 PG.
+- `lib/scrape/developments.ts` **(new)** — the engine: seeds sources from your own
+  directory (real-estate/agent listings that have a website — no manual list needed),
+  respects `robots.txt`, discovers project pages, and extracts projects with a strict,
+  grounded, JSON-mode model call. **Change-detection** (`content_hash`) skips the AI when a
+  site hasn't changed, so a daily rotation stays cheap. Projects are stored as
+  `directory_listings` of `type='development'`, so they inherit the whole existing stack
+  (concierge grounding, contacts, directory pages, map, dedup guard 0074). Summaries are
+  localised to all seven editions in one batched call. **26/26 unit cases pass.**
+- `app/api/cron/tick/route.ts` — the daily cron now drains a small, time-boxed batch of due
+  sources (2 per run, 12s budget) on a rotation, guarded by `developments_enabled` — within
+  the 60s Hobby cap, so every source refreshes over a few days at no new cost.
+- `app/api/admin/scrape/developments/route.ts` **(new)** — admin: GET status (sources,
+  projects, drafts, recent runs); POST `seed` (register developer sites) and `run`
+  (scrape now, optional `force`). Publishing follows the autopublish switch.
+- `app/[locale]/admin/(panel)/ai/page.tsx` — a **Developer projects** panel: the two
+  switches, **Seed sources from directory**, **Scrape developer projects now**, **Force
+  re-scrape**, live counts and recent-run table.
+- `lib/concierge/brain.ts` — the grounding now carries the structured development facts
+  (`price_from/to`, status, bedrooms, completion), so both the chat and the email concierge
+  quote the real number and delivery date. (`10/10` classifier + `16/16` mail-guardrail cases still pass.)
+- **After deploy:** run **0078**. Then Admin → AI newsroom → **Seed sources from directory**,
+  then **Scrape developer projects now** — review the drafts in Directory and, when happy,
+  turn on **Developer-projects scraper** (daily rotation) and optionally **Publish scraped
+  projects live**. Next: Phase 2 regulation watch, Phase 3 events actualiser + article links.
