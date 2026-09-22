@@ -1,21 +1,15 @@
-// Vercel Cron — the SINGLE daily job used while on the Hobby plan.
-// Scrape active feeds (time-boxed), then run the outreach cadence. Both are
-// guarded by settings and idempotent, so a partial run is safe.
-//
-// NOTE: AI-desk processing is handled by its own route (/api/cron/process) and
-// is intentionally NOT dispatched from here — that keeps this route free of the
-// desk/queue module, whose exports differ across branches.
+// Vercel Cron — the daily job. As of item 13 it no longer runs the heavy subsystems
+// inline; it ENQUEUES the day's background work (scrape, developer projects, regulation
+// watch, events, outreach — each guarded by its switch) and coordinate backfill, then
+// drains a time-boxed batch. With Supabase pg_cron enabled, /api/cron/worker drains the
+// rest continuously between ticks, so throughput is no longer capped by this 60s window.
+// AI-desk processing remains its own route (/api/cron/process).
 import { NextRequest, NextResponse } from 'next/server';
 import { isCronAuthorized } from '@/lib/cron';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { scrapeAllActive } from '@/lib/scraper';
-import { runOutreach } from '@/lib/outreach';
-import { runDevelopmentsScrape } from '@/lib/scrape/developments';
-import { runRegulationWatch } from '@/lib/scrape/regulations';
-import { runEventsActualiser } from '@/lib/scrape/events';
 import { logServerError } from '@/lib/monitor.server';
 import { runWorker } from '@/lib/jobs';
-import { enqueueGeocodeBacklog } from '@/lib/jobs.handlers';
+import { enqueueGeocodeBacklog, enqueueDailySubsystems } from '@/lib/jobs.handlers';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap
@@ -25,51 +19,17 @@ export async function GET(req: NextRequest) {
   const sb = supabaseAdmin();
   const out: Record<string, unknown> = { ok: true };
 
-  // Scrape (guarded by automation_settings).
+  // Enqueue the day's background work (guarded per subsystem) + top up coordinate backfill.
   try {
-    const { data } = await sb.from('automation_settings').select('scraper_enabled').eq('id', 1).maybeSingle();
-    if ((data as { scraper_enabled?: boolean } | null)?.scraper_enabled) {
-      out.scrape = await scrapeAllActive(sb, { deadlineMs: 30_000 });
-    }
-  } catch (e) { out.scrapeError = (e as Error).message; await logServerError('cron-tick:scrape', e); }
+    out.subsystemsEnqueued = await enqueueDailySubsystems(sb);
+    out.geocodeEnqueued = await enqueueGeocodeBacklog(sb, 60);
+  } catch (e) { await logServerError('cron-tick:enqueue', e); }
 
-  // Outreach cadence — only actually sends when sending is switched on in
-  // crm_settings (otherwise runOutreach no-ops on commit).
+  // Drain a time-boxed batch now, so work progresses even without pg_cron. pg_cron
+  // (when enabled) drains continuously between ticks.
   try {
-    const { data: cs } = await sb.from('crm_settings').select('sending_enabled').eq('id', 1).maybeSingle();
-    if ((cs as { sending_enabled?: boolean } | null)?.sending_enabled) {
-      out.outreach = await runOutreach(sb, { commit: true });
-    }
-  } catch { /* crm_settings not present yet — ignore */ }
-
-  // Living knowledge — developer projects. A small time-boxed batch each day so the
-  // rotation refreshes every source over a few days within the 60s Hobby cap. Only
-  // runs when switched on; content-hash change-detection keeps it cheap.
-  try {
-    const { data: a } = await sb.from('automation_settings').select('developments_enabled, developments_autopublish, regulation_watch_enabled, events_watch_enabled').eq('id', 1).maybeSingle();
-    const s = a as { developments_enabled?: boolean; developments_autopublish?: boolean; regulation_watch_enabled?: boolean; events_watch_enabled?: boolean } | null;
-    if (s?.developments_enabled) {
-      out.developments = await runDevelopmentsScrape(sb, { deadlineMs: 12_000, maxSources: 2, autopublish: !!s?.developments_autopublish });
-    }
-    if (s?.regulation_watch_enabled) {
-      out.regulations = await runRegulationWatch(sb, { deadlineMs: 10_000, maxSources: 2 });
-    }
-    // Events: only the light article-mining runs in the daily tick (the heavier
-    // external-listings refresh is the admin "Refresh agenda now" button, to stay
-    // inside the 60s Hobby cap alongside the other subsystems).
-    if (s?.events_watch_enabled) {
-      out.events = await runEventsActualiser(sb, { refresh: false, mine: true, mineLimit: 2, deadlineMs: 10_000 });
-    }
-  } catch (e) { out.livingKnowledgeError = (e as Error).message; await logServerError('cron-tick:living-knowledge', e); }
-
-  // Activate the background queue (item 01): top up coordinate-backfill jobs, then drain a
-  // time-boxed batch so it progresses even without pg_cron. When pg_cron is enabled, the
-  // worker also drains continuously between ticks.
-  try {
-    const enqueued = await enqueueGeocodeBacklog(sb, 40);
-    const drained = await runWorker({ deadlineMs: 15_000 });
-    out.jobs = { enqueued, ...drained };
-  } catch (e) { await logServerError('cron-tick:jobs', e); }
+    out.jobs = await runWorker({ deadlineMs: 45_000 });
+  } catch (e) { await logServerError('cron-tick:drain', e); }
 
   // Self-maintain the error log (keep 90 days). Best-effort.
   try { await sb.rpc('prune_error_log'); } catch { /* function not migrated yet — ignore */ }

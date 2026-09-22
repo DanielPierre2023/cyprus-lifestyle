@@ -245,6 +245,15 @@
   files extended. `tsc` clean; `npm test` 147/147 across 11 suites; all 89 migrations apply.
   ── **All of items 01–12 are now shipped, each tested and delivered as its own minimal bundle.**
 
+## Next tier (items 13–18, from the re-audit)
+- 2026-09-22 — **13 · All background work moved onto the queue.** The daily tick no longer runs
+  scraping/developments/regulations/events/outreach inline; it now ENQUEUES them (one per
+  subsystem per day, deduped, only for enabled switches) plus the coordinate backfill, then
+  drains a 45s batch. Each subsystem is a self-guarding queue handler (re-checks its switch), so
+  with Supabase pg_cron the worker drains continuously and throughput is no longer capped by the
+  60s daily window. `lib/jobs.handlers.ts` + `app/api/cron/tick/route.ts`; no migration. `tsc`
+  clean; `npm test` 155/155.
+
 ## Post-roadmap follow-through
 - 2026-09-22 — **A · Job queue activated.** Item 01's queue was live but inert; now it does real
   work. New handlers registered (`lib/jobs.handlers.ts`): `geocode_listing` (coordinate backfill,
