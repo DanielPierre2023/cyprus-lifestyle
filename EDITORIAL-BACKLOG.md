@@ -29,9 +29,9 @@ Priority tiers: **P0** = high demand × monetisable × fact-stable (do first); *
 
 | # | Working title | Category | KB topic(s) | Notes |
 | --- | --- | --- | --- | --- |
-| 6 | Cost of living in Cyprus (2026) | living | `cost-of-living`, `daily-budget` | Refresh yearly; strong SEO |
-| 7 | Renting a home in Cyprus | living | `renting` | Pairs with buy-property |
-| 8 | Healthcare in Cyprus: GHS & private | living | `healthcare`, `health`, `english-doctor` | Monetisable (clinics) |
+| 6 | Cost of living in Cyprus (2026) | living | `cost-of-living`, `daily-budget` | Refresh yearly; strong SEO — **✅ shipped, batch 3** |
+| 7 | Renting a home in Cyprus | living | `renting` | Pairs with buy-property — **✅ shipped, batch 3** |
+| 8 | Healthcare in Cyprus: GHS & private | living | `healthcare`, `health`, `english-doctor` | Monetisable (clinics) — **✅ shipped, batch 3** |
 | 9 | Schools & education for expat families | living | `schools`, `childcare-eldercare` | Family relocation |
 | 10 | Getting around Cyprus: airports, driving, taxis | travel | `getting-around`, `airport-transfer` | Monetisable (car hire, transfers) |
 | 11 | The best beaches in Cyprus | travel | `best-beaches`, `family-beaches` | Seasonal hero; directory tie-in |
@@ -56,4 +56,6 @@ Troodos hiking & painted churches (`hiking-troodos`, `painted-churches`); wineri
 - **Batch 1** — `0100_seed_articles.sql`: #1 (buying property) and #2 (best time to visit).
 - **Batch 2** — `0101_seed_articles_batch2.sql`: #3 (tax residency & non-dom), #4 (relocation checklist), #5 (company formation), with the 2026 reform figures (15% corporate tax, 5% dividend SDC).
 
-All in all seven languages, generated from `scripts/seed/articles.data.mjs` (each article tagged with a `batch`, written to its own migration so an applied batch is never rewritten). That completes P0. Next up: P1 #6–#14 (cost of living, renting, healthcare, schools, getting around, beaches, food, driving, banking).
+- **Batch 3** — `0102_seed_articles_batch3.sql`: #6 (cost of living), #7 (renting), #8 (healthcare / GESY), with 2026 figures (GESY 2.65% contribution, €6 specialist co-pay; rents by city; monthly budgets).
+
+All in all seven languages, generated from `scripts/seed/articles.data.mjs` (each article tagged with a `batch`, written to its own migration so an applied batch is never rewritten). P0 complete; P1 underway. Remaining P1: #9 schools, #10 getting around, #11 beaches, #12 food, #13 driving, #14 banking.

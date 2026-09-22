@@ -358,6 +358,14 @@
   213 files' `@/` imports resolve). Re-delivered the two files; build then went green and shipped
   the whole backlog in one deploy.
 
+- 2026-09-22 — **16 · Content batch 3.** Three P1 articles — *The cost of living in Cyprus (2026)*,
+  *Renting a home in Cyprus*, *Healthcare in Cyprus: GESY & private* — web-researched (2026 figures:
+  monthly budgets and rents by city, one-to-two-month deposits and tenant rights, GESY 2.65%
+  contribution and the €6 specialist co-pay) and written in all seven languages. Migration
+  `0102_seed_articles_batch3.sql`; 0100 and 0101 verified byte-unchanged. Full gate: 99 migrations
+  apply, 0102 idempotent, all three articles have every `content_{locale}` non-null. `tsc` clean;
+  `npm test` 234/234 across 16 suites. Backlog now: P1 #9–#14.
+
 ## Post-roadmap follow-through
 - 2026-09-22 — **A · Job queue activated.** Item 01's queue was live but inert; now it does real
   work. New handlers registered (`lib/jobs.handlers.ts`): `geocode_listing` (coordinate backfill,

@@ -16,6 +16,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const BATCH_FILES = {
   1: 'supabase/migrations/0100_seed_articles.sql',
   2: 'supabase/migrations/0101_seed_articles_batch2.sql',
+  3: 'supabase/migrations/0102_seed_articles_batch3.sql',
 };
 
 function columnsAndValues(a) {
