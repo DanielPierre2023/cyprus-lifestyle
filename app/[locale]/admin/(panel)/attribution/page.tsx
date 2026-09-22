@@ -4,21 +4,27 @@ export const dynamic = 'force-dynamic';
 
 type Attr = { slug: string; name: string | null; district: string | null; type: string | null; featured: boolean; impressions: number; clicks: number; ctr_pct: number; last_recommended: string | null };
 type Roi = { org_id: string; name: string | null; status: string | null; revenue_eur: number; orders: number; leads: number; revenue_per_lead: number | null; last_order_at: string | null };
+type LrevRow = { slug: string; name: string | null; district: string | null; advertiser: string | null; advertiser_tier: string | null; revenue_eur: number; orders: number; won_eur: number; pipeline_eur: number; active_placements: number; impressions: number; clicks: number; revenue_per_click: number | null };
 
 export default async function AttributionTab() {
   const sb = await supabaseServer();
-  const [{ data: attrData }, { data: roiData }, { data: ctaData }] = await Promise.all([
+  const [{ data: attrData }, { data: roiData }, { data: ctaData }, { data: lrevData }] = await Promise.all([
     sb.from('listing_attribution').select('*').order('impressions', { ascending: false }).limit(50),
     sb.from('advertiser_roi').select('*').limit(50),
     sb.from('cta_by_listing').select('*').order('clicks', { ascending: false }).limit(25),
+    sb.from('listing_revenue').select('*').limit(100),
   ]);
   const attr = (attrData as Attr[] | null) || [];
   const roi = (roiData as Roi[] | null) || [];
   const cta = (ctaData as { slug: string; cta: string; clicks: number; last_click: string }[] | null) || [];
+  const lrev = (lrevData as LrevRow[] | null) || [];
   const totalImpr = attr.reduce((s, a) => s + (a.impressions || 0), 0);
   const totalClicks = attr.reduce((s, a) => s + (a.clicks || 0), 0);
   const totalRev = roi.reduce((s, r) => s + Number(r.revenue_eur || 0), 0);
   const featured = attr.filter((a) => a.featured);
+  const earning = lrev.filter((r) => Number(r.revenue_eur || 0) > 0);
+  const lrevBooked = lrev.reduce((s, r) => s + Number(r.revenue_eur || 0), 0);
+  const lrevPipeline = lrev.reduce((s, r) => s + Number(r.pipeline_eur || 0), 0);
 
   return (
     <>
@@ -49,6 +55,30 @@ export default async function AttributionTab() {
             </tr>
           ))}
           {roi.length === 0 ? <tr><td colSpan={7}>No paid advertisers yet.</td></tr> : null}
+        </tbody>
+      </table>
+
+      {/* Per-listing revenue attribution (roadmap item 17). */}
+      <h1 style={{ fontSize: 18 }}>Revenue by listing</h1>
+      <p className="sub">Each listing linked to an advertiser account, and what it earns: booked revenue (paid/active orders), won and pipeline deal value, live placements, and the concierge engagement it gets — so you can rank listings by € and by € per click. Booked €{Math.round(lrevBooked).toLocaleString('en-US')} · pipeline €{Math.round(lrevPipeline).toLocaleString('en-US')} across {lrev.length} linked listing(s), {earning.length} earning.</p>
+      <table className="adm-t">
+        <thead><tr><th>Listing</th><th>Advertiser</th><th>Tier</th><th>Revenue</th><th>Won</th><th>Pipeline</th><th>Live</th><th>Recs</th><th>Clicks</th><th>€/click</th></tr></thead>
+        <tbody>
+          {lrev.slice(0, 50).map((r, i) => (
+            <tr key={i}>
+              <td>{r.name || r.slug}{r.district ? <span style={{ opacity: .6 }}> · {r.district}</span> : null}</td>
+              <td>{r.advertiser || '—'}</td>
+              <td>{r.advertiser_tier || '—'}</td>
+              <td style={{ fontWeight: Number(r.revenue_eur) > 0 ? 700 : 400 }}>€{Math.round(Number(r.revenue_eur || 0)).toLocaleString('en-US')}</td>
+              <td>{Number(r.won_eur) > 0 ? `€${Math.round(Number(r.won_eur)).toLocaleString('en-US')}` : '—'}</td>
+              <td>{Number(r.pipeline_eur) > 0 ? `€${Math.round(Number(r.pipeline_eur)).toLocaleString('en-US')}` : '—'}</td>
+              <td>{r.active_placements || '—'}</td>
+              <td>{r.impressions}</td>
+              <td>{r.clicks}</td>
+              <td>{r.revenue_per_click != null ? `€${Number(r.revenue_per_click).toLocaleString('en-US')}` : '—'}</td>
+            </tr>
+          ))}
+          {lrev.length === 0 ? <tr><td colSpan={10}>No listings linked to an advertiser account yet.</td></tr> : null}
         </tbody>
       </table>
 

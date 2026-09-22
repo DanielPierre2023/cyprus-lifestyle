@@ -289,6 +289,19 @@
   retained but de-identified, suppression added, audit hashed; idempotent and input-guarded. Pure
   validators have 13 unit tests; `tsc` clean; `npm test` 201/201 across 14 suites; all migrations
   apply (0098 idempotent).
+- 2026-09-22 — **17 · Per-listing revenue attribution.** Item 08 measured revenue per advertiser
+  ORG and engagement per LISTING, but nothing tied the money to the listing — so we could see who
+  spends and which listings get clicked, but not *which listings earn*. New `listing_revenue` view
+  (migration 0099) closes that: it joins each published listing to its advertiser account
+  (`crm_orgs.directory_listing_id`, kept in sync by the CRM-unify trigger) and brings together, per
+  listing, booked revenue (paid/active `ad_orders`, same definition as `advertiser_roi`), won and
+  open-pipeline deal value (`crm_deals` by stage), live placements (`sponsor_banners`), and 90-day
+  concierge engagement (recommendations + tracked opens), with € and € / click. The admin
+  Attribution tab gets a **Revenue by listing** table (booked/pipeline totals, earning count). A
+  read-only view over existing tables — no new writes. Arithmetic verified on Postgres (seeded
+  listing → €1,340 booked from 2 paid/active orders with a pending one correctly excluded, €5,000
+  won, €2,000 pipeline, 1 placement, 2 recs, 3 clicks, €446.67/click); `tsc` clean; `npm test`
+  201/201; all 96 migrations apply (0099 idempotent).
 
 ## Post-roadmap follow-through
 - 2026-09-22 — **A · Job queue activated.** Item 01's queue was live but inert; now it does real
