@@ -254,3 +254,27 @@
   time-boxed batch, so it progresses with OR without pg_cron; pg_cron drains continuously between
   ticks. Pure helpers unit-tested (`jobs.geocode`); `tsc` clean; `npm test` 155/155 across 12
   suites. No migration. Next: B (operator runbook).
+- 2026-09-22 — **B · Operator runbook shipped** (`RUNBOOK.md`): go-live checklist, where-to-watch
+  table for all 12 features, the switches table (all default OFF), env vars, testing, a weekly
+  review and troubleshooting.
+- 2026-09-22 — **C · Content & quality backlog.** Fixed "compare with similar" (`getPeers` in
+  lib/queries.ts): it filtered by the broad category_group, so a law firm could be compared with
+  banks. Now it fetches narrowest-first (same subtype → type → group, topping up only if thin) so
+  comparisons are genuinely the same kind of business, with same-district as a minor re-rank.
+  Verified: the Advertise FAQ is already in step with the live rate card (€490/yr, €850/mo), and
+  the de/pl/ru legacy-article backfill shipped earlier — so those needed no change. Bulk NEW
+  multilingual article writing remains a large, separate content effort (available on request).
+  `tsc` clean; `npm test` 155/155. No migration. Next: D (fresh deep audit).
+- 2026-09-22 — **Outreach · one-click bulk enrol.** Migration 0093 (`enroll_prospects_bulk`)
+  + `/api/admin/outreach/enroll-bulk` + a "＋ Enrol all in filter" button on the Sponsors tab.
+  Enrols every eligible account in the current vertical/tier/stage/search filter into the
+  first-contact sequence in one click; the DB skips no-email / opted-out / suppressed /
+  already-enrolled accounts, and it only QUEUES (sending stays gated by the on-switch + daily
+  cap). Eligibility verified on Postgres 16; `tsc` clean; all 90 migrations apply.
+- 2026-09-22 — **D · Fresh re-audit delivered** (`cyprus-lifestyle-reaudit-2026-09.html`).
+  Re-scored every dimension against the first audit: Infrastructure 4.8→8.2, Observability
+  3.2→8.5, Testing 1.8→8.0, Concierge 8.0→9.0, Commercial 6.5→8.0, Compliance 5.0→8.2 (data
+  coverage 6→7 and security 6→6.5 remain the yellows). Verified all 12 items + the queue
+  activation are live, and set the next tier (items 13–18): move all background work onto the
+  queue, live-model quality evals, executable DSAR erasure, a bulk multilingual content sprint,
+  per-listing revenue attribution, and resilience hardening. ── **Post-roadmap A–D all shipped.**

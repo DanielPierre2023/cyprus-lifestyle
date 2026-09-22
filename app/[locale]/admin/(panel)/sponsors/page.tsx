@@ -192,6 +192,25 @@ export default function SponsorsTab() {
     setRunning(false);
   }
 
+  // Bulk-enrol every eligible account in the CURRENT filter into the first-contact
+  // sequence. Only queues (sending stays gated by the on-switch + daily cap); the DB
+  // skips no-email / opted-out / suppressed / already-enrolled accounts.
+  async function enrollBulk() {
+    const scope = [cat !== 'all' ? cat : null, tier !== 'all' ? tier : null, stage !== 'all' ? stage : null, searchQ.trim() || null].filter(Boolean).join(' · ') || 'ALL verticals';
+    if (!window.confirm(`Enrol every eligible business in the current filter (${scope}) into the first-contact sequence?\n\nThis only queues them — nothing sends until "Sending enabled" is on, and then only up to your daily cap per run.`)) return;
+    setRunning(true); setMsg('');
+    try {
+      const res = await fetch('/api/admin/outreach/enroll-bulk', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: cat, tier, stage, q: searchQ }),
+      });
+      const d = await res.json();
+      if (!res.ok || !d.ok) setMsg(d.error || 'Bulk enrol failed');
+      else { setMsg(`Enrolled ${d.enrolled} business${d.enrolled === 1 ? '' : 'es'} into the sequence. Run a preview, then switch sending on.`); loadOutreach(); }
+    } catch (e) { setMsg((e as Error).message); }
+    setRunning(false);
+  }
+
   async function sendKit(e: React.FormEvent) {
     e.preventDefault(); setMsg('');
     const res = await fetch('/api/admin/sponsors', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(kit) });
@@ -229,6 +248,7 @@ export default function SponsorsTab() {
               : `Nothing is emailed yet. Set a from-address and switch sending on below when your domain is ready. ${enrolledCount} businesses queued.`}
           </span>
           <div className="row" style={{ gap: 8, marginTop: 10 }}>
+            <button className="abtn" type="button" disabled={running} onClick={enrollBulk} title="Enrol every eligible business in the current filter into the first-contact sequence">{running ? 'Working…' : `＋ Enrol all in filter${total ? ` (${total})` : ''}`}</button>
             <button className="abtn" type="button" disabled={running} onClick={() => runNow(false)}>{running ? 'Working…' : 'Run preview'}</button>
             <button className="abtn gold" type="button" disabled={running || !sending} title={sending ? '' : 'Turn sending on first'} onClick={() => runNow(true)}>Send due now</button>
           </div>
