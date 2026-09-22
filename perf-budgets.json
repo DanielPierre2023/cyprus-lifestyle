@@ -1,0 +1,8 @@
+{
+  "_comment": "First-load JS budgets in KB, enforced by scripts/perf/check-budgets.mjs after `next build`. Keys are normalised routes (route groups like (panel) and the trailing /page are stripped); the longest matching prefix wins, else `default`. Only navigable pages are measured (route handlers, layout/loading/error fragments and framework specials are skipped). These ceilings were calibrated from a measured production build (public pages ~395-440 KB, admin ~343-616 KB) with headroom, so the gate is green today and trips on a real regression (e.g. a heavy new dependency). Tighten as bundles shrink.",
+  "default": 480,
+  "routes": {
+    "/[locale]": 480,
+    "/[locale]/admin": 700
+  }
+}

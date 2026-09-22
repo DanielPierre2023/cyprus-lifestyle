@@ -302,6 +302,25 @@
   listing → €1,340 booked from 2 paid/active orders with a pending one correctly excluded, €5,000
   won, €2,000 pipeline, 1 placement, 2 recs, 3 clicks, €446.67/click); `tsc` clean; `npm test`
   201/201; all 96 migrations apply (0099 idempotent).
+- 2026-09-22 — **18 · Resilience hardening.** Turned "it should recover" into something
+  written down and testable. New `DR-RUNBOOK.md`: RPO/RTO targets, where state actually lives
+  (Postgres = the only durable store; Vercel stateless; the rest re-derivable), backups (Supabase
+  PITR/daily + a weekly `pg_dump` that works on Free), a **quarterly restore drill** that reuses
+  the CI prelude + migration gate to prove a dump is good, recovery playbooks (bad deploy →
+  instant Vercel rollback, Supabase outage, data corruption, leaked key, bad automation), a
+  **secret-rotation table** (every key → where → blast radius → cadence) and a restore-drill log.
+  A real **CWV/first-load-JS budget gate**: `scripts/perf/check-budgets.mjs` reads the App Router
+  build manifest, sums the JS each *navigable* page ships (route handlers and layout/loading/error
+  fragments skipped), and fails if a route is over `perf-budgets.json` (budgets calibrated from a
+  measured build with headroom, so it's green now and trips on a real regression); the pure logic
+  is unit-tested. A zero-dependency **load-test** probe (`scripts/perf/loadtest.mjs`,
+  p50/p90/p95/p99 per route). Wired as `npm run perf:budgets` / `perf:loadtest` and a **manual**
+  `.github/workflows/perf.yml` (kept off the fast push CI). Gate proven end-to-end on a real build
+  (98 routes measured, OVER/OK detection, correct exit codes) and on fabricated manifests
+  (exclusions confirmed). `tsc` clean; `npm test` 218/218 across 15 suites; no migration.
+  **Next-tier items 13–18 complete except 16** (the multilingual content sprint — a research-first
+  editorial effort, running next: web-researched + cited, worklist from the item-02 backlog +
+  item-04 coverage).
 
 ## Post-roadmap follow-through
 - 2026-09-22 — **A · Job queue activated.** Item 01's queue was live but inert; now it does real

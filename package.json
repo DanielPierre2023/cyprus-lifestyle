@@ -10,7 +10,9 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/tests/run.mjs",
-    "eval:antiai": "tsx scripts/eval-antiai.ts"
+    "eval:antiai": "tsx scripts/eval-antiai.ts",
+    "perf:budgets": "node scripts/perf/check-budgets.mjs",
+    "perf:loadtest": "node scripts/perf/loadtest.mjs"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.74.0",
