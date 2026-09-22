@@ -21,9 +21,9 @@ Priority tiers: **P0** = high demand × monetisable × fact-stable (do first); *
 | --- | --- | --- | --- | --- | --- |
 | 1 | Buying property in Cyprus as a foreigner | property | `buy-property`, `property` | Highest-value + monetisable (estate agents, lawyers) | Non-EU permit + area limit, VAT 5%/19%, transfer fees, stamp-duty status, title deeds — **✅ shipped, batch 1** |
 | 2 | The best time to visit Cyprus | travel | `when-to-visit`, `sea`, `plan` | Broad top-of-funnel demand; low fact-risk | Seasonal temps, sea temps, crowds/prices — **✅ shipped, batch 1** |
-| 3 | Cyprus tax residency: the 60-day rule & non-dom | business | `non-dom`, `get-residency` | HNW relocation; monetisable (tax/legal/accounting) | 60-day rule conditions, non-dom SDC exemption, 17-year limit — cite official/PwC/Deloitte |
-| 4 | Moving to Cyprus: a relocation checklist | living | `get-residency`, `cost-of-living`, `schools`, `healthcare` | Core relocation intent; links many verticals | Residency routes, GHS healthcare, school options, cost ranges |
-| 5 | Setting up a company in Cyprus | business | `form-company`, `business-banking`, `expand-business` | Monetisable (corporate services, banks) | 12.5% corp tax, IP box, formation steps, timelines |
+| 3 | Cyprus tax residency: the 60-day rule & non-dom | business | `non-dom`, `get-residency` | HNW relocation; monetisable (tax/legal/accounting) | 60-day rule, non-dom SDC exemption + 17-year limit, 2026 dividend SDC 5% — **✅ shipped, batch 2** |
+| 4 | Moving to Cyprus: a relocation checklist | living | `get-residency`, `cost-of-living`, `schools`, `healthcare` | Core relocation intent; links many verticals | EU yellow slip / non-EU permits, GESY, banking, licences — **✅ shipped, batch 2** |
+| 5 | Setting up a company in Cyprus | business | `form-company`, `business-banking`, `expand-business` | Monetisable (corporate services, banks) | 15% corp tax (from 2026), IP box, formation steps, substance — **✅ shipped, batch 2** |
 
 ## P1 — high demand, next
 
@@ -51,6 +51,9 @@ Troodos hiking & painted churches (`hiking-troodos`, `painted-churches`); wineri
 - Full metadata per language: `title`, `excerpt`, `summary`, `seo_title`, `seo_description`, `tags`; `reading_time_min`, `word_count`, `category`, `author_name`, `published_at`.
 - Seeded by an **idempotent migration** (UPSERT on `slug`), so re-running never duplicates and edits re-apply — verified on the migration gate.
 
-## Batch 1 — shipped
+## Shipped
 
-Migration `0100_seed_articles.sql`: articles #1 (buying property) and #2 (best time to visit), each in all seven languages, generated from `scripts/seed/articles.data.mjs`. Next batch: P0 #3–#5.
+- **Batch 1** — `0100_seed_articles.sql`: #1 (buying property) and #2 (best time to visit).
+- **Batch 2** — `0101_seed_articles_batch2.sql`: #3 (tax residency & non-dom), #4 (relocation checklist), #5 (company formation), with the 2026 reform figures (15% corporate tax, 5% dividend SDC).
+
+All in all seven languages, generated from `scripts/seed/articles.data.mjs` (each article tagged with a `batch`, written to its own migration so an applied batch is never rewritten). That completes P0. Next up: P1 #6–#14 (cost of living, renting, healthcare, schools, getting around, beaches, food, driving, banking).

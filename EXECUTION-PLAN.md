@@ -336,6 +336,28 @@
   234/234 across 16 suites. **Next-tier items 13–18 all complete.** Next content batches: P0 #3–#5
   from the backlog (tax residency, relocation checklist, company formation).
 
+- 2026-09-22 — **16 · Content batch 2 + perf-budget recalibration.** Three more P0 articles —
+  *Cyprus tax residency: the 60-day rule & non-dom*, *Moving to Cyprus: a relocation checklist*,
+  *Setting up a company in Cyprus* — web-researched and written in all seven languages, completing
+  the P0 tier. Research caught two figures that would have been wrong from memory: corporate tax
+  **rose to 15%** on 1 Jan 2026 (OECD Pillar Two, from 12.5%) and dividend **SDC is 5% from 2026**;
+  both are stated with the effective date and an "as of 2026, take professional advice" caveat. The
+  generator now tags each article with a `batch` and writes each batch to its own migration, so an
+  already-applied batch is never rewritten — batch 2 is `0101_seed_articles_batch2.sql` and `0100`
+  is byte-for-byte unchanged (verified). Full gate: 98 migrations apply, 0101 idempotent, all three
+  articles have every `content_{locale}` non-null. Also **recalibrated `perf-budgets.json`** from a
+  real production compile of this repo (measured per-route first-load 395–426 KB public, 598–619 KB
+  admin — the earlier "loose" read had confused this with Next's ~102 KB *shared* figure): budgets
+  tightened to a ~10% ratchet (470 public / 680 admin), gate verified green. `tsc` clean; `npm test`
+  234/234 across 16 suites.
+- 2026-09-22 — **Deploy unblocked.** Every deploy for ~20h had failed: `app/[locale]/admin/(panel)/
+  mail/page.tsx` and `app/api/email/inbound/route.ts` imported `@/lib/mail/tickets` and
+  `@/lib/crm/inbound` (items 06/07), but those two files had never reached the GitHub repo, so
+  webpack aborted the build and nothing — including items 13–18/16 — deployed. Verified the cause
+  from the build log (webpack lists all unresolved modules; only these two) and a local scan (all
+  213 files' `@/` imports resolve). Re-delivered the two files; build then went green and shipped
+  the whole backlog in one deploy.
+
 ## Post-roadmap follow-through
 - 2026-09-22 — **A · Job queue activated.** Item 01's queue was live but inert; now it does real
   work. New handlers registered (`lib/jobs.handlers.ts`): `geocode_listing` (coordinate backfill,

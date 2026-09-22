@@ -1,8 +1,8 @@
 {
-  "_comment": "First-load JS budgets in KB, enforced by scripts/perf/check-budgets.mjs after `next build`. Keys are normalised routes (route groups like (panel) and the trailing /page are stripped); the longest matching prefix wins, else `default`. Only navigable pages are measured (route handlers, layout/loading/error fragments and framework specials are skipped). These ceilings were calibrated from a measured production build (public pages ~395-440 KB, admin ~343-616 KB) with headroom, so the gate is green today and trips on a real regression (e.g. a heavy new dependency). Tighten as bundles shrink.",
-  "default": 480,
+  "_comment": "First-load JS budgets in KB, enforced by scripts/perf/check-budgets.mjs after `next build`. Keys are normalised routes (route groups like (panel) and the trailing /page are stripped); the longest matching prefix wins, else `default`. Only navigable pages are measured (route handlers, layout/loading/error fragments and framework specials are skipped). Calibrated 2026-09-22 from a real production compile of this repo (54 routes): public pages measured 395-426 KB, admin 598-619 KB — these ceilings sit ~10% above the measured max so the gate is green today and trips on a genuine regression (e.g. a heavy new dependency). NB: this per-route total counts each route's full chunk set and is larger than the 'First Load JS shared' line Next prints (~102 KB is only the shared chunks). Tighten as bundles shrink.",
+  "default": 500,
   "routes": {
-    "/[locale]": 480,
-    "/[locale]/admin": 700
+    "/[locale]": 470,
+    "/[locale]/admin": 680
   }
 }
