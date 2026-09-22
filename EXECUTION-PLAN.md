@@ -318,9 +318,23 @@
   `.github/workflows/perf.yml` (kept off the fast push CI). Gate proven end-to-end on a real build
   (98 routes measured, OVER/OK detection, correct exit codes) and on fabricated manifests
   (exclusions confirmed). `tsc` clean; `npm test` 218/218 across 15 suites; no migration.
-  **Next-tier items 13–18 complete except 16** (the multilingual content sprint — a research-first
-  editorial effort, running next: web-researched + cited, worklist from the item-02 backlog +
-  item-04 coverage).
+  the tier's code/infra work.
+- 2026-09-22 — **16 · Bulk multilingual content sprint (batch 1).** The one non-code tier item:
+  real editorial, all seven languages, no English fallback (a null `content_{locale}` falls back to
+  English in `getArticle`, so every locale must be populated). Shipped a prioritised, evidence-based
+  worklist (`EDITORIAL-BACKLOG.md`) derived from the 78 concierge KB intents (item 02) + directory
+  verticals + monetisation (item 17), tiered P0–P2 with per-article briefs. And **batch 1**: two
+  flagship evergreen articles — "Buying property in Cyprus as a foreigner" and "The best time to
+  visit Cyprus" — each **web-researched and cited** (VAT 5%/19%, the non-EU permit + ~4,014 m²
+  limit, transfer-fee reduction, stamp-duty abolition from 1 Jan 2026, seasonal + sea temperatures;
+  sources recorded per article, "as of 2026" caveats per the grounding rules), written in **all
+  seven languages**. Authored as structured data (`scripts/seed/articles.data.mjs`) and compiled by
+  a generator (`gen-articles-sql.mjs` + pure `sql-util.mjs`) into an idempotent UPSERT migration
+  (`0100_seed_articles.sql`), so re-runs update in place and never duplicate. Verified on Postgres:
+  97 migrations apply, both articles present with all seven `content_{locale}` non-null, idempotent
+  re-apply. Generator escaping + data completeness have 16 unit tests; `tsc` clean; `npm test`
+  234/234 across 16 suites. **Next-tier items 13–18 all complete.** Next content batches: P0 #3–#5
+  from the backlog (tax residency, relocation checklist, company formation).
 
 ## Post-roadmap follow-through
 - 2026-09-22 — **A · Job queue activated.** Item 01's queue was live but inert; now it does real
