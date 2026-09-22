@@ -253,6 +253,23 @@
   with Supabase pg_cron the worker drains continuously and throughput is no longer capped by the
   60s daily window. `lib/jobs.handlers.ts` + `app/api/cron/tick/route.ts`; no migration. `tsc`
   clean; `npm test` 155/155.
+- 2026-09-22 — **14 · Live-model concierge quality evals.** The gold suite (item 05) proves
+  retrieval + routing offline; this scores the concierge's *actual prose* from the live model. A
+  curated eval set (`EVAL_SET` — 24 synthetic, PII-free questions across the intents that matter,
+  in all seven languages) is answered by the real concierge (same grounding it serves guests),
+  then a cheap Haiku judge — given the SAME context — rates each answer 1–5 on **grounded**
+  (invents no business/price not in context), **language** (written fully & naturally in the
+  guest's tongue) and **helpful**. Verdict: a hallucination (grounded ≤ 2) or wrong language
+  (language ≤ 2) is a hard **fail**; a mediocre average (< 3.5) is **weak**; else **pass**.
+  Results land in `concierge_evals` (migration 0097) with a per-run `concierge_eval_summary` view.
+  **On-demand / opt-in only** — every run costs model calls, so it is NEVER auto-scheduled: the
+  admin Analytics tab has *Run quick sample* (4 items, synchronous, instant scores) and *Queue
+  full eval* (the whole set, chunked across worker cycles by the new `eval_concierge` queue job
+  which re-enqueues its next chunk). New: `lib/concierge/eval.ts`, `app/api/admin/concierge/eval/
+  run/route.ts`, `analytics/EvalRunner.tsx`, section in `analytics/page.tsx`; `eval_concierge`
+  handler in `lib/jobs.handlers.ts`. Migration 0097 applies on the full-migration gate (idempotent;
+  summary view verified). Pure verdict/scoring/sampler logic has 33 unit tests; `tsc` clean;
+  `npm test` 188/188 across 13 suites.
 
 ## Post-roadmap follow-through
 - 2026-09-22 — **A · Job queue activated.** Item 01's queue was live but inert; now it does real

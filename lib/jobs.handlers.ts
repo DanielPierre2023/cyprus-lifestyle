@@ -14,6 +14,7 @@ import { runDevelopmentsScrape } from '@/lib/scrape/developments';
 import { runRegulationWatch } from '@/lib/scrape/regulations';
 import { runEventsActualiser } from '@/lib/scrape/events';
 import { runOutreach } from '@/lib/outreach';
+import { EVAL_SET, runEvalBatch, newRunId } from '@/lib/concierge/eval';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 // ── Coordinate backfill — one listing per job (item 01/A). Cached + Cyprus-bounded.
@@ -63,6 +64,23 @@ registerJob('outreach', async () => {
   const { data } = await sb.from('crm_settings').select('sending_enabled').eq('id', 1).maybeSingle();
   if (!(data as { sending_enabled?: boolean } | null)?.sending_enabled) return;
   await runOutreach(sb, { commit: true });
+});
+
+// ── Live-model concierge quality evals (item 14) — ON-DEMAND ONLY. Enqueued by the
+// admin "run full eval" action, NEVER auto-scheduled (each item costs an answer +
+// judge model call). Runs one chunk of the eval set, then re-enqueues the next chunk,
+// so the full set spreads across worker cycles and no single invocation is heavy.
+registerJob('eval_concierge', async (payload) => {
+  const runId = String(payload.runId || newRunId('full'));
+  const offset = Math.max(0, Number(payload.offset || 0));
+  const limit = Math.max(1, Math.min(Number(payload.limit || 6), 12));
+  const slice = EVAL_SET.slice(offset, offset + limit);
+  if (!slice.length) return;
+  await runEvalBatch(slice, runId);
+  const next = offset + limit;
+  if (next < EVAL_SET.length) {
+    await enqueue('eval_concierge', { runId, offset: next, limit }, { dedupeKey: `eval:${runId}:${next}`, priority: 2, maxAttempts: 2 });
+  }
 });
 
 // ── Enqueue coordinate-backfill jobs for listings still missing coordinates.

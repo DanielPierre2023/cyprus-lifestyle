@@ -1,4 +1,5 @@
 import { supabaseServer } from '@/lib/supabase/server';
+import EvalRunner from './EvalRunner';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,6 +56,21 @@ export default async function AnalyticsTab() {
   const since7 = new Date(Date.now() - 7 * 864e5).toISOString();
   const { count: err7 } = await sb.from('error_log').select('id', { count: 'exact', head: true }).gte('created_at', since7);
 
+  // Concierge quality — live-model evals (item 14). On-demand; may be empty until a run.
+  const { data: evalRuns } = await sb.from('concierge_eval_summary')
+    .select('run_id, run_at, n, avg_grounded, avg_language, avg_helpful, avg_overall, fails, weak')
+    .order('run_at', { ascending: false }).limit(8);
+  const eRuns = (evalRuns as { run_id: string; run_at: string; n: number; avg_grounded: number | null; avg_language: number | null; avg_helpful: number | null; avg_overall: number | null; fails: number; weak: number }[] | null) || [];
+  const latestRun = eRuns[0];
+  let evalIssues: { locale: string | null; intent: string | null; verdict: string | null; overall: number | null; notes: string | null; question: string | null }[] = [];
+  if (latestRun) {
+    const { data: iss } = await sb.from('concierge_evals')
+      .select('locale, intent, verdict, overall, notes, question')
+      .eq('run_id', latestRun.run_id).in('verdict', ['fail', 'weak'])
+      .order('overall', { ascending: true, nullsFirst: true }).limit(12);
+    evalIssues = (iss as typeof evalIssues | null) || [];
+  }
+
   // Background jobs (item 01) — queue health + recent dead-letters.
   const { data: jobStats } = await sb.from('job_queue_stats').select('status, n, next_due');
   const jobs = (jobStats as { status: string; n: number; next_due: string | null }[] | null) || [];
@@ -96,6 +112,57 @@ export default async function AnalyticsTab() {
           {backlogRows.length === 0 ? <tr><td colSpan={5}>No gaps logged yet — every question was answered from grounded facts.</td></tr> : null}
         </tbody>
       </table>
+
+      {/* Concierge quality — live-model evals (roadmap item 14). On-demand & opt-in. */}
+      <h1 style={{ fontSize: 18, marginTop: 8 }}>Concierge quality · live evals</h1>
+      <p className="sub">Scores the concierge&rsquo;s <em>actual answers</em> from the live model — grounding (no fabrication), language fidelity and helpfulness, 1&ndash;5 each. On-demand only (each run costs model calls): run a quick sample for an instant read, or queue the full multilingual set. Results are stored per run.</p>
+      <EvalRunner />
+      {latestRun ? (
+        <div className="cards">
+          <div className="stat"><div className="n">{latestRun.avg_overall ?? '—'}</div><div className="k">Latest overall /5</div></div>
+          <div className="stat"><div className="n">{latestRun.avg_grounded ?? '—'}</div><div className="k">Grounded /5</div></div>
+          <div className="stat"><div className="n">{latestRun.avg_language ?? '—'}</div><div className="k">Language /5</div></div>
+          <div className="stat"><div className="n" style={latestRun.fails > 0 ? { color: '#B00020' } : undefined}>{latestRun.fails}</div><div className="k">Fails</div></div>
+        </div>
+      ) : null}
+      <table className="adm-t">
+        <thead><tr><th>Run</th><th style={{ width: 130 }}>When</th><th style={{ width: 50 }}>N</th><th style={{ width: 70 }}>Overall</th><th style={{ width: 70 }}>Ground</th><th style={{ width: 70 }}>Lang</th><th style={{ width: 70 }}>Help</th><th style={{ width: 60 }}>Weak</th><th style={{ width: 60 }}>Fail</th></tr></thead>
+        <tbody>
+          {eRuns.map((r, i) => (
+            <tr key={i}>
+              <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{r.run_id}</td>
+              <td>{new Date(r.run_at).toLocaleString()}</td>
+              <td>{r.n}</td>
+              <td>{r.avg_overall ?? '—'}</td>
+              <td>{r.avg_grounded ?? '—'}</td>
+              <td>{r.avg_language ?? '—'}</td>
+              <td>{r.avg_helpful ?? '—'}</td>
+              <td>{r.weak}</td>
+              <td style={r.fails > 0 ? { color: '#B00020', fontWeight: 700 } : undefined}>{r.fails}</td>
+            </tr>
+          ))}
+          {eRuns.length === 0 ? <tr><td colSpan={9}>No eval runs yet — click &ldquo;Run quick sample&rdquo; to score the concierge live.</td></tr> : null}
+        </tbody>
+      </table>
+      {evalIssues.length > 0 ? (
+        <>
+          <h1 style={{ fontSize: 18 }}>Latest run — answers to review</h1>
+          <table className="adm-t">
+            <thead><tr><th style={{ width: 50 }}>Lang</th><th style={{ width: 90 }}>Intent</th><th style={{ width: 60 }}>Verdict</th><th style={{ width: 60 }}>Score</th><th>Question &amp; judge note</th></tr></thead>
+            <tbody>
+              {evalIssues.map((r, i) => (
+                <tr key={i}>
+                  <td>{r.locale || '—'}</td>
+                  <td>{r.intent || '—'}</td>
+                  <td><span style={{ color: r.verdict === 'fail' ? '#B00020' : '#B8860B', fontWeight: 700 }}>{r.verdict}</span></td>
+                  <td>{r.overall ?? '—'}</td>
+                  <td><div>{r.question}</div>{r.notes ? <div className="sub" style={{ margin: '2px 0 0' }}>{r.notes}</div> : null}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : null}
 
       {/* System errors (roadmap item 03) — durable error log, grouped. */}
       <h1 style={{ fontSize: 18, marginTop: 8 }}>System errors{typeof err7 === 'number' ? ` · ${err7} in 7d` : ''}</h1>
