@@ -9,6 +9,7 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { brandedEmail, sendEmail } from '@/lib/email';
+import type { Locale } from '@/lib/locales';
 
 const GAP_DEFAULT = [4, 4, 6]; // days after step 1→2, 2→3, 3→4
 const MAX_CAP = 200;
@@ -89,7 +90,8 @@ export async function runOutreach(sb: SupabaseClient, opts: { commit: boolean; m
   if (!due.length) { out.note = 'No businesses are due right now.'; return out; }
 
   const { data: tplRows } = await sb.from('crm_templates').select('*').eq('active', true);
-  const templates = new Map<number, Row>((tplRows || []).map((t: Row) => [t.step, t]));
+  // Keyed by "<locale>:<step>" so each business gets its language, with an EN fallback.
+  const templates = new Map<string, Row>((tplRows || []).map((t: Row) => [`${t.locale || 'en'}:${t.step}`, t]));
   const { data: hookRows } = await sb.from('crm_hooks').select('*');
   const hooks = new Map<string, string>((hookRows || []).map((h: Row) => [h.category, h.hook]));
 
@@ -101,11 +103,12 @@ export async function runOutreach(sb: SupabaseClient, opts: { commit: boolean; m
       out.done++;
       continue;
     }
-    const tpl = templates.get(nextStep);
-    if (!tpl) { out.skipped++; out.errors.push(`step ${nextStep}: no template`); continue; }
-
-    const { data: org } = await sb.from('crm_orgs').select('id,name,category').eq('id', e.org_id).maybeSingle();
+    const { data: org } = await sb.from('crm_orgs').select('id,name,category,outreach_locale').eq('id', e.org_id).maybeSingle();
     if (!org) { out.skipped++; continue; }
+    // The business's outreach language (set at enrol time); fall back to EN per-step.
+    const loc = String(org.outreach_locale || 'en');
+    const tpl = templates.get(`${loc}:${nextStep}`) || templates.get(`en:${nextStep}`);
+    if (!tpl) { out.skipped++; out.errors.push(`step ${nextStep}: no template`); continue; }
 
     const { data: contactRows } = await sb
       .from('crm_contacts').select('*').eq('org_id', e.org_id)
@@ -139,7 +142,7 @@ export async function runOutreach(sb: SupabaseClient, opts: { commit: boolean; m
     const subject = render(tpl.subject, vars);
     const innerHtml = render(tpl.body, vars);
     const unsubUrl = `${site}/api/unsubscribe?c=${contact.id}&t=${contact.unsub_token}`;
-    const html = brandedEmail({ locale: 'en', heading: subject.replace(/[?]+$/, ''), bodyHtml: innerHtml, preheader: subject })
+    const html = brandedEmail({ locale: loc as Locale, heading: subject.replace(/[?]+$/, ''), bodyHtml: innerHtml, preheader: subject })
       .split('{{unsubscribe}}').join(unsubUrl);
 
     out.preview.push({ business: org.name, email: contact.email, step: nextStep, subject });

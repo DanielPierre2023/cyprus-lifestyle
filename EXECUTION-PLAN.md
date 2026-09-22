@@ -265,6 +265,19 @@
   the de/pl/ru legacy-article backfill shipped earlier — so those needed no change. Bulk NEW
   multilingual article writing remains a large, separate content effort (available on request).
   `tsc` clean; `npm test` 155/155. No migration. Next: D (fresh deep audit).
+- 2026-09-22 — **Outreach · Polish + Russian added → all seven editions.** Migration 0096 seeds
+  the four cadence emails in PL and RU (concierge voice), completing the set (28 templates across
+  7 locales). Both added to the Sponsors enrol-language dropdown and the template-editor tabs. No
+  engine change needed (it already resolves any locale with EN fallback). `tsc` clean; `npm test`
+  155/155; all 93 migrations apply.
+- 2026-09-22 — **Outreach · multilingual (EN/EL/RO/AR/DE).** Migration 0095 adds `locale` to
+  crm_templates + `outreach_locale` to crm_orgs, drops the old one-per-step unique index (now
+  unique on locale+step), and seeds all four cadence emails in five languages (20 templates,
+  concierge voice, RTL Arabic). The engine (`lib/outreach.ts`) now picks each business's language
+  with an EN fallback and renders RTL for Arabic. `enroll_prospects_bulk` gained a `p_locale` arg
+  that stamps the batch's language; the Sponsors "Enrol all in filter" control has a language
+  dropdown, and the template editor has EN/EL/RO/AR/DE tabs (RTL-aware). Verified on Postgres 16
+  (20 templates, locale stamp + enrol); `tsc` clean; `npm test` 155/155; all 92 migrations apply.
 - 2026-09-22 — **Outreach · templates v2.** Migration 0094 rewrites the four cadence emails in
   the Cyprus Lifestyle editor-in-chief / private-concierge voice, leading with the platform's
   current, unique position: independent seven-language guide, verified/merit-based directory, and

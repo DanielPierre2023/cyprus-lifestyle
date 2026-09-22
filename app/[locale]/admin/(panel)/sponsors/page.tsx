@@ -65,6 +65,8 @@ export default function SponsorsTab() {
   const [runResult, setRunResult] = useState<Row | null>(null);
   const [running, setRunning] = useState(false);
   const [msg, setMsg] = useState('');
+  const [enrollLocale, setEnrollLocale] = useState('');   // '' = leave as-is (English default)
+  const [tplLocale, setTplLocale] = useState('en');       // which language's templates to edit
 
   // advertising (existing)
   const [banners, setBanners] = useState<Row[]>([]);
@@ -197,12 +199,13 @@ export default function SponsorsTab() {
   // skips no-email / opted-out / suppressed / already-enrolled accounts.
   async function enrollBulk() {
     const scope = [cat !== 'all' ? cat : null, tier !== 'all' ? tier : null, stage !== 'all' ? stage : null, searchQ.trim() || null].filter(Boolean).join(' · ') || 'ALL verticals';
-    if (!window.confirm(`Enrol every eligible business in the current filter (${scope}) into the first-contact sequence?\n\nThis only queues them — nothing sends until "Sending enabled" is on, and then only up to your daily cap per run.`)) return;
+    const langLabel = ({ '': 'English (default)', el: 'Greek', ro: 'Romanian', ar: 'Arabic', de: 'German', en: 'English' } as Record<string, string>)[enrollLocale] || 'English';
+    if (!window.confirm(`Enrol every eligible business in the current filter (${scope}) into the first-contact sequence, contacted in ${langLabel}?\n\nThis only queues them — nothing sends until "Sending enabled" is on, and then only up to your daily cap per run.`)) return;
     setRunning(true); setMsg('');
     try {
       const res = await fetch('/api/admin/outreach/enroll-bulk', {
         method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category: cat, tier, stage, q: searchQ }),
+        body: JSON.stringify({ category: cat, tier, stage, q: searchQ, locale: enrollLocale }),
       });
       const d = await res.json();
       if (!res.ok || !d.ok) setMsg(d.error || 'Bulk enrol failed');
@@ -247,8 +250,18 @@ export default function SponsorsTab() {
               ? `Emails go from ${settings?.from_email}. ${enrolledCount} businesses in an active sequence.`
               : `Nothing is emailed yet. Set a from-address and switch sending on below when your domain is ready. ${enrolledCount} businesses queued.`}
           </span>
-          <div className="row" style={{ gap: 8, marginTop: 10 }}>
-            <button className="abtn" type="button" disabled={running} onClick={enrollBulk} title="Enrol every eligible business in the current filter into the first-contact sequence">{running ? 'Working…' : `＋ Enrol all in filter${total ? ` (${total})` : ''}`}</button>
+          <div className="row" style={{ gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select value={enrollLocale} onChange={(e) => setEnrollLocale(e.target.value)} title="Language to contact this batch in" style={{ padding: '7px 10px', borderRadius: 6, border: '1px solid var(--line,#e3d9c4)', background: 'var(--paper,#fff)', color: 'inherit', fontSize: 13 }}>
+              <option value="">Language: English (default)</option>
+              <option value="el">Greek (Ελληνικά)</option>
+              <option value="ro">Romanian (Română)</option>
+              <option value="ar">Arabic (العربية)</option>
+              <option value="de">German (Deutsch)</option>
+              <option value="pl">Polish (Polski)</option>
+              <option value="ru">Russian (Русский)</option>
+              <option value="en">English</option>
+            </select>
+            <button className="abtn" type="button" disabled={running} onClick={enrollBulk} title="Enrol every eligible business in the current filter into the first-contact sequence, in the selected language">{running ? 'Working…' : `＋ Enrol all in filter${total ? ` (${total})` : ''}`}</button>
             <button className="abtn" type="button" disabled={running} onClick={() => runNow(false)}>{running ? 'Working…' : 'Run preview'}</button>
             <button className="abtn gold" type="button" disabled={running || !sending} title={sending ? '' : 'Turn sending on first'} onClick={() => runNow(true)}>Send due now</button>
           </div>
@@ -282,8 +295,16 @@ export default function SponsorsTab() {
 
           <details style={{ marginTop: 6 }}>
             <summary style={{ cursor: 'pointer', color: '#8a5b12', fontSize: 13 }}>Email templates ({templates.length})</summary>
-            {templates.map((t) => (
-              <div key={t.id} style={{ marginTop: 10, background: '#fff', border: '1px solid #e3ddcf', borderRadius: 4, padding: 10 }}>
+            <div className="row" style={{ gap: 6, margin: '10px 0', flexWrap: 'wrap' }}>
+              {([['en', 'English'], ['el', 'Ελληνικά'], ['ro', 'Română'], ['ar', 'العربية'], ['de', 'Deutsch'], ['pl', 'Polski'], ['ru', 'Русский']] as [string, string][]).map(([code, lbl]) => (
+                <button key={code} type="button" onClick={() => setTplLocale(code)}
+                  style={{ padding: '5px 11px', borderRadius: 999, cursor: 'pointer', fontSize: 13,
+                    border: `1px solid ${tplLocale === code ? '#C9A24C' : 'var(--line,#e3d9c4)'}`,
+                    background: tplLocale === code ? 'rgba(201,162,76,.15)' : 'transparent', color: 'inherit' }}>{lbl}</button>
+              ))}
+            </div>
+            {templates.filter((t) => (t.locale || 'en') === tplLocale).sort((a, b) => (a.step || 0) - (b.step || 0)).map((t) => (
+              <div key={t.id} style={{ marginTop: 10, background: '#fff', border: '1px solid #e3ddcf', borderRadius: 4, padding: 10 }} dir={tplLocale === 'ar' ? 'rtl' : 'ltr'}>
                 <div style={{ fontSize: 12, color: '#8a8371', marginBottom: 4 }}>Step {t.step} · {t.name}</div>
                 <label className="fl">Subject</label>
                 <input defaultValue={t.subject} onBlur={(e) => saveTemplate(t.id, { subject: e.target.value })} />
@@ -291,6 +312,7 @@ export default function SponsorsTab() {
                 <textarea rows={6} defaultValue={t.body} onBlur={(e) => saveTemplate(t.id, { body: e.target.value })} style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
               </div>
             ))}
+            {templates.filter((t) => (t.locale || 'en') === tplLocale).length === 0 ? <p style={{ fontSize: 13, color: '#8a8371', marginTop: 8 }}>No templates for this language yet — run migration 0095.</p> : null}
           </details>
         </div>
       )}
