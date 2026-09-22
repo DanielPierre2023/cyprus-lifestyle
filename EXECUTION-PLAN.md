@@ -265,6 +265,13 @@
   the de/pl/ru legacy-article backfill shipped earlier — so those needed no change. Bulk NEW
   multilingual article writing remains a large, separate content effort (available on request).
   `tsc` clean; `npm test` 155/155. No migration. Next: D (fresh deep audit).
+- 2026-09-22 — **Outreach · templates v2.** Migration 0094 rewrites the four cadence emails in
+  the Cyprus Lifestyle editor-in-chief / private-concierge voice, leading with the platform's
+  current, unique position: independent seven-language guide, verified/merit-based directory, and
+  a concierge that recommends businesses BY NAME to high-intent readers (warm introductions, not
+  advertising). Steps: 1 invitation, 2 founding-partner value, 3 gentle nudge, 4 gracious close.
+  Placeholders preserved; editable in Admin → Sponsors → Email templates. Idempotent; all 91
+  migrations apply.
 - 2026-09-22 — **Outreach · one-click bulk enrol.** Migration 0093 (`enroll_prospects_bulk`)
   + `/api/admin/outreach/enroll-bulk` + a "＋ Enrol all in filter" button on the Sponsors tab.
   Enrols every eligible account in the current vertical/tier/stage/search filter into the
