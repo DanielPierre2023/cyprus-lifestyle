@@ -12,6 +12,9 @@ export default function PrivacyAdmin() {
   const [dsar, setDsar] = useState<Dsar[]>([]);
   const [ropa, setRopa] = useState<Ropa[]>([]);
   const [loading, setLoading] = useState(true);
+  const [eraseEmail, setEraseEmail] = useState('');
+  const [erasing, setErasing] = useState('');
+  const [eraseMsg, setEraseMsg] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -28,6 +31,29 @@ export default function PrivacyAdmin() {
     await sb.from('dsar_requests').update({ status, handled_at: new Date().toISOString() }).eq('id', id);
   }
 
+  // Executable erasure (item 15). Destructive & irreversible → a typed confirm.
+  async function erase(email: string, requestId?: string) {
+    const e = (email || '').trim();
+    if (!e) return;
+    if (!window.confirm(`Permanently ERASE all personal data for:\n\n${e}\n\nThis deletes their records everywhere (accounting records are anonymised, kept for tax) and cannot be undone. Continue?`)) return;
+    setErasing(requestId || e); setEraseMsg('');
+    try {
+      const res = await fetch('/api/admin/privacy/erase', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: e, requestId: requestId || null, confirm: true }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) { setEraseMsg(`Erasure failed: ${data.error || res.status}`); return; }
+      setEraseMsg(`Erased ${data.email_masked}: ${data.total} record(s) removed/anonymised across ${Object.keys(data.counts || {}).length} tables.`);
+      if (!requestId) setEraseEmail('');
+      load();
+    } catch (err) {
+      setEraseMsg((err as Error).message);
+    } finally {
+      setErasing('');
+    }
+  }
+
   const open = dsar.filter((d) => d.status === 'new' || d.status === 'in_progress');
   const overdue = (d: Dsar) => (d.status === 'new' || d.status === 'in_progress') && new Date(d.due_at).getTime() < Date.now();
 
@@ -37,6 +63,17 @@ export default function PrivacyAdmin() {
       <p className="sub">Data-subject requests (respond within one month) and the Record of Processing Activities. The public data-sourcing statement and request form are at <code>/sourcing</code>.</p>
 
       <h1 style={{ fontSize: 18 }}>Data-subject requests{open.length ? ` · ${open.length} open` : ''}</h1>
+
+      {/* Executable erasure (item 15). One audited call purges a subject everywhere. */}
+      <div className="row" style={{ alignItems: 'center', gap: 8, margin: '4px 0 14px', flexWrap: 'wrap' }}>
+        <input placeholder="email to erase…" value={eraseEmail} onChange={(e) => setEraseEmail(e.target.value)} style={{ minWidth: 240 }} />
+        <button className="abtn" disabled={!!erasing || !eraseEmail.trim()} onClick={() => erase(eraseEmail)} style={{ borderColor: '#B00020', color: '#B00020' }}>
+          {erasing === eraseEmail.trim() ? 'Erasing…' : 'Erase this email'}
+        </button>
+        <span className="sub" style={{ margin: 0 }}>Purges personal data across all tables; keeps &amp; anonymises accounting records; reinforces opt-out; writes an audit row.</span>
+        {eraseMsg ? <span className="sub" style={{ margin: 0, fontWeight: 600 }}>{eraseMsg}</span> : null}
+      </div>
+
       <table className="adm-t">
         <thead><tr><th>When</th><th>Type</th><th>From</th><th>Details</th><th>Due</th><th>Status</th><th></th></tr></thead>
         <tbody>
@@ -52,7 +89,8 @@ export default function PrivacyAdmin() {
                 {d.status !== 'resolved' ? (
                   <>
                     {d.status === 'new' ? <button onClick={() => setStatus(d.id, 'in_progress')} style={b(false)}>Start</button> : null}{' '}
-                    <button onClick={() => setStatus(d.id, 'resolved')} style={b(true)}>Resolve</button>
+                    <button onClick={() => setStatus(d.id, 'resolved')} style={b(true)}>Resolve</button>{' '}
+                    {d.kind === 'erasure' ? <button onClick={() => erase(d.email, d.id)} disabled={erasing === d.id} style={bDanger()}>{erasing === d.id ? 'Erasing…' : 'Erase data'}</button> : null}
                   </>
                 ) : null}
               </td>
@@ -87,4 +125,8 @@ function b(primary: boolean): React.CSSProperties {
   return { padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
     border: `1px solid ${primary ? '#C9A24C' : 'var(--line,#e3d9c4)'}`,
     background: primary ? 'rgba(201,162,76,.15)' : 'transparent', color: 'inherit' };
+}
+function bDanger(): React.CSSProperties {
+  return { padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+    border: '1px solid #B00020', background: 'rgba(176,0,32,.08)', color: '#B00020' };
 }

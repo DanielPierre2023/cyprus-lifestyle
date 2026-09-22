@@ -270,6 +270,25 @@
   handler in `lib/jobs.handlers.ts`. Migration 0097 applies on the full-migration gate (idempotent;
   summary view verified). Pure verdict/scoring/sampler logic has 33 unit tests; `tsc` clean;
   `npm test` 188/188 across 13 suites.
+- 2026-09-22 — **15 · Executable DSAR erasure.** Item 12 gave us the DSAR intake + the ROPA; this
+  makes an erasure request actually *erasable* in one audited call instead of a manual hunt across
+  a dozen tables. New SQL function `erase_personal_data(email, actor, request_id)` (migration 0098):
+  it purges the subject's personal data everywhere it lives — `contacts`, `newsletter_subscribers`,
+  `contact_messages`, `blog_comments`, `crm_contacts`, `ad_leads`, `directory_leads`,
+  `concierge_requests`, `concierge_members`, `inbound_emails` and the KB rows derived from their
+  mail — and cascades to the anonymous concierge tables (`concierge_events`, `saved_items`,
+  `concierge_memory`) via the cid recorded on their membership. It does the two things the law
+  requires us to KEEP: it **anonymises** (does not delete) the `ad_orders` accounting rows we must
+  retain for tax, and it **reinforces the opt-out** by ensuring an `crm_suppression` record so an
+  erasure can never re-open contact. Every run writes a `dsar_erasure_log` row proving what was
+  erased, for whom (a SHA-256 hash + a masked address, never plaintext), by which admin, with
+  per-table counts. Wrapped by `lib/privacy/erase.ts` and `app/api/admin/privacy/erase` (admin
+  session AND an explicit `confirm:true`); the admin Privacy tab gets a per-request **Erase data**
+  button and a standalone erase-by-email box, both behind a typed confirm. Proven end-to-end on
+  Postgres: a full 16-table seed → erase → every subject row gone, the decoy kept, the order row
+  retained but de-identified, suppression added, audit hashed; idempotent and input-guarded. Pure
+  validators have 13 unit tests; `tsc` clean; `npm test` 201/201 across 14 suites; all migrations
+  apply (0098 idempotent).
 
 ## Post-roadmap follow-through
 - 2026-09-22 — **A · Job queue activated.** Item 01's queue was live but inert; now it does real
