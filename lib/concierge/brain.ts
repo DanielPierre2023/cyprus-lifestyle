@@ -22,6 +22,10 @@ import { geocode, haversineMeters, bbox } from '@/lib/geo';
 
 export const CONCIERGE_MODEL = process.env.SONNET_MODEL || CLAUDE_SONNET;
 const NEIGHBOURHOOD_RADIUS_M = Number(process.env.NEIGHBOURHOOD_RADIUS_M || 2500);
+// Statuses the CONCIERGE may recommend from. 'published' is the public website set;
+// 'listed' is the bulk-imported directory (real businesses shown to the concierge for
+// "what's near me" but NOT on the public website — the site filters status='published').
+const CONCIERGE_STATUSES = ['published', 'listed'];
 
 export type Role = 'user' | 'assistant';
 export interface ChatMessage { role: Role; content: string; }
@@ -306,13 +310,13 @@ export async function searchDirectory(locale: string, q: string, limit = 8, opts
     // Subtype-exact FIRST (highest precision): "an accountant in Larnaca" must return
     // accountants, not the whole professional group — so they always lead the picks.
     for (const st of subtypes) {
-      let query = sb.from('directory_listings').select(cols).eq('status', 'published').eq('subtype', st);
+      let query = sb.from('directory_listings').select(cols).in('status', CONCIERGE_STATUSES).eq('subtype', st);
       if (districts.length === 1) query = query.eq('district', districts[0]);
       const { data } = await ordered(query).limit(10);
       push(data as Record<string, unknown>[] | null);
       // If a district filter found nothing, widen to island-wide for that subtype.
       if (!(data && data.length) && districts.length === 1) {
-        const { data: wide } = await ordered(sb.from('directory_listings').select(cols).eq('status', 'published').eq('subtype', st)).limit(6);
+        const { data: wide } = await ordered(sb.from('directory_listings').select(cols).in('status', CONCIERGE_STATUSES).eq('subtype', st)).limit(6);
         push(wide as Record<string, unknown>[] | null);
       }
     }
@@ -322,12 +326,12 @@ export async function searchDirectory(locale: string, q: string, limit = 8, opts
     const probes = categoryProbes(q);
     if (probes.length) {
       const por = probes.flatMap((p) => [`subtype.ilike.*${p}*`, `name_en.ilike.*${p}*`, `name_${locale}.ilike.*${p}*`]).join(',');
-      let pq = sb.from('directory_listings').select(cols).eq('status', 'published').or(por);
+      let pq = sb.from('directory_listings').select(cols).in('status', CONCIERGE_STATUSES).or(por);
       if (districts.length === 1) pq = pq.eq('district', districts[0]);
       const { data } = await ordered(pq).limit(12);
       push(data as Record<string, unknown>[] | null);
       if (!(data && data.length) && districts.length === 1) { // widen island-wide
-        const { data: wide } = await ordered(sb.from('directory_listings').select(cols).eq('status', 'published').or(por)).limit(8);
+        const { data: wide } = await ordered(sb.from('directory_listings').select(cols).in('status', CONCIERGE_STATUSES).or(por)).limit(8);
         push(wide as Record<string, unknown>[] | null);
       }
     }
@@ -336,12 +340,12 @@ export async function searchDirectory(locale: string, q: string, limit = 8, opts
         const v = t.replace(/[(),*]/g, '');
         return [`name_${locale}.ilike.*${v}*`, `name_en.ilike.*${v}*`, `summary_${locale}.ilike.*${v}*`, `summary_en.ilike.*${v}*`, `subtype.ilike.*${v}*`];
       }).join(',');
-      const { data } = await sb.from('directory_listings').select(cols).eq('status', 'published').or(or)
+      const { data } = await sb.from('directory_listings').select(cols).in('status', CONCIERGE_STATUSES).or(or)
         .order('rating', { ascending: false, nullsFirst: false }).limit(16);
       push(data as Record<string, unknown>[] | null);
     }
     for (const ty of types) {
-      let query = sb.from('directory_listings').select(cols).eq('status', 'published').eq('type', ty);
+      let query = sb.from('directory_listings').select(cols).in('status', CONCIERGE_STATUSES).eq('type', ty);
       if (districts.length === 1) query = query.eq('district', districts[0]);
       const { data } = await ordered(query).limit(10);
       push(data as Record<string, unknown>[] | null);
@@ -351,7 +355,7 @@ export async function searchDirectory(locale: string, q: string, limit = 8, opts
     // category_group, not the five content `type`s. This is what makes a request
     // like "imobiliare la Larnaca" or "wynajem samochodu" actually return listings.
     for (const g of groups) {
-      let query = sb.from('directory_listings').select(cols).eq('status', 'published').eq('category_group', g);
+      let query = sb.from('directory_listings').select(cols).in('status', CONCIERGE_STATUSES).eq('category_group', g);
       if (districts.length === 1) query = query.eq('district', districts[0]);
       const { data } = await ordered(query).limit(12);
       push(data as Record<string, unknown>[] | null);
@@ -370,7 +374,7 @@ async function searchNear(locale: string, point: { lat: number; lng: number }, r
   const box = bbox(point.lat, point.lng, radiusM);
   const { types, groups, subtypes } = readIntent(q);
   const probes = categoryProbes(q);
-  let query = sb.from('directory_listings').select(cols).eq('status', 'published')
+  let query = sb.from('directory_listings').select(cols).in('status', CONCIERGE_STATUSES)
     .gte('lat', box.minLat).lte('lat', box.maxLat).gte('lng', box.minLng).lte('lng', box.maxLng);
   const orParts: string[] = [];
   for (const st of subtypes) orParts.push(`subtype.eq.${st}`);
@@ -426,7 +430,7 @@ export async function matchForRequest(
 async function topRated(locale: string, limit = 8): Promise<Pick[]> {
   try {
     const { data } = await supabaseAdmin().from('directory_listings').select(dirCols(locale))
-      .eq('status', 'published').order('rating', { ascending: false, nullsFirst: false }).limit(limit);
+      .in('status', CONCIERGE_STATUSES).order('rating', { ascending: false, nullsFirst: false }).limit(limit);
     return ((data as Record<string, unknown>[] | null) || []).map((r) => rowToPick(r, locale));
   } catch { return []; }
 }
@@ -437,7 +441,7 @@ async function hydrateSlugs(locale: string, slugs: string[]): Promise<Pick[]> {
   if (!slugs.length) return [];
   try {
     const { data } = await supabaseAdmin().from('directory_listings').select(dirCols(locale))
-      .eq('status', 'published').in('slug', slugs);
+      .in('status', CONCIERGE_STATUSES).in('slug', slugs);
     const bySlug = new Map<string, Record<string, unknown>>();
     for (const r of (data as Record<string, unknown>[] | null) || []) bySlug.set(String(r.slug), r);
     const out: Pick[] = [];
