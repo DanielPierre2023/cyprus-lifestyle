@@ -14,6 +14,8 @@ import { runDevelopmentsScrape } from '@/lib/scrape/developments';
 import { runRegulationWatch } from '@/lib/scrape/regulations';
 import { runEventsActualiser } from '@/lib/scrape/events';
 import { logServerError } from '@/lib/monitor.server';
+import { runWorker } from '@/lib/jobs';
+import { enqueueGeocodeBacklog } from '@/lib/jobs.handlers';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap
@@ -59,6 +61,15 @@ export async function GET(req: NextRequest) {
       out.events = await runEventsActualiser(sb, { refresh: false, mine: true, mineLimit: 2, deadlineMs: 10_000 });
     }
   } catch (e) { out.livingKnowledgeError = (e as Error).message; await logServerError('cron-tick:living-knowledge', e); }
+
+  // Activate the background queue (item 01): top up coordinate-backfill jobs, then drain a
+  // time-boxed batch so it progresses even without pg_cron. When pg_cron is enabled, the
+  // worker also drains continuously between ticks.
+  try {
+    const enqueued = await enqueueGeocodeBacklog(sb, 40);
+    const drained = await runWorker({ deadlineMs: 15_000 });
+    out.jobs = { enqueued, ...drained };
+  } catch (e) { await logServerError('cron-tick:jobs', e); }
 
   // Self-maintain the error log (keep 90 days). Best-effort.
   try { await sb.rpc('prune_error_log'); } catch { /* function not migrated yet — ignore */ }

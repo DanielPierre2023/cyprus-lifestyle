@@ -165,18 +165,35 @@ export async function getPeers(
   limit = 5,
 ): Promise<Listing[]> {
   const sb = supabaseAdmin();
-  let q = sb.from('directory_listings').select(LISTING_COLS(locale)).eq('status', 'published');
-  q = opts.category_group ? q.eq('category_group', opts.category_group) : q.eq('type', opts.type);
-  const { data } = await q.order('rating', { ascending: false, nullsFirst: false }).limit(80);
-  const rows = ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale))
-    .filter((x) => x.name && x.slug !== excludeSlug);
-  // Stable re-rank (V8 sort is stable, so rating order is kept within equal scores):
-  // same subtype (+2) outweighs same district (+1).
+  const cols = LISTING_COLS(locale);
+  const seen = new Set<string>([excludeSlug]);
+  const out: Listing[] = [];
+  const add = (data: unknown) => {
+    for (const r of ((data || []) as unknown as Record<string, unknown>[])) {
+      const x = toListing(r, locale);
+      if (x.name && !seen.has(x.slug)) { seen.add(x.slug); out.push(x); }
+    }
+  };
+  const fetchBy = async (col: 'subtype' | 'type' | 'category_group', val: string | null): Promise<unknown> => {
+    if (!val) return [];
+    try {
+      const { data } = await sb.from('directory_listings').select(cols).eq('status', 'published')
+        .eq(col, val).order('rating', { ascending: false, nullsFirst: false }).limit(40);
+      return data;
+    } catch { return []; }
+  };
+  // "Similar" means the SAME KIND of business, not merely the same broad group. Fetch the
+  // narrowest match first (subtype), then widen to type, then the category group only to
+  // top up — so a law firm is compared with law firms, not with banks in the same group.
+  add(await fetchBy('subtype', opts.subtype));
+  if (out.length < limit) add(await fetchBy('type', opts.type));
+  if (out.length < limit && opts.category_group) add(await fetchBy('category_group', opts.category_group));
+  // Among the similar set, prefer the same subtype, then nudge same-district up (minor).
   const score = (x: Listing) =>
     (opts.subtype && x.subtype === opts.subtype ? 2 : 0) +
     (opts.district && x.district === opts.district ? 1 : 0);
-  rows.sort((a, b) => score(b) - score(a));
-  return rows.slice(0, limit);
+  out.sort((a, b) => score(b) - score(a));
+  return out.slice(0, limit);
 }
 // Upcoming events in a district — "what's on nearby".
 export async function getEventsByDistrict(locale: Locale, district: string | null, limit = 3): Promise<EventItem[]> {

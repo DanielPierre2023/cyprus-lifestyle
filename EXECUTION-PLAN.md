@@ -244,3 +244,13 @@
   runs the DSAR queue (overdue flagged) and shows the ROPA. Footer + sitemap updated; 7 message
   files extended. `tsc` clean; `npm test` 147/147 across 11 suites; all 89 migrations apply.
   ── **All of items 01–12 are now shipped, each tested and delivered as its own minimal bundle.**
+
+## Post-roadmap follow-through
+- 2026-09-22 — **A · Job queue activated.** Item 01's queue was live but inert; now it does real
+  work. New handlers registered (`lib/jobs.handlers.ts`): `geocode_listing` (coordinate backfill,
+  one listing per job, cached + Cyprus-bounded — lifts directory coord-coverage from item 04 over
+  time) plus `developments`/`regulations`/`events_mine`/`outreach` as enqueueable jobs. The daily
+  tick now tops up the geocode backlog (`enqueueGeocodeBacklog`, deduped per slug) and drains a
+  time-boxed batch, so it progresses with OR without pg_cron; pg_cron drains continuously between
+  ticks. Pure helpers unit-tested (`jobs.geocode`); `tsc` clean; `npm test` 155/155 across 12
+  suites. No migration. Next: B (operator runbook).
