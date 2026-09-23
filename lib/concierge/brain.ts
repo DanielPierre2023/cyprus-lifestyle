@@ -20,6 +20,7 @@ import { localizedIntent } from '@/lib/knowledge/qa.i18n';
 import { embedText } from '@/lib/concierge/embed';
 import { understandQuery, buildAugmentedQuery, type Understanding } from '@/lib/concierge/understand';
 import { rerankCandidates } from '@/lib/concierge/rerank';
+import { mapToCanonical } from '@/lib/directory/taxonomy';
 import { geocode, haversineMeters, bbox } from '@/lib/geo';
 
 export const CONCIERGE_MODEL = process.env.SONNET_MODEL || CLAUDE_SONNET;
@@ -36,6 +37,7 @@ export interface Pick {
   slug: string; type: string; name: string; district: string | null;
   rating: number | null; rating_count: number | null; price_band: string | null;
   image: string | null; verified?: boolean; subtype?: string | null; luxury?: boolean;
+  canonicalCategory?: string | null; // clean normalized category (Phase 1) — exact, language-agnostic
   // Structured development facts (type='development'), so the concierge can quote the
   // real number and status — "from €280k, delivery Q4 2026" — not just a band.
   priceFrom?: number | null; priceTo?: number | null; devStatus?: string | null;
@@ -206,13 +208,14 @@ export function classifyRequest(q: string): { category: string | null; district:
 
 // The directory columns we surface as a Pick (locale-aware, with English fallback).
 const dirCols = (locale: string) =>
-  `slug,type,subtype,district,price_band,rating,rating_count,verified,luxury,featured,lat,lng,image,price_from,price_to,dev_status,completion,bedrooms,partner_pitch,name_${locale},name_en,summary_${locale},summary_en`;
+  `slug,type,subtype,canonical_category,canonical_subtype,tags,district,price_band,rating,rating_count,verified,luxury,featured,lat,lng,image,price_from,price_to,dev_status,completion,bedrooms,partner_pitch,name_${locale},name_en,summary_${locale},summary_en`;
 
 function rowToPick(r: Record<string, unknown>, locale: string): Pick {
   return {
     slug: String(r.slug || ''),
     type: String(r.type || ''),
     subtype: (r.subtype as string) ?? null,
+    canonicalCategory: (r.canonical_category as string) ?? null,
     name: String(r[`name_${locale}`] || r.name_en || ''),
     district: (r.district as string) ?? null,
     rating: (r.rating as number) ?? null,
@@ -448,6 +451,31 @@ async function topRated(locale: string, limit = 8): Promise<Pick[]> {
   } catch { return []; }
 }
 
+// Exact canonical-category retrieval (Phase 1) — the most precise leg. A business is
+// normalised to gym-fitness / solar-installer / law-firm, so we fetch exactly that
+// category in the district, our-clients-first. Language- and slug-agnostic: the category
+// came from normalisation, not the query's wording. Widens island-wide if the district
+// has none of that category.
+async function searchByCanonical(locale: string, category: string, district: string | null, limit = 12): Promise<Pick[]> {
+  const sb = supabaseAdmin();
+  const cols = dirCols(locale);
+  const run = async (withDistrict: boolean): Promise<Pick[]> => {
+    let q = sb.from('directory_listings').select(cols).in('status', CONCIERGE_STATUSES).eq('canonical_category', category);
+    if (withDistrict && district) q = q.eq('district', district);
+    const { data } = await q
+      .order('featured', { ascending: false, nullsFirst: false })
+      .order('verified', { ascending: false, nullsFirst: false })
+      .order('rating', { ascending: false, nullsFirst: false })
+      .limit(limit);
+    return ((data as Record<string, unknown>[] | null) || []).map((r) => rowToPick(r, locale));
+  };
+  try {
+    let out = await run(true);
+    if (!out.length && district) out = await run(false); // widen island-wide
+    return out;
+  } catch { return []; }
+}
+
 // Hydrate full Picks for a set of slugs, preserving the given order (turns the
 // slugs from semantic search back into rich, published candidates).
 async function hydrateSlugs(locale: string, slugs: string[]): Promise<Pick[]> {
@@ -527,6 +555,9 @@ export async function assembleContext(locale: string, latestUser: string): Promi
   // the text so the keyword pass sharpens; the district scopes the semantic search.
   const augmented = understanding ? buildAugmentedQuery(latestUser, understanding) : latestUser;
   const intentDistrict = (understanding?.district) || readIntent(latestUser).districts[0] || readIntent(augmented).districts[0] || null;
+  // The clean canonical category this request maps to (query text + the LLM's English
+  // keywords) — powers the exact, language-agnostic category leg below.
+  const targetCanonical = mapToCanonical(`${latestUser} ${understanding?.keywords?.join(' ') || ''} ${understanding?.subtype || ''}`);
 
   // SEMANTIC-FIRST retrieval — language- and slug-agnostic. A gym stored as
   // 'health-clubs' and the query "sala de gimnastică" meet in vector space, so category
@@ -536,16 +567,19 @@ export async function assembleContext(locale: string, latestUser: string): Promi
   const kwAugP = (understanding && augmented !== latestUser)
     ? searchDirectory(locale, augmented, 10, { luxuryFirst: understanding.luxury }).catch(() => [] as Pick[])
     : Promise.resolve([] as Pick[]);
-  const [kbVecIds, vecDistrict, vecGlobal, kwAug] = await Promise.all([
+  const [kbVecIds, vecDistrict, vecGlobal, kwAug, canonExact] = await Promise.all([
     vectorKbIds(qvec),
     intentDistrict ? vectorDirectory(locale, qvec, 15, intentDistrict) : Promise.resolve([] as Pick[]),
     vectorDirectory(locale, qvec, 12),
     kwAugP,
+    targetCanonical ? searchByCanonical(locale, targetCanonical, intentDistrict, 14) : Promise.resolve([] as Pick[]),
   ]);
 
-  // Fusion, most-precise first: exact category+district (keyword) → category+district by
-  // MEANING (vector) → raw keyword → global meaning. Deduped by slug.
+  // Fusion, most-precise first: EXACT canonical category (clean, language-agnostic) →
+  // precise keyword → category+district by MEANING (vector) → raw keyword → global
+  // meaning. Deduped by slug.
   let candidates: Pick[] = [];
+  candidates = mergeDirHits(candidates, canonExact, 24);
   candidates = mergeDirHits(candidates, kwAug, 24);
   candidates = mergeDirHits(candidates, vecDistrict, 24);
   candidates = mergeDirHits(candidates, keywordPicks, 24);
@@ -604,23 +638,26 @@ export async function assembleContext(locale: string, latestUser: string): Promi
 export interface TraceLeg { name: string; count: number; sample: { slug: string; name: string; subtype: string | null; district: string | null }[] }
 export interface RetrievalTrace {
   query: string; locale: string; augmented: string; intentDistrict: string | null;
-  understanding: Understanding | null; hasEmbedding: boolean; legs: TraceLeg[];
+  targetCanonical: string | null; understanding: Understanding | null; hasEmbedding: boolean; legs: TraceLeg[];
 }
 export async function retrievalTrace(locale: string, q: string): Promise<RetrievalTrace> {
   const loc = isConciergeLocale(locale) ? locale : 'en';
   const understanding = await understandQuery(q).catch(() => null);
   const augmented = understanding ? buildAugmentedQuery(q, understanding) : q;
   const intentDistrict = (understanding?.district) || readIntent(q).districts[0] || readIntent(augmented).districts[0] || null;
+  const targetCanonical = mapToCanonical(`${q} ${understanding?.keywords?.join(' ') || ''} ${understanding?.subtype || ''}`);
   const qvec = await embedText(q);
-  const [kw, kwAug, vecDistrict, vecGlobal] = await Promise.all([
+  const [kw, kwAug, vecDistrict, vecGlobal, canonExact] = await Promise.all([
     searchDirectory(loc, q, 10).catch(() => [] as Pick[]),
     (understanding && augmented !== q) ? searchDirectory(loc, augmented, 10).catch(() => [] as Pick[]) : Promise.resolve([] as Pick[]),
     intentDistrict ? vectorDirectory(loc, qvec, 12, intentDistrict) : Promise.resolve([] as Pick[]),
     vectorDirectory(loc, qvec, 12),
+    targetCanonical ? searchByCanonical(loc, targetCanonical, intentDistrict, 12) : Promise.resolve([] as Pick[]),
   ]);
   // The fused + reranked order — what the guest actually sees (the proof the ordering
   // works). Respects CONCIERGE_RERANK: with it off this is the plain fused order.
   let fused: Pick[] = [];
+  fused = mergeDirHits(fused, canonExact, 24);
   fused = mergeDirHits(fused, kwAug, 24);
   fused = mergeDirHits(fused, vecDistrict, 24);
   fused = mergeDirHits(fused, kw, 24);
@@ -629,8 +666,9 @@ export async function retrievalTrace(locale: string, q: string): Promise<Retriev
 
   const sample = (a: Pick[]): TraceLeg['sample'] => a.slice(0, 8).map((p) => ({ slug: p.slug, name: p.name, subtype: p.subtype ?? null, district: p.district ?? null }));
   return {
-    query: q, locale: loc, augmented, intentDistrict, understanding, hasEmbedding: !!qvec,
+    query: q, locale: loc, augmented, intentDistrict, targetCanonical, understanding, hasEmbedding: !!qvec,
     legs: [
+      { name: 'canonical(exact)', count: canonExact.length, sample: sample(canonExact) },
       { name: 'keyword(raw)', count: kw.length, sample: sample(kw) },
       { name: 'keyword(augmented)', count: kwAug.length, sample: sample(kwAug) },
       { name: 'semantic(district)', count: vecDistrict.length, sample: sample(vecDistrict) },

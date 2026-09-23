@@ -579,7 +579,15 @@ below, measuring before and after.
   — **zero fabrication, it only labels existing rows** (one-time ≈ $1–2). This is the root fix for
   the raw-import-slug mess and unlocks clean faceting, precise category-match ranking, Partner
   **category-exclusivity**, and category analytics. `tsc` clean; `npm test` 22 suites (taxonomy.pure
-  18); 104 migrations apply, canonical columns verified. *Next (CI-8b): have retrieval/rerank prefer
-  `canonical_category` once populated, and mirror the CRM subscription tier for full Pillar E.*
+  18); 104 migrations apply, canonical columns verified.
+- [x] **CI-8b · Canonical category in retrieval.** *Shipped 2026-09-23 (17,747/17,778 normalised):*
+  `brain.ts` now exposes `canonical_category` on every Pick, and `assembleContext` leads the fusion
+  with an **exact canonical-category leg** — `mapToCanonical(query + LLM keywords)` → a precise
+  `canonical_category = <key>` (+ district) query, our-clients-first, widening island-wide if the
+  district is empty. So "gym in Larnaca" / "sală de gimnastică" / "γυμναστήριο" all resolve to the
+  gym-fitness rows exactly, no semantic guess and no per-query LLM. The retrieval-trace gains a
+  `canonical(exact)` leg and `targetCanonical`. `tsc` clean; `npm test` 22 suites; no migration.
+  *Next: mirror the CRM subscription tier onto listings for the full Partner/Featured/Listed Pillar E,
+  then the civic layer (nearest hospital/police, 112) and taste layer.*
 - [ ] **CI-5 · Taste & personality + re-measure.** Persona tuning (warmth/wit/timing) with a
   delight axis added to the eval; re-run coverage + live evals to prove the gains.
