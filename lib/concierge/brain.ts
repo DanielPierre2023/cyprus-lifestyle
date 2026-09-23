@@ -45,6 +45,8 @@ export interface Pick {
   partnerPitch?: string | null; // the business's OWN note about its services/offers
   distanceM?: number | null;    // metres from the guest's neighbourhood point, when known
   featured?: boolean;           // our own client / paid placement — surfaced first, but labelled
+  commercialTier?: string | null; // real CRM tier: 'partner' | 'featured' | 'listed' | null (0108)
+  commercialRank?: number | null; // orderable mirror of the tier: 3/2/1/0 — what ranking sorts on
   lat?: number | null; lng?: number | null;
 }
 export interface GuideLink { label: string; path: string; }
@@ -208,7 +210,7 @@ export function classifyRequest(q: string): { category: string | null; district:
 
 // The directory columns we surface as a Pick (locale-aware, with English fallback).
 const dirCols = (locale: string) =>
-  `slug,type,subtype,canonical_category,canonical_subtype,tags,district,price_band,rating,rating_count,verified,luxury,featured,lat,lng,image,price_from,price_to,dev_status,completion,bedrooms,partner_pitch,name_${locale},name_en,summary_${locale},summary_en`;
+  `slug,type,subtype,canonical_category,canonical_subtype,tags,district,price_band,rating,rating_count,verified,luxury,featured,commercial_tier,commercial_rank,lat,lng,image,price_from,price_to,dev_status,completion,bedrooms,partner_pitch,name_${locale},name_en,summary_${locale},summary_en`;
 
 function rowToPick(r: Record<string, unknown>, locale: string): Pick {
   return {
@@ -231,6 +233,8 @@ function rowToPick(r: Record<string, unknown>, locale: string): Pick {
     bedrooms: (r.bedrooms as string) ?? null,
     partnerPitch: (r.partner_pitch as string) ?? null,
     featured: Boolean(r.featured),
+    commercialTier: (r.commercial_tier as string) ?? null,
+    commercialRank: (r.commercial_rank as number) ?? 0,
     lat: (r.lat as number) ?? null,
     lng: (r.lng as number) ?? null,
   };
@@ -316,7 +320,8 @@ export async function searchDirectory(locale: string, q: string, limit = 8, opts
   const lux = luxuryIntent(q) || Boolean(opts?.luxuryFirst);
   // Apply luxury-first ordering when the guest signals the high end.
   const ordered = <T extends { order: (c: string, o: { ascending: boolean; nullsFirst: boolean }) => T }>(query: T): T => {
-    let x = query;
+    // Pillar E: paying tier leads among relevant matches; then luxury intent, verified, rating.
+    let x = query.order('commercial_rank', { ascending: false, nullsFirst: false });
     if (lux) x = x.order('luxury', { ascending: false, nullsFirst: false });
     return x.order('verified', { ascending: false, nullsFirst: false }).order('rating', { ascending: false, nullsFirst: false });
   };
@@ -407,8 +412,10 @@ async function searchNear(locale: string, point: { lat: number; lng: number }, r
         return { ...p, distanceM: isFinite(d) ? Math.round(d) : null };
       })
       .filter((p) => p.distanceM != null && p.distanceM <= radiusM);
-    // Our clients first (labelled downstream), then verified, then nearest, then rating.
+    // Our paying tier first (labelled downstream; the prompt still forbids hiding a nearer/
+    // better-rated place), then featured, verified, nearest, rating.
     near.sort((a, b) =>
+      ((Number(b.commercialRank) || 0) - (Number(a.commercialRank) || 0)) ||
       (Number(!!b.featured) - Number(!!a.featured)) ||
       (Number(!!b.verified) - Number(!!a.verified)) ||
       ((a.distanceM as number) - (b.distanceM as number)) ||
@@ -463,6 +470,7 @@ async function searchByCanonical(locale: string, category: string, district: str
     let q = sb.from('directory_listings').select(cols).in('status', CONCIERGE_STATUSES).eq('canonical_category', category);
     if (withDistrict && district) q = q.eq('district', district);
     const { data } = await q
+      .order('commercial_rank', { ascending: false, nullsFirst: false }) // Pillar E: paying tier leads (Partner>Featured>Listed)
       .order('featured', { ascending: false, nullsFirst: false })
       .order('verified', { ascending: false, nullsFirst: false })
       .order('rating', { ascending: false, nullsFirst: false })
@@ -716,7 +724,10 @@ export function groundingBlock(ctx: ConciergeContext, locale: string): string {
         if (bits.length) dev = `, ${bits.join(', ')}`;
       }
       const dm = (c.distanceM != null) ? `, ~${dist(c.distanceM)} away` : '';
-      const partner = c.featured ? ' — ★ our featured partner' : '';
+      const partner = c.commercialTier === 'partner' ? ' — ★ our partner'
+        : (c.commercialTier === 'featured' || c.featured) ? ' — ★ our featured partner'
+        : c.commercialTier === 'listed' ? ' — our listed partner'
+        : '';
       parts.push(`• ${c.name} — ${kind}${c.district ? `, ${c.district}` : ''}${dm}${c.rating ? `, ${c.rating}★${c.rating_count ? ` (${c.rating_count})` : ''}` : ''}${c.price_band ? `, ${c.price_band}` : ''}${dev}${c.verified ? ', verified' : ''}${partner}`);
       // The business's own note about its services/offers — you MAY relay this, but
       // attribute it as their own words ("they say…"), and never state it as our fact.

@@ -74,6 +74,7 @@ export const CANONICAL_CATEGORIES: CanonicalCategory[] = [
   { key: 'hair-barber', label: 'Hairdresser / barber', group: 'beauty' },
   { key: 'beauty-spa', label: 'Beauty salon / spa', group: 'beauty' },
   { key: 'nail-salon', label: 'Nail salon', group: 'beauty' },
+  { key: 'tattoo-piercing', label: 'Tattoo / piercing', group: 'beauty' },
   { key: 'gym-fitness', label: 'Gym / fitness', group: 'fitness' },
   { key: 'yoga-pilates', label: 'Yoga / pilates studio', group: 'fitness' },
   // Mobility
@@ -139,7 +140,7 @@ const RULES: [RegExp, string][] = [
   [/solar|photovolta|pv.?system|φωτοβολτα/, 'solar-installer'],
   [/estate.?agent|real.?estate|realtor|realty|property.?agent|letting.?agent|κτηματομεσιτ|μεσιτ/, 'real-estate-agency'],
   [/developer|land.?development|property.?development/, 'property-developer'],
-  [/lawyer|law.?firm|advocat|solicitor|attorney|legal.?service|barrister|δικηγορ/, 'law-firm'],
+  [/lawyer|law.?firm|advocat|solicitor|attorney|legal.?service|barrister|notar|δικηγορ|συμβολαιογραφ/, 'law-firm'], // notary → lawyer: in Cyprus notarial acts are done by advocates
   [/account|audit|bookkeep|λογιστ/, 'accountant'],
   [/insurance|insurer|assurance|ασφαλ/, 'insurance'],
   [/\bbank\b|banking|τραπεζ/, 'bank'],
@@ -159,7 +160,8 @@ const RULES: [RegExp, string][] = [
   [/clinic|medical.?cent|\bdoctor|physician|polyclinic|diagnostic|ιατρειο|ιατρικ/, 'doctor-clinic'],
   [/\bgym|fitness|health.?club|crossfit|body.?build|γυμναστ/, 'gym-fitness'],
   [/\byoga\b|pilates/, 'yoga-pilates'],
-  [/hairdress|\bbarber|hair.?salon|coiffure|κομμωτ|κουρειο/, 'hair-barber'],
+  [/hairdress|\bbarber|hair.?salon|hair.?stylist|hair.?style|coiffure|κομμωτ|κουρειο/, 'hair-barber'],
+  [/tattoo|tatuaj|\btatoo\b|piercing|τατου/, 'tattoo-piercing'], // real category on the island (esp. Ayia Napa/Larnaca)
   [/beauty.?salon|beauty.?cent|\bspa\b|\bmassage|wellness|aesthetic|cosmetic|ινστιτουτ ομορφ/, 'beauty-spa'],
   [/nail.?salon|nail.?bar|manicure|νυχια/, 'nail-salon'],
   [/restaurant|tavern|eatery|bistro|\bgrill\b|steakhouse|pizzeria|trattoria|\bdiner\b|\bmeze|εστιατορ|ταβερν/, 'restaurant'],
@@ -184,6 +186,7 @@ const RULES: [RegExp, string][] = [
   [/carpenter|\bjoiner|ξυλουργ|cabinet.?mak/, 'carpenter'],
   [/\bbuilder|building.?contract|construction|οικοδομ/, 'builder'],
   [/handyman|home.?repair|maintenance.?service/, 'handyman'],
+  [/laundr|dry.?clean|καθαριστηρ|πλυντηρ/, 'laundry-drycleaner'], // before cleaning-service: "dry cleaner" is laundry, not a maid service
   [/cleaning|\bclean\b|καθαρισμ|housekeep|janitor/, 'cleaning-service'],
   [/pest.?control|fumigat|απολυμανσ/, 'pest-control'],
   [/garden|landscap|κηπουρ/, 'gardener-landscaper'],
@@ -212,7 +215,6 @@ const RULES: [RegExp, string][] = [
   [/tutoring|\btuition\b|language.?school|φροντιστηρ|private.?lesson/, 'tutoring-language'],
   [/\bschools?\b|academy|γυμνασιο|λυκειο/, 'school'],
   [/photograph|foto.?studio|videograph|φωτογραφ/, 'photographer'],
-  [/laundr|dry.?clean|καθαριστηρ|πλυντηρ/, 'laundry-drycleaner'],
   [/\btailor|alteration|ραφτ|seamstress/, 'tailor'],
   [/printing|\bprint\b|signage|typograph|copy.?shop|εκτυπωσ/, 'printing'],
 ];

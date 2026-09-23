@@ -31,14 +31,17 @@ export interface Rankable {
   rating?: number | null;
   verified?: boolean;
   featured?: boolean;
+  commercialRank?: number | null; // real CRM tier mirrored on the listing: 3 partner, 2 featured, 1 listed, 0 none
 }
 
-// Commercial tier from the signals a listing already carries. `featured` is a paid
-// placement (Featured/Partner); `verified` is an organic but confirmed listing; the
-// rest are basic (imported). Kept as one function so the true CRM subscription tier can
-// slot in here later (Phase 1) without touching the ranking maths.
-export function commercialTier(p: { featured?: boolean; verified?: boolean }): number {
-  if (p.featured) return 3;
+// Commercial tier for ranking. The authoritative signal is `commercialRank` — the tier the
+// business actually BOUGHT, mirrored from the CRM onto the listing (0108): Partner 3 >
+// Featured 2 > Listed 1. When it is absent (legacy rows, editorial flags) we fall back to the
+// booleans: an editorially `featured` listing ranks like the Featured tier, a `verified` one
+// like Listed. This is the Phase-1 slot-in the reranker was built for.
+export function commercialTier(p: { commercialRank?: number | null; featured?: boolean; verified?: boolean }): number {
+  if (typeof p.commercialRank === 'number' && p.commercialRank > 0) return Math.min(3, Math.round(p.commercialRank));
+  if (p.featured) return 2; // editorial / legacy featured, no CRM deal on file
   if (p.verified) return 1;
   return 0;
 }

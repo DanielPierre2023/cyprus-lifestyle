@@ -49,6 +49,15 @@ eq('"car repair garage" → car-repair-garage', mapToCanonical('auto repair gara
 eq('"coffee shop" → cafe', mapToCanonical('coffee shop'), 'cafe');
 eq('Greek "φαρμακείο" → pharmacy', mapToCanonical('φαρμακείο'), 'pharmacy');
 eq('name-based "FROSTER refrigerator" → ac-hvac', mapToCanonical('vendor FROSTER REFRIGERATOR COMPANY'), 'ac-hvac');
+eq('"notary public" → law-firm (Cyprus notaries are lawyers)', mapToCanonical('notary public'), 'law-firm');
+eq('RO "notar" → law-firm', mapToCanonical('notar birou'), 'law-firm');
+eq('"dry cleaner" → laundry, not cleaning-service', mapToCanonical('dry cleaner'), 'laundry-drycleaner');
+eq('"laundry service" → laundry', mapToCanonical('laundry service'), 'laundry-drycleaner');
+eq('plain "cleaning services" still → cleaning-service', mapToCanonical('cleaning services'), 'cleaning-service');
+eq('"tattoo studio" → tattoo-piercing', mapToCanonical('tattoo studio'), 'tattoo-piercing');
+eq('RO "tatuaj" → tattoo-piercing', mapToCanonical('salon tatuaj'), 'tattoo-piercing');
+eq('"piercing" → tattoo-piercing', mapToCanonical('piercing studio'), 'tattoo-piercing');
+eq('"hairstylist" → hair-barber', mapToCanonical('hairstylist'), 'hair-barber');
 eq('unrecognised → null (goes to LLM)', mapToCanonical('quantum flux widgets ltd'), null);
 eq('empty → null', mapToCanonical('   '), null);
 

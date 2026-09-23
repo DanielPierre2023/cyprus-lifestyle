@@ -6,11 +6,14 @@ import { eq, ok, report } from './_harness';
 
 const mk = (slug: string, o: Partial<Rankable> = {}): Rankable => ({ slug, name: slug, featured: false, verified: false, rating: null, ...o });
 
-// ── commercialTier ───────────────────────────────────────────────────────────────
-eq('featured → 3', commercialTier({ featured: true }), 3);
+// ── commercialTier — the real CRM tier (commercialRank) is authoritative; booleans fall back
+eq('partner rank 3 → 3', commercialTier({ commercialRank: 3 }), 3);
+eq('featured rank 2 → 2', commercialTier({ commercialRank: 2 }), 2);
+eq('listed rank 1 → 1', commercialTier({ commercialRank: 1 }), 1);
+eq('legacy featured boolean → 2', commercialTier({ featured: true }), 2);
 eq('verified (unpaid) → 1', commercialTier({ verified: true }), 1);
 eq('neither → 0', commercialTier({}), 0);
-eq('featured wins over verified', commercialTier({ featured: true, verified: true }), 3);
+eq('CRM rank overrides booleans', commercialTier({ commercialRank: 3, featured: true, verified: true }), 3);
 
 // ── fuseScore: relevance dominates, tier boosts, rating breaks ties ────────────────
 eq('score = relevance*10 + tier*2 + rating', fuseScore(3, 3, 4.5), 40.5);
@@ -49,6 +52,16 @@ ok('within the same relevance & tier, higher rating leads', fuseScore(2, 1, 4.8)
 {
   const out = applyRerank([mk('low', { rating: 3.0 }), mk('high', { rating: 4.9 })], { low: 2, high: 2 });
   eq('higher rating leads on a tie', out[0].slug, 'high');
+}
+// 7. CRM tier ladder — a Partner (rank 3) leads a Featured (rank 2) at equal relevance.
+{
+  const out = applyRerank([mk('feat', { commercialRank: 2 }), mk('partner', { commercialRank: 3 })], { feat: 3, partner: 3 });
+  eq('partner leads featured at equal relevance', out[0].slug, 'partner');
+}
+// 8. Relevance still gates the CRM tier — an exact non-partner beats a weakly-relevant partner.
+{
+  const out = applyRerank([mk('partner', { commercialRank: 3 }), mk('exact')], { exact: 3, partner: 1 });
+  eq('exact match beats a weakly-relevant partner', out[0].slug, 'exact');
 }
 
 report('rerank.pure');
