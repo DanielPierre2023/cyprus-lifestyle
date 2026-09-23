@@ -1,7 +1,8 @@
 // GET|POST /api/concierge/embed-directory?key=<ENRICH_SECRET>[&force=1]
-// Re-runnable job: embed every PUBLISHED directory listing into
+// Re-runnable job: embed every concierge-visible directory listing (status
+// 'published' OR 'listed' — the latter being the bulk import) into
 // directory_embeddings so the concierge can search the whole directory by meaning
-// (see 0051_concierge_dir_vectors.sql). Only listings whose text changed are
+// (see 0051 + 0105). Only listings whose text changed are
 // re-embedded (content_hash) unless ?force=1. Needs OPENAI_API_KEY, gated by
 // ENRICH_SECRET. Works within maxDuration; if a very large directory can't finish
 // in one pass, the response reports `remaining` > 0 — simply call it again.
@@ -67,7 +68,7 @@ async function run(force: boolean): Promise<Record<string, unknown>> {
   const PAGE = 500;
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await sb.from('directory_listings').select(SELECT)
-      .eq('status', 'published').order('slug').range(from, from + PAGE - 1);
+      .in('status', ['published', 'listed']).order('slug').range(from, from + PAGE - 1);
     if (error) return { ok: false, error: error.message };
     const rows = (data as unknown as Row[] | null) || [];
     total += rows.length;

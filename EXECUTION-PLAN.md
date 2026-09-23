@@ -490,9 +490,22 @@ below, measuring before and after.
   overall score + per-topic/per-locale breakdown + the gap worklist; `EVAL_SET` (live
   quality eval) widened to the same breadth. `tsc` clean; `npm test` 17 suites (coverage.pure
   30); all 101 migrations apply. **This is the baseline every later CI-item must beat.**
-- [ ] **CI-2 · Light the dark legs.** Fix `match_directory` to include `'listed'`; embed the
-  14,671 imports; geocode them (village-centroids first for instant town ranking, street
-  precision as a background refine). Unlocks semantic + radius for the whole directory.
+  *Baseline run 2026-09-23 (prod): overall **68.8/100**, n=55, 1 blind / 24 thin / 30 ok-strong.
+  Directory healthy (casual dining, cafés, beaches, diving, boat-trips, yachts, jewellery, stays,
+  health, relocation, car-rental, tax, company all 100). Gaps are the two adviser layers:
+  editorial/articles empty (fine-dining, museums, theatre, archaeology, fashion, nightlife,
+  wineries capped at 34) and KB thin (investing, culture, state-of-cyprus, prices, weather, law).
+  Locale EN 76 / RO 87 / AR 84 vs EL 47 / PL 51 / RU 34 (partly topic-mix — matched set at CI-5).*
+- [x] **CI-2 · Light the dark legs.** *Shipped 2026-09-23:* migration `0105` redefines
+  `match_directory` to return `status in ('published','listed')` (semantic search now sees the
+  imports); the embed backfill (`/api/concierge/embed-directory`) and `enqueueGeocodeBacklog`
+  both extended to `'listed'`; new `lib/concierge/localities.ts` (~90 towns → district, pure
+  `findLocality`) + `/api/concierge/geocode-directory` — a coordinate FAST PASS that geocodes each
+  distinct town once (cached) and stamps town-level coordinates on every business in it, so radius
+  search ("nearest in Pyla") works in minutes; the per-address `geocode_listing` job then refines.
+  `tsc` clean; `npm test` 18 suites (localities.pure 28); all 102 migrations apply, `match_directory`
+  verified to include `'listed'`. Deploy order: apply 0105 → run `embed-directory` (repeat until
+  remaining=0) → run `geocode-directory` (repeat until remaining=0).
 - [ ] **CI-3 · Smarter retrieval.** LLM query understanding (Haiku) + hybrid rank fusion +
   category-taxonomy embeddings, so new phrasings/languages work without hand-coded regex.
 - [ ] **CI-4 · Knowledge breadth sprint.** Fill the worst gaps the baseline shows — KB entries

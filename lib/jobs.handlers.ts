@@ -87,7 +87,7 @@ registerJob('eval_concierge', async (payload) => {
 export async function enqueueGeocodeBacklog(sb: SupabaseClient, limit = 40): Promise<number> {
   try {
     const { data } = await sb.from('directory_listings')
-      .select('slug, address, district').eq('status', 'published').is('lat', null)
+      .select('slug, address, district').in('status', ['published', 'listed']).is('lat', null)
       .limit(Math.max(1, Math.min(limit, 200)));
     const rows = (data as { slug: string; address: string | null; district: string | null }[] | null) || [];
     let n = 0;
