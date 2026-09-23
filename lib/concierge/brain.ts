@@ -132,11 +132,11 @@ const INTENTS: IntentDef[] = [
 // District aliases include short STEMS so inflected forms match after de-accenting
 // (e.g. Polish "Larnace", Greek "Λεμεσό", Russian "Ларнаке").
 const DISTRICT_ALIASES: Record<string, string[]> = {
-  paphos: ['paph', 'pafos', 'παφ', 'بافوس', 'паф', 'polis', 'πολ'],
-  limassol: ['limass', 'lemes', 'λεμεσ', 'ليماسول', 'лимас', 'germasogeia'],
-  larnaca: ['larnac', 'larnak', 'λαρνακ', 'لارنكا', 'ларнак', 'aradippou'],
-  nicosia: ['nicos', 'nikos', 'nikoz', 'lefkos', 'λευκωσ', 'نيقوسيا', 'никос', 'strovolos'],
-  famagusta: ['famagust', 'αμμοχωστ', 'فاماغوستا', 'фамагуст', 'ayia napa', 'agia napa', 'protaras', 'paralimni', 'kapparis', 'deryneia'],
+  paphos: ['paph', 'pafos', 'παφ', 'بافوس', 'паф', 'polis', 'πολ', 'peyia', 'pegeia', 'geroskipou', 'chloraka', 'kissonerga', 'tsada', 'kathikas', 'kouklia', 'mandria', 'argaka', 'pomos', 'latchi', 'coral bay'],
+  limassol: ['limass', 'lemes', 'λεμεσ', 'ليماسول', 'лимас', 'germasogeia', 'mesa geitonia', 'agios athanasios', 'ypsonas', 'polemidia', 'agios tychon', 'parekklisia', 'pissouri', 'kolossi', 'mouttagiaka', 'platres', 'omodos', 'pelendri', 'palodia'],
+  larnaca: ['larnac', 'larnak', 'λαρνακ', 'لارنكا', 'ларнак', 'aradippou', 'pyla', 'pila', 'πυλα', 'oroklini', 'ορόκλινη', 'kiti', 'κίτι', 'livadia', 'dromolaxia', 'meneou', 'perivolia', 'kornos', 'lefkara', 'athienou', 'kalavasos', 'mazotos', 'alethriko', 'kophinou', 'tersefanou', 'xylofagou', 'xylotympou', 'ormideia'],
+  nicosia: ['nicos', 'nikos', 'nikoz', 'lefkos', 'λευκωσ', 'نيقوسيا', 'никос', 'strovolos', 'lakatamia', 'aglantzia', 'latsia', 'engomi', 'kaimakli', 'tseri', 'deftera', 'anthoupoli', 'kokkinotrimithia', 'kakopetria', 'astromeritis'],
+  famagusta: ['famagust', 'αμμοχωστ', 'فاماغوستا', 'фамагуст', 'ayia napa', 'agia napa', 'protaras', 'paralimni', 'kapparis', 'deryneia', 'frenaros', 'avgorou', 'liopetri', 'vrysoulles', 'acheritou'],
 };
 
 // Strip accents/diacritics so matching is robust to how a guest actually types —
@@ -263,6 +263,17 @@ const CATEGORY_PROBES: { rx: RegExp; probes: string[] }[] = [
   { rx: /aquarium|ενυδρ/, probes: ['aquarium'] },
   { rx: /advertis|marketing|διαφημ|реклам|werbe|web ?design|ιστοσελιδ/, probes: ['advertis', 'marketing', 'web'] },
   { rx: /architect|αρχιτεκτ|arhitect|architekt/, probes: ['architect'] },
+  // Home trades — heavily represented in the bulk directory import; the guest asks in
+  // any of the seven languages, the subtypes are English slugs, so match the query
+  // multilingually and probe the English subtype/name.
+  { rx: /air.?condition|aircon|conditionat|climatiz|clima|κλιματ|klimaanlage|klimatyzac|кондицион|تكييف|مكيف/, probes: ['aircondition', 'air-condition', 'condition', 'climat'] },
+  { rx: /electric|ηλεκτρολ|ηλεκτρικ|electrician|electricist|elektryk|электрик|كهرباء/, probes: ['electric'] },
+  { rx: /plumb|υδραυλικ|instalator|hydraulik|сантехник|سباك/, probes: ['plumb', 'sanitar'] },
+  { rx: /appliance|electrocasnic|επισκευη συσκευ|sprzet agd|бытов техник|تصليح اجهزة|washing machine|fridge/, probes: ['appliance', 'domestic-appliance'] },
+  { rx: /locksmith|κλειδαρ|lacatus|slusarz|слесар|قفل/, probes: ['locksmith', 'lock'] },
+  { rx: /heating|θερμανσ|incalzire|ogrzewani|отоплен|تدفئة|boiler|solar water/, probes: ['heating', 'boiler', 'solar'] },
+  { rx: /painter|βαψιμ|ελαιοχρωμ|zugrav|malarz|маляр|دهان|painting/, probes: ['painter', 'paint'] },
+  { rx: /carpenter|ξυλουργ|tamplar|dulgher|stolarz|плотник|столяр|نجار/, probes: ['carpenter', 'joiner', 'wood'] },
 ];
 export function categoryProbes(q: string): string[] {
   const s = deacc(q.toLowerCase());

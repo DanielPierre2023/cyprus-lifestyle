@@ -366,6 +366,45 @@
   apply, 0102 idempotent, all three articles have every `content_{locale}` non-null. `tsc` clean;
   `npm test` 234/234 across 16 suites. Backlog now: P1 #9–#14.
 
+- 2026-09-22 — **Bulk directory import (cyprusatlas → concierge).** Turned a 17.7k-row scrape of
+  cyprusatlas.com into ~15,500 real businesses for the concierge to ground on ("what's near me — a
+  cleaner, an AC repairer, a lawyer"). Cleaner (`scripts/import/clean_atlas.py`) keeps real
+  businesses with an address or phone, maps the category (from the Additional Type URL) to our
+  taxonomy, parses district from the address, normalises phones, drops scraped descriptions/images
+  (IP — factual fields only), and de-dupes within the file. Imported as **`status='listed'`** — a
+  new state the **concierge reads but the public website does not** (`brain.ts` now filters
+  `status IN ('published','listed')` in all 10 directory queries; the site still shows only
+  `published`). The merge (`atlas-1-staging.sql` + `atlas-2-merge.sql`) is anti-joined on the
+  directory de-dup key + phone + slug, so it never duplicates the existing ~3,000, and it backfills
+  outreach email onto the CRM accounts the sync trigger creates (~3,700 emailed prospects). Fixing
+  this surfaced a real latent bug: the 0074 de-dup key stripped `[^a-z0-9]`, collapsing every
+  Greek-named business to one key — fixed unicode-aware in `0103_directory_dedup_unicode.sql` (finer
+  key, index rebuilt, idempotent). Proven end-to-end on Postgres: 100 migrations apply, full 15,535
+  file merges to 15,240 listed (295 dedup-skipped), seeded duplicates stayed single rows, 3,719 CRM
+  prospects with email, concierge sees `listed`/website sees only `published`. `tsc` clean; `npm
+  test` 234/234; 0103 idempotent.
+
+- 2026-09-22 — **Import monitor (admin).** Added an "Imported directory · concierge listings"
+  section at the top of the admin Coverage tab: cards for listed total, geocoded %, awaiting
+  geocode, with-email (outreach), and published; a geocoding progress bar + queued-jobs count; and
+  a per-district table so you can watch the import land and the coordinates fill in. Queried
+  directly against `directory_listings`/`job_queue` (the coverage views are published-only), so no
+  migration. Verified against the 15,240-row test import (district split correct; % advances as
+  rows geocode). `tsc` clean.
+
+- 2026-09-22 — **Concierge retrieval for the imported directory.** After the bulk import, a live
+  test ("reparator aer condiționat în Pila") returned nothing — two gaps, not model failure: the
+  category matcher had no **air-conditioning** entry (so it never searched the 39 `air-conditioning`
+  + 14 `auto-airconditions` + … subtypes), and **village names didn't map to districts** (Pyla/Pila
+  → Larnaca was absent). Fixed in `brain.ts`: added multilingual `CATEGORY_PROBES` for the home
+  trades that dominate the import (air-conditioning, electrician, plumber, appliance repair,
+  locksmith, heating, painter, carpenter — EN/EL/RO/DE/PL/RU/AR), and a curated, collision-checked
+  village→district alias set for all five districts (Nicosia, Limassol, Larnaca, Paphos, Famagusta).
+  Verified against the imported data: the concierge's own query now returns real AC businesses by
+  district (46 Nicosia, 12 Limassol, 9 Paphos, 5 Famagusta, 3 Larnaca). Pure-logic tests +10
+  (`brain.pure` 34); `tsc` clean; `npm test` 244/244 across 16 suites. (Precise radius still
+  sharpens as geocoding fills coordinates; district+category works now.)
+
 ## Post-roadmap follow-through
 - 2026-09-22 — **A · Job queue activated.** Item 01's queue was live but inert; now it does real
   work. New handlers registered (`lib/jobs.handlers.ts`): `geocode_listing` (coordinate backfill,

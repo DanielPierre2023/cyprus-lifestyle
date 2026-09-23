@@ -28,6 +28,27 @@ ok('Russian vet → pet/vet probe', categoryProbes('ветеринар рядо�
 ok('German bakery → baker probe', categoryProbes('gibt es eine Bäckerei').includes('baker'));
 eq('unrelated query → no probes', categoryProbes('what is the weather like'), []);
 
+// ── home-trade categories from the bulk import (multilingual) ────────────────
+ok('EN air conditioning → condition probe', categoryProbes('I need air conditioning repair').includes('condition'));
+ok('RO aer condiționat → condition probe', categoryProbes('reparator pentru aerul condiționat în pila').includes('condition'));
+ok('EL κλιματισμός → condition probe', categoryProbes('τεχνικός για κλιματισμό').includes('condition'));
+ok('DE Klimaanlage → condition probe', categoryProbes('Techniker für die Klimaanlage').includes('condition'));
+ok('RU кондиционер → condition probe', categoryProbes('ремонт кондиционера').includes('condition'));
+ok('electrician → electric probe', categoryProbes('am nevoie de un electrician').includes('electric'));
+ok('plumber → plumb probe', categoryProbes('a plumber please').includes('plumb'));
+
+// ── Larnaca villages map to the district ────────────────────────────────────
+eq('Pila → larnaca', classifyRequest('reparator aer condiționat în pila').district, 'larnaca');
+eq('Pyla → larnaca', classifyRequest('an electrician in Pyla').district, 'larnaca');
+eq('Oroklini → larnaca', classifyRequest('a plumber in Oroklini').district, 'larnaca');
+// villages across all five districts
+eq('Lakatamia → nicosia', classifyRequest('air conditioning in Lakatamia').district, 'nicosia');
+eq('Ypsonas → limassol', classifyRequest('an electrician in Ypsonas').district, 'limassol');
+eq('Peyia → paphos', classifyRequest('a plumber in Peyia').district, 'paphos');
+eq('Geroskipou → paphos', classifyRequest('air conditioning in Geroskipou').district, 'paphos');
+eq('Frenaros → famagusta', classifyRequest('an electrician in Frenaros').district, 'famagusta');
+eq('Paralimni → famagusta', classifyRequest('a plumber in Paralimni').district, 'famagusta');
+
 // ── latestUserText ──────────────────────────────────────────────────────────
 eq('picks the last user message', latestUserText([
   { role: 'user', content: 'first' },
