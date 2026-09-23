@@ -19,6 +19,7 @@ import { retrieveKnowledge, guideHref, QA_INDEX, type QAHit } from '@/lib/knowle
 import { localizedIntent } from '@/lib/knowledge/qa.i18n';
 import { embedText } from '@/lib/concierge/embed';
 import { understandQuery, buildAugmentedQuery, type Understanding } from '@/lib/concierge/understand';
+import { rerankCandidates } from '@/lib/concierge/rerank';
 import { geocode, haversineMeters, bbox } from '@/lib/geo';
 
 export const CONCIERGE_MODEL = process.env.SONNET_MODEL || CLAUDE_SONNET;
@@ -572,6 +573,11 @@ export async function assembleContext(locale: string, latestUser: string): Promi
   }
   if (candidates.length < 4) candidates = mergeDirHits(candidates, await topRated(locale, 8), 8);
 
+  // RERANK (CI-7, opt-in): reorder by true relevance (drops wrong-category noise) then
+  // commercial tier (paying partners lead among comparable matches). Honest by design —
+  // relevance dominates, so a partner never beats a clearly better-matched option.
+  candidates = await rerankCandidates(augmented, candidates).catch(() => candidates);
+
   const kb = mergeKbHits(kbKeyword, kbVecIds);
   const guides: GuideLink[] = kb.slice(0, 4).map((h) => ({ label: localizedIntent(h.item.id, locale).q, path: guideHref(h.item.id) }));
   const canRoute = candidates.length > 0 || kb.some((h) => h.item.connect.length > 0);
@@ -612,6 +618,15 @@ export async function retrievalTrace(locale: string, q: string): Promise<Retriev
     intentDistrict ? vectorDirectory(loc, qvec, 12, intentDistrict) : Promise.resolve([] as Pick[]),
     vectorDirectory(loc, qvec, 12),
   ]);
+  // The fused + reranked order — what the guest actually sees (the proof the ordering
+  // works). Respects CONCIERGE_RERANK: with it off this is the plain fused order.
+  let fused: Pick[] = [];
+  fused = mergeDirHits(fused, kwAug, 24);
+  fused = mergeDirHits(fused, vecDistrict, 24);
+  fused = mergeDirHits(fused, kw, 24);
+  fused = mergeDirHits(fused, vecGlobal, 24);
+  fused = await rerankCandidates(augmented, fused.slice(0, 16)).catch(() => fused.slice(0, 16));
+
   const sample = (a: Pick[]): TraceLeg['sample'] => a.slice(0, 8).map((p) => ({ slug: p.slug, name: p.name, subtype: p.subtype ?? null, district: p.district ?? null }));
   return {
     query: q, locale: loc, augmented, intentDistrict, understanding, hasEmbedding: !!qvec,
@@ -620,6 +635,7 @@ export async function retrievalTrace(locale: string, q: string): Promise<Retriev
       { name: 'keyword(augmented)', count: kwAug.length, sample: sample(kwAug) },
       { name: 'semantic(district)', count: vecDistrict.length, sample: sample(vecDistrict) },
       { name: 'semantic(global)', count: vecGlobal.length, sample: sample(vecGlobal) },
+      { name: 'final(reranked)', count: fused.length, sample: sample(fused) },
     ],
   };
 }

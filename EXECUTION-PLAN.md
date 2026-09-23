@@ -559,5 +559,16 @@ below, measuring before and after.
   guessing). `tsc` clean; `npm test` 20 suites; 103 migrations apply, `match_directory` verified as
   a single 4-arg overload. Proof step: after deploy + apply 0106, run the trace on the failing
   queries and watch the semantic(district) leg surface what keyword missed.
+- [x] **CI-7 · Rerank + commercial tier (precision + revenue).** *Shipped 2026-09-23:* new
+  `lib/concierge/rerank.ts` — a cheap Haiku pass scores each top-K candidate's relevance (0–3) to
+  the request, then fuses `relevance*10 + tier*2 + rating` so (a) wrong-category noise drops (the
+  taxi that outranked a locksmith scores 0 and leaves), and (b) among genuinely relevant results
+  paying subscribers lead in tier order (featured > verified > basic) — **honest by design, since
+  relevance dominates and a partner can never beat a clearly better match.** Wired into
+  `assembleContext` before picks; the retrieval-trace gains a `final(reranked)` leg so the ordering
+  is inspectable. Opt-in via `CONCIERGE_RERANK=1`. Commercial tier currently reads the existing
+  `featured`/`verified` signals; the full CRM subscription tier gets mirrored onto listings in
+  Phase 1. `tsc` clean; `npm test` 21 suites (rerank.pure 15); no migration. This is the Phase-2
+  precision+revenue layer from CONCIERGE-STRATEGY.md.
 - [ ] **CI-5 · Taste & personality + re-measure.** Persona tuning (warmth/wit/timing) with a
   delight axis added to the eval; re-run coverage + live evals to prove the gains.
