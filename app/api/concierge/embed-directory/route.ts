@@ -16,7 +16,7 @@ export const maxDuration = 60;
 
 const LOCS = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'] as const;
 const SELECT = [
-  'slug', 'type', 'subtype', 'category_group', 'district', 'address', 'price_band', 'luxury', 'tags',
+  'slug', 'type', 'subtype', 'category_group', 'district', 'address', 'price_band', 'luxury', 'tags', 'source_description',
   ...LOCS.map((l) => `name_${l}`), ...LOCS.map((l) => `summary_${l}`),
 ].join(',');
 
@@ -36,6 +36,7 @@ function dirDoc(r: Row): string {
   if (band) parts.push(band);
   const tags = Array.isArray(r.tags) ? (r.tags as unknown[]).map(String).filter(Boolean) : [];
   if (tags.length) parts.push('Tags: ' + tags.join(', '));
+  const desc = s('source_description'); if (desc) parts.push(desc); // the business's own words — the richest signal for oblique queries
   for (const l of LOCS) {
     const summ = s(`summary_${l}`); if (summ) parts.push(summ);
     const nm = s(`name_${l}`); if (nm && nm !== nameEn) parts.push(nm);

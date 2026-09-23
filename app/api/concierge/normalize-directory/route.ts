@@ -19,19 +19,19 @@ const PAGE = 1500;         // rows scanned per DB page (most classified determin
 const CHUNK = 30;          // businesses per model call (the tail only)
 const CONCURRENCY = 4;     // model calls in flight (low, to avoid 429 throttling)
 
-interface Row { id: string; name_en: string | null; subtype: string | null; type: string | null; category_group: string | null; district: string | null }
+interface Row { id: string; name_en: string | null; subtype: string | null; type: string | null; category_group: string | null; district: string | null; source_description: string | null }
 
 const SYSTEM =
   'You classify businesses in the Republic of Cyprus into a FIXED taxonomy. You are given a numbered ' +
-  'list "index | name | raw category | district". Return ONLY JSON: {"results":[{"i":<index>,"category":' +
+  'list "index | name | raw category | district | what the business says about itself". Return ONLY JSON: {"results":[{"i":<index>,"category":' +
   '"<exactly one taxonomy key>","subtype":"<short specific type, or empty>","tags":["short","tags"]}]} — one ' +
   'entry per index. The category MUST be exactly one of these keys:\n' + classifyPromptList() +
-  '\nJudge from the name and the raw category. If genuinely unclear, use general-vendor. Keep tags short ' +
+  '\nJudge from the name, the raw category, AND what the business says about itself (often the clearest signal). If genuinely unclear, use general-vendor. Keep tags short ' +
   '(e.g. cuisine, speciality, service). Do not invent facts — classify only.';
 
 async function classifyChunk(rows: Row[]): Promise<void> {
   const sb = supabaseAdmin();
-  const lines = rows.map((r, i) => `${i} | ${(r.name_en || '').slice(0, 60)} | ${(r.subtype || r.type || '').slice(0, 40)}${r.category_group ? ' /' + r.category_group : ''} | ${r.district || ''}`).join('\n');
+  const lines = rows.map((r, i) => `${i} | ${(r.name_en || '').slice(0, 60)} | ${(r.subtype || r.type || '').slice(0, 40)}${r.category_group ? ' /' + r.category_group : ''} | ${r.district || ''}${r.source_description ? ' | ' + r.source_description.replace(/\s+/g, ' ').slice(0, 160) : ''}`).join('\n');
   let byIndex = new Map<number, ReturnType<typeof coerceClassification>>();
   try {
     const r = await callClaude({ systemInstruction: SYSTEM, userMessage: `Classify these ${rows.length} businesses:\n${lines}`, model: CLAUDE_HAIKU, jsonMode: true, maxTokens: 1500, timeoutMs: 20_000, fn: 'normalize-directory' });
@@ -57,7 +57,7 @@ async function run(redo: boolean): Promise<Record<string, unknown>> {
   const sb = supabaseAdmin();
   const started = Date.now();
   const BUDGET_MS = 45_000;
-  const SELECT = 'id,name_en,subtype,type,category_group,district';
+  const SELECT = 'id,name_en,subtype,type,category_group,district,source_description';
   let mapped = 0, llmDone = 0, after = '';
 
   for (;;) {
