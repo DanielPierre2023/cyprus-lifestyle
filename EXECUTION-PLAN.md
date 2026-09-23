@@ -516,8 +516,21 @@ below, measuring before and after.
   ~fraction of a cent, 3.5s timeout); `callClaude` gained a `timeoutMs`. `tsc` clean; `npm test`
   19 suites (understand.pure 21). *Deferred as a later tune: reciprocal-rank fusion and
   category-taxonomy embeddings — the query-understanding pass covers most of their benefit.*
-- [ ] **CI-4 · Knowledge breadth sprint.** Fill the worst gaps the baseline shows — KB entries
+- [~] **CI-4 · Knowledge breadth sprint.** Fill the worst gaps the baseline shows — KB entries
   and verified directory categories (diving, yachts, jewellery, fashion, nightlife, museums,
   theatre, archaeology, casual dining) — worst topic first.
+  - [x] **CI-4a · KB facts for the blind topics.** *Shipped 2026-09-23:* added three QAItems to
+    `lib/knowledge/qa.ts` — `investing-in-cyprus` (sectors, the four foreign-investment routes,
+    15% corporate tax / non-dom / IP box, with the golden-passport caveat), `cypriot-culture`
+    (Orthodox core, philoxenia, coffee, meze, name days, panigyria/Kataklysmos, crafts) and
+    `state-of-cyprus` (EU/eurozone, safety, ~3× EU-average growth, ~4% unemployment, A-/A ratings,
+    kept neutral + refreshable). Each web-researched and carries a citable `source`. New
+    `kb.content` test proves all three are retrievable, not just present. `tsc` clean; `npm test`
+    20 suites. *After deploy, run the KB embed backfill so the multilingual (vector) path also
+    covers them.* NB: KB keyword retrieval is English-token-based, so non-English coverage of
+    these rides the embedded path — another reason CI-3 (query understanding) + KB embeddings matter.
+  - [ ] **CI-4b · Editorial taste** (fine dining, museums, theatre, archaeology, fashion,
+    nightlife, wineries — articles so listings gain context and taste).
+  - [ ] **CI-4c · Weak-language parity** (EL/PL/RU) once CI-3 is enabled and measured.
 - [ ] **CI-5 · Taste & personality + re-measure.** Persona tuning (warmth/wit/timing) with a
   delight axis added to the eval; re-run coverage + live evals to prove the gains.
