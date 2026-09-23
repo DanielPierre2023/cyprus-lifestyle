@@ -125,6 +125,106 @@ export function classifyPromptList(): string {
   return CANONICAL_CATEGORIES.map((c) => `${c.key} — ${c.label}`).join('\n');
 }
 
+// ── Deterministic mapper — classify the BULK with zero model calls. The import's raw
+// slugs/names are finite and mostly recognisable, so ordered keyword rules (specific
+// before generic) map them straight to a canonical key. Only what this can't place goes
+// to the LLM. Pure + unit-tested. Match against subtype + type + group + name, deaccented.
+const _deacc = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+const RULES: [RegExp, string][] = [
+  [/rent.?a.?car|car.?rental|car.?hire|rental.?car|ενοικιαση αυτοκιν/, 'car-rental'],
+  [/car.?repair|auto.?repair|car.?service|\bgarage\b|mechanic|body.?shop|vehicle.?repair|συνεργειο/, 'car-repair-garage'],
+  [/\btyres?\b|\btire\b|wheel.?align|vulcaniz/, 'tyre-service'],
+  [/auto.?part|car.?part|spare.?part|autopart|ανταλλακτ/, 'car-parts'],
+  [/air.?condition|aircon|hvac|climate.?control|refriger|cooling.?heating|κλιματ/, 'ac-hvac'],
+  [/solar|photovolta|pv.?system|φωτοβολτα/, 'solar-installer'],
+  [/estate.?agent|real.?estate|realtor|realty|property.?agent|letting.?agent|κτηματομεσιτ|μεσιτ/, 'real-estate-agency'],
+  [/developer|land.?development|property.?development/, 'property-developer'],
+  [/lawyer|law.?firm|advocat|solicitor|attorney|legal.?service|barrister|δικηγορ/, 'law-firm'],
+  [/account|audit|bookkeep|λογιστ/, 'accountant'],
+  [/insurance|insurer|assurance|ασφαλ/, 'insurance'],
+  [/\bbank\b|banking|τραπεζ/, 'bank'],
+  [/immigration|residency.?service|relocation.?service|μεταναστευσ/, 'immigration-adviser'],
+  [/company.?formation|corporate.?service|company.?service|fiduciary/, 'company-formation'],
+  [/consultant|consulting|advisory/, 'business-consultant'],
+  [/marketing|advertis|branding|\bpr.?agency\b|διαφημ/, 'marketing-agency'],
+  [/web.?design|web.?develop|software|digital.?agency|\bhosting\b|ιστοσελιδ/, 'web-it'],
+  [/architect|αρχιτεκτ/, 'architect'],
+  [/surveyor|civil.?engineer|structural.?engineer|quantity.?surveyor|πολιτικος μηχανικ/, 'surveyor-engineer'],
+  [/pharmac|chemist|φαρμακ/, 'pharmacy'],
+  [/dentist|dental|orthodont|οδοντιατ/, 'dentist'],
+  [/physio|physical.?therapy|rehabilitation|φυσιοθεραπ/, 'physiotherapy'],
+  [/optician|optical|eyewear|\boptic/, 'optician'],
+  [/veterin|\bvet\b|animal.?hospital|animal.?clinic|κτηνιατ/, 'veterinary'],
+  [/hospital|νοσοκομειο/, 'hospital'],
+  [/clinic|medical.?cent|\bdoctor|physician|polyclinic|diagnostic|ιατρειο|ιατρικ/, 'doctor-clinic'],
+  [/\bgym|fitness|health.?club|crossfit|body.?build|γυμναστ/, 'gym-fitness'],
+  [/\byoga\b|pilates/, 'yoga-pilates'],
+  [/hairdress|\bbarber|hair.?salon|coiffure|κομμωτ|κουρειο/, 'hair-barber'],
+  [/beauty.?salon|beauty.?cent|\bspa\b|\bmassage|wellness|aesthetic|cosmetic|ινστιτουτ ομορφ/, 'beauty-spa'],
+  [/nail.?salon|nail.?bar|manicure|νυχια/, 'nail-salon'],
+  [/restaurant|tavern|eatery|bistro|\bgrill\b|steakhouse|pizzeria|trattoria|\bdiner\b|\bmeze|εστιατορ|ταβερν/, 'restaurant'],
+  [/\bcafes?\b|coffee|cafeteria|espresso|\bcaffe|καφε/, 'cafe'],
+  [/bakery|\bbaker\b|αρτοποιε|φουρνο/, 'bakery'],
+  [/patisserie|pastry|confection|ζαχαροπλαστ/, 'patisserie'],
+  [/delicatessen|\bdeli\b|gourmet|fine.?food/, 'deli-gourmet'],
+  [/\bbars?\b|\bpubs?\b|wine.?bar|cocktail|lounge.?bar|brewery/, 'bar'],
+  [/night.?club|nightclub|\bdisco\b/, 'nightclub'],
+  [/winery|\bwiner|vineyard|οινοποιε|κρασ/, 'winery'],
+  [/butcher|κρεοπωλ|meat.?market/, 'butcher'],
+  [/greengrocer|fruit.?and.?veg|μαναβ/, 'greengrocer'],
+  [/supermarket|mini.?market|\bgrocery\b|convenience.?store|υπεραγορ|παντοπωλ/, 'supermarket'],
+  [/\bhotels?\b|\bresorts?\b|\bmotels?\b|ξενοδοχ/, 'hotel'],
+  [/apartment|studios|holiday.?let|short.?stay|διαμερισμα/, 'apartment-rental'],
+  [/\bvilla/, 'villa-rental'],
+  [/agrotour|guest.?house|guesthouse|\bhostel\b|bed.?and.?breakfast/, 'agrotourism'],
+  [/plumb|υδραυλικ|sanitary.?install/, 'plumber'],
+  [/electrician|ηλεκτρολογ|electrical.?install/, 'electrician'],
+  [/locksmith|κλειδαρ|key.?cutting/, 'locksmith'],
+  [/painter|paint.?contract|decorator|ελαιοχρωμ|βαψιμ/, 'painter'],
+  [/carpenter|\bjoiner|ξυλουργ|cabinet.?mak/, 'carpenter'],
+  [/\bbuilder|building.?contract|construction|οικοδομ/, 'builder'],
+  [/handyman|home.?repair|maintenance.?service/, 'handyman'],
+  [/cleaning|\bclean\b|καθαρισμ|housekeep|janitor/, 'cleaning-service'],
+  [/pest.?control|fumigat|απολυμανσ/, 'pest-control'],
+  [/garden|landscap|κηπουρ/, 'gardener-landscaper'],
+  [/\bpool\b|piscina|πισιν/, 'pool-service'],
+  [/removal|\bmover|moving.?company|μετακομισ/, 'mover-removals'],
+  [/appliance.?repair|white.?good|domestic.?appliance|επισκευη συσκευ/, 'appliance-repair'],
+  [/jewel|κοσμηματ|goldsmith|watch.?shop|χρυσοχ/, 'jewellery'],
+  [/florist|flower.?shop|ανθοπωλ/, 'florist'],
+  [/furnitur|\bεπιπλα|homeware|home.?decor|mattress/, 'furniture-homeware'],
+  [/electronic|computer.?shop|mobile.?phone|ηλεκτρονικ/, 'electronics'],
+  [/book.?shop|bookstore|stationer|βιβλιοπωλ|χαρτικ/, 'bookshop-stationery'],
+  [/fashion|clothing|\bboutique|apparel|garment|menswear|womenswear|ενδυματ|ρουχ/, 'fashion-clothing'],
+  [/\bshoes?\b|footwear|παπουτσ|υποδημα/, 'footwear'],
+  [/sport.?shop|sport.?good|sportswear|athletic.?wear/, 'sports-shop'],
+  [/pet.?shop|pet.?store|pet.?suppl|ζωοτροφ/, 'pet-shop'],
+  [/souvenir|gift.?shop|\bgifts\b|δωρα/, 'gift-souvenir'],
+  [/museum|\bgallery\b|μουσειο|πινακοθηκ/, 'museum'],
+  [/archaeolog|antiquit|ancient.?site|αρχαιολογ/, 'archaeological-site'],
+  [/theatre|theater|performing.?art|θεατρο/, 'theatre-arts'],
+  [/diving|dive.?cent|scuba|watersport|καταδυσ/, 'diving-centre'],
+  [/\byacht|boat.?charter|boat.?trip|sailing|σκαφ|ιστιοπλο/, 'yacht-boat-charter'],
+  [/travel.?agen|tour.?operat|\btours\b|excursion|sightsee|ταξιδιωτ/, 'tour-activity'],
+  [/driving.?school|driving.?instruct|σχολη οδηγ/, 'driving-school'],
+  [/\btaxi\b|transfer.?service|airport.?transfer|chauffeur|private.?driver/, 'taxi-transfer'],
+  [/nursery|kindergarten|pre.?school|childcare|day.?care|παιδικ.?σταθμ|νηπιαγ/, 'nursery-childcare'],
+  [/tutoring|\btuition\b|language.?school|φροντιστηρ|private.?lesson/, 'tutoring-language'],
+  [/\bschools?\b|academy|γυμνασιο|λυκειο/, 'school'],
+  [/photograph|foto.?studio|videograph|φωτογραφ/, 'photographer'],
+  [/laundr|dry.?clean|καθαριστηρ|πλυντηρ/, 'laundry-drycleaner'],
+  [/\btailor|alteration|ραφτ|seamstress/, 'tailor'],
+  [/printing|\bprint\b|signage|typograph|copy.?shop|εκτυπωσ/, 'printing'],
+];
+
+// Deterministically map a business's text to a canonical key, or null if unsure.
+export function mapToCanonical(text: string): string | null {
+  const s = _deacc(String(text || '').toLowerCase());
+  if (!s.trim()) return null;
+  for (const [rx, cat] of RULES) if (rx.test(s)) return cat;
+  return null;
+}
+
 export interface Classification { category: string; subtype: string | null; tags: string[] }
 
 // Coerce a model classification into a safe, validated shape. An unknown/blank category

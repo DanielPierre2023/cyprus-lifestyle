@@ -9,14 +9,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { callClaude, CLAUDE_HAIKU, parseAiJson } from '@/lib/ai';
-import { classifyPromptList, coerceClassification } from '@/lib/directory/taxonomy';
+import { classifyPromptList, coerceClassification, mapToCanonical } from '@/lib/directory/taxonomy';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const STATUSES = ['published', 'listed'];
-const CHUNK = 25;          // businesses per model call
-const CONCURRENCY = 5;     // model calls in flight
+const PAGE = 1500;         // rows scanned per DB page (most classified deterministically)
+const CHUNK = 30;          // businesses per model call (the tail only)
+const CONCURRENCY = 4;     // model calls in flight (low, to avoid 429 throttling)
 
 interface Row { id: string; name_en: string | null; subtype: string | null; type: string | null; category_group: string | null; district: string | null }
 
@@ -57,23 +58,45 @@ async function run(redo: boolean): Promise<Record<string, unknown>> {
   const started = Date.now();
   const BUDGET_MS = 45_000;
   const SELECT = 'id,name_en,subtype,type,category_group,district';
-  let processed = 0, after = '';
+  let mapped = 0, llmDone = 0, after = '';
 
   for (;;) {
     if (Date.now() - started > BUDGET_MS) break;
-    let q = sb.from('directory_listings').select(SELECT).in('status', STATUSES).order('id').limit(CHUNK * CONCURRENCY);
+    let q = sb.from('directory_listings').select(SELECT).in('status', STATUSES).order('id').limit(PAGE);
     if (!redo) q = q.is('normalized_at', null);
     if (after) q = q.gt('id', after);
     const { data, error } = await q;
-    if (error) return { ok: false, error: error.message, processed };
+    if (error) return { ok: false, error: error.message, mapped, llmClassified: llmDone };
     const rows = (data as Row[] | null) || [];
     if (!rows.length) break;
     after = rows[rows.length - 1].id;
-    // split into chunks and classify them in parallel
-    const chunks: Row[][] = [];
-    for (let i = 0; i < rows.length; i += CHUNK) chunks.push(rows.slice(i, i + CHUNK));
-    await Promise.all(chunks.map((c) => classifyChunk(c)));
-    processed += rows.length;
+
+    // 1) Deterministic bulk — group by canonical key, one grouped UPDATE per key (no model
+    //    calls). This clears the great majority of the directory almost instantly.
+    const groups = new Map<string, string[]>();
+    const llmRows: Row[] = [];
+    for (const r of rows) {
+      const det = mapToCanonical(`${r.subtype || ''} ${r.type || ''} ${r.category_group || ''} ${r.name_en || ''}`);
+      if (det) { const a = groups.get(det) || []; a.push(r.id); groups.set(det, a); }
+      else llmRows.push(r);
+    }
+    const nowIso = new Date().toISOString();
+    for (const [cat, ids] of groups) {
+      for (let i = 0; i < ids.length; i += 200) {
+        const chunk = ids.slice(i, i + 200);
+        const { error: ue } = await sb.from('directory_listings').update({ canonical_category: cat, normalized_at: nowIso }).in('id', chunk);
+        if (!ue) mapped += chunk.length;
+      }
+    }
+
+    // 2) LLM tail — only what the mapper couldn't place, at low concurrency to avoid 429s.
+    for (let i = 0; i < llmRows.length && Date.now() - started <= BUDGET_MS; i += CHUNK * CONCURRENCY) {
+      const slice = llmRows.slice(i, i + CHUNK * CONCURRENCY);
+      const chunks: Row[][] = [];
+      for (let j = 0; j < slice.length; j += CHUNK) chunks.push(slice.slice(j, j + CHUNK));
+      await Promise.all(chunks.map((c) => classifyChunk(c)));
+      llmDone += slice.length;
+    }
   }
 
   let remaining: number | null = null;
@@ -83,7 +106,7 @@ async function run(redo: boolean): Promise<Record<string, unknown>> {
   } catch { /* best-effort */ }
 
   return {
-    ok: true, processed, remaining,
+    ok: true, mapped, llmClassified: llmDone, remaining,
     note: remaining && remaining > 0 ? 'Time budget reached — call again to normalise the rest.' : 'Directory fully normalised.',
   };
 }

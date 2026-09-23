@@ -4,7 +4,7 @@
 // category-exclusivity).
 import {
   CANONICAL_CATEGORIES, CATEGORY_KEYS, isCanonicalCategory, categoryLabel,
-  classifyPromptList, coerceClassification,
+  classifyPromptList, coerceClassification, mapToCanonical,
 } from '@/lib/directory/taxonomy';
 import { eq, ok, report } from './_harness';
 
@@ -35,5 +35,21 @@ eq('non-object → general-vendor', coerceClassification('nope' as unknown).cate
   ok('tags capped at 6', c.tags.length <= 6);
   ok('too-short tag dropped', !c.tags.includes('a'));
 }
+
+// ── mapToCanonical (deterministic bulk classifier) ────────────────────────────────
+eq('raw slug "gyms" → gym-fitness', mapToCanonical('gyms'), 'gym-fitness');
+eq('"health-clubs" → gym-fitness', mapToCanonical('health-clubs'), 'gym-fitness');
+eq('"solar-energy" → solar-installer', mapToCanonical('solar-energy'), 'solar-installer');
+eq('"lawyers" → law-firm', mapToCanonical('lawyers'), 'law-firm');
+eq('"advocates" → law-firm', mapToCanonical('advocates'), 'law-firm');
+eq('"estate agents" → real-estate-agency', mapToCanonical('estate agents'), 'real-estate-agency');
+eq('"pharmacies" → pharmacy', mapToCanonical('pharmacies'), 'pharmacy');
+eq('"car rental" → car-rental', mapToCanonical('car rental'), 'car-rental');
+eq('"car repair garage" → car-repair-garage', mapToCanonical('auto repair garage'), 'car-repair-garage');
+eq('"coffee shop" → cafe', mapToCanonical('coffee shop'), 'cafe');
+eq('Greek "φαρμακείο" → pharmacy', mapToCanonical('φαρμακείο'), 'pharmacy');
+eq('name-based "FROSTER refrigerator" → ac-hvac', mapToCanonical('vendor FROSTER REFRIGERATOR COMPANY'), 'ac-hvac');
+eq('unrecognised → null (goes to LLM)', mapToCanonical('quantum flux widgets ltd'), null);
+eq('empty → null', mapToCanonical('   '), null);
 
 report('taxonomy.pure');
