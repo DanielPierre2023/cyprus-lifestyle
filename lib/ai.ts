@@ -4,11 +4,10 @@
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
-// ── models (from TT) ──────────────────────────────────────────────────────────
+// ── models ──────────────────────────────────────────────────────────────────
 export const CLAUDE_HAIKU = 'claude-haiku-4-5-20251001';
-// Current production Sonnet. (The former 'claude-sonnet-4-6' was never a real API
-// model id — Anthropic rejected it, which is why the concierge kept saying "busy".)
-// Override per-deploy with the SONNET_MODEL env var if you move models again.
+// Current production Sonnet. The former 'claude-sonnet-4-6' was never a real API
+// model id — Anthropic rejected every call, which is why the concierge said "busy".
 export const CLAUDE_SONNET = 'claude-sonnet-5';
 export const OPENAI_MODEL = 'gpt-4o';
 export const GEMINI_MODEL = 'gemini-2.5-flash';
@@ -20,6 +19,7 @@ export interface AiRequest {
   maxTokens?: number;
   jsonMode?: boolean;
   model?: string;
+  timeoutMs?: number; // request abort deadline (default 120s); short for latency-sensitive calls
 }
 export interface AiResponse {
   text: string;
@@ -83,11 +83,11 @@ async function fetchWithRetry(url: string, init: RequestInit, attempt = 0): Prom
   return res;
 }
 
-// ── Claude (Anthropic) — ported verbatim from TT _shared/claude.ts ─────────────
+// ── Claude (Anthropic) ─────────────────────────────────────────────────────────
 export async function callClaude(req: AiRequest & { fn?: string }): Promise<AiResponse> {
   const {
-    systemInstruction, userMessage, temperature = 0.7, maxTokens = 4096,
-    jsonMode = false, model = CLAUDE_HAIKU, fn = 'writer',
+    systemInstruction, userMessage, maxTokens = 4096,
+    jsonMode = false, model = CLAUDE_HAIKU, fn = 'writer', timeoutMs = 120_000,
   } = req;
   const apiKey = process.env.CLAUDE_API_KEY;
   if (!apiKey) return { text: '', error: 'CLAUDE_API_KEY not configured' };
@@ -97,15 +97,19 @@ export async function callClaude(req: AiRequest & { fn?: string }): Promise<AiRe
     : systemInstruction;
 
   try {
+    // NOTE: newer Claude models (sonnet-5 / opus-5) reject the `temperature` field
+    // with a 400, so it is intentionally not sent.
     const res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01', 'x-api-key': apiKey },
-      body: JSON.stringify({ model, max_tokens: maxTokens, temperature, system, messages: [{ role: 'user', content: userMessage }] }),
-      signal: AbortSignal.timeout(120_000),
+      body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: userMessage }] }),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const data = await res.json();
     if (!res.ok) return { text: '', error: data.error?.message || 'Claude API error' };
-    const text = data.content?.[0]?.text || '';
+    const text = (Array.isArray(data.content) ? data.content : [])
+      .filter((b: { type?: string; text?: string }) => b?.type === 'text' && b.text)
+      .map((b: { text?: string }) => b.text).join('') || '';
     const inTok = data.usage?.input_tokens ?? 0;
     const outTok = data.usage?.output_tokens ?? 0;
     const base = estimateUsd(model, inTok, outTok);
@@ -150,7 +154,7 @@ export async function callOpenAI(req: AiRequest & { fn?: string }): Promise<AiRe
   }
 }
 
-// ── Gemini (Google) — ported from TT _shared/gemini.ts ─────────────────────────
+// ── Gemini (Google) ─────────────────────────────────────────────────────────
 export async function callGemini(req: AiRequest & { fn?: string }): Promise<AiResponse> {
   const {
     systemInstruction, userMessage, temperature = 0.7, maxTokens = 2000,
@@ -184,7 +188,7 @@ export async function callGemini(req: AiRequest & { fn?: string }): Promise<AiRe
   }
 }
 
-// Safe JSON parser for model responses — ported from TT parseClaudeJson.
+// Safe JSON parser for model responses.
 export function parseAiJson<T = Record<string, unknown>>(raw: string): T {
   const cleaned = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
   try { return JSON.parse(cleaned) as T; } catch { /* fall through */ }

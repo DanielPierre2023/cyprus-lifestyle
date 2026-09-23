@@ -18,6 +18,7 @@ import { CLAUDE_SONNET } from '@/lib/ai';
 import { retrieveKnowledge, guideHref, QA_INDEX, type QAHit } from '@/lib/knowledge/qa';
 import { localizedIntent } from '@/lib/knowledge/qa.i18n';
 import { embedText } from '@/lib/concierge/embed';
+import { understandQuery, buildAugmentedQuery } from '@/lib/concierge/understand';
 import { geocode, haversineMeters, bbox } from '@/lib/geo';
 
 export const CONCIERGE_MODEL = process.env.SONNET_MODEL || CLAUDE_SONNET;
@@ -511,16 +512,28 @@ export async function assembleContext(locale: string, latestUser: string): Promi
   const kbKeyword = retrieveKnowledge(latestUser, 5);
   // One embedding for the whole turn, computed alongside the keyword search; it
   // feeds both semantic layers. null (no OPENAI_API_KEY) → keyword-only fallback.
-  const [keywordPicks, qvec, related] = await Promise.all([
+  const [keywordPicks, qvec, related, understanding] = await Promise.all([
     searchDirectory(locale, latestUser, 8),
     embedText(latestUser),
     searchArticles(locale as Locale, latestUser, 3).catch(() => []),
+    understandQuery(latestUser).catch(() => null), // opt-in; resolves null instantly when disabled
   ]);
   const [kbVecIds, vecPicks] = await Promise.all([
     vectorKbIds(qvec),
     vectorDirectory(locale, qvec, 8),
   ]);
   let candidates = mergeDirHits(keywordPicks, vecPicks, 8);
+
+  // LLM query understanding (CI-3, opt-in): translate any phrasing/language into English
+  // category stems + district the keyword engine handles, then LEAD with those precise
+  // hits. Additive and safe — no-ops instantly when disabled or on any error.
+  if (understanding) {
+    const augmented = buildAugmentedQuery(latestUser, understanding);
+    if (augmented !== latestUser) {
+      const llmPicks = await searchDirectory(locale, augmented, 8, { luxuryFirst: understanding.luxury });
+      if (llmPicks.length) candidates = mergeDirHits(llmPicks, candidates, 10);
+    }
+  }
 
   // Neighbourhood radius: if the guest named a street / area / postcode, resolve it
   // and LEAD with what's actually within a short distance — our clients first.

@@ -506,8 +506,16 @@ below, measuring before and after.
   `tsc` clean; `npm test` 18 suites (localities.pure 28); all 102 migrations apply, `match_directory`
   verified to include `'listed'`. Deploy order: apply 0105 → run `embed-directory` (repeat until
   remaining=0) → run `geocode-directory` (repeat until remaining=0).
-- [ ] **CI-3 · Smarter retrieval.** LLM query understanding (Haiku) + hybrid rank fusion +
-  category-taxonomy embeddings, so new phrasings/languages work without hand-coded regex.
+- [x] **CI-3 · Smarter retrieval (query understanding).** *Shipped 2026-09-23:* new
+  `lib/concierge/understand.ts` — a cheap Haiku pass that reads a message in ANY language and
+  returns `{district, subtype, keywords[], luxury}` in English, folded into the query so the
+  proven keyword engine (readIntent/categoryProbes/district filter) matches it — killing the
+  whack-a-mole and directly lifting the weak languages (EL/PL/RU) without touching dictionaries.
+  Integrated into `assembleContext` as an additive, high-precision lead pass (parallelized;
+  degrades to null on error). Opt-in via `CONCIERGE_LLM_UNDERSTAND=1` (a Haiku call per turn,
+  ~fraction of a cent, 3.5s timeout); `callClaude` gained a `timeoutMs`. `tsc` clean; `npm test`
+  19 suites (understand.pure 21). *Deferred as a later tune: reciprocal-rank fusion and
+  category-taxonomy embeddings — the query-understanding pass covers most of their benefit.*
 - [ ] **CI-4 · Knowledge breadth sprint.** Fill the worst gaps the baseline shows — KB entries
   and verified directory categories (diving, yachts, jewellery, fashion, nightlife, museums,
   theatre, archaeology, casual dining) — worst topic first.
