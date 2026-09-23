@@ -18,7 +18,7 @@ import { CLAUDE_SONNET } from '@/lib/ai';
 import { retrieveKnowledge, guideHref, QA_INDEX, type QAHit } from '@/lib/knowledge/qa';
 import { localizedIntent } from '@/lib/knowledge/qa.i18n';
 import { embedText } from '@/lib/concierge/embed';
-import { understandQuery, buildAugmentedQuery } from '@/lib/concierge/understand';
+import { understandQuery, buildAugmentedQuery, type Understanding } from '@/lib/concierge/understand';
 import { geocode, haversineMeters, bbox } from '@/lib/geo';
 
 export const CONCIERGE_MODEL = process.env.SONNET_MODEL || CLAUDE_SONNET;
@@ -477,10 +477,13 @@ async function vectorKbIds(vec: number[] | null): Promise<string[]> {
 // Directory-wide semantic search: the concierge can now find a listing by what it
 // IS ("somewhere romantic for an anniversary", "a quiet family beach near Paphos")
 // even when the wording matches no name, tag or summary term.
-async function vectorDirectory(locale: string, vec: number[] | null, limit = 8): Promise<Pick[]> {
+async function vectorDirectory(locale: string, vec: number[] | null, limit = 8, district?: string | null, type?: string | null): Promise<Pick[]> {
   if (!vec) return [];
   try {
-    const { data, error } = await supabaseAdmin().rpc('match_directory', { query_embedding: vec, match_count: Math.max(limit, 10) });
+    const params: Record<string, unknown> = { query_embedding: vec, match_count: Math.max(limit, 10) };
+    if (type) params.filter_type = type;
+    if (district) params.filter_district = district;
+    const { data, error } = await supabaseAdmin().rpc('match_directory', params);
     if (error || !Array.isArray(data)) return [];
     const slugs = (data as { slug: string }[]).map((r) => String(r.slug)).filter(Boolean).slice(0, limit);
     return hydrateSlugs(locale, slugs);
@@ -510,30 +513,43 @@ function mergeDirHits(primary: Pick[], extra: Pick[], max = 8): Pick[] {
 // ── Assemble the grounded context for one turn (from the latest user message) ──
 export async function assembleContext(locale: string, latestUser: string): Promise<ConciergeContext> {
   const kbKeyword = retrieveKnowledge(latestUser, 5);
-  // One embedding for the whole turn, computed alongside the keyword search; it
-  // feeds both semantic layers. null (no OPENAI_API_KEY) → keyword-only fallback.
+  // One embedding for the whole turn, computed alongside the keyword search; it feeds
+  // the semantic layers. null (no OPENAI_API_KEY) → keyword-only fallback.
   const [keywordPicks, qvec, related, understanding] = await Promise.all([
     searchDirectory(locale, latestUser, 8),
     embedText(latestUser),
     searchArticles(locale as Locale, latestUser, 3).catch(() => []),
-    understandQuery(latestUser).catch(() => null), // opt-in; resolves null instantly when disabled
+    understandQuery(latestUser).catch(() => null),
   ]);
-  const [kbVecIds, vecPicks] = await Promise.all([
-    vectorKbIds(qvec),
-    vectorDirectory(locale, qvec, 8),
-  ]);
-  let candidates = mergeDirHits(keywordPicks, vecPicks, 8);
 
-  // LLM query understanding (CI-3, opt-in): translate any phrasing/language into English
-  // category stems + district the keyword engine handles, then LEAD with those precise
-  // hits. Additive and safe — no-ops instantly when disabled or on any error.
-  if (understanding) {
-    const augmented = buildAugmentedQuery(latestUser, understanding);
-    if (augmented !== latestUser) {
-      const llmPicks = await searchDirectory(locale, augmented, 8, { luxuryFirst: understanding.luxury });
-      if (llmPicks.length) candidates = mergeDirHits(llmPicks, candidates, 10);
-    }
-  }
+  // Structured intent. The augmented query folds the LLM's English category stems into
+  // the text so the keyword pass sharpens; the district scopes the semantic search.
+  const augmented = understanding ? buildAugmentedQuery(latestUser, understanding) : latestUser;
+  const intentDistrict = (understanding?.district) || readIntent(latestUser).districts[0] || readIntent(augmented).districts[0] || null;
+
+  // SEMANTIC-FIRST retrieval — language- and slug-agnostic. A gym stored as
+  // 'health-clubs' and the query "sala de gimnastică" meet in vector space, so category
+  // no longer depends on a hand-coded keyword matching a raw import slug. District-scoped
+  // so "in Larnaca" truly means Larnaca, with a global pass as a safety net. The precise
+  // keyword pass on the normalised query still leads when it hits an exact subtype/name.
+  const kwAugP = (understanding && augmented !== latestUser)
+    ? searchDirectory(locale, augmented, 10, { luxuryFirst: understanding.luxury }).catch(() => [] as Pick[])
+    : Promise.resolve([] as Pick[]);
+  const [kbVecIds, vecDistrict, vecGlobal, kwAug] = await Promise.all([
+    vectorKbIds(qvec),
+    intentDistrict ? vectorDirectory(locale, qvec, 15, intentDistrict) : Promise.resolve([] as Pick[]),
+    vectorDirectory(locale, qvec, 12),
+    kwAugP,
+  ]);
+
+  // Fusion, most-precise first: exact category+district (keyword) → category+district by
+  // MEANING (vector) → raw keyword → global meaning. Deduped by slug.
+  let candidates: Pick[] = [];
+  candidates = mergeDirHits(candidates, kwAug, 24);
+  candidates = mergeDirHits(candidates, vecDistrict, 24);
+  candidates = mergeDirHits(candidates, keywordPicks, 24);
+  candidates = mergeDirHits(candidates, vecGlobal, 24);
+  candidates = candidates.slice(0, 16);
 
   // Neighbourhood radius: if the guest named a street / area / postcode, resolve it
   // and LEAD with what's actually within a short distance — our clients first.
@@ -546,7 +562,7 @@ export async function assembleContext(locale: string, latestUser: string): Promi
     if (strong || hasCategory) {
       const point = await geocode(locPhrase).catch(() => null);
       if (point) {
-        const nearPicks = await searchNear(locale, point, NEIGHBOURHOOD_RADIUS_M, latestUser, 10);
+        const nearPicks = await searchNear(locale, point, NEIGHBOURHOOD_RADIUS_M, augmented, 10);
         if (nearPicks.length) {
           candidates = mergeDirHits(nearPicks, candidates, 10); // near results lead
           near = { label: point.label, radiusM: NEIGHBOURHOOD_RADIUS_M };
@@ -573,6 +589,39 @@ export async function assembleContext(locale: string, latestUser: string): Promi
   const articles: ArticleLink[] = (related || []).map((a) => ({ slug: a.slug, title: a.title, category: a.category }));
   const luxury = luxuryIntent(latestUser);
   return { candidates, picks, guides, articles, kb, canRoute, luxury, near };
+}
+
+// ── Retrieval trace (observability) — shows exactly what each retrieval leg returns for
+// a query, so we can SEE why a result appears and diagnose without guessing. Admin-only
+// diagnostic; not on the guest path. This is what turns "the concierge is dumb" into a
+// concrete, inspectable answer (which leg found what, in which district). ─────────────
+export interface TraceLeg { name: string; count: number; sample: { slug: string; name: string; subtype: string | null; district: string | null }[] }
+export interface RetrievalTrace {
+  query: string; locale: string; augmented: string; intentDistrict: string | null;
+  understanding: Understanding | null; hasEmbedding: boolean; legs: TraceLeg[];
+}
+export async function retrievalTrace(locale: string, q: string): Promise<RetrievalTrace> {
+  const loc = isConciergeLocale(locale) ? locale : 'en';
+  const understanding = await understandQuery(q).catch(() => null);
+  const augmented = understanding ? buildAugmentedQuery(q, understanding) : q;
+  const intentDistrict = (understanding?.district) || readIntent(q).districts[0] || readIntent(augmented).districts[0] || null;
+  const qvec = await embedText(q);
+  const [kw, kwAug, vecDistrict, vecGlobal] = await Promise.all([
+    searchDirectory(loc, q, 10).catch(() => [] as Pick[]),
+    (understanding && augmented !== q) ? searchDirectory(loc, augmented, 10).catch(() => [] as Pick[]) : Promise.resolve([] as Pick[]),
+    intentDistrict ? vectorDirectory(loc, qvec, 12, intentDistrict) : Promise.resolve([] as Pick[]),
+    vectorDirectory(loc, qvec, 12),
+  ]);
+  const sample = (a: Pick[]): TraceLeg['sample'] => a.slice(0, 8).map((p) => ({ slug: p.slug, name: p.name, subtype: p.subtype ?? null, district: p.district ?? null }));
+  return {
+    query: q, locale: loc, augmented, intentDistrict, understanding, hasEmbedding: !!qvec,
+    legs: [
+      { name: 'keyword(raw)', count: kw.length, sample: sample(kw) },
+      { name: 'keyword(augmented)', count: kwAug.length, sample: sample(kwAug) },
+      { name: 'semantic(district)', count: vecDistrict.length, sample: sample(vecDistrict) },
+      { name: 'semantic(global)', count: vecGlobal.length, sample: sample(vecGlobal) },
+    ],
+  };
 }
 
 // The context block appended to the system prompt for grounding.

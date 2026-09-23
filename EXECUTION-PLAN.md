@@ -544,5 +544,20 @@ below, measuring before and after.
     Also **CI-2.2**: embed backfill batch raised 96→512 so it finishes in ~2 calls.
   - [ ] **CI-4b-articles · (optional) full editorial articles** for SEO/reader depth on the same topics.
   - [ ] **CI-4c · Weak-language parity** (EL/PL/RU) once CI-3 is enabled and measured.
+- [x] **CI-6 · Enterprise retrieval (semantic-first, district-scoped).** *Shipped 2026-09-23,
+  from live evidence:* the import stored each business's subtype as the raw source slug
+  (`clean_atlas.py`), so gyms are 'health-clubs'/'sports-clubs', solar is 'solar-energy', etc. —
+  a keyword probe can never catch them all, in any language (proven live: "sala de gimnastica in
+  6021" returned hotels; "panouri solare" returned nothing; only 1 Larnaca gym found while many
+  showed in Limassol/Nicosia). Fix: migration `0106` gives `match_directory` a **district filter**;
+  `brain.ts` retrieval is rebuilt **semantic-first** — the query embedding drives a **district-scoped
+  vector search** (K=15) as the primary leg, fused most-precise-first (exact keyword → category+
+  district by meaning → raw keyword → global meaning); the postcode/neighbourhood path now filters
+  category from the LLM-normalised query too. Language- and slug-agnostic by construction: "sala de
+  gimnastică", "gym", "γυμναστήριο" all land on the same Larnaca gyms without a hand-coded word.
+  New **/api/admin/concierge/retrieval-trace** shows every leg's hits (observability — no more
+  guessing). `tsc` clean; `npm test` 20 suites; 103 migrations apply, `match_directory` verified as
+  a single 4-arg overload. Proof step: after deploy + apply 0106, run the trace on the failing
+  queries and watch the semantic(district) leg surface what keyword missed.
 - [ ] **CI-5 · Taste & personality + re-measure.** Persona tuning (warmth/wit/timing) with a
   delight axis added to the eval; re-run coverage + live evals to prove the gains.
