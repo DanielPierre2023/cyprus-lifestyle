@@ -570,5 +570,16 @@ below, measuring before and after.
   `featured`/`verified` signals; the full CRM subscription tier gets mirrored onto listings in
   Phase 1. `tsc` clean; `npm test` 21 suites (rerank.pure 15); no migration. This is the Phase-2
   precision+revenue layer from CONCIERGE-STRATEGY.md.
+- [x] **CI-8 · Canonical taxonomy (Phase 1 data foundation, part 1).** *Shipped 2026-09-23:* a clean
+  ~80-category Cyprus taxonomy in `lib/directory/taxonomy.ts` (key/label/group + validated coercion,
+  `general-vendor` fallback — never emits a category outside the set). Migration `0107` adds
+  `canonical_category`, `canonical_subtype`, `tags[]`, `normalized_at` to `directory_listings`.
+  Job `POST /api/concierge/normalize-directory` classifies each listing (name + raw slug + district)
+  into the taxonomy via a cheap model, ~25 per call × 5 in parallel, re-runnable until `remaining=0`
+  — **zero fabrication, it only labels existing rows** (one-time ≈ $1–2). This is the root fix for
+  the raw-import-slug mess and unlocks clean faceting, precise category-match ranking, Partner
+  **category-exclusivity**, and category analytics. `tsc` clean; `npm test` 22 suites (taxonomy.pure
+  18); 104 migrations apply, canonical columns verified. *Next (CI-8b): have retrieval/rerank prefer
+  `canonical_category` once populated, and mirror the CRM subscription tier for full Pillar E.*
 - [ ] **CI-5 · Taste & personality + re-measure.** Persona tuning (warmth/wit/timing) with a
   delight axis added to the eval; re-run coverage + live evals to prove the gains.
