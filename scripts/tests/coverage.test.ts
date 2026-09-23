@@ -4,7 +4,7 @@
 import {
   COVERAGE_TOPICS, COVERAGE_PROBES, TOPIC_BY_KEY,
   coverageVerdict, coverageScore, overallCoverage, rollupByTopic, rollupByLocale, gaps,
-  type ProbeResult, type CoverageVerdict,
+  type ProbeResult, type CoverageVerdict, type CoverageTopic,
 } from '@/lib/concierge/coverage';
 import { eq, ok, report } from './_harness';
 
@@ -31,11 +31,12 @@ const weather = TOPIC_BY_KEY['weather'];
 eq('KB topic with only directory hits → thin', coverageVerdict(weather, { dir: 9, kb: 0, articles: 0 }), 'thin');
 eq('KB topic with a KB answer → strong', coverageVerdict(weather, { dir: 0, kb: 3, articles: 0 }), 'strong');
 
-// ── a multi-source topic (fine-dining expects directory AND article) ────────────
-const fine = TOPIC_BY_KEY['fine-dining'];
-eq('directory but no article → thin', coverageVerdict(fine, { dir: 5, kb: 0, articles: 0 }), 'thin');
-eq('directory + one article → ok', coverageVerdict(fine, { dir: 5, kb: 0, articles: 1 }), 'ok');
-eq('directory + several articles → strong', coverageVerdict(fine, { dir: 5, kb: 0, articles: 3 }), 'strong');
+// ── a multi-source topic (expects directory AND article) — synthetic, so this tests
+// the AND logic itself and stays valid however the real taxonomy's flags evolve ──
+const multi: CoverageTopic = { key: 'x', label: 'x', pillar: 'directory', expectDirectory: true, expectKb: false, expectArticle: true, en: 'x' };
+eq('directory but no article → thin', coverageVerdict(multi, { dir: 5, kb: 0, articles: 0 }), 'thin');
+eq('directory + one article → ok', coverageVerdict(multi, { dir: 5, kb: 0, articles: 1 }), 'ok');
+eq('directory + several articles → strong', coverageVerdict(multi, { dir: 5, kb: 0, articles: 3 }), 'strong');
 
 // ── unknown topic → graded on the pooled total ──────────────────────────────────
 eq('unknown topic, empty → blind', coverageVerdict(undefined, { dir: 0, kb: 0, articles: 0 }), 'blind');

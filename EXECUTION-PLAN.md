@@ -534,8 +534,15 @@ below, measuring before and after.
     20 suites. *After deploy, run the KB embed backfill so the multilingual (vector) path also
     covers them.* NB: KB keyword retrieval is English-token-based, so non-English coverage of
     these rides the embedded path — another reason CI-3 (query understanding) + KB embeddings matter.
-  - [ ] **CI-4b · Editorial taste** (fine dining, museums, theatre, archaeology, fashion,
-    nightlife, wineries — articles so listings gain context and taste).
+  - [x] **CI-4b · Editorial taste (as KB).** *Shipped 2026-09-23:* six taste-laden KB entries in
+    `qa.ts` — `fine-dining`, `nightlife`, `museums`, `archaeological-sites` (3 UNESCO + Kourion),
+    `fashion-shopping` (Stasikratous), `theatre-arts` (Rialto, Paphos Aphrodite Festival, Kourion) —
+    naming public landmarks/areas, never directory businesses, each cited (visitcyprus / UNESCO).
+    KB is fed to the concierge IN FULL (unlike article titles), so it advises with real taste now.
+    `coverage.ts` updated so these taste topics count as covered by listings + knowledge; standalone
+    web articles remain a future site enhancement. `kb.content` 14 assertions; `tsc` + tests green.
+    Also **CI-2.2**: embed backfill batch raised 96→512 so it finishes in ~2 calls.
+  - [ ] **CI-4b-articles · (optional) full editorial articles** for SEO/reader depth on the same topics.
   - [ ] **CI-4c · Weak-language parity** (EL/PL/RU) once CI-3 is enabled and measured.
 - [ ] **CI-5 · Taste & personality + re-measure.** Persona tuning (warmth/wit/timing) with a
   delight axis added to the eval; re-run coverage + live evals to prove the gains.

@@ -59,28 +59,28 @@ export interface CoverageProbe {
 // way a real guest asks them. ────────────────────────────────────────────────────
 export const COVERAGE_TOPICS: CoverageTopic[] = [
   // Investing, law, money — the KB pillar (priced, cited, practical).
-  { key: 'investing',      label: 'Investing in Cyprus',       pillar: 'knowledge', expectDirectory: false, expectKb: true,  expectArticle: true,  en: 'Is Cyprus a good place to invest my money, and how do foreigners get started?' },
+  { key: 'investing',      label: 'Investing in Cyprus',       pillar: 'knowledge', expectDirectory: false, expectKb: true,  expectArticle: false, en: 'Is Cyprus a good place to invest my money, and how do foreigners get started?' },
   { key: 'tax-residency',  label: 'Tax & residency',           pillar: 'knowledge', expectDirectory: false, expectKb: true,  expectArticle: false, en: 'How does non-dom tax residency work in Cyprus and what would I actually pay?' },
   { key: 'company',        label: 'Company formation',         pillar: 'knowledge', expectDirectory: true,  expectKb: true,  expectArticle: false, en: 'I want to set up a company in Cyprus — what is the process and the corporate tax?', expectCategory: 'accounting' },
   { key: 'law',            label: 'Laws & legal help',         pillar: 'knowledge', expectDirectory: true,  expectKb: true,  expectArticle: false, en: 'What are the current property laws for non-EU buyers, and can you find me a lawyer in Larnaca?', expectCategory: 'law-firm', expectDistrict: 'larnaca' },
   { key: 'prices',         label: 'Prices & cost of living',   pillar: 'knowledge', expectDirectory: false, expectKb: true,  expectArticle: false, en: 'What does it cost to live comfortably in Cyprus each month?' },
   { key: 'weather',        label: 'Weather',                   pillar: 'knowledge', expectDirectory: false, expectKb: true,  expectArticle: false, en: 'What is the weather like in Cyprus in October — can I still swim in the sea?' },
-  { key: 'culture',        label: 'Cypriot culture',           pillar: 'editorial', expectDirectory: false, expectKb: true,  expectArticle: true,  en: 'Tell me about Cypriot culture and the traditions I should know about.' },
-  { key: 'state-of-cyprus',label: 'The current feel of Cyprus',pillar: 'editorial', expectDirectory: false, expectKb: true,  expectArticle: true,  en: 'How is the general situation in Cyprus right now — is it a good time to be here?' },
+  { key: 'culture',        label: 'Cypriot culture',           pillar: 'editorial', expectDirectory: false, expectKb: true,  expectArticle: false, en: 'Tell me about Cypriot culture and the traditions I should know about.' },
+  { key: 'state-of-cyprus',label: 'The current feel of Cyprus',pillar: 'editorial', expectDirectory: false, expectKb: true,  expectArticle: false, en: 'How is the general situation in Cyprus right now — is it a good time to be here?' },
 
   // Property & relocation.
   { key: 'real-estate',    label: 'Buying property',           pillar: 'directory', expectDirectory: true,  expectKb: true,  expectArticle: false, en: 'I want to buy a two-bedroom apartment near the sea in Paphos — where do I start?', expectCategory: 'agency', expectDistrict: 'paphos' },
   { key: 'relocation',     label: 'Relocation & moving',       pillar: 'directory', expectDirectory: true,  expectKb: false, expectArticle: false, en: "I'm moving to Cyprus — can you find movers and relocation help?", expectCategory: 'movers' },
 
   // Dining, both ways — his explicit ask.
-  { key: 'fine-dining',    label: 'Fine & luxury dining',      pillar: 'directory', expectDirectory: true,  expectKb: false, expectArticle: true,  en: "Where is the finest luxury dining in Limassol for a special anniversary dinner?", expectCategory: 'restaurant', expectDistrict: 'limassol' },
+  { key: 'fine-dining',    label: 'Fine & luxury dining',      pillar: 'directory', expectDirectory: true,  expectKb: true,  expectArticle: false, en: "Where is the finest luxury dining in Limassol for a special anniversary dinner?", expectCategory: 'restaurant', expectDistrict: 'limassol' },
   { key: 'casual-dining',  label: 'Casual dining with a view', pillar: 'directory', expectDirectory: true,  expectKb: false, expectArticle: false, en: 'A relaxed place to eat with a lovely sea view in Larnaca, somewhere with real atmosphere but not too expensive?', expectCategory: 'restaurant', expectDistrict: 'larnaca' },
   { key: 'cafes',          label: 'Cafés & coffee',            pillar: 'directory', expectDirectory: true,  expectKb: false, expectArticle: false, en: 'A lovely café for good coffee and people-watching in Nicosia?' },
 
   // Culture & sights.
-  { key: 'museums',        label: 'Museums',                   pillar: 'directory', expectDirectory: true,  expectKb: false, expectArticle: true,  en: 'Which museums are worth visiting in Nicosia?' },
-  { key: 'theatre',        label: 'Theatre, shows & spectacles',pillar: 'editorial',expectDirectory: true,  expectKb: false, expectArticle: true,  en: 'Are there any theatre performances or shows on in Cyprus this month?' },
-  { key: 'archaeology',    label: 'Archaeological sites',      pillar: 'directory', expectDirectory: true,  expectKb: false, expectArticle: true,  en: 'Which archaeological sites should I see near Paphos?', expectDistrict: 'paphos' },
+  { key: 'museums',        label: 'Museums',                   pillar: 'directory', expectDirectory: false, expectKb: true,  expectArticle: false, en: 'Which museums are worth visiting in Nicosia?' },
+  { key: 'theatre',        label: 'Theatre, shows & spectacles',pillar: 'editorial',expectDirectory: false, expectKb: true,  expectArticle: false, en: 'Are there any theatre performances or shows on in Cyprus this month?' },
+  { key: 'archaeology',    label: 'Archaeological sites',      pillar: 'directory', expectDirectory: false, expectKb: true,  expectArticle: false, en: 'Which archaeological sites should I see near Paphos?', expectDistrict: 'paphos' },
 
   // The sea.
   { key: 'beaches',        label: 'Beaches',                   pillar: 'directory', expectDirectory: true,  expectKb: false, expectArticle: false, en: 'Which are the best beaches near Ayia Napa?', expectCategory: 'beach', expectDistrict: 'famagusta' },
@@ -90,14 +90,14 @@ export const COVERAGE_TOPICS: CoverageTopic[] = [
 
   // Shopping & style.
   { key: 'jewellery',      label: 'Jewellery',                 pillar: 'directory', expectDirectory: true,  expectKb: false, expectArticle: false, en: 'Where can I buy fine jewellery in Limassol?', expectDistrict: 'limassol' },
-  { key: 'fashion',        label: 'Fashion & boutiques',       pillar: 'directory', expectDirectory: true,  expectKb: false, expectArticle: true,  en: 'Where is the best fashion shopping and the nicest boutiques in Cyprus?' },
+  { key: 'fashion',        label: 'Fashion & boutiques',       pillar: 'directory', expectDirectory: true,  expectKb: true,  expectArticle: false, en: 'Where is the best fashion shopping and the nicest boutiques in Cyprus?' },
 
   // Nightlife.
-  { key: 'nightlife',      label: 'Nightlife & party miles',   pillar: 'editorial', expectDirectory: true,  expectKb: false, expectArticle: true,  en: 'Where are the best party spots and nightlife in Ayia Napa, and where do the locals actually go?', expectDistrict: 'famagusta' },
+  { key: 'nightlife',      label: 'Nightlife & party miles',   pillar: 'editorial', expectDirectory: true,  expectKb: true,  expectArticle: false, en: 'Where are the best party spots and nightlife in Ayia Napa, and where do the locals actually go?', expectDistrict: 'famagusta' },
 
   // Stays & wine.
   { key: 'stays',          label: 'Hotels & stays',            pillar: 'directory', expectDirectory: true,  expectKb: false, expectArticle: false, en: 'A luxury hotel in Paphos for a honeymoon?', expectCategory: 'hotel', expectDistrict: 'paphos' },
-  { key: 'wineries',       label: 'Wine & wineries',           pillar: 'directory', expectDirectory: true,  expectKb: false, expectArticle: true,  en: 'Can you recommend a winery to visit in the Limassol wine villages?', expectCategory: 'winery' },
+  { key: 'wineries',       label: 'Wine & wineries',           pillar: 'directory', expectDirectory: true,  expectKb: true,  expectArticle: false, en: 'Can you recommend a winery to visit in the Limassol wine villages?', expectCategory: 'winery' },
 
   // Everyday services — including the bulk-imported home trades (the Pila/aircon case).
   { key: 'health',         label: 'Health & clinics',          pillar: 'directory', expectDirectory: true,  expectKb: false, expectArticle: false, en: 'I need a good dentist in Larnaca.', expectDistrict: 'larnaca' },

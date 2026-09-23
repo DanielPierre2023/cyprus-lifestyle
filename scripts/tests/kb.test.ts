@@ -17,4 +17,13 @@ ok('situation is retrievable', has('state-of-cyprus', 'what is the current situa
 
 ok('all three carry a citable source', ['investing-in-cyprus', 'cypriot-culture', 'state-of-cyprus'].every((id) => !!QA_INDEX[id]?.item.source));
 
+// ── CI-4b editorial taste entries ────────────────────────────────────────────────
+ok('fine-dining is retrievable', has('fine-dining', 'where can I find fine dining for a special dinner in Limassol'));
+ok('nightlife is retrievable', has('nightlife', 'where is the best nightlife and party areas in Cyprus'));
+ok('museums is retrievable', has('museums', 'which museums are worth visiting in Cyprus'));
+ok('archaeological-sites is retrievable', has('archaeological-sites', 'which ancient archaeological sites should I see in Cyprus'));
+ok('fashion-shopping is retrievable', has('fashion-shopping', 'where is the best fashion shopping and designer boutiques'));
+ok('theatre-arts is retrievable', has('theatre-arts', 'what is the theatre and live performance scene like in Cyprus'));
+ok('editorial entries all carry a citable source', ['fine-dining', 'nightlife', 'museums', 'archaeological-sites', 'fashion-shopping', 'theatre-arts'].every((id) => !!QA_INDEX[id]?.item.source));
+
 report('kb.content');

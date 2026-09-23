@@ -83,7 +83,7 @@ async function run(force: boolean): Promise<Record<string, unknown>> {
   // Embed the changed listings in batches, upserting as we go, within the budget.
   // Anything not reached is picked up on the next call (its hash stays unwritten).
   let embedded = 0;
-  const BATCH = 96;
+  const BATCH = 512; // text-embedding-3-small accepts up to 2048 inputs/request; larger batches = far fewer round-trips, so the backfill finishes in ~2 calls
   let i = 0;
   for (; i < pending.length; i += BATCH) {
     if (Date.now() - started > BUDGET_MS) break;
