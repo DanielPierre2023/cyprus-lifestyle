@@ -29,7 +29,7 @@ async function run(): Promise<Record<string, unknown>> {
   const sb = supabaseAdmin();
   const started = Date.now();
   const BUDGET_MS = 45_000;
-  const PAGE = 500;
+  const PAGE = 1000; // coordinates are built-in now (no per-town geocode), so pages fly
 
   // Geocode each distinct locality once per run; a persistent geocode_cache hit needs
   // no external call (and no rate-limit sleep).
@@ -37,6 +37,14 @@ async function run(): Promise<Record<string, unknown>> {
   async function centroidFor(loc: Locality): Promise<Pt> {
     const key = `${loc.name}|${loc.district}`;
     if (seen.has(key)) return seen.get(key) as Pt;
+    // Built-in town centroid — instant, no geocoder call, no rate limit. This is the
+    // normal path; the cache/geocode fallback below only runs for a locality that somehow
+    // lacks coordinates.
+    if (typeof loc.lat === 'number' && typeof loc.lng === 'number') {
+      const pt: Pt = { lat: loc.lat, lng: loc.lng };
+      seen.set(key, pt);
+      return pt;
+    }
     const q = localityQuery(loc);
     let cached = false; let pt: Pt = null;
     try {

@@ -51,6 +51,17 @@ eq('accented Yeroskípou → paphos', dist('Yeroskípou'), 'paphos');
   ok('all five districts are represented', valid.every((d) => CY_LOCALITIES.some((l) => l.district === d)));
   ok('every district has a display name', valid.every((d) => !!DISTRICT_NAME[d]));
   ok('names are non-trivial', CY_LOCALITIES.every((l) => l.name.length >= 3));
+  // Coordinate integrity — every centroid must sit inside the Cyprus bounding box, so a
+  // typo (wrong sign, transposed digits) can never place a business off-island.
+  ok('every locality centroid is inside Cyprus', CY_LOCALITIES.every((l) =>
+    typeof l.lat === 'number' && typeof l.lng === 'number' &&
+    l.lat > 34.4 && l.lat < 35.8 && l.lng > 32.2 && l.lng < 34.7));
+  // Spot-checks against known town centres (±0.1° ≈ 11 km tolerance).
+  const near = (a: number, b: number) => Math.abs(a - b) < 0.1;
+  const L = (n: string) => CY_LOCALITIES.find((x) => x.name === n)!;
+  ok('Larnaca centroid is right', near(L('Larnaca').lat, 34.92) && near(L('Larnaca').lng, 33.62));
+  ok('Paphos centroid is right', near(L('Paphos').lat, 34.77) && near(L('Paphos').lng, 32.43));
+  ok('Ayia Napa centroid is right', near(L('Ayia Napa').lat, 34.99) && near(L('Ayia Napa').lng, 34.00));
 }
 
 report('localities.pure');

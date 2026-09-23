@@ -506,6 +506,11 @@ below, measuring before and after.
   `tsc` clean; `npm test` 18 suites (localities.pure 28); all 102 migrations apply, `match_directory`
   verified to include `'listed'`. Deploy order: apply 0105 → run `embed-directory` (repeat until
   remaining=0) → run `geocode-directory` (repeat until remaining=0).
+  - **CI-2.1 (2026-09-23):** `geocode-directory` now ships built-in town centroids for ~90 Cyprus
+    localities (no Nominatim dependency, no rate-limit), so one call stamps thousands and the whole
+    backlog clears in 1–2 calls instead of ~30. First live run stamped 460/500 with the old geocoder
+    path (96% of the page resolved); the per-address `geocode_listing` job still refines to street
+    level. `localities.pure` grew coord-bounds + spot-check tests (32 assertions).
 - [x] **CI-3 · Smarter retrieval (query understanding).** *Shipped 2026-09-23:* new
   `lib/concierge/understand.ts` — a cheap Haiku pass that reads a message in ANY language and
   returns `{district, subtype, keywords[], luxury}` in English, folded into the query so the
