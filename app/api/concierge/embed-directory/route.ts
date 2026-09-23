@@ -50,7 +50,7 @@ async function run(force: boolean): Promise<Record<string, unknown>> {
   if (!hasEmbeddings()) return { ok: false, error: 'OPENAI_API_KEY not configured' };
   const sb = supabaseAdmin();
   const started = Date.now();
-  const BUDGET_MS = 45_000;
+  const BUDGET_MS = 50_000;
 
   // Existing hashes — so we only re-embed listings whose text actually changed.
   const existing = new Map<string, string>();
@@ -84,19 +84,21 @@ async function run(force: boolean): Promise<Record<string, unknown>> {
   // Embed the changed listings in batches, upserting as we go, within the budget.
   // Anything not reached is picked up on the next call (its hash stays unwritten).
   let embedded = 0;
-  const BATCH = 512; // text-embedding-3-small accepts up to 2048 inputs/request; larger batches = far fewer round-trips, so the backfill finishes in ~2 calls
+  const EMBED_BATCH = 256;   // OpenAI request size (text-embedding-3-small accepts up to 2048)
+  const UPSERT_CHUNK = 100;  // DB write size — bulk vector upserts are index-heavy, so keep each statement well under the DB statement_timeout (512 timed out)
   let i = 0;
-  for (; i < pending.length; i += BATCH) {
+  for (; i < pending.length; i += EMBED_BATCH) {
     if (Date.now() - started > BUDGET_MS) break;
-    const chunk = pending.slice(i, i + BATCH);
+    const chunk = pending.slice(i, i + EMBED_BATCH);
     const vecs = await embedBatch(chunk.map((c) => c.doc));
     const rows = chunk
       .map((c, j) => (vecs[j] ? { slug: c.slug, embedding: vecs[j] as number[], content_hash: c.h, updated_at: new Date().toISOString() } : null))
       .filter(Boolean) as { slug: string; embedding: number[]; content_hash: string; updated_at: string }[];
-    if (rows.length) {
-      const { error } = await sb.from('directory_embeddings').upsert(rows, { onConflict: 'slug' });
+    for (let k = 0; k < rows.length; k += UPSERT_CHUNK) {
+      const sub = rows.slice(k, k + UPSERT_CHUNK);
+      const { error } = await sb.from('directory_embeddings').upsert(sub, { onConflict: 'slug' });
       if (error) return { ok: false, error: error.message, embedded };
-      embedded += rows.length;
+      embedded += sub.length;
     }
   }
 

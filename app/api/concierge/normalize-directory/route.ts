@@ -56,7 +56,7 @@ async function classifyChunk(rows: Row[]): Promise<void> {
 async function run(redo: boolean): Promise<Record<string, unknown>> {
   const sb = supabaseAdmin();
   const started = Date.now();
-  const BUDGET_MS = 45_000;
+  const BUDGET_MS = 50_000;
   const SELECT = 'id,name_en,subtype,type,category_group,district,source_description';
   let mapped = 0, llmDone = 0, after = '';
 
@@ -111,6 +111,21 @@ async function run(redo: boolean): Promise<Record<string, unknown>> {
   };
 }
 
+// Reset normalisation so a re-run re-classifies EVERYTHING with the newly loaded descriptions.
+// The old `redo=1` couldn't progress across calls (it ignored normalized_at, so it re-did the
+// first batch each time and reported remaining:0). Instead: call ?reset=1 ONCE, then call the
+// endpoint normally (no redo, no reset) until "remaining":0 — that drains null-normalized_at rows
+// in batches with a correct remaining count, exactly like the first import did.
+async function resetNormalization(): Promise<Record<string, unknown>> {
+  const sb = supabaseAdmin();
+  const { error, count } = await sb.from('directory_listings')
+    .update({ normalized_at: null }, { count: 'exact' })
+    .in('status', STATUSES)
+    .not('normalized_at', 'is', null);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, reset: true, cleared: count ?? null, note: 'Reset done — now call this endpoint WITHOUT reset or redo, repeatedly, until "remaining":0. It re-classifies using the loaded descriptions.' };
+}
+
 function denyReason(req: NextRequest): string | null {
   if (!process.env.ENRICH_SECRET) return 'ENRICH_SECRET is not set on the server. Add it in Vercel → Settings → Environment Variables, redeploy, then call this URL with ?key=<that same value>.';
   if ((req.nextUrl.searchParams.get('key') || '') !== process.env.ENRICH_SECRET) return 'Unauthorized — the ?key= value does not match ENRICH_SECRET set on the server.';
@@ -120,10 +135,12 @@ function denyReason(req: NextRequest): string | null {
 export async function GET(req: NextRequest) {
   const deny = denyReason(req);
   if (deny) return NextResponse.json({ ok: false, error: deny }, { status: 401 });
+  if (req.nextUrl.searchParams.get('reset') === '1') return NextResponse.json(await resetNormalization());
   return NextResponse.json(await run(req.nextUrl.searchParams.get('redo') === '1'));
 }
 export async function POST(req: NextRequest) {
   const deny = denyReason(req);
   if (deny) return NextResponse.json({ ok: false, error: deny }, { status: 401 });
+  if (req.nextUrl.searchParams.get('reset') === '1') return NextResponse.json(await resetNormalization());
   return NextResponse.json(await run(req.nextUrl.searchParams.get('redo') === '1'));
 }
