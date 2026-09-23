@@ -458,3 +458,45 @@
   activation are live, and set the next tier (items 13–18): move all background work onto the
   queue, live-model quality evals, executable DSAR erasure, a bulk multilingual content sprint,
   per-listing revenue attribution, and resilience hardening. ── **Post-roadmap A–D all shipped.**
+
+---
+
+## Concierge Intelligence Programme (2026-09 →) — "make him as smart as possible"
+
+**North star (Daniel):** an adviser who knows Cyprus like a brilliant local friend —
+investing & law, fine *and* casual dining, museums, theatre, archaeology, weather,
+the sea (diving, boats, yachts), jewellery, fashion, nightlife & the party miles,
+prices, culture, and an honest, warm read on how the island feels now — with the
+taste and timing to make you smile and still give the right advice.
+
+**Three pillars:** (1) *Retrieval intelligence* — light all three legs (semantic +
+proximity + keyword), hybrid-rank, LLM query understanding; (2) *Knowledge breadth* —
+grow the KB (priced, cited), enrich the directory with the missing categories, editorial
+for taste, a refreshable "State of Cyprus"; (3) *Taste & personality* — warmth, wit,
+timing, never at grounding's expense. **Measured against the vision the whole way.**
+
+**Diagnosis (from the code):** the brain has three retrieval legs but two are dark for
+the 14,671 bulk imports — `match_directory` (0051) still filters `status='published'`,
+the imports have no embeddings, and they have no coordinates. So semantic + radius
+silently skip them and only brittle keyword ILIKE carries the load. Fix in the order
+below, measuring before and after.
+
+- [x] **CI-1 · Baseline instrument (breadth coverage probe).** *Shipped 2026-09-23:*
+  `lib/concierge/coverage.ts` — a retrieval-only probe (directory + KB + articles, **no
+  answer/judge model, so free**) across 28 vision topics in all 7 languages, graded
+  blind/thin/ok/strong with pure, unit-tested scoring; migration `0104_concierge_coverage`
+  (table + `concierge_coverage_summary` / `concierge_coverage_topics` views, SQL score
+  identical to the TS); admin route `POST /api/admin/concierge/coverage/run` returns an
+  overall score + per-topic/per-locale breakdown + the gap worklist; `EVAL_SET` (live
+  quality eval) widened to the same breadth. `tsc` clean; `npm test` 17 suites (coverage.pure
+  30); all 101 migrations apply. **This is the baseline every later CI-item must beat.**
+- [ ] **CI-2 · Light the dark legs.** Fix `match_directory` to include `'listed'`; embed the
+  14,671 imports; geocode them (village-centroids first for instant town ranking, street
+  precision as a background refine). Unlocks semantic + radius for the whole directory.
+- [ ] **CI-3 · Smarter retrieval.** LLM query understanding (Haiku) + hybrid rank fusion +
+  category-taxonomy embeddings, so new phrasings/languages work without hand-coded regex.
+- [ ] **CI-4 · Knowledge breadth sprint.** Fill the worst gaps the baseline shows — KB entries
+  and verified directory categories (diving, yachts, jewellery, fashion, nightlife, museums,
+  theatre, archaeology, casual dining) — worst topic first.
+- [ ] **CI-5 · Taste & personality + re-measure.** Persona tuning (warmth/wit/timing) with a
+  delight axis added to the eval; re-run coverage + live evals to prove the gains.

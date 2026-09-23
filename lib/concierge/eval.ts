@@ -58,6 +58,24 @@ export const EVAL_SET: EvalItem[] = [
   { id: 'ru-realestate', locale: 'ru', intent: 'realestate', question: 'Хочу купить квартиру у моря в Лимасоле. С чего начать?' },
   { id: 'ru-legal', locale: 'ru', intent: 'professional', question: 'Мне нужен юрист в Ларнаке для открытия компании на Кипре.' },
   { id: 'ru-hotel', locale: 'ru', intent: 'hotel', question: 'Посоветуйте роскошный отель в Пафосе для медового месяца.' },
+
+  // ── The wider vision (item: "he should know everything"): dining both ways,
+  // culture & sights, the sea, style, nightlife, prices, investing and the feel of
+  // Cyprus — so the live quality eval scores the same breadth the coverage probe maps.
+  { id: 'en-finedining', locale: 'en', intent: 'fine-dining', question: "Where is the finest luxury dining in Limassol for a special anniversary dinner?" },
+  { id: 'en-casual', locale: 'en', intent: 'casual-dining', question: 'A relaxed place with a lovely sea view in Larnaca for a good, affordable lunch?' },
+  { id: 'en-culture', locale: 'en', intent: 'culture', question: 'Which museums and archaeological sites should I see near Paphos?' },
+  { id: 'en-diving', locale: 'en', intent: 'activity', question: 'Where can I go scuba diving in Cyprus?' },
+  { id: 'en-yacht', locale: 'en', intent: 'luxury', question: "I'd like to charter a private yacht for a day from Limassol." },
+  { id: 'en-nightlife', locale: 'en', intent: 'nightlife', question: 'Where is the best nightlife in Ayia Napa, and where do the locals actually go?' },
+  { id: 'en-prices', locale: 'en', intent: 'practical', question: 'What does it cost to live comfortably in Cyprus each month?' },
+  { id: 'en-invest', locale: 'en', intent: 'practical', question: 'Is Cyprus a good place to invest, and how do foreigners get started?' },
+  { id: 'el-culture', locale: 'el', intent: 'culture', question: 'Ποια μουσεία και αρχαιολογικοί χώροι αξίζουν κοντά στην Πάφο;' },
+  { id: 'ro-casual', locale: 'ro', intent: 'casual-dining', question: 'Un loc frumos cu vedere la mare în Larnaca, cu o atmosferă plăcută?' },
+  { id: 'ar-jewellery', locale: 'ar', intent: 'retail', question: 'أين أشتري مجوهرات فاخرة في ليماسول؟' },
+  { id: 'de-invest', locale: 'de', intent: 'practical', question: 'Ist Zypern ein guter Ort zum Investieren, und wie fange ich an?' },
+  { id: 'pl-beach', locale: 'pl', intent: 'beach', question: 'Które plaże w pobliżu Ayia Napa są najlepsze?' },
+  { id: 'ru-state', locale: 'ru', intent: 'practical', question: 'Как сейчас общая обстановка на Кипре? Стоит ли приезжать?' },
 ];
 
 const LANG_NAME: Record<string, string> = {
