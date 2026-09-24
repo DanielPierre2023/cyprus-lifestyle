@@ -4,6 +4,9 @@
     "tagline": "The island, in full colour"
   },
   "nav": {
+    "style": "Style",
+    "design-living": "Design & Living",
+    "the-island": "The Island",
     "home": "Home",
     "cyprus": "Cyprus",
     "business": "Business",
@@ -89,6 +92,9 @@
     "more": "More from the island"
   },
   "sections": {
+    "style": "Fashion, beauty and the makers — how the island dresses, adorns and presents itself.",
+    "design-living": "Architecture, interiors and the well-made object — designing a Mediterranean life.",
+    "the-island": "Essentials, news and the knowledge that helps — the island, explained.",
     "cyprus": "Governance, the economy and the stories shaping the Republic.",
     "business": "Markets, funds, shipping and the money moving through Limassol and Nicosia.",
     "property": "Villas, marinas and the new architecture of the coast — the island as an address.",

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
 import { getByCategory } from '@/lib/queries';
+import { departments as editorialDepartments, getSection } from '@/lib/editorial/taxonomy';
 import { pageMetadata, breadcrumbJsonLd, ld } from '@/lib/seo';
 import ArticleCard from '@/components/ArticleCard';
 import CoverImage from '@/components/CoverImage';
@@ -11,9 +12,13 @@ import NewsletterSignup from '@/components/NewsletterSignup';
 
 export const revalidate = 300;
 
-// 'agenda' is handled by the dedicated /agenda events page (static route), so it
-// is intentionally excluded here to avoid a route conflict.
-const CATS = ['cyprus', 'business', 'property', 'relocation', 'culture', 'escapes', 'table', 'people', 'world'];
+// Public section pages: the nine merged departments (lib/editorial/taxonomy.ts) plus
+// the legacy keys kept working for URL continuity. 'agenda' is handled by the
+// dedicated /agenda events page (static route), so it is excluded here.
+const CATS = [
+  ...editorialDepartments().map((d) => d.key),
+  'cyprus', 'relocation', 'world',
+].filter((c) => c !== 'agenda');
 
 // Prerender all sections so they are cache HITs from the first click, per locale.
 export function generateStaticParams() {
@@ -24,8 +29,8 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const { locale, category } = await params;
   if (!isLocale(locale) || !CATS.includes(category)) return {};
   const t = await getTranslations({ locale });
-  const label = t.has(`nav.${category}`) ? t(`nav.${category}`) : category;
-  const desc = t.has(`sections.${category}`) ? t(`sections.${category}`) : undefined;
+  const label = t.has(`nav.${category}`) ? t(`nav.${category}`) : (getSection(category)?.name || category);
+  const desc = t.has(`sections.${category}`) ? t(`sections.${category}`) : (getSection(category)?.description || undefined);
   return pageMetadata({ locale: locale as Locale, path: `/${category}`, title: label, description: desc, kicker: 'Cyprus Lifestyle' });
 }
 
@@ -37,8 +42,8 @@ export default async function CategoryPage({ params }: { params: Promise<{ local
   const t = await getTranslations();
   const cards = await getByCategory(l, category, 25);
 
-  const label = t.has(`nav.${category}`) ? t(`nav.${category}`) : category;
-  const desc = t.has(`sections.${category}`) ? t(`sections.${category}`) : '';
+  const label = t.has(`nav.${category}`) ? t(`nav.${category}`) : (getSection(category)?.name || category);
+  const desc = t.has(`sections.${category}`) ? t(`sections.${category}`) : (getSection(category)?.description || '');
   const lead = cards[0];
   const rest = cards.slice(1);
   const byline = (c: typeof cards[number]) =>

@@ -24,8 +24,12 @@ const XML_HEADERS = { 'Content-Type': 'application/xml; charset=utf-8' } as cons
 
 // Static / marketing routes (mirrors the previous single-file sitemap).
 const STATIC_PATHS = [
-  '/', '/property', '/relocation', '/culture', '/cyprus', '/business', '/escapes',
-  '/table', '/agenda', '/people', '/world', '/directory', '/luxury', '/ask',
+  // The nine merged departments (nav order).
+  '/', '/style', '/table', '/escapes', '/design-living', '/property', '/business',
+  '/culture', '/people', '/the-island',
+  // Legacy section URLs kept live for continuity (still resolve; no longer in nav).
+  '/relocation', '/cyprus', '/agenda', '/world',
+  '/directory', '/luxury', '/ask',
   '/guide', '/for', '/when-to-visit', '/membership', '/about', '/advertise',
   '/contact', '/standards', '/privacy', '/sourcing', '/partner',
 ];

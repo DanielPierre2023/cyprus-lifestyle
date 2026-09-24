@@ -4,6 +4,9 @@
     "tagline": "Insula, în culori depline"
   },
   "nav": {
+    "style": "Stil",
+    "design-living": "Design & Living",
+    "the-island": "Insula",
     "home": "Acasă",
     "cyprus": "Cipru",
     "business": "Afaceri",
@@ -89,6 +92,9 @@
     "more": "Mai multe de pe insulă"
   },
   "sections": {
+    "style": "Modă, frumusețe și creatorii — cum se îmbracă, se înfrumusețează și se prezintă insula.",
+    "design-living": "Arhitectură, interioare și obiectul bine făcut — designul unei vieți mediteraneene.",
+    "the-island": "Esențialul, știrile și informațiile utile — insula, explicată.",
     "cyprus": "Guvernare, economie și poveștile care modelează Republica.",
     "business": "Piețe, fonduri, transport maritim și banii care circulă prin Limassol și Nicosia.",
     "property": "Vile, marine și noua arhitectură a coastei — insula ca adresă.",

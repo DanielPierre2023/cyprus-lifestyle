@@ -3,7 +3,8 @@ import { Link } from '@/lib/i18n/routing';
 import LocaleSwitch from '@/components/LocaleSwitch';
 import type { Locale } from '@/lib/locales';
 
-const CATS = ['property', 'relocation', 'culture', 'cyprus', 'business', 'escapes', 'table', 'agenda', 'people', 'world'] as const;
+// The nine merged departments (see lib/editorial/taxonomy.ts).
+const CATS = ['style', 'table', 'escapes', 'design-living', 'property', 'business', 'culture', 'people', 'the-island'] as const;
 
 // Cyprus Lifestyle is the media title of ADD Individual Solutions Ltd.
 const OWNER: Record<Locale, string> = {

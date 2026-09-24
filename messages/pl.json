@@ -4,6 +4,9 @@
     "tagline": "Wyspa w pełnej barwie"
   },
   "nav": {
+    "style": "Styl",
+    "design-living": "Design i wnętrza",
+    "the-island": "Wyspa",
     "home": "Start",
     "cyprus": "Cypr",
     "business": "Biznes",
@@ -89,6 +92,9 @@
     "more": "Więcej z wyspy"
   },
   "sections": {
+    "style": "Moda, uroda i twórcy — jak wyspa się ubiera, zdobi i prezentuje.",
+    "design-living": "Architektura, wnętrza i dobrze wykonany przedmiot — projektowanie śródziemnomorskiego życia.",
+    "the-island": "Niezbędnik, wiadomości i przydatna wiedza — wyspa w pigułce.",
     "cyprus": "Polityka, gospodarka i historie, które kształtują Republikę.",
     "business": "Rynki, fundusze, żegluga i kapitał przepływający przez Limassol i Nikozję.",
     "property": "Wille, mariny i nowa architektura wybrzeża — wyspa jako adres.",

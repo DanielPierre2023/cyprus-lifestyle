@@ -5,7 +5,10 @@ import { Link } from '@/lib/i18n/routing';
 import LocaleSwitch from '@/components/LocaleSwitch';
 
 // Order echoes the print masthead: lead with the marquee sections.
-const CATS = ['property', 'relocation', 'culture', 'cyprus', 'business', 'escapes', 'table', 'agenda', 'people', 'world'] as const;
+// The nine merged departments (see lib/editorial/taxonomy.ts). Subcategories and
+// the legacy sections (cyprus/relocation/agenda/world) still have working URLs;
+// they're just no longer top-level masthead links.
+const CATS = ['style', 'table', 'escapes', 'design-living', 'property', 'business', 'culture', 'people', 'the-island'] as const;
 
 export default function Header() {
   const t = useTranslations('nav');

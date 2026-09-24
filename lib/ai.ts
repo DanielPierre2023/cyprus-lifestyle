@@ -20,6 +20,8 @@ export interface AiRequest {
   jsonMode?: boolean;
   model?: string;
   timeoutMs?: number; // request abort deadline (default 120s); short for latency-sensitive calls
+  webSearch?: boolean; // give Claude Anthropic's server-side web_search tool (live "what's in" research)
+  maxSearches?: number; // cap web_search tool uses per call (default 5)
 }
 export interface AiResponse {
   text: string;
@@ -88,6 +90,7 @@ export async function callClaude(req: AiRequest & { fn?: string }): Promise<AiRe
   const {
     systemInstruction, userMessage, maxTokens = 4096,
     jsonMode = false, model = CLAUDE_HAIKU, fn = 'writer', timeoutMs = 120_000,
+    webSearch = false, maxSearches = 5,
   } = req;
   const apiKey = process.env.CLAUDE_API_KEY;
   if (!apiKey) return { text: '', error: 'CLAUDE_API_KEY not configured' };
@@ -102,7 +105,13 @@ export async function callClaude(req: AiRequest & { fn?: string }): Promise<AiRe
     const res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01', 'x-api-key': apiKey },
-      body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: userMessage }] }),
+      body: JSON.stringify({
+        model, max_tokens: maxTokens, system,
+        messages: [{ role: 'user', content: userMessage }],
+        // Anthropic runs web_search server-side (searches, reads, then answers); we
+        // extract only the final text blocks below, so the JSON contract still holds.
+        ...(webSearch ? { tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: maxSearches }] } : {}),
+      }),
       signal: AbortSignal.timeout(timeoutMs),
     });
     const data = await res.json();

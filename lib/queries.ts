@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Locale } from '@/lib/locales';
 import { MIN_COLLECTION_SIZE, collectionSlug, slugifyDistrict, type CollectionFacet } from '@/lib/collections';
 import { GROUP_KEYS } from '@/lib/taxonomy';
+import { getSection, EDITORIAL_SECTIONS } from '@/lib/editorial/taxonomy';
 
 export interface Card {
   id: string; slug: string; title: string; excerpt: string; category: string | null;
@@ -52,9 +53,23 @@ export async function getFeatured(locale: Locale): Promise<Card | null> {
   return latest[0] || null;
 }
 
+// Taxonomy-aware section listing. A DEPARTMENT page aggregates its subcategories
+// (new pieces carry category = department; legacy pieces carry category = a key that
+// is now a subcategory, e.g. 'relocation'), so we match category IN [dept, …subs].
+// A SUBCATEGORY page matches either column (new pieces set subcategory; legacy set
+// category). An unknown key falls back to the plain category match, so nothing breaks.
 export async function getByCategory(locale: Locale, category: string, limit = 18): Promise<Card[]> {
-  const { data } = await supabaseAdmin().from('blog_posts').select(CARD_COLS(locale))
-    .eq('status', 'published').eq('category', category).order('published_at', { ascending: false }).limit(limit);
+  const sec = getSection(category);
+  let q = supabaseAdmin().from('blog_posts').select(CARD_COLS(locale)).eq('status', 'published');
+  if (sec && sec.parentKey === null) {
+    const keys = [category, ...EDITORIAL_SECTIONS.filter((s) => s.parentKey === category).map((s) => s.key)];
+    q = q.in('category', keys);
+  } else if (sec) {
+    q = q.or(`subcategory.eq.${category},category.eq.${category}`);
+  } else {
+    q = q.eq('category', category);
+  }
+  const { data } = await q.order('published_at', { ascending: false }).limit(limit);
   return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toCard(r, locale)).filter((c) => c.title);
 }
 

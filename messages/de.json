@@ -4,6 +4,9 @@
     "tagline": "Die Insel, in voller Farbe"
   },
   "nav": {
+    "style": "Stil",
+    "design-living": "Design & Wohnen",
+    "the-island": "Die Insel",
     "home": "Start",
     "cyprus": "Zypern",
     "business": "Wirtschaft",
@@ -89,6 +92,9 @@
     "more": "Mehr von der Insel"
   },
   "sections": {
+    "style": "Mode, Beauty und die Macher — wie die Insel sich kleidet, schmückt und präsentiert.",
+    "design-living": "Architektur, Interieur und das gut gemachte Objekt — ein mediterranes Leben gestalten.",
+    "the-island": "Das Wesentliche, Nachrichten und hilfreiches Wissen — die Insel, erklärt.",
     "cyprus": "Politik, Wirtschaft und die Geschichten, die die Republik prägen.",
     "business": "Märkte, Fonds, Schifffahrt und das Kapital, das durch Limassol und Nikosia fließt.",
     "property": "Villen, Marinas und die neue Architektur der Küste — die Insel als Adresse.",
