@@ -15,8 +15,10 @@ import { callClaude, CLAUDE_SONNET, CLAUDE_HAIKU, parseAiJson } from '@/lib/ai';
 import { retrieveKnowledge, compactForConcierge } from '@/lib/knowledge/qa';
 import {
   dossierPrompt, draftPrompt, translatePrompt,
+  LOCALE_NAMES, isLocale,
   type PipelineSubject, type PieceKind,
 } from '@/lib/editorial/pipeline';
+import { craftBlock, antiAiRules, deAiScrub, lintAiTells, polishSystem } from '@/lib/editorial/craft';
 
 // ── grounding ─────────────────────────────────────────────────────────────────
 // A compact block of relevant knowledge-base intents, so the dossier is anchored in
@@ -83,7 +85,10 @@ export interface DraftResult {
 export async function draftPiece(input: DraftInput): Promise<DraftResult> {
   if (!input || !input.subject?.name) return { title: '', bodyMd: '', error: 'A subject with a name is required.' };
   const r = await callClaude({
-    systemInstruction: draftPrompt(input.kind, input.franchise, input.notes || '', input.subject),
+    // The base commission prompt PLUS the House Book: this franchise's redactional
+    // format, the craft standard, and the anti-AI-detection rules.
+    systemInstruction: draftPrompt(input.kind, input.franchise, input.notes || '', input.subject)
+      + '\n\n' + craftBlock(input.franchise, input.kind, 'English'),
     userMessage: `Write the ${input.kind} for "${input.subject.name}" now.`,
     model: CLAUDE_SONNET,
     jsonMode: true,
@@ -94,8 +99,8 @@ export async function draftPiece(input: DraftInput): Promise<DraftResult> {
   if (r.error || !r.text) return { title: '', bodyMd: '', error: r.error || 'No response from the model.' };
 
   const j = parseAiJson<{ title?: string; body_md?: string }>(r.text);
-  const title = typeof j.title === 'string' ? j.title.trim() : '';
-  const bodyMd = typeof j.body_md === 'string' ? j.body_md.trim() : '';
+  const title = deAiScrub(typeof j.title === 'string' ? j.title.trim() : '');
+  const bodyMd = deAiScrub(typeof j.body_md === 'string' ? j.body_md.trim() : '');
   if (!bodyMd) return { title, bodyMd: '', error: 'Could not parse a draft body from the model response.' };
   return { title, bodyMd };
 }
@@ -116,8 +121,11 @@ export async function translatePiece(
 ): Promise<TranslateResult> {
   const body0 = String(bodyMd || '');
   if (!body0.trim()) return { title: '', body: '', error: 'Nothing to translate (empty body).' };
+  const langName = isLocale(targetLocale) ? LOCALE_NAMES[targetLocale] : targetLocale;
   const r = await callClaude({
-    systemInstruction: translatePrompt(targetLocale),
+    // Translate faithfully, but render it as a native journalist would AND keep the
+    // anti-AI rules in the target language (so no edition reads as machine-made).
+    systemInstruction: translatePrompt(targetLocale) + '\n\n' + antiAiRules(langName),
     userMessage: `TITLE:\n${String(title || '').trim()}\n\nBODY:\n${body0}`,
     model: CLAUDE_HAIKU,
     jsonMode: true,
@@ -128,8 +136,50 @@ export async function translatePiece(
   if (r.error || !r.text) return { title: '', body: '', error: r.error || 'No response from the model.' };
 
   const j = parseAiJson<{ title?: string; body?: string }>(r.text);
-  const outTitle = typeof j.title === 'string' ? j.title.trim() : '';
-  const outBody = typeof j.body === 'string' ? j.body.trim() : '';
+  const outTitle = deAiScrub(typeof j.title === 'string' ? j.title.trim() : '');
+  const outBody = deAiScrub(typeof j.body === 'string' ? j.body.trim() : '');
   if (!outBody) return { title: outTitle, body: '', error: 'Could not parse a translation from the model response.' };
   return { title: outTitle, body: outBody };
+}
+
+// ── 4. polish: elevate an existing draft to the standard + strip every AI tell ───
+// A dedicated editing pass (the pipeline's 'editing' stage). It scores the draft for
+// AI tells, tells the model exactly what to remove, rewrites to the franchise format
+// and craft standard, then applies the deterministic scrub as a final guarantee.
+export interface PolishResult {
+  title: string;
+  bodyMd: string;
+  tellsBefore: string[];
+  tellsAfter: string[];
+  error?: string;
+}
+
+export async function polishPiece(
+  title: string,
+  bodyMd: string,
+  franchise: string | null,
+  kind: PieceKind,
+  locale = 'en',
+): Promise<PolishResult> {
+  const body0 = String(bodyMd || '');
+  if (!body0.trim()) return { title: '', bodyMd: '', tellsBefore: [], tellsAfter: [], error: 'Nothing to polish (empty body).' };
+  const langName = isLocale(locale) ? LOCALE_NAMES[locale] : 'English';
+  const tellsBefore = lintAiTells(`${title}\n${body0}`);
+
+  const r = await callClaude({
+    systemInstruction: polishSystem(franchise, kind, tellsBefore, langName),
+    userMessage: `TITLE:\n${String(title || '').trim()}\n\nBODY:\n${body0}`,
+    model: CLAUDE_SONNET,
+    jsonMode: true,
+    maxTokens: 4096,
+    timeoutMs: 90_000,
+    fn: 'editorial-polish',
+  });
+  if (r.error || !r.text) return { title: '', bodyMd: '', tellsBefore, tellsAfter: tellsBefore, error: r.error || 'No response from the model.' };
+
+  const j = parseAiJson<{ title?: string; body_md?: string }>(r.text);
+  const outTitle = deAiScrub(typeof j.title === 'string' && j.title.trim() ? j.title.trim() : title);
+  const outBody = deAiScrub(typeof j.body_md === 'string' ? j.body_md.trim() : '');
+  if (!outBody) return { title: outTitle, bodyMd: '', tellsBefore, tellsAfter: tellsBefore, error: 'Could not parse the polished body from the model response.' };
+  return { title: outTitle, bodyMd: outBody, tellsBefore, tellsAfter: lintAiTells(`${outTitle}\n${outBody}`) };
 }
