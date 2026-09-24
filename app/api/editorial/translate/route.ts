@@ -10,6 +10,7 @@ import { translatePiece, transcreatePiece, translatePackage, packagePiece } from
 import { LOCALES } from '@/lib/editorial/pipeline';
 import { packageColumns, packageFromPiece, packageIsEmpty, pieceToPackageInput } from '@/lib/editorial/packageWrite';
 import type { PackageResult } from '@/lib/editorial/generate';
+import { shouldTranscreate, parseTranscreateFlag } from '@/lib/editorial/transcreation';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -29,6 +30,31 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
   const srcBody = String(p[`content_${source}`] || '');
   if (!srcBody.trim()) return { ok: false, error: `The source edition (${source}) has no body yet — draft the piece before translating.` };
 
+  // Rendering decision, per FRANCHISE. The long-form interview franchise is
+  // re-reported by a native staff writer (transcreation, Sonnet); every other
+  // franchise is faithfully translated + humanised (Haiku). `?transcreate=1|0`
+  // overrides per call.
+  const explicit = parseTranscreateFlag(req.nextUrl.searchParams.get('transcreate'));
+  const franchise = typeof p.franchise === 'string' ? p.franchise : '';
+  const wantTranscreate = shouldTranscreate(franchise, explicit);
+
+  // COMPARE MODE: `?compare=1[&locale=xx]` returns BOTH renderings for one edition
+  // and saves NOTHING — so the desk can judge transcreation against the humanised
+  // translation before we widen the rollout.
+  if (req.nextUrl.searchParams.get('compare') === '1') {
+    const locale = req.nextUrl.searchParams.get('locale') || LOCALES.find((l) => l !== source) || 'de';
+    const [tr, tc] = await Promise.all([
+      translatePiece(srcTitle, srcBody, locale),
+      transcreatePiece(srcTitle, srcBody, locale),
+    ]);
+    return {
+      ok: !tr.error && !tc.error, id, source, locale, compare: true, franchise,
+      translation: { title: tr.title, body: tr.body, level: tr.level ?? null, score: tr.score ?? null, error: tr.error ?? null },
+      transcreation: { title: tc.title, body: tc.body, level: tc.level ?? null, score: tc.score ?? null, error: tc.error ?? null },
+      note: `Compare only — nothing saved. locale=${locale}. Run without ?compare to write the editions.`,
+    };
+  }
+
   // Mark the piece as being translated.
   await sb.from('blog_posts').update({ pipeline_status: 'translating' }).eq('id', id);
 
@@ -45,12 +71,17 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
   }
   const havePkg = !packageIsEmpty(sourcePkg);
 
-  // Body renderer. Default: faithful translation + the deterministic 7-language
-  // humaniser (fast, Haiku). Opt-in `?transcreate=1`: re-report each edition as a
-  // native staff writer in its own rhythm (Sonnet — higher quality, slower/costlier,
-  // so the caller chooses it for flagship pieces). Same signature, swappable.
-  const transcreate = req.nextUrl.searchParams.get('transcreate') === '1';
-  const renderBody = transcreate ? transcreatePiece : translatePiece;
+  // Per-edition body renderer. When transcreation is on for this piece, re-report
+  // each edition natively (Sonnet); if a transcreation fails, fall back to faithful
+  // translation so no edition is ever left empty.
+  async function renderBody(locale: string) {
+    if (wantTranscreate) {
+      const tc = await transcreatePiece(srcTitle, srcBody, locale);
+      if (!tc.error && tc.body) return tc;
+      return translatePiece(srcTitle, srcBody, locale);
+    }
+    return translatePiece(srcTitle, srcBody, locale);
+  }
 
   // Loop the seven locales; the source is a no-op. The other six run in parallel
   // (independent) so the whole set finishes within the function budget. Each
@@ -59,7 +90,7 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
   const results = await Promise.all(
     targets.map(async (locale) => {
       const [t, pkg] = await Promise.all([
-        renderBody(srcTitle, srcBody, locale),
+        renderBody(locale),
         havePkg ? translatePackage(sourcePkg, locale) : Promise.resolve<PackageResult | null>(null),
       ]);
       return { locale, ...t, pkg };
@@ -88,7 +119,8 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
     ok: failed.length === 0,
     id,
     source,
-    mode: transcreate ? 'transcreate' : 'translate',
+    franchise,
+    mode: wantTranscreate ? 'transcreate' : 'translate',
     translated,
     failed,
     pipeline_status: 'translating',
