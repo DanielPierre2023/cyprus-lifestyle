@@ -26,8 +26,18 @@ export default function FieldNoteForm() {
         body: JSON.stringify({ ...f, rating: f.rating || undefined }),
       });
       const d = await r.json();
-      if (d.ok) { setMsg(`✓ ${d.note || 'Saved.'}`); if (d.queuedDraft) setTimeout(() => location.reload(), 1600); }
-      else setMsg(d.error || 'Failed to save.');
+      if (!d.ok) { setMsg(d.error || 'Failed to save.'); setBusy(false); return; }
+      if (d.autoDraft && d.blogPostId) {
+        setMsg('✓ Saved · drafting… (up to a minute)');
+        try {
+          const r2 = await fetch('/api/admin/editorial/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: d.blogPostId }) });
+          const d2 = await r2.json();
+          setMsg(d2.ok ? `✓ Drafted · ${d2.words || ''} words — now in Editing` : `Saved; draft failed: ${d2.error || 'unknown'}`);
+        } catch { setMsg('Saved; the draft is still running.'); }
+        setTimeout(() => location.reload(), 1800);
+      } else {
+        setMsg(`✓ ${d.note || 'Saved.'}`);
+      }
     } catch (e2) { setMsg((e2 as Error).message); }
     setBusy(false);
   }

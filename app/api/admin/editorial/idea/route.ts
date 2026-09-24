@@ -7,7 +7,7 @@
 //             of timing out inline.
 //   reject  → mark the idea rejected (with an optional reason).
 //   assign  → set assigned_to and mark it assigned.
-import { NextRequest, NextResponse, after } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { uniqueSlug } from '@/lib/util';
@@ -23,7 +23,17 @@ interface Idea {
   research_brief: Record<string, unknown> | null; status: string; blog_post_id: string | null;
 }
 
-async function approve(req: NextRequest, idea: Idea): Promise<Record<string, unknown>> {
+function briefingFrom(idea: Idea): string {
+  const b = idea.research_brief || {};
+  const parts: string[] = [];
+  if (idea.angle) parts.push(`Angle: ${idea.angle}`);
+  if (typeof b.subjectHint === 'string' && b.subjectHint) parts.push(`Subject: ${b.subjectHint}`);
+  if (Array.isArray(b.outline) && b.outline.length) parts.push(`Outline:\n- ${(b.outline as string[]).join('\n- ')}`);
+  if (Array.isArray(b.verify) && b.verify.length) parts.push(`Must verify (do not assert unverified):\n- ${(b.verify as string[]).join('\n- ')}`);
+  return parts.join('\n\n');
+}
+
+async function approve(idea: Idea): Promise<Record<string, unknown>> {
   const sb = supabaseAdmin();
   const settings = await getEditorialSettings();
 
@@ -52,39 +62,24 @@ async function approve(req: NextRequest, idea: Idea): Promise<Record<string, unk
     subcategory: idea.subcategory_key,
     author_name: 'The Cyprus Lifestyle Desk',
     title_en: title,
+    // Carry the planner's brief onto the piece so the draft step is grounded on it.
+    dossier: { briefing: briefingFrom(idea) },
   }).select('id, slug').single();
   if (error) return { ok: false, error: `Could not create the piece: ${error.message}` };
   const blogId = (created as { id: string }).id;
 
-  await sb.from('editorial_ideas').update({ status: 'approved', blog_post_id: blogId, assigned_to: 'ai' }).eq('id', idea.id);
+  const autoDraft = settings.autonomy === 'auto-draft';
+  await sb.from('editorial_ideas').update({
+    status: autoDraft ? 'drafting' : 'approved', blog_post_id: blogId, assigned_to: 'ai',
+  }).eq('id', idea.id);
 
-  // Auto-draft: hand the heavy write to the dedicated draft route in the background.
-  // It runs as its own function (full 60s) and advances the piece to 'drafting'; this
-  // request returns immediately, so it never times out.
-  let queuedDraft = false;
-  if (settings.autonomy === 'auto-draft') {
-    const key = process.env.ENRICH_SECRET || '';
-    if (key) {
-      const origin = req.nextUrl.origin;
-      after(async () => {
-        try {
-          await fetch(`${origin}/api/editorial/draft?key=${encodeURIComponent(key)}&id=${blogId}`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-          });
-        } catch { /* the draft route runs as an independent invocation; best effort */ }
-      });
-      await sb.from('editorial_ideas').update({ status: 'drafting' }).eq('id', idea.id);
-      queuedDraft = true;
-    }
-  }
-
+  // When auto-draft is on, the COCKPIT calls /api/admin/editorial/draft next (a second
+  // request with its own 60s budget). We just report the id + flag here so approve stays fast.
   return {
     ok: true, action: 'approve', blogPostId: blogId, slug,
     franchise, franchiseName: getFranchise(franchise)?.name ?? franchise,
-    queuedDraft,
-    note: queuedDraft
-      ? 'Approved and commissioned. The AI editor is drafting it in the background — it will appear in the pipeline (Editing) shortly.'
-      : 'Approved and commissioned. Draft it from the pipeline.',
+    autoDraft,
+    note: autoDraft ? 'Approved and commissioned. Drafting…' : 'Approved and commissioned. Draft it from the pipeline.',
   };
 }
 
@@ -116,5 +111,5 @@ export async function POST(req: NextRequest) {
   if (idea.status === 'approved' || idea.status === 'drafting' || idea.blog_post_id) {
     return NextResponse.json({ ok: false, error: 'This idea has already been approved.' }, { status: 409 });
   }
-  return NextResponse.json(await approve(req, idea));
+  return NextResponse.json(await approve(idea));
 }

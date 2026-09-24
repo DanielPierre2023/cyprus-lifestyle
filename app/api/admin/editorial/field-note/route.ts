@@ -5,7 +5,7 @@
 // fast and the full Sonnet draft runs in its own 60s function.
 // Body: { kind, subjectListingId?, subjectName?, place?, visitedOn?, rating?, notes,
 //         quotes?, media?[], sectionKey?, subcategoryKey?, franchise?, author?, autoDraft? }
-import { NextRequest, NextResponse, after } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { uniqueSlug } from '@/lib/util';
@@ -62,28 +62,14 @@ export async function POST(req: NextRequest) {
     pipeline_status: 'commissioned', status: 'draft', subject_listing_id: subjectListingId,
     category: s('sectionKey') || null, subcategory: s('subcategoryKey') || null,
     author_name: author, title_en: title,
+    // The field notes ARE the grounding material — carry them onto the piece so the
+    // draft step (which reads dossier.briefing) writes from what the editor saw.
+    dossier: { briefing: material },
   }).select('id, slug').single();
-  if (cErr) return NextResponse.json({ ok: true, id: noteId, queuedDraft: false, error: `Note saved, but could not commission a piece: ${cErr.message}` });
+  if (cErr) return NextResponse.json({ ok: true, id: noteId, autoDraft: false, error: `Note saved, but could not commission a piece: ${cErr.message}` });
   const blogId = (created as { id: string }).id;
   await sb.from('editorial_field_notes').update({ status: 'drafting', blog_post_id: blogId }).eq('id', noteId);
 
-  const key = process.env.ENRICH_SECRET || '';
-  if (key) {
-    const origin = req.nextUrl.origin;
-    after(async () => {
-      try {
-        await fetch(`${origin}/api/editorial/draft?key=${encodeURIComponent(key)}&id=${blogId}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ notes: material }),
-        });
-      } catch { /* the draft route runs as an independent invocation; best effort */ }
-    });
-  }
-
-  return NextResponse.json({
-    ok: true, id: noteId, blogPostId: blogId, slug, queuedDraft: !!key,
-    note: key
-      ? 'Field note saved. The AI editor is drafting it in the background — it will appear in the pipeline (Editing) shortly.'
-      : 'Field note saved and a piece commissioned. Set ENRICH_SECRET to enable background drafting.',
-  });
+  // The cockpit calls /api/admin/editorial/draft next (its own 60s budget).
+  return NextResponse.json({ ok: true, id: noteId, blogPostId: blogId, slug, autoDraft: true, note: 'Field note saved. Drafting…' });
 }

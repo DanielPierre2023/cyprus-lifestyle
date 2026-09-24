@@ -14,17 +14,31 @@ export default function IdeaActions({ id }: { id: string }) {
 
   async function act(action: 'approve' | 'reject') {
     setState('busy'); setMsg('');
+    const H = { 'Content-Type': 'application/json' };
     try {
       const r = await fetch('/api/admin/editorial/idea', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: H,
         body: JSON.stringify({ id, action, reason: action === 'reject' ? 'Not a fit' : undefined }),
       });
       const d = await r.json();
-      if (d.ok) {
-        setState('done');
-        setMsg(action === 'approve' ? (d.queuedDraft ? 'Approved · drafting…' : 'Approved · commissioned') : 'Rejected');
-        setTimeout(() => location.reload(), 900);
-      } else { setState('err'); setMsg(d.error || 'Failed'); }
+      if (!d.ok) { setState('err'); setMsg(d.error || 'Failed'); return; }
+
+      // Auto-draft on: the cockpit triggers the draft as a second request (its own 60s).
+      if (action === 'approve' && d.autoDraft && d.blogPostId) {
+        setMsg('Approved · drafting… (up to a minute)');
+        try {
+          const r2 = await fetch('/api/admin/editorial/draft', { method: 'POST', headers: H, body: JSON.stringify({ id: d.blogPostId }) });
+          const d2 = await r2.json();
+          setState('done');
+          setMsg(d2.ok ? `Drafted · ${d2.words || ''} words — now in Editing` : `Approved; draft failed: ${d2.error || 'unknown'}`);
+        } catch { setState('done'); setMsg('Approved; the draft is still running.'); }
+        setTimeout(() => location.reload(), 1400);
+        return;
+      }
+
+      setState('done');
+      setMsg(action === 'approve' ? 'Approved · commissioned' : 'Rejected');
+      setTimeout(() => location.reload(), 900);
     } catch (e) { setState('err'); setMsg((e as Error).message); }
   }
 
