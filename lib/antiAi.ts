@@ -1,12 +1,15 @@
-// Cyprus Lifestyle — deterministic anti-AI humanizer + AI-tell scorer.
-// Ported from Transilvania Times _shared/tt-anti-ai.ts, extended EN·EL·RO·AR and
-// re-anchored to a Cyprus gazetteer. Strips em/en dashes, scrubs AI-lexicon and
-// filler openers, calms ALL-CAPS headings, and scores how "AI" a draft still reads.
-// Language-neutral rules (dashes, emoji) apply to all four; lexicon/filler lists
-// are per-language (EL/AR are lighter — no public stemmer, so we target the
-// obvious tells).
+// Cyprus Lifestyle — deterministic anti-AI humaniser + AI-tell scorer.
+// Ported from Transilvania Times _shared/tt-anti-ai.ts, extended across all seven
+// editions (EN·EL·RO·AR·DE·PL·RU) and re-anchored to a Cyprus gazetteer. Strips
+// em/en dashes, scrubs AI-lexicon and filler openers, calms ALL-CAPS headings,
+// measures sentence rhythm (burstiness) and scores how "AI" a draft still reads.
+// Language-neutral rules (dashes, emoji, burstiness) apply to every edition;
+// lexicon/filler lists are per-language. EL/AR/RU carry no public stemmer, so we
+// target the distinctive multi-word calques rather than inflected single words,
+// using Unicode letter boundaries because ASCII \b does not delimit Greek,
+// Arabic or Cyrillic letters (Latin de/pl keep \b).
 
-export type Lang = 'en' | 'el' | 'ro' | 'ar';
+export type Lang = 'en' | 'el' | 'ro' | 'ar' | 'de' | 'pl' | 'ru';
 
 // Acronyms/caps tokens that must STAY uppercase when a title is de-shouted.
 const KEEP_UPPER = new Set<string>([
@@ -190,6 +193,87 @@ const LEX_AR: Array<[RegExp, string]> = [
   [/مجموعة متنوعة من/g, 'العديد من'],
   [/طائفة واسعة من/g, 'العديد من'],
 ];
+// German — Latin script, so ASCII \b delimits words safely. Replacements are chosen
+// so the surrounding grammar stays intact: article-preserving swaps ("ein" serves
+// masc. and neut. nominative/accusative alike), the "-los" adjective declined in
+// step with its replacement, and empty-string drops for the hollow "it is important
+// to note" frame (mirroring the AR drops — a dropped frame never mis-inflects).
+const LEX_DE: Array<[RegExp, string]> = [
+  [/\bdarüber hinaus\b/gi, 'außerdem'],
+  [/\bes ist wichtig zu (?:beachten|betonen|erwähnen)(?:, dass)?/gi, ''],
+  [/\bim Herzen von\b/gi, 'im Zentrum von'],
+  [/\bim Herzen der\b/gi, 'im Zentrum der'],
+  [/\bim Herzen des\b/gi, 'im Zentrum des'],
+  [/\beine Vielzahl (?:von|an)\b/gi, 'viele'],
+  [/\beine breite Palette (?:von|an)\b/gi, 'viele'],
+  [/\beine breite Auswahl an\b/gi, 'viele'],
+  [/\bspielt eine (?:entscheidende|wichtige|zentrale|maßgebliche) Rolle\b/gi, 'ist zentral'],
+  [/\bspielt eine Schlüsselrolle\b/gi, 'ist zentral'],
+  [/\bin der heutigen (?:schnelllebigen )?(?:Welt|Zeit|Gesellschaft)\b/gi, 'heute'],
+  // "seamless(ly)" — decline the replacement in lock-step with the source adjective.
+  [/\bnahtlose\b/gi, 'reibungslose'],
+  [/\bnahtlosen\b/gi, 'reibungslosen'],
+  [/\bnahtloser\b/gi, 'reibungsloser'],
+  [/\bnahtloses\b/gi, 'reibungsloses'],
+  [/\bnahtlos\b/gi, 'reibungslos'],
+  // "a (true) testament to/of" — drop the adjective, keep "ein" (valid for the
+  // masc. "Beleg") so no article agreement breaks.
+  [/\bein (?:wahres )?Zeugnis (?:für|von)\b/gi, 'ein Beleg für'],
+  // "dive/immerse into" — the object case may need a light human pass; the swap is
+  // grammatical for article-less objects and removes the calque either way.
+  [/\beintauchen in\b/gi, 'sich befassen mit'],
+  // "treasure trove" → "abundance"; both feminine, so any preceding adjective agrees.
+  [/\bSchatzkammer\b/gi, 'Fülle'],
+];
+// Polish — Latin script, ASCII \b is fine. Role/importance calques are rendered
+// gender-neutrally ("ma kluczowe znaczenie", where the neuter "znaczenie" carries
+// the agreement, not the subject), and the "true testament" adjective is dropped so
+// the instrumental noun stands alone grammatically.
+const LEX_PL: Array<[RegExp, string]> = [
+  [/\bwarto (?:zauważyć|podkreślić)(?:, że)?/gi, ''],
+  [/\bnależy (?:zauważyć|podkreślić)(?:, że)?/gi, ''],
+  [/\bw dzisiejszych czasach\b/gi, 'dziś'],
+  // Polish words ending in a diacritic (rolę, gamę) need a Unicode trailing boundary:
+  // ASCII \b does not fire after ę/ą, so we close these with (?!\p{L}) under the u flag.
+  [/\bodgrywa (?:kluczową|istotną|ważną|zasadniczą) rolę(?!\p{L})/giu, 'ma kluczowe znaczenie'],
+  [/\bszeroka gama\b/gi, 'wiele'],
+  [/\bszeroką gamę(?!\p{L})/giu, 'wiele'],
+  [/\bszeroki wachlarz\b/gi, 'wiele'],
+  [/\bmnóstwo\b/gi, 'wiele'],
+  [/\bw sercu\b/gi, 'w centrum'],
+  [/\bbezproblemowo\b/gi, 'sprawnie'],
+  [/\bpłynnie\b/gi, 'sprawnie'],
+  [/\bprawdziwym (?:dowodem|świadectwem)\b/gi, 'dowodem'],
+  [/\bzagłębić się w\b/gi, 'przyjrzeć się'],
+  // "true treasure trove" — fix adjective + noun together (neuter) before the bare noun.
+  [/\bprawdziwa skarbnica\b/gi, 'prawdziwe bogactwo'],
+  [/\bskarbnica\b/gi, 'bogactwo'],
+];
+// Russian — CYRILLIC, so ASCII \b never fires between letters. We mirror LEX_EL and
+// wrap every entry in Unicode letter lookarounds (?<!\p{L}) … (?!\p{L}) with the u
+// flag. Role/importance is rendered gender-neutrally ("имеет ключевое значение");
+// the "seamless" adjective is declined across all genders; "погрузиться в" keeps the
+// accusative object it already governs; the "true testament" adjective is dropped.
+const LEX_RU: Array<[RegExp, string]> = [
+  [/(?<!\p{L})стоит (?:отметить|подчеркнуть)(?:, что)?(?![\p{L}])/giu, ''],
+  [/(?<!\p{L})следует (?:отметить|подчеркнуть)(?:, что)?(?![\p{L}])/giu, ''],
+  [/(?<!\p{L})в (?:современном мире|наше время)(?![\p{L}])/giu, 'сегодня'],
+  [/(?<!\p{L})(?:в )?динамично развивающемся мире(?![\p{L}])/giu, 'сегодня'],
+  [/(?<!\p{L})играет (?:ключевую|важную|решающую|значимую) роль(?![\p{L}])/giu, 'имеет ключевое значение'],
+  [/(?<!\p{L})широкий (?:спектр|ассортимент|выбор|круг|диапазон)(?![\p{L}])/giu, 'много'],
+  [/(?<!\p{L})множество(?![\p{L}])/giu, 'много'],
+  [/(?<!\p{L})в сердце(?![\p{L}])/giu, 'в центре'],
+  [/(?<!\p{L})бесшовная(?![\p{L}])/giu, 'гладкая'],
+  [/(?<!\p{L})бесшовное(?![\p{L}])/giu, 'гладкое'],
+  [/(?<!\p{L})бесшовные(?![\p{L}])/giu, 'гладкие'],
+  [/(?<!\p{L})бесшовный(?![\p{L}])/giu, 'гладкий'],
+  [/(?<!\p{L})бесшовно(?![\p{L}])/giu, 'плавно'],
+  [/(?<!\p{L})настоящим (?:свидетельством|доказательством)(?![\p{L}])/giu, 'доказательством'],
+  [/(?<!\p{L})погрузиться в(?![\p{L}])/giu, 'рассмотреть'],
+  [/(?<!\p{L})погружаться в(?![\p{L}])/giu, 'рассматривать'],
+  [/(?<!\p{L})настоящая сокровищница(?![\p{L}])/giu, 'настоящее богатство'],
+  [/(?<!\p{L})сокровищница(?![\p{L}])/giu, 'богатство'],
+];
 
 const FILLERS_EN =
   'Moreover|Furthermore|Additionally|In addition|Notably|Importantly|Crucially|' +
@@ -210,6 +294,20 @@ const FILLERS_AR =
   'علاوة على ذلك|وعلاوة على ذلك|بالإضافة إلى ذلك|إضافة إلى ذلك|فضلا عن ذلك|علاوة على ما سبق|' +
   'من ناحية أخرى|في الختام|وفي الختام|وختاما|ختاما|في نهاية المطاف|باختصار|إجمالا|بشكل عام|' +
   'وبطبيعة الحال|وفي هذا السياق|ومن الجدير بالذكر';
+// Sentence-initial connectives. dropFillers wraps these in a NON-capturing group,
+// so every optional part below must also be non-capturing (?:…)? — a capturing group
+// would shift dropFillers' backreference and break re-capitalisation.
+const FILLERS_DE =
+  'Darüber hinaus|Außerdem|Zudem|Ferner|Überdies|Des Weiteren|' +
+  'Zusammenfassend|Abschließend|Letztendlich|Schließlich|Insgesamt|' +
+  'Es ist erwähnenswert(?:, dass)?';
+const FILLERS_PL =
+  'Ponadto|Co więcej|Dodatkowo|Warto dodać(?:, że)?|' +
+  'Podsumowując|Reasumując|Ostatecznie|Co istotne|Co ważne';
+const FILLERS_RU =
+  'Более того|Кроме того|Помимо этого|Помимо всего прочего|Стоит добавить(?:, что)?|' +
+  'Таким образом|В заключение|В итоге|В конечном счёте|В конечном итоге|' +
+  'Важно отметить(?:, что)?';
 
 // Drop a sentence-initial filler and re-capitalise the next word. Uses Unicode
 // letter/mark boundaries (not ASCII \b) so it works for Greek and Arabic too, and
@@ -220,10 +318,12 @@ function dropFillers(s: string, alternation: string): string {
 }
 
 function lexFor(lang: Lang): Array<[RegExp, string]> {
-  return lang === 'ro' ? LEX_RO : lang === 'el' ? LEX_EL : lang === 'ar' ? LEX_AR : LEX_EN;
+  return lang === 'ro' ? LEX_RO : lang === 'el' ? LEX_EL : lang === 'ar' ? LEX_AR
+    : lang === 'de' ? LEX_DE : lang === 'pl' ? LEX_PL : lang === 'ru' ? LEX_RU : LEX_EN;
 }
 function fillersFor(lang: Lang): string {
-  return lang === 'ro' ? FILLERS_RO : lang === 'el' ? FILLERS_EL : lang === 'ar' ? FILLERS_AR : FILLERS_EN;
+  return lang === 'ro' ? FILLERS_RO : lang === 'el' ? FILLERS_EL : lang === 'ar' ? FILLERS_AR
+    : lang === 'de' ? FILLERS_DE : lang === 'pl' ? FILLERS_PL : lang === 'ru' ? FILLERS_RU : FILLERS_EN;
 }
 
 export function scrubLexicon(s: string, lang: Lang): string {
@@ -258,7 +358,7 @@ export function humanizeHtml(html: string, lang: Lang): string {
 
 // ── AI-tell detector (0 clean → 100 very AI) ────────────────────────────────────
 export interface AiTell { key: string; label: string; severity: 'high' | 'medium' | 'low'; count: number; sample: string }
-export interface AiTellReport { score: number; level: 'clean' | 'low' | 'medium' | 'high'; tells: AiTell[] }
+export interface AiTellReport { score: number; level: 'clean' | 'low' | 'medium' | 'high'; tells: AiTell[]; burstiness?: { sentenceCV: number; paraCV: number; uniform: boolean } }
 const WEIGHT = { high: 40, medium: 7, low: 3 } as const;
 
 function bodyDefs(lang: Lang): Array<{ key: string; label: string; severity: 'high' | 'medium' | 'low'; re: RegExp }> {
@@ -289,6 +389,30 @@ function bodyDefs(lang: Lang): Array<{ key: string; label: string; severity: 'hi
     { key: 'ar_seamless', label: '«سلس / بسلاسة» (seamless)', severity: 'low', re: /سلس(?:ة|ًا)?(?![\p{L}])|بسلاسة/gu },
     { key: 'ar_worldpace', label: '«في عالم سريع التغير»', severity: 'medium', re: /في عالم[ٍ]? (?:سريع التغير|سريع الخطى|دائم التطور|دائم التغير)/g },
     { key: 'ar_undeniable', label: '«مما لا شك فيه / لا يمكن إنكار»', severity: 'low', re: /مما لا شك فيه|لا يمكن إنكار/g }];
+  if (lang === 'de') return [...common,
+    { key: 'de_worth', label: '„Es ist wichtig zu beachten / erwähnenswert"', severity: 'medium', re: /\bes ist wichtig zu (?:beachten|betonen|erwähnen)\b|\bes ist erwähnenswert\b/gi },
+    { key: 'de_role', label: '„spielt eine entscheidende Rolle"', severity: 'medium', re: /\bspielt eine (?:entscheidende|wichtige|zentrale|maßgebliche) Rolle\b|\bspielt eine Schlüsselrolle\b/gi },
+    { key: 'de_range', label: '„eine Vielzahl / breite Palette von"', severity: 'low', re: /\beine Vielzahl (?:von|an)\b|\beine breite (?:Palette|Auswahl) (?:von|an)\b/gi },
+    { key: 'de_not_only', label: 'Struktur „nicht nur … sondern auch"', severity: 'medium', re: /\bnicht nur\b[^.?!]{0,80}\bsondern auch\b/gi },
+    { key: 'de_conclusion', label: 'Schlussabsatz', severity: 'medium', re: /(^|\n)\s*(?:Zusammenfassend|Abschließend|Letztendlich|Insgesamt)\b/gi },
+    { key: 'de_filler', label: 'Konnektoren „Darüber hinaus / Außerdem"', severity: 'low', re: /(^|\n|[.!?]\s+)(?:Darüber hinaus|Außerdem|Zudem|Ferner|Des Weiteren)/g },
+    { key: 'de_lexicon', label: 'KI-Vokabular (nahtlos, eintauchen, Zeugnis, Schatzkammer…)', severity: 'medium', re: /\bnahtlos(?:e|er|es|en)?\b|\beintauchen in\b|\bein (?:wahres )?Zeugnis (?:für|von)\b|\bSchatzkammer\b|\bim Herzen (?:von|der|des)\b/gi }];
+  if (lang === 'pl') return [...common,
+    { key: 'pl_worth', label: '„warto zauważyć / należy podkreślić"', severity: 'medium', re: /\bwarto (?:zauważyć|podkreślić)(?!\p{L})|\bnależy (?:zauważyć|podkreślić)(?!\p{L})/giu },
+    { key: 'pl_role', label: '„odgrywa kluczową rolę"', severity: 'medium', re: /\bodgrywa (?:kluczową|istotną|ważną|zasadniczą) rolę(?!\p{L})/giu },
+    { key: 'pl_range', label: '„szeroka gama / mnóstwo"', severity: 'low', re: /\bszerok[aią] (?:gama|gamę|wachlarz)(?!\p{L})|\bmnóstwo(?!\p{L})/giu },
+    { key: 'pl_not_only', label: 'Struktura „nie tylko … ale także"', severity: 'medium', re: /\bnie tylko\b[^.?!]{0,80}\b(?:ale|lecz) (?:także|również)(?!\p{L})/giu },
+    { key: 'pl_conclusion', label: 'Akapit podsumowujący', severity: 'medium', re: /(^|\n)\s*(?:Podsumowując|Reasumując|Ostatecznie|Na koniec)\b/gi },
+    { key: 'pl_filler', label: 'Konektory „Ponadto / Co więcej"', severity: 'low', re: /(^|\n|[.!?]\s+)(?:Ponadto|Co więcej|Dodatkowo)/g },
+    { key: 'pl_lexicon', label: 'Słownik AI (bezproblemowo, zagłębić się, skarbnica…)', severity: 'medium', re: /\b(?:bezproblemowo|płynnie)\b|\bzagłębić się w\b|\bskarbnica\b|\bw sercu\b|\bprawdziwym (?:dowodem|świadectwem)\b/gi }];
+  if (lang === 'ru') return [...common,
+    { key: 'ru_worth', label: '«стоит отметить / следует подчеркнуть»', severity: 'medium', re: /(?<!\p{L})(?:стоит|следует|важно) (?:отметить|подчеркнуть|заметить)(?![\p{L}])/giu },
+    { key: 'ru_role', label: '«играет ключевую роль»', severity: 'medium', re: /(?<!\p{L})играет (?:ключевую|важную|решающую|значимую) роль(?![\p{L}])/giu },
+    { key: 'ru_range', label: '«широкий спектр / множество»', severity: 'low', re: /(?<!\p{L})широкий (?:спектр|ассортимент|выбор|круг|диапазон)(?![\p{L}])|(?<!\p{L})множество(?![\p{L}])/giu },
+    { key: 'ru_not_only', label: 'структура «не только … но и»', severity: 'medium', re: /(?<!\p{L})не только[^.?!]{0,80}но и(?![\p{L}])/giu },
+    { key: 'ru_conclusion', label: 'заключительный абзац', severity: 'medium', re: /(^|\n)\s*(?:Таким образом|В заключение|В итоге|В конечном (?:счёте|счете|итоге)|Подводя итог)/giu },
+    { key: 'ru_filler', label: 'коннекторы «Более того / Кроме того»', severity: 'low', re: /(^|\n|[.!?]\s+)(?:Более того|Кроме того|Помимо этого)/gu },
+    { key: 'ru_lexicon', label: 'словарь ИИ (бесшовный, погрузиться, сокровищница…)', severity: 'medium', re: /(?<!\p{L})бесшовн(?:ый|ая|ое|ые)(?![\p{L}])|(?<!\p{L})бесшовно(?![\p{L}])|(?<!\p{L})погрузиться в(?![\p{L}])|(?<!\p{L})сокровищница(?![\p{L}])|(?<!\p{L})в сердце(?![\p{L}])|(?<!\p{L})настоящим (?:свидетельством|доказательством)(?![\p{L}])/giu }];
   return [...common,
     { key: 'en_worth', label: '“It’s worth noting / important to note”', severity: 'medium', re: /\bit(?:'|’)?s (?:worth noting|important to note)\b|\bit is (?:worth noting|important to note)\b/gi },
     { key: 'en_lexicon', label: 'AI lexicon (delve, boasts, nestled, tapestry…)', severity: 'medium', re: /\b(?:delve|delving|boasts?|nestled|tapestry|testament to|underscore[sd]?|showcas(?:e|es|ing)|myriad|plethora|seamless(?:ly)?|meticulous(?:ly)?|cutting-edge|state-of-the-art)\b/gi },
@@ -305,8 +429,34 @@ function sampleAround(text: string, re: RegExp): string {
   return (i > 0 ? '…' : '') + text.slice(i, j).replace(/\s+/g, ' ').trim() + (j < text.length ? '…' : '');
 }
 
+// Burstiness — human prose varies its sentence and paragraph lengths ("bursty");
+// machine output tends to be metronomic. We measure the coefficient of variation
+// (stddev / mean) of the per-unit word counts. Pure and language-neutral: sentences
+// split on . ! ? plus the Arabic question mark (؟), the Greek question mark (;) and
+// the Greek ano teleia (·), and on hard line breaks; paragraphs split on blank lines.
+export function burstiness(text: string): { sentenceCV: number; paraCV: number; uniform: boolean } {
+  const wc = (s: string): number => (s.match(/[\p{L}\p{N}]+/gu) || []).length;
+  const cv = (counts: number[]): number => {
+    const n = counts.length;
+    if (n < 2) return 0;
+    const mean = counts.reduce((a, b) => a + b, 0) / n;
+    if (mean <= 0) return 0;
+    const variance = counts.reduce((a, b) => a + (b - mean) * (b - mean), 0) / n;
+    return Math.sqrt(variance) / mean;
+  };
+  const src = text || '';
+  const sCounts = src.split(/[.!?;؟··\n]+/u).map((s) => s.trim()).filter((s) => wc(s) > 0).map(wc);
+  const pCounts = src.split(/\n\s*\n+/).map((p) => p.trim()).filter((p) => wc(p) > 0).map(wc);
+  const sentenceCV = cv(sCounts);
+  const paraCV = cv(pCounts);
+  // Only meaningful once there is a reasonable run of sentences; below ~0.35 the
+  // rhythm is flat enough to read as machine-generated.
+  const uniform = sCounts.length >= 6 && sentenceCV < 0.35;
+  return { sentenceCV, paraCV, uniform };
+}
+
 export function scoreAiTells(input: { title?: string; content?: string; lang?: Lang }): AiTellReport {
-  const lang: Lang = (['en', 'el', 'ro', 'ar'] as string[]).includes(input.lang as string) ? (input.lang as Lang) : 'en';
+  const lang: Lang = (['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'] as string[]).includes(input.lang as string) ? (input.lang as Lang) : 'en';
   const title = (input.title || '').trim();
   const content = (input.content || '').trim();
   const tells: AiTell[] = [];
@@ -331,8 +481,14 @@ export function scoreAiTells(input: { title?: string; content?: string; lang?: L
       }
     }
   }
+  // Burstiness — a language-neutral rhythm signal folded in additively.
+  const burst = burstiness(content);
+  if (content && burst.uniform) {
+    tells.push({ key: 'low_burstiness', label: 'Uniform sentence rhythm (low burstiness)', severity: 'medium', count: 1, sample: 'CV ' + burst.sentenceCV.toFixed(2) });
+    score += WEIGHT.medium;
+  }
   score = Math.max(0, Math.min(100, Math.round(score)));
   const level: AiTellReport['level'] = score === 0 ? 'clean' : score <= 15 ? 'low' : score <= 40 ? 'medium' : 'high';
   tells.sort((a, b) => WEIGHT[b.severity] - WEIGHT[a.severity] || b.count - a.count);
-  return { score, level, tells };
+  return { score, level, tells, burstiness: burst };
 }

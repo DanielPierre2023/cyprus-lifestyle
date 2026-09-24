@@ -37,6 +37,8 @@ export interface UrlEntry {
   /** Locale-agnostic path, e.g. '/directory/restaurant/some-slug'. */
   path: string;
   lastmod?: string | Date | null;
+  /** Optional representative image (absolute URL) for the image sitemap. */
+  image?: string | null;
 }
 
 // One <url> per path: the default-locale URL as <loc>, with an <xhtml:link>
@@ -53,12 +55,15 @@ function urlXml(e: UrlEntry): string {
     const d = e.lastmod instanceof Date ? e.lastmod : new Date(e.lastmod);
     if (!Number.isNaN(d.getTime())) s += `<lastmod>${d.toISOString()}</lastmod>\n`;
   }
+  if (e.image) {
+    s += `<image:image><image:loc>${xmlEscape(e.image)}</image:loc></image:image>\n`;
+  }
   return s + '</url>\n';
 }
 
 export function urlsetXml(entries: UrlEntry[]): string {
   let s = '<?xml version="1.0" encoding="UTF-8"?>\n';
-  s += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n';
+  s += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n';
   for (const e of entries) s += urlXml(e);
   return s + '</urlset>\n';
 }
@@ -135,16 +140,18 @@ async function fetchChunk(
 
 /** Published directory listings for child sitemap `listings-<chunk>`. */
 export function listingChunkEntries(chunk: number): Promise<UrlEntry[]> {
-  return fetchChunk('directory_listings', 'slug, type, updated_at', chunk, (r) => ({
+  return fetchChunk('directory_listings', 'slug, type, updated_at, image', chunk, (r) => ({
     path: `/directory/${String(r.type)}/${String(r.slug)}`,
     lastmod: (r.updated_at as string) ?? null,
+    image: (r.image as string) ?? null,
   }));
 }
 
 /** Published articles for child sitemap `articles-<chunk>`. */
 export function articleChunkEntries(chunk: number): Promise<UrlEntry[]> {
-  return fetchChunk('blog_posts', 'slug, published_at, updated_at', chunk, (r) => ({
+  return fetchChunk('blog_posts', 'slug, published_at, updated_at, cover_image', chunk, (r) => ({
     path: `/article/${String(r.slug)}`,
     lastmod: (r.updated_at as string) ?? (r.published_at as string) ?? null,
+    image: (r.cover_image as string) ?? null,
   }));
 }

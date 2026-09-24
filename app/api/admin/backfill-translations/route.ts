@@ -12,6 +12,9 @@
 //   GET                       → diagnostic: how many (article × edition) gaps remain
 //   POST { limit?, targets?, includeDrafts? } → fill up to `limit` gaps, report the rest
 //
+// `targets` defaults to de/pl/ru (the editions the four-edition era left NULL); it
+// also accepts any subset of the six non-English editions to patch legacy el/ro/ar gaps.
+//
 // Auth: an admin session, OR `Authorization: Bearer <BACKFILL_SECRET>` for a
 // headless loop. Every gap filled is one fewer English fallback on the site.
 import { NextRequest, NextResponse } from 'next/server';
@@ -23,16 +26,19 @@ import { isLocale, type Locale } from '@/lib/locales';
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap; raise to 300 on Vercel Pro for bigger batches
 
-const TARGETS: Locale[] = ['de', 'pl', 'ru'];
+const TARGETS: Locale[] = ['de', 'pl', 'ru']; // default backfill scope (the de/pl/ru gap)
+// Any non-English edition MAY be requested via POST { targets } to patch legacy gaps
+// (e.g. an older el/ro/ar row missing a field). en is the source, never a target.
+const ALLOWED_TARGETS: Locale[] = ['el', 'ro', 'ar', 'de', 'pl', 'ru'];
 const FETCH_CAP = 2000; // rows scanned per call to build the backlog
 
 const empty = (v: unknown) => v == null || String(v).trim() === '';
 
 // The English source fields + every target field we may fill, so we can respect
 // any edition that already exists and only translate what's genuinely missing.
-function selectCols(): string {
+function selectCols(targets: Locale[]): string {
   const en = ['title_en', 'content_en', 'excerpt_en', 'summary_en', 'seo_title_en', 'seo_description_en', 'tags_en'];
-  const tgt = TARGETS.flatMap((l) => [`title_${l}`, `content_${l}`, `excerpt_${l}`, `summary_${l}`, `seo_title_${l}`, `seo_description_${l}`, `tags_${l}`]);
+  const tgt = targets.flatMap((l) => [`title_${l}`, `content_${l}`, `excerpt_${l}`, `summary_${l}`, `seo_title_${l}`, `seo_description_${l}`, `tags_${l}`]);
   return ['id', 'slug', 'status', ...en, ...tgt].join(',');
 }
 
@@ -45,7 +51,7 @@ function missingLangs(r: Row, targets: Locale[]): Locale[] {
 }
 
 async function loadBacklog(targets: Locale[], includeDrafts: boolean): Promise<Row[]> {
-  let q = supabaseAdmin().from('blog_posts').select(selectCols())
+  let q = supabaseAdmin().from('blog_posts').select(selectCols(targets))
     .not('content_en', 'is', null)
     .order('published_at', { ascending: false, nullsFirst: false })
     .limit(FETCH_CAP);
@@ -67,7 +73,7 @@ async function authed(req: NextRequest): Promise<boolean> {
 
 function parseTargets(raw: unknown): Locale[] {
   if (!Array.isArray(raw)) return TARGETS;
-  const t = raw.map(String).filter(isLocale).filter((l) => TARGETS.includes(l as Locale)) as Locale[];
+  const t = [...new Set(raw.map(String).filter(isLocale).filter((l) => ALLOWED_TARGETS.includes(l as Locale)))] as Locale[];
   return t.length ? t : TARGETS;
 }
 

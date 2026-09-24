@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
 import { getArticle, getByCategory, getLatest, getEventsByDistrict, getUpcomingEvents, getReviewSubject, type Card, type EventItem } from '@/lib/queries';
-import { pageMetadata } from '@/lib/seo';
+import { pageMetadata, clampSeoTitle } from '@/lib/seo';
 import { JsonLd, article, breadcrumb, faqPage, review } from '@/lib/seo/jsonld';
 import ArticleCard from '@/components/ArticleCard';
 import CommentSection from '@/components/CommentSection';
@@ -65,11 +65,17 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   if (!a) return {};
   const t = await getTranslations({ locale });
   const kicker = a.category ? (t.has(`nav.${a.category}`) ? t(`nav.${a.category}`) : a.category) : undefined;
-  return pageMetadata({
+  const meta = pageMetadata({
     locale: locale as Locale, path: `/article/${slug}`,
     title: a.seo_title, description: a.seo_description, type: 'article',
     ogTitle: a.title, kicker, cover: a.cover_image,
   });
+  // Force an ABSOLUTE document <title> within Google's ~60-char budget. The root
+  // layout (app/[locale]/layout.tsx, not owned here) sets a global
+  // title.template of "%s · Cyprus Lifestyle"; an absolute title opts out of it,
+  // so the brand suffix is not stacked on top and the tag stays short. Open
+  // Graph / Twitter titles are left untouched.
+  return { ...meta, title: { absolute: clampSeoTitle(a.seo_title) } };
 }
 
 export default async function ArticlePage({ params }: { params: Promise<{ locale: string; slug: string }> }) {

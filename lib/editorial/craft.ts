@@ -109,7 +109,20 @@ export const AI_TELLS: string[] = [
   'in the heart of', 'nestled in the heart', 'more than just', "isn't just", 'is not just',
   'first and foremost', 'a feast for the senses', 'leave you wanting more', 'a symphony of',
   'as we navigate', 'unlock the', 'a world of', 'when it comes down to', 'truly',
+  // current-generation AI tells (2025–2026). 'underscore' catches underscored/
+  // underscoring, 'showcase' catches showcases/showcasing (substring match).
+  'underscore', 'pivotal', 'in an era', 'testament', 'showcase', 'stands out', 'evolving landscape',
 ];
+
+// ── Structural anti-AI — human "burstiness" ──────────────────────────────────────
+// Deliberately uneven architecture is the single hardest thing for a model to fake,
+// so we spell it out. Exported so the transcreation pass can reuse it and so it can
+// be unit-tested. The prose is itself bursty, to model the instruction.
+export const BURSTINESS: string = [
+  '• Structure with human burstiness. Make paragraph lengths deliberately UNEVEN: some paragraphs a single short sentence, others a full, winding block. Never put two adjacent paragraphs of similar length next to each other.',
+  '• Spread sentence length wide on purpose. Set very short sentences (three to five words) hard against long ones (thirty words or more). Some land in two words. Others run on, gathering clauses, doubling back, holding the reader until the thought is fully spent.',
+  '• Keep the rhythm unpredictable. No uniform cadence, no metronome of medium-length sentences, no paragraph built to the same shape as the one before it. If a pattern starts to form, break it.',
+].join('\n');
 
 // The instruction block that makes the model write undetectably. Language-agnostic
 // (the same rules hold in every edition); `language` names the target for translations.
@@ -119,6 +132,7 @@ export function antiAiRules(language = 'English'): string {
     '• NEVER use an em dash (—) or a spaced en dash used as one. Use commas, full stops, semicolons or parentheses instead.',
     '• NEVER use these phrases or their close variants: ' + AI_TELLS.slice(0, 40).join('; ') + '.',
     '• Vary sentence length and rhythm hard: mix short, blunt sentences with longer ones. Do not start consecutive sentences the same way, and avoid participial openers ("Nestled…", "Boasting…", "Perched…").',
+    BURSTINESS,
     '• No habitual tricolons (lists of three), no "not only X but also Y", no "isn’t just X, it’s Y", no rhetorical questions as filler.',
     '• Do NOT end with a summary that restates the piece. End on an image, a line of dialogue, or a forward look.',
     '• Cut hype adjectives (vibrant, bustling, stunning, breathtaking, iconic, elevated, curated, seamless). Replace them with the specific thing.',
@@ -162,6 +176,20 @@ export function lintAiTells(text: string): string[] {
   return [...found];
 }
 
+// Strip HTML markup to plain text so the AI-tell scorer (scoreAiTells) sees prose,
+// not tags. Block-level closings become newlines, so paragraph-aware tells still
+// register; every other tag is dropped and the common entities are decoded. Markdown
+// or plain text passes through essentially unchanged. Pure + unit-tested.
+export function stripHtml(input: string): string {
+  let s = String(input || '');
+  s = s.replace(/<\s*(?:br|\/p|\/div|\/li|\/h[1-6]|\/tr|\/blockquote)\s*\/?>/gi, '\n'); // block ends → newline
+  s = s.replace(/<[^>]+>/g, '');                                                        // drop all remaining tags
+  s = s.replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>');
+  s = s.replace(/[ \t]+/g, ' ');                                                        // collapse inline whitespace (keep newlines)
+  s = s.replace(/[ \t]*\n[ \t]*/g, '\n').replace(/\n{3,}/g, '\n\n');                    // tidy newlines
+  return s.trim();
+}
+
 // The polish/de-AI pass system prompt: rewrite to the standard, enforce the format,
 // remove every detected tell. Facts and quotes are frozen.
 export function polishSystem(franchise?: string | null, kind?: string | null, tells: string[] = [], language = 'English'): string {
@@ -175,5 +203,31 @@ export function polishSystem(franchise?: string | null, kind?: string | null, te
     tells.length ? `\nThese AI tells were detected and MUST be gone from your version: ${tells.join('; ')}.` : '',
     '',
     'Return ONLY JSON: {"title":"<the headline>","body_md":"<the edited article body, in the SAME format you received it — markdown or HTML>"}.',
+  ].join('\n');
+}
+
+// ── Transcreation prompt — re-report natively, kill translationese ────────────────
+// For the six non-English editions: instead of a faithful translation, re-report the
+// piece AS A NATIVE writer of the target language, keeping every fact and the section
+// structure but rebuilding the prose in that language's own rhythm. Pure; the model
+// call lives in generate.ts (transcreatePiece). Reuses antiAiRules (which carries the
+// BURSTINESS directive) so the output obeys the same anti-AI contract.
+export function transcreateSystem(language = 'English'): string {
+  const L = language.toUpperCase();
+  return [
+    `You are a NATIVE ${L} STAFF WRITER at Cyprus Lifestyle, a premium magazine for discerning residents of the Republic of Cyprus.`,
+    '',
+    `TASK: RE-REPORT the piece below in ${language}. This is transcreation, not translation. Rewrite it as if you had reported and written it yourself in ${language} from the first line, for ${language}-speaking readers.`,
+    '',
+    '• Keep EVERY fact, name, number, date, price and quotation exactly as given. Add nothing, drop nothing, invent nothing.',
+    '• Keep the section structure and running order: the same beats and headings, in the same sequence, and return the body in the SAME format you receive it (markdown or HTML).',
+    `• Do NOT mirror the English sentence shapes, clause order or idioms. Think in ${language} and phrase it the way a ${language} journalist actually writes; where English uses a turn of phrase ${language} would not, recast it natively rather than carrying it across.`,
+    `• Translate meaning and effect, never words. The result must read as though ${language} were the original language, with no trace of an English source underneath.`,
+    '',
+    HOUSE_STYLE,
+    '',
+    antiAiRules(language),
+    '',
+    'Return ONLY JSON of the exact shape: {"title":"<the re-reported title>","body":"<the re-reported body, same format as received>"}.',
   ].join('\n');
 }

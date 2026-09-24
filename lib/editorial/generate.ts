@@ -18,7 +18,8 @@ import {
   LOCALE_NAMES, isLocale,
   type PipelineSubject, type PieceKind,
 } from '@/lib/editorial/pipeline';
-import { craftBlock, antiAiRules, deAiScrub, lintAiTells, polishSystem } from '@/lib/editorial/craft';
+import { craftBlock, antiAiRules, deAiScrub, lintAiTells, polishSystem, transcreateSystem, stripHtml } from '@/lib/editorial/craft';
+import { humanizeText, humanizeHtml, scoreAiTells, type Lang } from '@/lib/antiAi';
 import {
   packageSystem, packageUser, translatePackageSystem, translatePackageUser,
   coercePackage, fillPackage, clampText, SEO,
@@ -36,6 +37,40 @@ function groundingFor(subject: PipelineSubject): string {
   if (!hits.length) return '';
   const lines = hits.map((h) => `• ${h.q}\n  ${h.a}`);
   return `GROUNDED KNOWLEDGE (from the Cyprus Lifestyle knowledge base — use for context, do not contradict):\n${lines.join('\n')}`;
+}
+
+// ── humanisation gate ───────────────────────────────────────────────────────────
+// The deterministic anti-AI layer, applied to every generated/translated body and
+// title in its own language. The antiAi humaniser (per-language dash stripping +
+// AI-lexicon/filler scrubbing) is the PRIMARY layer; deAiScrub stays as a final
+// mechanical safety net. Together they guarantee no edition ships with the obvious
+// machine tells, even when the model slips.
+const HUMANISER_LANGS: ReadonlySet<string> = new Set(['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru']);
+
+// Narrow a locale code to the antiAi Lang. The seven editions map 1:1 to Lang;
+// anything unexpected falls back to English so the humaniser never throws.
+function toLang(locale?: string | null): Lang {
+  const l = String(locale || '').toLowerCase();
+  return (HUMANISER_LANGS.has(l) ? l : 'en') as Lang;
+}
+
+// Does a body carry HTML markup (vs markdown/plain)? Picks humanizeHtml vs humanizeText.
+function isHtmlBody(s: string): boolean {
+  return /<\/?(?:p|div|h[1-6]|ul|ol|li|a|strong|em|b|i|br|blockquote|figure|img|span|section|article)\b/i.test(String(s || ''));
+}
+
+// Humanise a body in the right mode (HTML-aware for HTML, text for markdown/plain),
+// then run deAiScrub as the deterministic safety net.
+function humaniseBody(body: string, lang: Lang): string {
+  const s = String(body || '');
+  if (!s.trim()) return '';
+  const humanised = isHtmlBody(s) ? humanizeHtml(s, lang) : humanizeText(s, lang);
+  return deAiScrub(humanised);
+}
+
+// Humanise a title (always plain text), then the deterministic safety net.
+function humaniseTitle(title: string, lang: Lang): string {
+  return deAiScrub(humanizeText(String(title || ''), lang));
 }
 
 // ── 1. dossier: briefing + tailored interview questions ─────────────────────────
@@ -104,8 +139,9 @@ export async function draftPiece(input: DraftInput): Promise<DraftResult> {
   if (r.error || !r.text) return { title: '', bodyMd: '', error: r.error || 'No response from the model.' };
 
   const j = parseAiJson<{ title?: string; body_md?: string }>(r.text);
-  const title = deAiScrub(typeof j.title === 'string' ? j.title.trim() : '');
-  const bodyMd = deAiScrub(typeof j.body_md === 'string' ? j.body_md.trim() : '');
+  // Source edition is English; humanise in English (markdown body → humanizeText).
+  const title = humaniseTitle(typeof j.title === 'string' ? j.title.trim() : '', 'en');
+  const bodyMd = humaniseBody(typeof j.body_md === 'string' ? j.body_md.trim() : '', 'en');
   if (!bodyMd) return { title, bodyMd: '', error: 'Could not parse a draft body from the model response.' };
   return { title, bodyMd };
 }
@@ -115,6 +151,12 @@ export interface TranslateResult {
   title: string;
   body: string;
   error?: string;
+  // AI-tell score of the humanised output, in the target language (optional, additive):
+  // score 0 (clean) … 100 (very AI), with the level band and the detected tells, so a
+  // caller can gate/flag an edition that still reads machine-made.
+  score?: number;
+  level?: 'clean' | 'low' | 'medium' | 'high';
+  tells?: ReturnType<typeof scoreAiTells>['tells'];
 }
 
 // bodyMd is the source body (markdown or HTML — the prompt preserves whatever format
@@ -141,10 +183,59 @@ export async function translatePiece(
   if (r.error || !r.text) return { title: '', body: '', error: r.error || 'No response from the model.' };
 
   const j = parseAiJson<{ title?: string; body?: string }>(r.text);
-  const outTitle = deAiScrub(typeof j.title === 'string' ? j.title.trim() : '');
-  const outBody = deAiScrub(typeof j.body === 'string' ? j.body.trim() : '');
+  // Humanise the output in the TARGET language (per-language lexicon + fillers), then
+  // score what remains so callers can see how machine-made the edition still reads.
+  const lang = toLang(targetLocale);
+  const outTitle = humaniseTitle(typeof j.title === 'string' ? j.title.trim() : '', lang);
+  const outBody = humaniseBody(typeof j.body === 'string' ? j.body.trim() : '', lang);
   if (!outBody) return { title: outTitle, body: '', error: 'Could not parse a translation from the model response.' };
-  return { title: outTitle, body: outBody };
+  const sc = scoreAiTells({ title: outTitle, content: stripHtml(outBody), lang });
+  return { title: outTitle, body: outBody, score: sc.score, level: sc.level, tells: sc.tells };
+}
+
+// ── 3b. transcreate: re-report an edition natively (kills translationese) ─────────
+// An additive, higher-quality alternative to a straight translation for the six
+// non-English editions. Instead of translating, it re-reports the piece AS A NATIVE
+// writer of the target language: every fact and the section structure are kept, but
+// the prose is rebuilt in that language's own rhythm, so no edition reads as an
+// English calque. CLAUDE_SONNET (not Haiku) because this is a craft pass, not a
+// mechanical render. Additive by design — the translate route can adopt it in place
+// of, or after, translatePiece without any other change.
+export interface TranscreateResult {
+  title: string;
+  body: string;
+  error?: string;
+  score?: number;
+  level?: 'clean' | 'low' | 'medium' | 'high';
+}
+
+export async function transcreatePiece(
+  title: string,
+  bodyMd: string,
+  targetLocale: string,
+): Promise<TranscreateResult> {
+  const body0 = String(bodyMd || '');
+  if (!body0.trim()) return { title: '', body: '', error: 'Nothing to transcreate (empty body).' };
+  const langName = isLocale(targetLocale) ? LOCALE_NAMES[targetLocale] : targetLocale;
+  const lang = toLang(targetLocale);
+  const r = await callClaude({
+    // Re-report natively; transcreateSystem embeds antiAiRules (+ the burstiness block).
+    systemInstruction: transcreateSystem(langName),
+    userMessage: `TITLE:\n${String(title || '').trim()}\n\nBODY:\n${body0}`,
+    model: CLAUDE_SONNET,
+    jsonMode: true,
+    maxTokens: 4096,
+    timeoutMs: 90_000,
+    fn: 'editorial-transcreate',
+  });
+  if (r.error || !r.text) return { title: '', body: '', error: r.error || 'No response from the model.' };
+
+  const j = parseAiJson<{ title?: string; body?: string }>(r.text);
+  const outTitle = humaniseTitle(typeof j.title === 'string' ? j.title.trim() : '', lang);
+  const outBody = humaniseBody(typeof j.body === 'string' ? j.body.trim() : '', lang);
+  if (!outBody) return { title: outTitle, body: '', error: 'Could not parse a transcreation from the model response.' };
+  const sc = scoreAiTells({ title: outTitle, content: stripHtml(outBody), lang });
+  return { title: outTitle, body: outBody, score: sc.score, level: sc.level };
 }
 
 // ── 4. polish: elevate an existing draft to the standard + strip every AI tell ───
@@ -157,6 +248,9 @@ export interface PolishResult {
   tellsBefore: string[];
   tellsAfter: string[];
   error?: string;
+  // AI-tell score of the humanised, polished output (optional, additive).
+  score?: number;
+  level?: 'clean' | 'low' | 'medium' | 'high';
 }
 
 export async function polishPiece(
@@ -183,10 +277,14 @@ export async function polishPiece(
   if (r.error || !r.text) return { title: '', bodyMd: '', tellsBefore, tellsAfter: tellsBefore, error: r.error || 'No response from the model.' };
 
   const j = parseAiJson<{ title?: string; body_md?: string }>(r.text);
-  const outTitle = deAiScrub(typeof j.title === 'string' && j.title.trim() ? j.title.trim() : title);
-  const outBody = deAiScrub(typeof j.body_md === 'string' ? j.body_md.trim() : '');
+  // Humanise the rewrite for the given locale, then recompute the tells and the score.
+  const lang = toLang(locale);
+  const outTitle = humaniseTitle(typeof j.title === 'string' && j.title.trim() ? j.title.trim() : title, lang);
+  const outBody = humaniseBody(typeof j.body_md === 'string' ? j.body_md.trim() : '', lang);
   if (!outBody) return { title: outTitle, bodyMd: '', tellsBefore, tellsAfter: tellsBefore, error: 'Could not parse the polished body from the model response.' };
-  return { title: outTitle, bodyMd: outBody, tellsBefore, tellsAfter: lintAiTells(`${outTitle}\n${outBody}`) };
+  const tellsAfter = lintAiTells(`${outTitle}\n${outBody}`);
+  const sc = scoreAiTells({ title: outTitle, content: stripHtml(outBody), lang });
+  return { title: outTitle, bodyMd: outBody, tellsBefore, tellsAfter, score: sc.score, level: sc.level };
 }
 
 // ── 5. package: the SEO + editorial package for one edition ───────────────────────

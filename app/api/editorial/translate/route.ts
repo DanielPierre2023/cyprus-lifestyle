@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { denyReason } from '@/lib/editorial/gate';
-import { translatePiece, translatePackage, packagePiece } from '@/lib/editorial/generate';
+import { translatePiece, transcreatePiece, translatePackage, packagePiece } from '@/lib/editorial/generate';
 import { LOCALES } from '@/lib/editorial/pipeline';
 import { packageColumns, packageFromPiece, packageIsEmpty, pieceToPackageInput } from '@/lib/editorial/packageWrite';
 import type { PackageResult } from '@/lib/editorial/generate';
@@ -45,14 +45,21 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
   }
   const havePkg = !packageIsEmpty(sourcePkg);
 
+  // Body renderer. Default: faithful translation + the deterministic 7-language
+  // humaniser (fast, Haiku). Opt-in `?transcreate=1`: re-report each edition as a
+  // native staff writer in its own rhythm (Sonnet — higher quality, slower/costlier,
+  // so the caller chooses it for flagship pieces). Same signature, swappable.
+  const transcreate = req.nextUrl.searchParams.get('transcreate') === '1';
+  const renderBody = transcreate ? transcreatePiece : translatePiece;
+
   // Loop the seven locales; the source is a no-op. The other six run in parallel
-  // (Haiku, independent) so the whole set finishes within the function budget. Each
-  // locale translates the body AND the package concurrently.
+  // (independent) so the whole set finishes within the function budget. Each
+  // locale renders the body AND translates the package concurrently.
   const targets = LOCALES.filter((l) => l !== source);
   const results = await Promise.all(
     targets.map(async (locale) => {
       const [t, pkg] = await Promise.all([
-        translatePiece(srcTitle, srcBody, locale),
+        renderBody(srcTitle, srcBody, locale),
         havePkg ? translatePackage(sourcePkg, locale) : Promise.resolve<PackageResult | null>(null),
       ]);
       return { locale, ...t, pkg };
@@ -81,6 +88,7 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
     ok: failed.length === 0,
     id,
     source,
+    mode: transcreate ? 'transcreate' : 'translate',
     translated,
     failed,
     pipeline_status: 'translating',

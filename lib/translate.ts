@@ -1,7 +1,9 @@
-// Cyprus Lifestyle — translator (Node port of TT tt-translate-html, extended to
-// EN·EL·RO·AR). Translates an article body between any two of the four languages
-// while preserving the EXACT HTML structure; only text between tags is translated.
-// The output runs through the deterministic anti-AI humanizer.
+// Cyprus Lifestyle — translator (Node port of TT tt-translate-html, extended to all
+// seven editions: EN·EL·RO·AR·DE·PL·RU). Translates an article body between any two
+// of the seven languages while preserving the EXACT HTML structure; only text
+// between tags is translated. The target language is passed through to the
+// deterministic anti-AI humanizer as its real Lang, so every edition (de/pl/ru
+// included) is humanised — not left with em-dashes or calques.
 import 'server-only';
 import { callClaude, CLAUDE_SONNET, parseAiJson } from '@/lib/ai';
 import { humanizeHtml, humanizeText, type Lang } from '@/lib/antiAi';
@@ -43,6 +45,8 @@ export async function translateHtml(html: string, source: Locale, target: Locale
     `- Do NOT add a title, extra headings, notes or a wrapping element.` + rtlNote,
     ``,
     `Write natural, editorial ${LOCALE_NAME[target]} — never machine-like:`,
+    `- Translate faithfully and in full: preserve the exact meaning, facts, figures, names and nuance — no additions, omissions, softening or embellishment.`,
+    `- Read as if originally written by a native ${LOCALE_NAME[target]} journalist for print: idiomatic, precise and publication-grade — accurate to the source yet never a word-for-word calque.`,
     `- Use NO em/en dashes (— –); use commas, periods or parentheses.`,
     `- Headings stay sentence case, never ALL CAPS or Title Case; keep real acronyms (EU, VAT, NATO).`,
     `- Avoid AI-tell words and filler: ${AI_TELL_HINT[target]}. Prefer plain words.`,
@@ -64,6 +68,7 @@ export async function translateText(text: string, source: Locale, target: Locale
   const rtlNote = target === 'ar' ? ' Produce natural Modern Standard Arabic.' : '';
   const system = [
     `You are a translator for Cyprus Lifestyle, a luxury Cyprus magazine. Translate this ${kind} from ${LOCALE_NAME[source]} to ${LOCALE_NAME[target]}.`,
+    `Translate faithfully but idiomatically — as a native ${LOCALE_NAME[target]} journalist would write it, accurate to the source yet natural, never a literal calque or machine-like.`,
     `Return ONLY the translation — no quotes, no notes. Sentence case (never ALL CAPS/Title Case). No em/en dashes. Keep EUR figures and proper names.${rtlNote}`,
   ].join('\n');
   const { text: out } = await callClaude({ systemInstruction: system, userMessage: body, model: CLAUDE_SONNET, temperature: 0.2, maxTokens: 400, fn: 'translate-text' });
@@ -71,7 +76,7 @@ export async function translateText(text: string, source: Locale, target: Locale
 }
 
 // Translate several short fields in ONE call (title/excerpt/summary/seo). Keeps
-// the per-article model-call count sane for a 4-language pipeline.
+// the per-article model-call count sane across the seven-language pipeline.
 export async function translateBundle(
   fields: Record<string, string>, source: Locale, target: Locale,
 ): Promise<Record<string, string>> {

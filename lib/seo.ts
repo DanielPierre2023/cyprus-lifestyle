@@ -57,6 +57,20 @@ export function pageMetadata(opts: {
   };
 }
 
+/**
+ * Build a document `<title>` that stays within Google's ~60-char pixel budget.
+ * Prefers the branded form `"<title> · <brand>"`; if that overflows it drops the
+ * brand and returns the bare title; if the title itself is over-long it is
+ * hard-trimmed to `max` (trailing separators/whitespace tidied). Pure + additive.
+ */
+export function clampSeoTitle(title: string, brand: string = SITE_NAME, max = 60): string {
+  const t = (title || '').trim();
+  const branded = `${t} · ${brand}`;
+  if (branded.length <= max) return branded;
+  if (t.length <= max) return t;
+  return t.slice(0, max).replace(/[\s·,;:–—-]+$/u, '').trim();
+}
+
 /** Organization + WebSite JSON-LD for the site root. */
 export function orgJsonLd() {
   return {
@@ -79,6 +93,12 @@ export function orgJsonLd() {
         name: SITE_NAME,
         inLanguage: LOCALES.map((l) => l),
         publisher: { '@id': `${SITE_URL}/#organization` },
+        // Sitelinks search box: lets Google wire the SERP search box to our /search.
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: `${SITE_URL}/search?q={search_term_string}`,
+          'query-input': 'required name=search_term_string',
+        },
       },
     ],
   };
@@ -89,11 +109,16 @@ export function articleJsonLd(a: {
   locale: Locale; slug: string; title: string; description?: string;
   image?: string | null; author?: string | null; authorSlug?: string | null;
   publishedAt?: string | null; updatedAt?: string | null; section?: string | null;
+  authorSameAs?: string[];
 }) {
   // A named editor → Person (E-E-A-T); otherwise fall back to the Organization.
-  const author = a.author && a.authorSlug
+  const baseAuthor = a.author && a.authorSlug
     ? { '@type': 'Person', name: a.author, url: urlFor(a.locale, `/author/${a.authorSlug}`) }
     : { '@type': 'Organization', name: a.author || SITE_NAME, url: SITE_URL };
+  // Verified author profiles (e.g. LinkedIn) strengthen E-E-A-T when provided.
+  const author = a.authorSameAs && a.authorSameAs.length
+    ? { ...baseAuthor, sameAs: a.authorSameAs }
+    : baseAuthor;
   return {
     '@context': 'https://schema.org',
     '@type': 'NewsArticle',
@@ -105,6 +130,8 @@ export function articleJsonLd(a: {
     datePublished: a.publishedAt || undefined,
     dateModified: a.updatedAt || a.publishedAt || undefined,
     articleSection: a.section || undefined,
+    // Voice-assistant hint: the headline and dek are the read-aloud summary.
+    speakable: { '@type': 'SpeakableSpecification', cssSelector: ['h1', '.dek'] },
     author,
     publisher: { '@id': `${SITE_URL}/#organization` },
   };

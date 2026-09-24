@@ -1,17 +1,21 @@
-// Cyprus Lifestyle — light AI proofreading pass for Greek & Arabic.
+// Cyprus Lifestyle — light AI proofreading pass for the inflected editions.
 // The deterministic humanizer (lib/antiAi) can't catch every inflected AI-tell in
-// EL/AR because no public stemmer ships for them. This pass runs ONLY when the
-// deterministic result still reads "medium+" on the AI-tell score, sends just
-// that text to a cheap Haiku call to neutralise the flagged phrasing (preserving
-// meaning, facts and HTML structure), re-humanises the result, and keeps whichever
-// version scores cleaner. Cost is bounded: clean/low text never triggers a call.
+// EL/AR/DE/PL/RU (no reliable public stemmer for these), so this pass runs ONLY
+// when the deterministic result still reads "medium+" on the AI-tell score, sends
+// just that text to a cheap Haiku call to neutralise the flagged phrasing
+// (preserving meaning, facts and HTML structure), re-humanises the result, and
+// keeps whichever version scores cleaner. Cost is bounded: clean/low text never
+// triggers a call.
 import 'server-only';
 import { callClaude, CLAUDE_HAIKU } from '@/lib/ai';
 import { humanizeHtml, humanizeText, scoreAiTells, type Lang } from '@/lib/antiAi';
 import { LOCALE_NAME } from '@/lib/locales';
 
-// Only worth a model call for the two languages without a deterministic stemmer.
-export const AI_PROOFREAD_LANGS: Lang[] = ['el', 'ar'];
+// The inflected editions where the deterministic net alone leaves residual AI-tells
+// and a targeted model pass earns its keep. EN/RO have full deterministic coverage
+// and are excluded (no model call). Shared by the desk pipeline and the editor's
+// "AI clean" action, so both humanise de/pl/ru the same way.
+export const AI_PROOFREAD_LANGS: Lang[] = ['el', 'ar', 'de', 'pl', 'ru'];
 const THRESHOLD = 16; // 'medium' or worse after the deterministic pass
 
 function stripFences(s: string): string {

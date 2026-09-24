@@ -20,6 +20,8 @@ export async function GET(): Promise<Response> {
   const children: { loc: string; lastmod?: string }[] = [
     { loc: childSitemapUrl('pages'), lastmod: now },
     { loc: childSitemapUrl('hubs'), lastmod: now },
+    // Google News sitemap (trailing-48h articles); loc = `${SITE_URL}/sitemaps/news`.
+    { loc: childSitemapUrl('news'), lastmod: now },
   ];
 
   // One child per chunk of published articles / listings. Counts are best-effort:

@@ -11,6 +11,7 @@ const TABS = [
   { href: '/admin/editorial', label: 'Editorial Studio' },
   { href: '/admin/editorial-pipeline', label: 'Editorial Pipeline' },
   { href: '/admin/editorial-plan', label: 'Editorial Plan' },
+  { href: '/admin/quality', label: 'Quality scan' },
   { href: '/admin/ideas', label: 'Idea Board' },
   { href: '/admin/field-notes', label: 'Field Notes' },
   { href: '/admin/articles', label: 'Articles (Articole)' },

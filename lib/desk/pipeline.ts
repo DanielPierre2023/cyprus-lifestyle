@@ -1,4 +1,4 @@
-// Cyprus Lifestyle — the AI editorial desk (4 languages).
+// Cyprus Lifestyle — the AI editorial desk (7 languages).
 // Faithful to TT's pipeline shape: draft (desk 1) → translate/fan-out (desk 2b)
 // → deterministic anti-AI pass → commit via commit_scraper_blog_post RPC, with
 // a generation_logs row for observability. Prompts/voice are Cyprus-specific.
@@ -11,9 +11,19 @@ import { proofread, AI_PROOFREAD_LANGS } from '@/lib/desk/proofread';
 import { draftSystemPrompt, editorForCategory, AUTHOR_SLUG, AUTHOR_NAME, type EditorKey } from '@/lib/desk/prompts';
 import { findCover } from '@/lib/desk/cover';
 import { uniqueSlug, wordCount, stripTags } from '@/lib/util';
-import { type Locale } from '@/lib/locales';
+import { LOCALES, type Locale } from '@/lib/locales';
 
-const TRANSLATE_TO: Locale[] = ['el', 'ro', 'ar'];
+// Every non-English edition the desk fans out to. Kept in sync with the seven
+// editions the site (and the commit RPC) support, so German/Polish/Russian pieces
+// ship translated instead of falling back to English.
+const TRANSLATE_TO: Locale[] = ['el', 'ro', 'ar', 'de', 'pl', 'ru'];
+
+// generation_logs (migration 0004) only has per-language columns for the original
+// four editions, and no generic JSON column. We translate + persist all seven, but
+// log word-count / humanness / desk2b flags only for these four so the insert stays
+// schema-valid — de/pl/ru are still produced, humanised and committed to blog_posts,
+// they are just not logged per-language here.
+const LOG_LANGS: Locale[] = ['en', 'el', 'ro', 'ar'];
 
 interface Draft {
   title: string; excerpt: string; summary: string; body_html: string;
@@ -57,7 +67,7 @@ async function draftEnglish(sourceTitle: string, sourceContent: string, editor: 
   return { draft, ms: Date.now() - t0, usd: usd || 0 };
 }
 
-// ── Desk 2b — fan out EN → EL/RO/AR ─────────────────────────────────────────
+// ── Desk 2b — fan out EN → EL/RO/AR/DE/PL/RU ─────────────────────────────────
 async function buildAllLanguages(draft: Draft): Promise<{ langs: Record<Locale, LangBundle>; flags: Record<string, boolean> }> {
   const flags: Record<string, boolean> = {};
   const en: LangBundle = {
@@ -69,8 +79,9 @@ async function buildAllLanguages(draft: Draft): Promise<{ langs: Record<Locale, 
     seo_description: humanizeText(draft.seo_description, 'en'),
     tags: draft.tags.map((t) => t.toLowerCase()),
   };
-  // de/pl/ru start as the English bundle (fallback); TRANSLATE_TO fills the
-  // editions it targets. All seven keys are present so the map stays exhaustive.
+  // Every non-English edition starts as the English bundle (fallback) and is then
+  // overwritten by its translation below; a failed translation keeps the English
+  // fallback. All seven keys are present so the map stays exhaustive.
   const langs: Record<Locale, LangBundle> = { en, el: en, ro: en, ar: en, de: en, pl: en, ru: en };
 
   await Promise.all(TRANSLATE_TO.map(async (target) => {
@@ -82,7 +93,7 @@ async function buildAllLanguages(draft: Draft): Promise<{ langs: Record<Locale, 
         tags: draft.tags.join(', '),
       }, 'en', target),
     ]);
-    flags[`desk2b_${target}_ok`] = !!bodyRes.ok;
+    if (LOG_LANGS.includes(target)) flags[`desk2b_${target}_ok`] = !!bodyRes.ok;
     langs[target] = {
       title: bundle.title || en.title,
       excerpt: bundle.excerpt || en.excerpt,
@@ -92,12 +103,13 @@ async function buildAllLanguages(draft: Draft): Promise<{ langs: Record<Locale, 
       seo_description: bundle.seo_description || en.seo_description,
       tags: (bundle.tags || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
     };
-    // Greek/Arabic get a targeted AI proofread pass (self-gates by tell score),
-    // to catch inflected AI-tells the deterministic net can't. EN/RO skip it.
+    // Inflected editions (el/ar/de/pl/ru) get a targeted AI proofread pass
+    // (self-gates by tell score) to catch AI-tells the deterministic net can't.
+    // EN/RO have full deterministic coverage and skip it.
     if (AI_PROOFREAD_LANGS.includes(target as Lang)) {
       const pr = await proofread({ text: langs[target].body_html, lang: target as Lang, isHtml: true, title: langs[target].title });
       langs[target].body_html = pr.text;
-      flags[`${target}_polished`] = pr.changed;
+      if (LOG_LANGS.includes(target)) flags[`${target}_polished`] = pr.changed;
     }
   }));
   return { langs, flags };
@@ -121,14 +133,33 @@ async function commit(sb: SupabaseClient, langs: Record<Locale, LangBundle>, opt
   const slug = uniqueSlug(langs.en.title);
   const wc = wordCount(langs.en.body_html);
 
+  // Per-edition columns for ALL seven editions (en·el·ro·ar·de·pl·ru). The commit
+  // RPC (0032_commit_seven_langs) already reads every *_de/_pl/_ru key; building
+  // them from LOCALES here is what actually persists the German/Polish/Russian
+  // editions instead of leaving them NULL to fall back to English at render.
+  const blogLangCols: Record<string, unknown> = {};
+  const writebackLangCols: Record<string, unknown> = {};
+  for (const l of LOCALES) {
+    const b = langs[l];
+    blogLangCols[`title_${l}`] = b.title;
+    blogLangCols[`content_${l}`] = b.body_html;
+    blogLangCols[`excerpt_${l}`] = b.excerpt;
+    blogLangCols[`summary_${l}`] = b.summary;
+    blogLangCols[`tags_${l}`] = b.tags;
+    blogLangCols[`seo_title_${l}`] = b.seo_title;
+    blogLangCols[`seo_description_${l}`] = b.seo_description;
+
+    writebackLangCols[`rewritten_${l}`] = CI(b.body_html);
+    writebackLangCols[`title_${l}`] = b.title;
+    writebackLangCols[`excerpt_${l}`] = b.excerpt;
+    writebackLangCols[`summary_${l}`] = b.summary;
+    writebackLangCols[`rewrite_tags_${l}`] = b.tags;
+    writebackLangCols[`seo_title_${l}`] = b.seo_title;
+    writebackLangCols[`seo_description_${l}`] = b.seo_description;
+  }
+
   const p_blog_payload: Record<string, unknown> = {
-    title_en: langs.en.title, title_el: langs.el.title, title_ro: langs.ro.title, title_ar: langs.ar.title,
-    content_en: langs.en.body_html, content_el: langs.el.body_html, content_ro: langs.ro.body_html, content_ar: langs.ar.body_html,
-    excerpt_en: langs.en.excerpt, excerpt_el: langs.el.excerpt, excerpt_ro: langs.ro.excerpt, excerpt_ar: langs.ar.excerpt,
-    summary_en: langs.en.summary, summary_el: langs.el.summary, summary_ro: langs.ro.summary, summary_ar: langs.ar.summary,
-    tags_en: langs.en.tags, tags_el: langs.el.tags, tags_ro: langs.ro.tags, tags_ar: langs.ar.tags,
-    seo_title_en: langs.en.seo_title, seo_title_el: langs.el.seo_title, seo_title_ro: langs.ro.seo_title, seo_title_ar: langs.ar.seo_title,
-    seo_description_en: langs.en.seo_description, seo_description_el: langs.el.seo_description, seo_description_ro: langs.ro.seo_description, seo_description_ar: langs.ar.seo_description,
+    ...blogLangCols,
     slug, category: opts.category, subcategory: opts.subcategory || null, county: opts.county,
     cover_image: opts.coverImage, source_url: opts.sourceUrl, scraped_article_id: opts.scrapedId,
     ai_editor: opts.editor, author_name: AUTHOR_NAME[opts.editor], author_id: authorId,
@@ -138,13 +169,7 @@ async function commit(sb: SupabaseClient, langs: Record<Locale, LangBundle>, opt
   };
   const p_writeback: Record<string, unknown> = {
     assigned_editor: opts.editor,
-    rewritten_en: CI(langs.en.body_html), rewritten_el: CI(langs.el.body_html), rewritten_ro: CI(langs.ro.body_html), rewritten_ar: CI(langs.ar.body_html),
-    title_en: langs.en.title, title_el: langs.el.title, title_ro: langs.ro.title, title_ar: langs.ar.title,
-    excerpt_en: langs.en.excerpt, excerpt_el: langs.el.excerpt, excerpt_ro: langs.ro.excerpt, excerpt_ar: langs.ar.excerpt,
-    summary_en: langs.en.summary, summary_el: langs.el.summary, summary_ro: langs.ro.summary, summary_ar: langs.ar.summary,
-    rewrite_tags_en: langs.en.tags, rewrite_tags_el: langs.el.tags, rewrite_tags_ro: langs.ro.tags, rewrite_tags_ar: langs.ar.tags,
-    seo_title_en: langs.en.seo_title, seo_title_el: langs.el.seo_title, seo_title_ro: langs.ro.seo_title, seo_title_ar: langs.ar.seo_title,
-    seo_description_en: langs.en.seo_description, seo_description_el: langs.el.seo_description, seo_description_ro: langs.ro.seo_description, seo_description_ar: langs.ar.seo_description,
+    ...writebackLangCols,
     category: opts.category, subcategory: opts.subcategory || null, cover_image: opts.coverImage,
     output_word_count: String(wc),
   };
@@ -156,7 +181,7 @@ async function commit(sb: SupabaseClient, langs: Record<Locale, LangBundle>, opt
   return data as string;
 }
 
-// ── Main entry: process one scraped article into a 4-language draft post ─────
+// ── Main entry: process one scraped article into a 7-language draft post ─────
 export interface ScrapedRow {
   id: string; original_title: string | null; original_content: string | null;
   original_content_full: string | null; category: string | null; county: string | null;
@@ -198,15 +223,10 @@ export async function processScrapedArticle(sb: SupabaseClient, scraped: Scraped
     if (found) { cover = found.url; credit = found.credit; }
   }
 
-  // humanness per language (observability)
-  log.words_en = wordCount(langs.en.body_html);
-  log.words_el = wordCount(langs.el.body_html);
-  log.words_ro = wordCount(langs.ro.body_html);
-  log.words_ar = wordCount(langs.ar.body_html);
-  log.en_humanness = humanness(langs.en.title, langs.en.body_html, 'en');
-  log.el_humanness = humanness(langs.el.title, langs.el.body_html, 'el');
-  log.ro_humanness = humanness(langs.ro.title, langs.ro.body_html, 'ro');
-  log.ar_humanness = humanness(langs.ar.title, langs.ar.body_html, 'ar');
+  // word count + humanness per edition (observability). Limited to LOG_LANGS
+  // because generation_logs only has columns for those four editions.
+  for (const l of LOG_LANGS) log[`words_${l}`] = wordCount(langs[l].body_html);
+  for (const l of LOG_LANGS) log[`${l}_humanness`] = humanness(langs[l].title, langs[l].body_html, l as Lang);
 
   try {
     const county = ['nicosia', 'limassol', 'larnaca', 'famagusta', 'paphos', 'kyrenia'].includes(d.draft.district) ? d.draft.district : scraped.county;
