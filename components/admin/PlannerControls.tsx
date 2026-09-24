@@ -27,9 +27,11 @@ export default function PlannerControls({ settings }: { settings: Settings }) {
       if (d.ok) {
         let m = `${dryRun ? 'Dry run' : 'Planned'}: ${d.ideasCreated} idea(s) across ${d.sectionsProcessed} section(s)`;
         if (d.remainingGaps) m += ` · ${d.remainingGaps} sections still with gaps`;
-        const results: { error?: string; webFallback?: boolean }[] = Array.isArray(d.results) ? d.results : [];
+        const results: { error?: string; webFallback?: boolean; webSource?: string }[] = Array.isArray(d.results) ? d.results : [];
         if (d.ideasCreated === 0) { const e = results.find((x) => x.error); if (e?.error) m += ` — ${e.error}`; }
         if (results.some((x) => x.webFallback)) m += ' · web search unavailable, used offline research';
+        else if (results.some((x) => x.webSource === 'tavily')) m += ' · researched via Tavily';
+        else if (results.some((x) => x.webSource === 'anthropic')) m += ' · researched via Anthropic web search';
         setMsg(m);
         if (!dryRun && d.ideasCreated) setTimeout(() => location.reload(), 1200);
       } else setMsg(d.error || 'Planner failed.');

@@ -20,8 +20,9 @@ import { getSection } from '@/lib/editorial/taxonomy';
 import { getEditorialSettings } from '@/lib/editorial/settings';
 import {
   plannerSystem, ideatePrompt, coerceIdeas, filterRedundant, dedupHash,
-  seasonalNote, monthName, type PlannerSignals,
+  seasonalNote, monthName, researchQueriesFor, type PlannerSignals,
 } from '@/lib/editorial/planner';
+import { researchWeb } from '@/lib/editorial/search';
 
 const SEMANTIC_DUP = 0.90;   // cosine ≥ this against an existing idea → treat as duplicate
 
@@ -86,7 +87,7 @@ async function isSemanticDup(embedding: number[] | null): Promise<boolean> {
 async function processSection(
   gap: PlanGapRow, monthIndex: number, opts: PlannerRunOptions, settings: { webSearch: boolean; ideasPerSection: number },
   budgetLeftMs: () => number,
-): Promise<{ section: string; created: number; skippedDup: number; error?: string; webFallback?: boolean }> {
+): Promise<{ section: string; created: number; skippedDup: number; error?: string; webFallback?: boolean; webSource?: string }> {
   const section = getSection(gap.section_key);
   if (!section) return { section: gap.section_key, created: 0, skippedDup: 0, error: 'unknown section' };
 
@@ -95,32 +96,36 @@ async function processSection(
   const existing = await existingTitlesFor(section.key, gap.department_key);
   const wantWeb = opts.webSearch == null ? settings.webSearch : !!opts.webSearch;
 
-  // One ideation attempt, with or without live web research.
-  async function ideate(web: boolean) {
-    const signals: PlannerSignals = {
-      seasonal: seasonalNote(monthIndex),
-      web: web ? '(Use web search now to find what is genuinely happening, new or of interest for this section in the Republic of Cyprus this month, then propose. Treat findings as leads to verify.)' : '',
-      demand: [],
-      candidates,
-    };
+  // Live web research: PREFER Tavily (a search API built for grounding) when
+  // TAVILY_API_KEY is set; else fall back to Anthropic's built-in web_search tool.
+  let digest = '';
+  if (wantWeb) { try { digest = await researchWeb(researchQueriesFor(section, monthIndex)); } catch { digest = ''; } }
+  const webSource: 'tavily' | 'anthropic' | 'none' = digest ? 'tavily' : (wantWeb ? 'anthropic' : 'none');
+
+  // One ideation attempt. `useTool` turns on Anthropic web_search; `webText` is the
+  // research block (Tavily digest, or the directive that tells the tool to search).
+  async function ideate(useTool: boolean, webText: string) {
+    const signals: PlannerSignals = { seasonal: seasonalNote(monthIndex), web: webText, demand: [], candidates };
     const userMessage = ideatePrompt({ section: section!, departmentName: gap.department_name, monthIndex, count: want, signals, existingTitles: existing });
     return callClaude({
       systemInstruction: plannerSystem(), userMessage, model: CLAUDE_SONNET, jsonMode: true,
-      webSearch: web, maxSearches: 4, maxTokens: 3600,
+      webSearch: useTool, maxSearches: 4, maxTokens: 3600,
       timeoutMs: Math.min(70_000, Math.max(20_000, budgetLeftMs() - 5_000)), fn: 'editorial-planner',
     });
   }
 
-  // Attempt 1 (web if requested). If web was on but yields nothing usable (e.g. the
-  // web_search tool isn't enabled on the account, or its answer was truncated), retry
-  // ONCE without web search so a section is never silently skipped.
-  let r = await ideate(wantWeb);
+  // Attempt 1: Tavily digest (no Anthropic tool), or the Anthropic tool if no digest,
+  // or plain. If web was wanted but yields nothing usable, retry ONCE fully offline so
+  // a section is never silently skipped.
+  const useTool = webSource === 'anthropic';
+  const firstText = digest || (useTool ? '(Use web search now to find what is genuinely happening, new or of interest for this section in the Republic of Cyprus this month, then propose. Treat findings as leads to verify.)' : '');
+  let r = await ideate(useTool, firstText);
   let parsed = r.text ? coerceIdeas(parseAiJson(r.text)) : [];
   let lastErr = r.error || (parsed.length === 0 ? 'the model returned no usable ideas' : undefined);
   let webFallback = false;
   if (wantWeb && parsed.length === 0 && budgetLeftMs() > 15_000) {
     webFallback = true;
-    r = await ideate(false);
+    r = await ideate(false, '');
     const p2 = r.text ? coerceIdeas(parseAiJson(r.text)) : [];
     if (p2.length) { parsed = p2; lastErr = undefined; }
     else lastErr = r.error || 'no usable ideas, with or without web search';
@@ -128,7 +133,7 @@ async function processSection(
   if (!parsed.length) return { section: section.key, created: 0, skippedDup: 0, error: lastErr, webFallback };
 
   const fresh = filterRedundant(parsed, existing).slice(0, want);
-  if (opts.dryRun) return { section: section.key, created: fresh.length, skippedDup: parsed.length - fresh.length, webFallback };
+  if (opts.dryRun) return { section: section.key, created: fresh.length, skippedDup: parsed.length - fresh.length, webFallback, webSource: webFallback ? 'none' : webSource };
 
   let created = 0, skippedDup = 0;
   const targetMonth = firstOfMonth(monthIndex);
@@ -156,14 +161,14 @@ async function processSection(
         needs: idea.needs, wordTarget: idea.wordTarget, outline: idea.outline, verify: idea.verify,
         franchise: idea.franchise || section.franchiseKey || null, subjectHint: idea.subjectHint,
       },
-      signals: { seasonal: seasonalNote(monthIndex), month: monthName(monthIndex), webResearched: wantWeb && !webFallback },
+      signals: { seasonal: seasonalNote(monthIndex), month: monthName(monthIndex), webResearched: wantWeb && !webFallback, webSource: webFallback ? 'none' : webSource },
       dedup_hash: dedupHash(idea.workingTitle),
       embedding,
       created_by: 'planner',
     });
     if (!error) created++;
   }
-  return { section: section.key, created, skippedDup, webFallback };
+  return { section: section.key, created, skippedDup, webFallback, webSource: webFallback ? 'none' : webSource };
 }
 
 export async function runPlanner(opts: PlannerRunOptions = {}): Promise<Record<string, unknown>> {
@@ -183,7 +188,7 @@ export async function runPlanner(opts: PlannerRunOptions = {}): Promise<Record<s
   const gaps = (data as PlanGapRow[] | null) || [];
   if (!gaps.length) return { ok: true, month: monthName(monthIndex), sectionsProcessed: 0, ideasCreated: 0, note: 'No gaps — the plan is full for this month.' };
 
-  const results: { section: string; created: number; skippedDup: number; error?: string; webFallback?: boolean }[] = [];
+  const results: { section: string; created: number; skippedDup: number; error?: string; webFallback?: boolean; webSource?: string }[] = [];
   let totalCreated = 0;
   const sectionLimit = opts.sectionKey ? 1 : settings.sectionsPerRun;
 
