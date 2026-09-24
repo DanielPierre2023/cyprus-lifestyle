@@ -1,10 +1,11 @@
 import { supabaseServer } from '@/lib/supabase/server';
+import { categoryLabel } from '@/lib/directory/taxonomy';
 
 export const dynamic = 'force-dynamic';
 
 type GroupRow = {
-  category_group: string; total: number; with_coords: number; with_contact: number; with_image: number; verified: number;
-  pct_coords: number; pct_contact: number; pct_image: number; pct_verified: number; median_age_days: number | null;
+  category_group: string; total: number; published: number; listed: number; with_coords: number; with_contact: number; with_image: number; with_rating: number; verified: number;
+  pct_coords: number; pct_contact: number; pct_image: number; pct_rating: number; pct_verified: number; median_age_days: number | null;
 };
 type DistrictRow = { district: string; total: number; with_coords: number; with_image: number; pct_coords: number; pct_image: number };
 type Cell = { category_group: string; district: string; total: number; with_coords: number; with_image: number };
@@ -15,15 +16,49 @@ function pctCell(p: number) {
   return <span style={{ color: bg, fontWeight: 700 }}>{p}%</span>;
 }
 
+const IMPORT_DISTRICTS = ['nicosia', 'limassol', 'larnaca', 'paphos', 'famagusta'];
+
 export default async function CoverageTab() {
   const sb = await supabaseServer();
+
+  // ── Imported directory ('listed' = concierge-visible, not on the website) + geocoding
+  // progress. Queried directly (the coverage views below are published-only). ──────────
+  const cnt = (build: (q: any) => any) => build(sb.from('directory_listings').select('id', { count: 'exact', head: true }));
+  const [
+    listedTotalQ, listedGeoQ, listedEmailQ, publishedTotalQ, geoQueueQ,
+    ...districtQs
+  ] = await Promise.all([
+    cnt((q: any) => q.eq('status', 'listed')),
+    cnt((q: any) => q.eq('status', 'listed').not('lat', 'is', null)),
+    cnt((q: any) => q.eq('status', 'listed').not('email', 'is', null)),
+    cnt((q: any) => q.eq('status', 'published')),
+    sb.from('job_queue').select('id', { count: 'exact', head: true }).eq('kind', 'geocode_listing').in('status', ['pending', 'running']),
+    ...IMPORT_DISTRICTS.flatMap((d) => [
+      cnt((q: any) => q.eq('status', 'listed').eq('district', d)),
+      cnt((q: any) => q.eq('status', 'listed').eq('district', d).not('lat', 'is', null)),
+    ]),
+    cnt((q: any) => q.eq('status', 'listed').is('district', null)),
+  ]);
+  const listedTotal = listedTotalQ.count || 0;
+  const listedGeo = listedGeoQ.count || 0;
+  const listedEmail = listedEmailQ.count || 0;
+  const publishedTotal = publishedTotalQ.count || 0;
+  const geoQueue = geoQueueQ.count || 0;
+  const geoPct = listedTotal ? Math.round((100 * listedGeo) / listedTotal) : 0;
+  const importDistricts = IMPORT_DISTRICTS.map((d, i) => ({
+    district: d,
+    total: (districtQs[i * 2] as { count: number | null }).count || 0,
+    geo: (districtQs[i * 2 + 1] as { count: number | null }).count || 0,
+  }));
+  const noDistrict = (districtQs[IMPORT_DISTRICTS.length * 2] as { count: number | null } | undefined)?.count || 0;
+
   const [{ data: overall }, { data: byGroup }, { data: byDistrict }, { data: cells }] = await Promise.all([
     sb.from('directory_coverage_overall').select('*').maybeSingle(),
     sb.from('directory_coverage_by_group').select('*'),
     sb.from('directory_coverage_by_district').select('*'),
     sb.from('directory_coverage_cells').select('*'),
   ]);
-  const o = (overall as { total: number; pct_coords: number; pct_contact: number; pct_image: number; pct_verified: number } | null) || null;
+  const o = (overall as { total: number; published: number; listed: number; pct_coords: number; pct_contact: number; pct_image: number; pct_rating: number; pct_verified: number } | null) || null;
   const groups = (byGroup as GroupRow[] | null) || [];
   const districts = (byDistrict as DistrictRow[] | null) || [];
   const cellRows = (cells as Cell[] | null) || [];
@@ -38,33 +73,72 @@ export default async function CoverageTab() {
 
   return (
     <>
-      <h1>Directory coverage · Acoperire</h1>
-      <p className="sub">What the directory has and where the holes are — the map/neighbourhood needs coordinates, the concierge needs contacts and photos. Published listings only. Pair this with the concierge backlog in Analytics to prioritise the scrape / enrich sprint.</p>
+      {/* Bulk-imported directory (concierge-only) + geocoding progress. */}
+      <h1>Imported directory · concierge listings</h1>
+      <p className="sub">Businesses bulk-imported for the concierge (status <code>listed</code>): visible to the concierge for &ldquo;what&rsquo;s near me&rdquo;, not shown on the public website. Near-me by town/category works as soon as they&rsquo;re imported; precise radius sharpens as the geocoder fills in coordinates. This section is empty until you run the import.</p>
+      <div className="cards">
+        <div className="stat"><div className="n">{listedTotal.toLocaleString('en-US')}</div><div className="k">Listed (concierge)</div></div>
+        <div className="stat"><div className="n">{geoPct}%</div><div className="k">Geocoded</div></div>
+        <div className="stat"><div className="n" style={listedTotal - listedGeo > 0 ? { color: '#b8860b' } : undefined}>{(listedTotal - listedGeo).toLocaleString('en-US')}</div><div className="k">Awaiting geocode</div></div>
+        <div className="stat"><div className="n">{listedEmail.toLocaleString('en-US')}</div><div className="k">With email (outreach)</div></div>
+        <div className="stat"><div className="n">{publishedTotal.toLocaleString('en-US')}</div><div className="k">Published (on website)</div></div>
+      </div>
+      {listedTotal > 0 ? (
+        <>
+          <div style={{ margin: '4px 0 14px' }}>
+            <div style={{ height: 12, background: 'rgba(255,255,255,0.08)', borderRadius: 6, overflow: 'hidden', maxWidth: 520 }}>
+              <div style={{ height: '100%', width: `${geoPct}%`, background: '#1f7a3f' }} />
+            </div>
+            <span className="sub" style={{ margin: '4px 0 0' }}>{listedGeo.toLocaleString('en-US')} of {listedTotal.toLocaleString('en-US')} geocoded · {geoQueue.toLocaleString('en-US')} geocode job(s) queued</span>
+          </div>
+          <table className="adm-t">
+            <thead><tr><th>District</th><th>Listed</th><th>Geocoded</th><th>Progress</th></tr></thead>
+            <tbody>
+              {importDistricts.map((d) => (
+                <tr key={d.district}>
+                  <td style={{ textTransform: 'capitalize' }}>{d.district}</td>
+                  <td>{d.total.toLocaleString('en-US')}</td>
+                  <td>{d.geo.toLocaleString('en-US')}</td>
+                  <td>{pctCell(d.total ? Math.round((100 * d.geo) / d.total) : 0)}</td>
+                </tr>
+              ))}
+              {noDistrict > 0 ? <tr><td>(no district)</td><td>{noDistrict.toLocaleString('en-US')}</td><td>—</td><td>—</td></tr> : null}
+            </tbody>
+          </table>
+        </>
+      ) : null}
+
+      <h1 style={{ marginTop: 8 }}>Directory coverage · Acoperire</h1>
+      <p className="sub">The WHOLE directory — published (on the website) and listed (concierge-only) together — grouped by the canonical categories. A photo counts a curated image OR the imported source image. &ldquo;With a rating&rdquo; is the enrichment gap still to close.</p>
 
       <div className="cards">
-        <div className="stat"><div className="n">{o?.total ?? 0}</div><div className="k">Published listings</div></div>
+        <div className="stat"><div className="n">{(o?.total ?? 0).toLocaleString('en-US')}</div><div className="k">Total (all)</div></div>
+        <div className="stat"><div className="n">{(o?.published ?? 0).toLocaleString('en-US')}</div><div className="k">Published (on site)</div></div>
+        <div className="stat"><div className="n">{(o?.listed ?? 0).toLocaleString('en-US')}</div><div className="k">Listed (concierge)</div></div>
         <div className="stat"><div className="n">{o?.pct_coords ?? 0}%</div><div className="k">With coordinates</div></div>
         <div className="stat"><div className="n">{o?.pct_contact ?? 0}%</div><div className="k">With a contact</div></div>
         <div className="stat"><div className="n">{o?.pct_image ?? 0}%</div><div className="k">With a photo</div></div>
-        <div className="stat"><div className="n">{o?.pct_verified ?? 0}%</div><div className="k">Verified</div></div>
+        <div className="stat"><div className="n" style={(o?.pct_rating ?? 0) < 50 ? { color: '#b8860b' } : undefined}>{o?.pct_rating ?? 0}%</div><div className="k">With a rating</div></div>
       </div>
 
-      <h1 style={{ fontSize: 18 }}>By category group</h1>
+      <h1 style={{ fontSize: 18 }}>By category</h1>
       <table className="adm-t">
-        <thead><tr><th>Category group</th><th>Listings</th><th>Coords</th><th>Contact</th><th>Photo</th><th>Verified</th><th>Median age</th></tr></thead>
+        <thead><tr><th>Category</th><th>Total</th><th>Pub</th><th>Listed</th><th>Coords</th><th>Contact</th><th>Photo</th><th>Rating</th><th>Verified</th></tr></thead>
         <tbody>
           {groups.map((g, i) => (
             <tr key={i}>
-              <td>{g.category_group}</td>
-              <td>{g.total}</td>
+              <td>{categoryLabel(g.category_group)}</td>
+              <td>{g.total.toLocaleString('en-US')}</td>
+              <td>{g.published.toLocaleString('en-US')}</td>
+              <td>{g.listed.toLocaleString('en-US')}</td>
               <td>{pctCell(g.pct_coords)}</td>
               <td>{pctCell(g.pct_contact)}</td>
               <td>{pctCell(g.pct_image)}</td>
+              <td>{pctCell(g.pct_rating)}</td>
               <td>{pctCell(g.pct_verified)}</td>
-              <td>{g.median_age_days == null ? '—' : `${g.median_age_days}d`}</td>
             </tr>
           ))}
-          {groups.length === 0 ? <tr><td colSpan={7}>No published listings.</td></tr> : null}
+          {groups.length === 0 ? <tr><td colSpan={9}>No listings.</td></tr> : null}
         </tbody>
       </table>
 

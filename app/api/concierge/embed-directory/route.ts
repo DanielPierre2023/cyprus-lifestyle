@@ -16,7 +16,7 @@ export const maxDuration = 60;
 
 const LOCS = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'] as const;
 const SELECT = [
-  'slug', 'type', 'subtype', 'category_group', 'district', 'address', 'price_band', 'luxury', 'tags', 'source_description',
+  'slug', 'type', 'subtype', 'category_group', 'district', 'address', 'price_band', 'luxury', 'tags', 'source_description', 'reviews',
   ...LOCS.map((l) => `name_${l}`), ...LOCS.map((l) => `summary_${l}`),
 ].join(',');
 
@@ -37,6 +37,8 @@ function dirDoc(r: Row): string {
   const tags = Array.isArray(r.tags) ? (r.tags as unknown[]).map(String).filter(Boolean) : [];
   if (tags.length) parts.push('Tags: ' + tags.join(', '));
   const desc = s('source_description'); if (desc) parts.push(desc); // the business's own words — the richest signal for oblique queries
+  const revs = Array.isArray(r.reviews) ? (r.reviews as Array<Record<string, unknown>>) : [];
+  if (revs.length) { const rt = revs.map((x) => String((x && x.text) || '')).filter(Boolean).slice(0, 5).join(' | '); if (rt) parts.push('What guests say: ' + rt.slice(0, 1500)); } // real reviews sharpen vibe/quality matching
   for (const l of LOCS) {
     const summ = s(`summary_${l}`); if (summ) parts.push(summ);
     const nm = s(`name_${l}`); if (nm && nm !== nameEn) parts.push(nm);

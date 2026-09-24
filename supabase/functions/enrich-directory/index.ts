@@ -86,18 +86,18 @@ async function timedFetch(url: string, ms = 9000, init: RequestInit = {}): Promi
 }
 
 // ── Places (New) ────────────────────────────────────────────────────────────
-interface PlaceHit { websiteUri?: string; internationalPhoneNumber?: string; photoName?: string; photoAttr?: string; rating?: number; ratingCount?: number; editorial?: string; primaryType?: string }
-async function placesLookup(query: string): Promise<PlaceHit | null> {
+interface PlaceReview { author?: string; rating?: number; text?: string; when?: string }
+interface PlaceHit { websiteUri?: string; internationalPhoneNumber?: string; photoName?: string; photoAttr?: string; rating?: number; ratingCount?: number; editorial?: string; primaryType?: string; reviews?: PlaceReview[] }
+async function placesLookup(query: string, wantReviews = false): Promise<PlaceHit | null> {
   if (!PLACES_KEY || !query.trim()) return null;
+  // photos already put this call in the top field-mask tier, so rating/editorialSummary/
+  // primaryType ride it for free. `places.reviews` is Google's pricier Atmosphere SKU, so
+  // it's only requested when explicitly asked for (&reviews=1) — the stall fix never needs it.
+  const mask = 'places.id,places.displayName,places.websiteUri,places.internationalPhoneNumber,places.photos,places.rating,places.userRatingCount,places.editorialSummary,places.primaryTypeDisplayName,places.businessStatus'
+    + (wantReviews ? ',places.reviews' : '');
   const res = await timedFetch('https://places.googleapis.com/v1/places:searchText', 12000, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': PLACES_KEY,
-      // photos already put this call in the top field-mask tier, so adding rating,
-      // editorialSummary and primaryType costs nothing extra — they ride the same request.
-      'X-Goog-FieldMask': 'places.id,places.displayName,places.websiteUri,places.internationalPhoneNumber,places.photos,places.rating,places.userRatingCount,places.editorialSummary,places.primaryTypeDisplayName,places.businessStatus',
-    },
+    headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': PLACES_KEY, 'X-Goog-FieldMask': mask },
     body: JSON.stringify({ textQuery: query, regionCode: 'CY', maxResultCount: 1 }),
   });
   if (!res || !res.ok) return null;
@@ -108,6 +108,17 @@ async function placesLookup(query: string): Promise<PlaceHit | null> {
   const attr = (photo?.authorAttributions as Array<{ displayName?: string }> | undefined)?.[0]?.displayName;
   const ed = (p.editorialSummary as { text?: string } | undefined)?.text;
   const pt = (p.primaryTypeDisplayName as { text?: string } | undefined)?.text;
+  let reviews: PlaceReview[] | undefined;
+  if (wantReviews) {
+    const rv = (p.reviews as Array<Record<string, unknown>> | undefined) || [];
+    reviews = rv.slice(0, 5).map((x) => ({
+      author: (x.authorAttribution as { displayName?: string } | undefined)?.displayName,
+      rating: typeof x.rating === 'number' ? x.rating : undefined,
+      text: ((((x.text as { text?: string } | undefined)?.text) || ((x.originalText as { text?: string } | undefined)?.text) || '')).replace(/\s+/g, ' ').trim().slice(0, 600),
+      when: x.relativePublishTimeDescription as string | undefined,
+    })).filter((r) => r.text);
+    if (!reviews.length) reviews = undefined;
+  }
   return {
     websiteUri: p.websiteUri as string | undefined,
     internationalPhoneNumber: p.internationalPhoneNumber as string | undefined,
@@ -117,6 +128,7 @@ async function placesLookup(query: string): Promise<PlaceHit | null> {
     ratingCount: typeof p.userRatingCount === 'number' ? p.userRatingCount : undefined,
     editorial: ed && ed.trim() ? ed.trim() : undefined,
     primaryType: pt && pt.trim() ? pt.trim() : undefined,
+    reviews,
   };
 }
 
@@ -142,13 +154,16 @@ async function placesPhotoBytes(photoName: string): Promise<ImgData | null> {
   if (!j?.photoUri) return null;
   return downloadImage(j.photoUri);
 }
+const MAX_IMG_BYTES = 5_000_000; // 5 MB — larger is almost always a mistake and risks the worker's memory (a cause of the 546 stalls)
 async function downloadImage(url: string): Promise<ImgData | null> {
   const res = await timedFetch(url, 12000);
   if (!res || !res.ok) return null;
   const ct = res.headers.get('content-type') || 'image/jpeg';
   if (!ct.startsWith('image/')) return null;
+  const len = Number(res.headers.get('content-length') || 0);
+  if (len && len > MAX_IMG_BYTES) { try { await res.body?.cancel(); } catch { /* ignore */ } return null; } // skip oversized before buffering
   const buf = await res.arrayBuffer();
-  if (buf.byteLength < 3000) return null;
+  if (buf.byteLength < 3000 || buf.byteLength > MAX_IMG_BYTES) return null;
   return { buf, ct };
 }
 let LAST_UPLOAD_ERR = '';
@@ -249,7 +264,7 @@ async function unsplashImage(query: string): Promise<{ url: string; credit: stri
 }
 
 // ── per-row enrichment ──────────────────────────────────────────────────────
-async function enrichRow(entity: string, cfg: EntityCfg, r: Record<string, unknown>, opts: { imagesOnly: boolean; contactsOnly: boolean; stock: boolean }): Promise<Record<string, unknown>> {
+async function enrichRow(entity: string, cfg: EntityCfg, r: Record<string, unknown>, opts: { imagesOnly: boolean; contactsOnly: boolean; stock: boolean; wantReviews: boolean }): Promise<Record<string, unknown>> {
   const patch: Record<string, unknown> = { enriched_at: new Date().toISOString() };
   let hits = 0;
   const name = String(r[cfg.nameField] || '');
@@ -262,7 +277,7 @@ async function enrichRow(entity: string, cfg: EntityCfg, r: Record<string, unkno
   // ZERO Places calls — we go straight to its website for the photo.
   let placeChecked = false;
   let place: PlaceHit | null = null;
-  const getPlace = async (): Promise<PlaceHit | null> => { if (!placeChecked) { placeChecked = true; place = await placesLookup(query); } return place; };
+  const getPlace = async (): Promise<PlaceHit | null> => { if (!placeChecked) { placeChecked = true; place = await placesLookup(query, opts.wantReviews); } return place; };
 
   if (cfg.contacts) {
     if (!r.url) { const p = await getPlace(); if (p?.websiteUri) { patch.url = p.websiteUri; hits++; } }
@@ -305,6 +320,7 @@ async function enrichRow(entity: string, cfg: EntityCfg, r: Record<string, unkno
     const p = await getPlace();
     if (!r.summary_en) { patch.summary_en = (p?.editorial) || composedSummary(String(r.type || ''), p?.primaryType, district); hits++; }
     if (p?.rating != null && r.rating == null) { patch.rating = p.rating; if (p.ratingCount != null) patch.rating_count = p.ratingCount; }
+    if (opts.wantReviews && p?.reviews && p.reviews.length) { patch.reviews = p.reviews; hits++; } // Google review snippets → jsonb (0111)
   }
 
   patch.enrich_status = hits === 0 ? 'none' : ((patch.image || r.image) && (!cfg.contacts || patch.email || r.email) ? 'ok' : 'partial');
@@ -325,6 +341,8 @@ async function handler(req: Request): Promise<Response> {
   const imagesOnly = u.searchParams.get('imagesOnly') === '1';
   const contactsOnly = u.searchParams.get('contactsOnly') === '1';
   const stock = u.searchParams.get('stock') === '1';
+  const wantReviews = u.searchParams.get('reviews') === '1'; // opt-in: fetch+store Google review snippets (pricier SKU)
+  const retry = u.searchParams.get('retry') === '1';         // re-run rows parked at enrich_status processing/error
 
   // ── diagnostics: ?debug=<name substring> — inspects ONE listing, writes nothing,
   // and reports exactly what the edge sees so we can tell why a photo is missing.
@@ -361,7 +379,7 @@ async function handler(req: Request): Promise<Response> {
     return new Response(JSON.stringify(out, null, 2), { headers: { 'Content-Type': 'application/json' } });
   }
 
-  const filter = redo ? '' : '&enriched_at=is.null';
+  const filter = redo ? '' : (retry ? '&enrich_status=in.(processing,error)' : '&enriched_at=is.null');
   const isJunk = (nm: string) => /^\d+$/.test(nm.trim()) || /\[closed\]/i.test(nm); // numeric codes + closed places
 
   const sel = await rest(`${cfg.table}?select=${cfg.select}&status=eq.published${filter}&order=${cfg.nameField}.asc&limit=${limit}`);
@@ -369,25 +387,47 @@ async function handler(req: Request): Promise<Response> {
   const rows = await sel.json() as Record<string, unknown>[];
 
   let updated = 0;
+  let stoppedEarly = false;
+  // Hard per-invocation time budget. Each row is committed as it finishes, so
+  // returning early loses nothing — the next cron call picks up where we stopped.
+  // This is what makes the drain unstallable: it can never run long enough for the
+  // platform to kill the worker mid-batch (the 546 that used to freeze the queue).
+  const DEADLINE = Date.now() + 40000;
   const results: Array<Record<string, unknown>> = [];
   for (const r of rows) {
+    if (Date.now() > DEADLINE) { stoppedEarly = true; break; }
     const nm = String(r[cfg.nameField] || '');
     // Cheaply drain junk directory rows (numeric import codes, [CLOSED]) — no API spend.
     if (entity === 'directory' && isJunk(nm)) {
       await rest(`${cfg.table}?id=eq.${r.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ enriched_at: new Date().toISOString(), enrich_status: 'skipped' }) });
       updated++; results.push({ name: nm, status: 'skipped' }); continue;
     }
+    // CLAIM the row up-front: set enriched_at NOW so a throw — or a platform worker-kill
+    // (the 546) mid-row — can never re-block the queue. The heavy work runs after; if it
+    // dies, this row is already out of the `enriched_at is null` selection, so the next
+    // call moves on instead of re-reading the same poison row forever (the 1,683 stall).
+    // A row left at enrich_status='processing' is the retry signal (&retry=1).
+    await rest(`${cfg.table}?id=eq.${r.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ enriched_at: new Date().toISOString(), enrich_status: 'processing' }) }).catch(() => {});
     try {
-      const patch = await enrichRow(entity, cfg, r, { imagesOnly, contactsOnly, stock });
+      // Hard per-row cap so one slow/poison row can't run long enough to get the worker killed.
+      const patch = await Promise.race([
+        enrichRow(entity, cfg, r, { imagesOnly, contactsOnly, stock, wantReviews }),
+        new Promise<Record<string, unknown>>((_, rej) => setTimeout(() => rej(new Error('row-timeout')), 32000)),
+      ]);
       const up = await rest(`${cfg.table}?id=eq.${r.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
       if (up.ok) { updated++; results.push({ name: nm, status: patch.enrich_status, image: !!patch.image, email: patch.email || undefined, url: patch.url || undefined }); }
-    } catch (e) { results.push({ name: nm, error: String(e) }); }
+      else results.push({ name: nm, error: `patch ${up.status}` });
+    } catch (e) {
+      // already claimed (enriched_at set) — mark it a retry candidate and move on
+      await rest(`${cfg.table}?id=eq.${r.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ enrich_status: 'error' }) }).catch(() => {});
+      results.push({ name: nm, error: String(e).slice(0, 80) });
+    }
   }
 
   const head = await rest(`${cfg.table}?select=id&status=eq.published&enriched_at=is.null`, { method: 'HEAD', headers: { Prefer: 'count=exact' } });
   const remaining = Number((head.headers.get('content-range') || '*/0').split('/')[1] || 0);
 
-  return new Response(JSON.stringify({ ok: true, entity, processed: rows.length, updated, remaining, results }, null, 2), { headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify({ ok: true, entity, processed: updated, fetched: rows.length, stoppedEarly, remaining, results }, null, 2), { headers: { 'Content-Type': 'application/json' } });
 }
 
 if (import.meta.main) Deno.serve(handler);
