@@ -48,7 +48,7 @@ export default async function EditorialPlanTab() {
         Run the AI planner to fill the gaps with grounded, non-redundant ideas; approve them on the <a href="/admin/ideas" style={{ color: '#C9A24C' }}>Idea Board</a>.
       </p>
 
-      <PlannerControls settings={{ autonomy: settings.autonomy, webSearch: settings.webSearch }} />
+      <PlannerControls settings={{ autonomy: settings.autonomy, webSearch: settings.webSearch, autoCover: settings.autoCover, imageSource: settings.imageSource }} />
 
       <div className="cards">
         <div className="stat"><div className="n">{tTarget.toLocaleString('en-US')}</div><div className="k">Target / month</div></div>

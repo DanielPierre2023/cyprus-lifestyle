@@ -1,9 +1,10 @@
 'use client';
 import { useState } from 'react';
 
-// Cockpit controls: run the planner on demand, and flip autonomy suggest ⇄ auto-draft.
-// Admin session-gated routes — no secret in the browser.
-type Settings = { autonomy: 'suggest' | 'auto-draft'; webSearch: boolean };
+// Cockpit controls: run the planner on demand, flip autonomy suggest ⇄ auto-draft,
+// and set the desk's imagery policy. Admin session-gated routes — no secret in the browser.
+type ImageSource = 'off' | 'stock' | 'ai' | 'stock-then-ai';
+type Settings = { autonomy: 'suggest' | 'auto-draft'; webSearch: boolean; autoCover: boolean; imageSource: ImageSource };
 
 const btn: React.CSSProperties = {
   fontFamily: 'var(--sans, Jost, sans-serif)', fontSize: 12, fontWeight: 600, letterSpacing: '.06em',
@@ -14,6 +15,8 @@ const btn: React.CSSProperties = {
 export default function PlannerControls({ settings }: { settings: Settings }) {
   const [autonomy, setAutonomy] = useState<Settings['autonomy']>(settings.autonomy);
   const [web, setWeb] = useState<boolean>(settings.webSearch);
+  const [autoCover, setAutoCover] = useState<boolean>(settings.autoCover);
+  const [imageSource, setImageSource] = useState<ImageSource>(settings.imageSource);
   const [busy, setBusy] = useState<'' | 'run' | 'dry' | 'save'>('');
   const [msg, setMsg] = useState('');
 
@@ -46,8 +49,11 @@ export default function PlannerControls({ settings }: { settings: Settings }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next),
       });
       const d = await r.json();
-      if (d.ok) { setAutonomy(d.settings.autonomy); setWeb(d.settings.webSearch); setMsg('Settings saved.'); }
-      else setMsg(d.error || 'Could not save.');
+      if (d.ok) {
+        setAutonomy(d.settings.autonomy); setWeb(d.settings.webSearch);
+        setAutoCover(d.settings.autoCover); setImageSource(d.settings.imageSource);
+        setMsg('Settings saved.');
+      } else setMsg(d.error || 'Could not save.');
     } catch (e) { setMsg((e as Error).message); }
     setBusy('');
   }
@@ -68,6 +74,23 @@ export default function PlannerControls({ settings }: { settings: Settings }) {
 
       <label style={{ fontFamily: 'var(--sans, Jost, sans-serif)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
         <input type="checkbox" checked={web} onChange={(e) => saveSettings({ webSearch: e.target.checked })} /> Web-search research
+      </label>
+
+      <span style={{ width: 1, height: 22, background: 'rgba(255,255,255,0.12)' }} aria-hidden />
+
+      <label style={{ fontFamily: 'var(--sans, Jost, sans-serif)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+        <input type="checkbox" checked={autoCover} onChange={(e) => saveSettings({ autoCover: e.target.checked })} /> Auto cover on draft
+      </label>
+
+      <label style={{ fontFamily: 'var(--sans, Jost, sans-serif)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+        On-demand image
+        <select value={imageSource} onChange={(e) => saveSettings({ imageSource: e.target.value as ImageSource })}
+          style={{ fontFamily: 'inherit', fontSize: 12, padding: '6px 8px', background: '#12161b', color: '#EDEBE4', border: '1px solid #2a2e35', borderRadius: 4 }}>
+          <option value="stock">Real photo</option>
+          <option value="ai">AI illustration</option>
+          <option value="stock-then-ai">Photo, else AI</option>
+          <option value="off">Off</option>
+        </select>
       </label>
 
       {msg && <span style={{ fontFamily: 'var(--sans, Jost, sans-serif)', fontSize: 12, color: '#C9A24C' }}>{msg}</span>}

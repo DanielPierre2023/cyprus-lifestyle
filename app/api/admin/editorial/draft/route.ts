@@ -11,6 +11,8 @@ import { wordCount } from '@/lib/util';
 import { subjectFromListing } from '@/lib/editorial/gate';
 import { draftPiece } from '@/lib/editorial/generate';
 import { mdToHtml, isPieceKind, isFranchise, type PipelineSubject, type PieceKind } from '@/lib/editorial/pipeline';
+import { getEditorialSettings } from '@/lib/editorial/settings';
+import { attachCover, coverInputFromPiece, type CoverResult } from '@/lib/editorial/cover';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -66,5 +68,23 @@ export async function POST(req: NextRequest) {
   const { error: ue } = await sb.from('blog_posts').update(upd).eq('id', id);
   if (ue) return NextResponse.json({ ok: false, error: `Drafted but could not save: ${ue.message}` }, { status: 500 });
 
-  return NextResponse.json({ ok: true, id, title: res.title || (p[`title_${sourceLang}`] as string) || '', words, sourceLang, pipeline_status: 'editing' });
+  // Auto-attach a real, matching cover photo (best-effort). Uses STOCK only on this
+  // path — it's fast and free, and it never risks the 60s draft budget (AI covers are
+  // on-demand via /api/admin/editorial/cover). Time-boxed so a slow photo search can
+  // never turn a saved draft into a timeout; the piece just stays cover-less and can
+  // be given one from the board.
+  let cover: { source: string; url: string } | null = null;
+  try {
+    const settings = await getEditorialSettings();
+    if (settings.autoCover && !p.cover_image) {
+      const ci = coverInputFromPiece({ ...p, [`title_${sourceLang}`]: res.title || p[`title_${sourceLang}`] }, sourceLang);
+      const c = await Promise.race<CoverResult | null>([
+        attachCover(id, ci, 'stock', { existing: (p.cover_image as string) || null }),
+        new Promise<null>((r) => setTimeout(() => r(null), 12000)),
+      ]);
+      if (c) cover = { source: c.source, url: c.url };
+    }
+  } catch { /* imagery is best-effort */ }
+
+  return NextResponse.json({ ok: true, id, title: res.title || (p[`title_${sourceLang}`] as string) || '', words, sourceLang, pipeline_status: 'editing', cover });
 }

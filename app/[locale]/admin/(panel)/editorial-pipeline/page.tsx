@@ -3,6 +3,7 @@ import {
   FRANCHISES, PIPELINE_STATUSES, getFranchise,
   type PipelineStatus,
 } from '@/lib/editorial/pipeline';
+import CoverActions from '@/components/admin/CoverActions';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,7 @@ type Piece = {
   angle: string | null; subject_listing_id: string | null;
   questions: unknown; scheduled_at: string | null; source_lang: string | null;
   updated_at: string | null; title_en: string | null; title_el: string | null;
+  cover_image: string | null;
 };
 
 // Human labels + the gold-scale accent used across the admin.
@@ -36,7 +38,7 @@ export default async function EditorialPipelineTab() {
   const sb = await supabaseServer();
 
   const { data } = await sb.from('blog_posts')
-    .select('id, slug, kind, franchise, pipeline_status, angle, subject_listing_id, questions, scheduled_at, source_lang, updated_at, title_en, title_el')
+    .select('id, slug, kind, franchise, pipeline_status, angle, subject_listing_id, questions, scheduled_at, source_lang, updated_at, title_en, title_el, cover_image')
     .not('pipeline_status', 'is', null)
     .order('updated_at', { ascending: false })
     .limit(400);
@@ -100,6 +102,10 @@ export default async function EditorialPipelineTab() {
                   const subj = p.subject_listing_id ? subjectName.get(p.subject_listing_id) : null;
                   return (
                     <div key={p.id} style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 6, padding: '8px 10px' }}>
+                      {p.cover_image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.cover_image} alt="" style={{ width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', borderRadius: 4, display: 'block', marginBottom: 6 }} />
+                      ) : null}
                       <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>{pieceTitle(p)}</div>
                       <div className="sub" style={{ margin: '4px 0 0', fontSize: 11 }}>
                         {f ? f.name : (p.franchise || '—')} · {p.kind || '—'}
@@ -107,6 +113,7 @@ export default async function EditorialPipelineTab() {
                       </div>
                       {subj ? <div className="sub" style={{ margin: '2px 0 0', fontSize: 11, color: '#C9A24C' }}>↳ {subj}</div> : null}
                       {st === 'scheduled' && p.scheduled_at ? <div className="sub" style={{ margin: '2px 0 0', fontSize: 11 }}>{new Date(p.scheduled_at).toLocaleString('en-GB')}</div> : null}
+                      <div style={{ marginTop: 6 }}><CoverActions id={p.id} hasCover={!!p.cover_image} /></div>
                     </div>
                   );
                 })}

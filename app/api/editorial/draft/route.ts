@@ -10,6 +10,8 @@ import { wordCount } from '@/lib/util';
 import { denyReason, subjectFromListing } from '@/lib/editorial/gate';
 import { draftPiece } from '@/lib/editorial/generate';
 import { mdToHtml, isPieceKind, isFranchise, type PipelineSubject, type PieceKind } from '@/lib/editorial/pipeline';
+import { getEditorialSettings } from '@/lib/editorial/settings';
+import { attachCover, coverInputFromPiece, type CoverResult } from '@/lib/editorial/cover';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -70,6 +72,21 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
   const { error: ue } = await sb.from('blog_posts').update(upd).eq('id', id);
   if (ue) return { ok: false, error: `Drafted the piece but could not save it: ${ue.message}` };
 
+  // Auto-attach a real, matching cover (best-effort, STOCK only, time-boxed) — same
+  // policy as the admin draft route: never risk the 60s budget, AI covers are on-demand.
+  let cover: { source: string; url: string } | null = null;
+  try {
+    const settings = await getEditorialSettings();
+    if (settings.autoCover && !p.cover_image) {
+      const ci = coverInputFromPiece({ ...p, [`title_${sourceLang}`]: res.title || p[`title_${sourceLang}`] }, sourceLang);
+      const c = await Promise.race<CoverResult | null>([
+        attachCover(id, ci, 'stock', { existing: (p.cover_image as string) || null }),
+        new Promise<null>((r) => setTimeout(() => r(null), 12000)),
+      ]);
+      if (c) cover = { source: c.source, url: c.url };
+    }
+  } catch { /* imagery is best-effort */ }
+
   return {
     ok: true,
     id,
@@ -77,6 +94,7 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
     words,
     sourceLang,
     pipeline_status: 'drafting',
+    cover,
     note: `Draft written (${words} words). Next: edit, then POST /api/editorial/translate?id=${id}`,
   };
 }

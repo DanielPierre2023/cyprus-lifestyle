@@ -7,10 +7,17 @@
 //   • webSearch      give the planner live web research ("what's in").
 //   • ideasPerSection how many candidates to ask for per under-served subcategory.
 //   • sectionsPerRun  how many sections one planner run covers (fits the 60s budget).
+//   • autoCover      when a piece is drafted, auto-attach a real matching stock photo
+//                    (fast + free; AI covers are on-demand, never on this path).
+//   • imageSource    the DEFAULT mode for on-demand cover generation (the board's
+//                    "Photo" / "AI image" buttons and the /cover route):
+//                    'stock' (real photo) · 'ai' (illustration) · 'stock-then-ai'
+//                    (a real photo if one fits, else an AI illustration) · 'off'.
 // Server-only. Reads degrade to sensible defaults if the row is missing.
 // ============================================================================
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import type { ImageSource } from '@/lib/editorial/cover';
 
 export type Autonomy = 'suggest' | 'auto-draft';
 export interface EditorialSettings {
@@ -18,12 +25,17 @@ export interface EditorialSettings {
   webSearch: boolean;
   ideasPerSection: number;
   sectionsPerRun: number;
+  autoCover: boolean;
+  imageSource: ImageSource;
 }
+const IMAGE_SOURCES: ImageSource[] = ['off', 'stock', 'ai', 'stock-then-ai'];
 export const DEFAULT_EDITORIAL_SETTINGS: EditorialSettings = {
   autonomy: 'suggest',   // Daniel: suggest-only for week one, then switch to 'auto-draft'
   webSearch: true,       // Daniel: wire web search now
   ideasPerSection: 3,
   sectionsPerRun: 4,
+  autoCover: true,             // every new draft gets a real, matching photo
+  imageSource: 'stock-then-ai', // on-demand: a real photo first, an AI illustration if none fits
 };
 
 export async function getEditorialSettings(): Promise<EditorialSettings> {
@@ -37,6 +49,9 @@ export async function getEditorialSettings(): Promise<EditorialSettings> {
         ? Math.min(Math.round(v.ideasPerSection as number), 8) : DEFAULT_EDITORIAL_SETTINGS.ideasPerSection,
       sectionsPerRun: Number.isFinite(v.sectionsPerRun as number) && (v.sectionsPerRun as number) > 0
         ? Math.min(Math.round(v.sectionsPerRun as number), 12) : DEFAULT_EDITORIAL_SETTINGS.sectionsPerRun,
+      autoCover: typeof v.autoCover === 'boolean' ? v.autoCover : DEFAULT_EDITORIAL_SETTINGS.autoCover,
+      imageSource: IMAGE_SOURCES.includes(v.imageSource as ImageSource)
+        ? (v.imageSource as ImageSource) : DEFAULT_EDITORIAL_SETTINGS.imageSource,
     };
   } catch {
     return DEFAULT_EDITORIAL_SETTINGS;
