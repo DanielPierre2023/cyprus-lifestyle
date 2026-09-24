@@ -25,7 +25,12 @@ export default function PlannerControls({ settings }: { settings: Settings }) {
       });
       const d = await r.json();
       if (d.ok) {
-        setMsg(`${dryRun ? 'Dry run' : 'Planned'}: ${d.ideasCreated} idea(s) across ${d.sectionsProcessed} section(s)${d.remainingGaps ? ` · ${d.remainingGaps} sections still with gaps` : ''}.`);
+        let m = `${dryRun ? 'Dry run' : 'Planned'}: ${d.ideasCreated} idea(s) across ${d.sectionsProcessed} section(s)`;
+        if (d.remainingGaps) m += ` · ${d.remainingGaps} sections still with gaps`;
+        const results: { error?: string; webFallback?: boolean }[] = Array.isArray(d.results) ? d.results : [];
+        if (d.ideasCreated === 0) { const e = results.find((x) => x.error); if (e?.error) m += ` — ${e.error}`; }
+        if (results.some((x) => x.webFallback)) m += ' · web search unavailable, used offline research';
+        setMsg(m);
         if (!dryRun && d.ideasCreated) setTimeout(() => location.reload(), 1200);
       } else setMsg(d.error || 'Planner failed.');
     } catch (e) { setMsg((e as Error).message); }

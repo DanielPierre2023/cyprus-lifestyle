@@ -86,41 +86,49 @@ async function isSemanticDup(embedding: number[] | null): Promise<boolean> {
 async function processSection(
   gap: PlanGapRow, monthIndex: number, opts: PlannerRunOptions, settings: { webSearch: boolean; ideasPerSection: number },
   budgetLeftMs: () => number,
-): Promise<{ section: string; created: number; skippedDup: number; error?: string }> {
+): Promise<{ section: string; created: number; skippedDup: number; error?: string; webFallback?: boolean }> {
   const section = getSection(gap.section_key);
   if (!section) return { section: gap.section_key, created: 0, skippedDup: 0, error: 'unknown section' };
 
   const want = Math.min(Math.max(gap.gap, 1), settings.ideasPerSection);
   const candidates = await candidatesFor(section.dirGroups);
   const existing = await existingTitlesFor(section.key, gap.department_key);
+  const wantWeb = opts.webSearch == null ? settings.webSearch : !!opts.webSearch;
 
-  const useWeb = opts.webSearch == null ? settings.webSearch : !!opts.webSearch;
-  const signals: PlannerSignals = {
-    seasonal: seasonalNote(monthIndex),
-    web: useWeb ? '(Use web search now to find what is genuinely happening, new or of interest for this section in the Republic of Cyprus this month, then propose. Treat findings as leads to verify.)' : '',
-    demand: [],
-    candidates,
-  };
-  const userMessage = ideatePrompt({
-    section, departmentName: gap.department_name, monthIndex, count: want, signals, existingTitles: existing,
-  });
+  // One ideation attempt, with or without live web research.
+  async function ideate(web: boolean) {
+    const signals: PlannerSignals = {
+      seasonal: seasonalNote(monthIndex),
+      web: web ? '(Use web search now to find what is genuinely happening, new or of interest for this section in the Republic of Cyprus this month, then propose. Treat findings as leads to verify.)' : '',
+      demand: [],
+      candidates,
+    };
+    const userMessage = ideatePrompt({ section: section!, departmentName: gap.department_name, monthIndex, count: want, signals, existingTitles: existing });
+    return callClaude({
+      systemInstruction: plannerSystem(), userMessage, model: CLAUDE_SONNET, jsonMode: true,
+      webSearch: web, maxSearches: 4, maxTokens: 3600,
+      timeoutMs: Math.min(70_000, Math.max(20_000, budgetLeftMs() - 5_000)), fn: 'editorial-planner',
+    });
+  }
 
-  const r = await callClaude({
-    systemInstruction: plannerSystem(),
-    userMessage,
-    model: CLAUDE_SONNET,
-    jsonMode: true,
-    webSearch: useWeb,
-    maxSearches: 4,
-    maxTokens: 3200,
-    timeoutMs: Math.min(70_000, Math.max(20_000, budgetLeftMs() - 5_000)),
-    fn: 'editorial-planner',
-  });
-  if (r.error || !r.text) return { section: section.key, created: 0, skippedDup: 0, error: r.error || 'no model response' };
+  // Attempt 1 (web if requested). If web was on but yields nothing usable (e.g. the
+  // web_search tool isn't enabled on the account, or its answer was truncated), retry
+  // ONCE without web search so a section is never silently skipped.
+  let r = await ideate(wantWeb);
+  let parsed = r.text ? coerceIdeas(parseAiJson(r.text)) : [];
+  let lastErr = r.error || (parsed.length === 0 ? 'the model returned no usable ideas' : undefined);
+  let webFallback = false;
+  if (wantWeb && parsed.length === 0 && budgetLeftMs() > 15_000) {
+    webFallback = true;
+    r = await ideate(false);
+    const p2 = r.text ? coerceIdeas(parseAiJson(r.text)) : [];
+    if (p2.length) { parsed = p2; lastErr = undefined; }
+    else lastErr = r.error || 'no usable ideas, with or without web search';
+  }
+  if (!parsed.length) return { section: section.key, created: 0, skippedDup: 0, error: lastErr, webFallback };
 
-  const parsed = coerceIdeas(parseAiJson(r.text));
   const fresh = filterRedundant(parsed, existing).slice(0, want);
-  if (opts.dryRun) return { section: section.key, created: fresh.length, skippedDup: parsed.length - fresh.length };
+  if (opts.dryRun) return { section: section.key, created: fresh.length, skippedDup: parsed.length - fresh.length, webFallback };
 
   let created = 0, skippedDup = 0;
   const targetMonth = firstOfMonth(monthIndex);
@@ -148,14 +156,14 @@ async function processSection(
         needs: idea.needs, wordTarget: idea.wordTarget, outline: idea.outline, verify: idea.verify,
         franchise: idea.franchise || section.franchiseKey || null, subjectHint: idea.subjectHint,
       },
-      signals: { seasonal: signals.seasonal, month: monthName(monthIndex), webResearched: useWeb },
+      signals: { seasonal: seasonalNote(monthIndex), month: monthName(monthIndex), webResearched: wantWeb && !webFallback },
       dedup_hash: dedupHash(idea.workingTitle),
       embedding,
       created_by: 'planner',
     });
     if (!error) created++;
   }
-  return { section: section.key, created, skippedDup };
+  return { section: section.key, created, skippedDup, webFallback };
 }
 
 export async function runPlanner(opts: PlannerRunOptions = {}): Promise<Record<string, unknown>> {
@@ -175,7 +183,7 @@ export async function runPlanner(opts: PlannerRunOptions = {}): Promise<Record<s
   const gaps = (data as PlanGapRow[] | null) || [];
   if (!gaps.length) return { ok: true, month: monthName(monthIndex), sectionsProcessed: 0, ideasCreated: 0, note: 'No gaps — the plan is full for this month.' };
 
-  const results: { section: string; created: number; skippedDup: number; error?: string }[] = [];
+  const results: { section: string; created: number; skippedDup: number; error?: string; webFallback?: boolean }[] = [];
   let totalCreated = 0;
   const sectionLimit = opts.sectionKey ? 1 : settings.sectionsPerRun;
 
