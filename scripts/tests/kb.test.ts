@@ -26,4 +26,11 @@ ok('fashion-shopping is retrievable', has('fashion-shopping', 'where is the best
 ok('theatre-arts is retrievable', has('theatre-arts', 'what is the theatre and live performance scene like in Cyprus'));
 ok('editorial entries all carry a citable source', ['fine-dining', 'nightlife', 'museums', 'archaeological-sites', 'fashion-shopping', 'theatre-arts'].every((id) => !!QA_INDEX[id]?.item.source));
 
+// ── CI-15 civic / emergency layer ──────────────────────────────────────────────────
+ok('emergencies is retrievable', has('emergencies', 'what is the emergency number in Cyprus and the nearest hospital'));
+ok('night-pharmacy is retrievable', has('night-pharmacy', 'I need a pharmacy open now at night in Paphos'));
+ok('urgent-help is retrievable', has('urgent-help', 'on-call doctor on a public holiday weekend'));
+ok('emergency answer names 112', /112/.test(QA_INDEX['emergencies']?.item.a || ''));
+ok('civic entries all carry a citable source', ['emergencies', 'night-pharmacy', 'urgent-help'].every((id) => !!QA_INDEX[id]?.item.source));
+
 report('kb.content');

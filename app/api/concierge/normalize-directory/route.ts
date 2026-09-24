@@ -16,8 +16,13 @@ export const maxDuration = 60;
 
 const STATUSES = ['published', 'listed'];
 const PAGE = 1500;         // rows scanned per DB page (most classified deterministically)
-const CHUNK = 30;          // businesses per model call (the tail only)
+const CHUNK = 12;          // businesses per model call — small, so the LLM's per-row index alignment stays reliable (large batches caused mis-tagging)
 const CONCURRENCY = 4;     // model calls in flight (low, to avoid 429 throttling)
+// Categories whose REAL members are reliably keyword-named (a hospital says "hospital/clinic",
+// a bank "bank", a school "school/gymnasium"). For these we only trust the LLM when the
+// business's own name/subtype corroborates — this stops a batch slip tagging a restaurant as a
+// hospital. NOT for pharmacy/doctor/dentist/law-firm, whose real names often lack the keyword.
+const CORROBORATE = new Set(['hospital', 'bank', 'school']);
 
 interface Row { id: string; name_en: string | null; subtype: string | null; type: string | null; category_group: string | null; district: string | null; source_description: string | null }
 
@@ -26,7 +31,7 @@ const SYSTEM =
   'list "index | name | raw category | district | what the business says about itself". Return ONLY JSON: {"results":[{"i":<index>,"category":' +
   '"<exactly one taxonomy key>","subtype":"<short specific type, or empty>","tags":["short","tags"]}]} — one ' +
   'entry per index. The category MUST be exactly one of these keys:\n' + classifyPromptList() +
-  '\nJudge from the name, the raw category, AND what the business says about itself (often the clearest signal). If genuinely unclear, use general-vendor. Keep tags short ' +
+  '\nJudge from the name, the raw category, AND what the business says about itself (often the clearest signal). Classify what the business primarily IS or SELLS — never a nearby landmark, street or its clientele (being NEAR a hospital does not make it a hospital). Echo back the exact index i we gave each business. If genuinely unclear, use general-vendor. Keep tags short ' +
   '(e.g. cuisine, speciality, service). Do not invent facts — classify only.';
 
 async function classifyChunk(rows: Row[]): Promise<void> {
@@ -38,7 +43,19 @@ async function classifyChunk(rows: Row[]): Promise<void> {
     if (r.error || !r.text) return; // transient — leave rows unmarked, a later call retries
     const j = parseAiJson<{ results?: { i?: number; category?: string; subtype?: string; tags?: string[] }[] }>(r.text);
     if (!Array.isArray(j.results)) return;
-    for (const x of j.results) if (typeof x?.i === 'number') byIndex.set(x.i, coerceClassification(x));
+    for (const x of j.results) {
+      if (typeof x?.i !== 'number' || x.i < 0 || x.i >= rows.length) continue; // bounds-check the index the model echoes back
+      const row = rows[x.i];
+      const cls = coerceClassification(x);
+      // Corroboration guard: accept a high-stakes category only when the business's OWN
+      // name/subtype supports it — stops a batch-alignment slip from tagging a restaurant as a
+      // hospital (the "Sandwich Factory in the hospital bucket" failure the trace exposed).
+      if (CORROBORATE.has(cls.category)) {
+        const nameCat = mapToCanonical(`${row.name_en || ''} ${row.subtype || ''}`);
+        if (nameCat !== cls.category) cls.category = 'general-vendor';
+      }
+      byIndex.set(x.i, cls);
+    }
   } catch { return; }
   // Write each row (a parse-gap for one index falls back to general-vendor, still marked
   // so the queue advances — only a whole-call error leaves the chunk for a retry).
