@@ -343,6 +343,13 @@ async function handler(req: Request): Promise<Response> {
   const stock = u.searchParams.get('stock') === '1';
   const wantReviews = u.searchParams.get('reviews') === '1'; // opt-in: fetch+store Google review snippets (pricier SKU)
   const retry = u.searchParams.get('retry') === '1';         // re-run rows parked at enrich_status processing/error
+  // status target: published (default, on-site), listed (the ~14.7k concierge-only import),
+  // or all (both). Lets a slow background drain enrich the listed set, which the hardcoded
+  // published-only query never reached.
+  const statusParam = (u.searchParams.get('status') || 'published').toLowerCase();
+  const statusSel = statusParam === 'listed' ? 'status=eq.listed'
+    : statusParam === 'all' ? 'status=in.(published,listed)'
+    : 'status=eq.published';
 
   // ── diagnostics: ?debug=<name substring> — inspects ONE listing, writes nothing,
   // and reports exactly what the edge sees so we can tell why a photo is missing.
@@ -382,7 +389,7 @@ async function handler(req: Request): Promise<Response> {
   const filter = redo ? '' : (retry ? '&enrich_status=in.(processing,error)' : '&enriched_at=is.null');
   const isJunk = (nm: string) => /^\d+$/.test(nm.trim()) || /\[closed\]/i.test(nm); // numeric codes + closed places
 
-  const sel = await rest(`${cfg.table}?select=${cfg.select}&status=eq.published${filter}&order=${cfg.nameField}.asc&limit=${limit}`);
+  const sel = await rest(`${cfg.table}?select=${cfg.select}&${statusSel}${filter}&order=${cfg.nameField}.asc&limit=${limit}`);
   if (!sel.ok) return new Response(JSON.stringify({ ok: false, error: `select ${sel.status}` }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   const rows = await sel.json() as Record<string, unknown>[];
 
@@ -424,7 +431,7 @@ async function handler(req: Request): Promise<Response> {
     }
   }
 
-  const head = await rest(`${cfg.table}?select=id&status=eq.published&enriched_at=is.null`, { method: 'HEAD', headers: { Prefer: 'count=exact' } });
+  const head = await rest(`${cfg.table}?select=id&${statusSel}&enriched_at=is.null`, { method: 'HEAD', headers: { Prefer: 'count=exact' } });
   const remaining = Number((head.headers.get('content-range') || '*/0').split('/')[1] || 0);
 
   return new Response(JSON.stringify({ ok: true, entity, processed: updated, fetched: rows.length, stoppedEarly, remaining, results }, null, 2), { headers: { 'Content-Type': 'application/json' } });
