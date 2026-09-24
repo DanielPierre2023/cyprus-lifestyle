@@ -26,7 +26,7 @@ export default function FieldNoteForm() {
         body: JSON.stringify({ ...f, rating: f.rating || undefined }),
       });
       const d = await r.json();
-      if (d.ok) { setMsg(d.drafted ? '✓ Saved and drafted — the piece is now in Editing.' : `✓ ${d.note || 'Saved.'}`); if (d.drafted) setTimeout(() => location.reload(), 1400); }
+      if (d.ok) { setMsg(`✓ ${d.note || 'Saved.'}`); if (d.queuedDraft) setTimeout(() => location.reload(), 1600); }
       else setMsg(d.error || 'Failed to save.');
     } catch (e2) { setMsg((e2 as Error).message); }
     setBusy(false);

@@ -1,18 +1,17 @@
 // POST /api/admin/editorial/idea   (admin session-gated — no secret in the browser)
 // Body: { id, action: 'approve'|'reject'|'assign', reason?, assignedTo? }
-//   approve → create a pipeline piece (blog_posts, commissioned) from the idea, link
-//             it, and — when the autonomy setting is 'auto-draft' — write the first
-//             draft in-house (AI editor) and move it to 'editing'.
+//   approve → create a pipeline piece (blog_posts, commissioned) from the idea and link
+//             it. When autonomy is 'auto-draft', the writing is handed to the dedicated
+//             /api/editorial/draft route IN THE BACKGROUND (via after()), so this request
+//             returns fast and the full Sonnet draft runs in its own 60s function instead
+//             of timing out inline.
 //   reject  → mark the idea rejected (with an optional reason).
 //   assign  → set assigned_to and mark it assigned.
-// This is how the Idea Board acts on the planner's suggestions.
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { uniqueSlug } from '@/lib/util';
-import { subjectFromListing } from '@/lib/editorial/gate';
-import { suggestCommission, isFranchise, getFranchise, mdToHtml, type PipelineSubject } from '@/lib/editorial/pipeline';
-import { draftPiece } from '@/lib/editorial/generate';
+import { suggestCommission, isFranchise, getFranchise } from '@/lib/editorial/pipeline';
 import { getEditorialSettings } from '@/lib/editorial/settings';
 
 export const runtime = 'nodejs';
@@ -24,32 +23,16 @@ interface Idea {
   research_brief: Record<string, unknown> | null; status: string; blog_post_id: string | null;
 }
 
-function briefToNotes(brief: Record<string, unknown> | null, angle: string | null): string {
-  if (!brief) return angle ? `Angle: ${angle}` : '';
-  const parts: string[] = [];
-  if (angle) parts.push(`Angle: ${angle}`);
-  if (typeof brief.subjectHint === 'string' && brief.subjectHint) parts.push(`Subject: ${brief.subjectHint}`);
-  if (Array.isArray(brief.outline) && brief.outline.length) parts.push(`Outline:\n- ${(brief.outline as string[]).join('\n- ')}`);
-  if (Array.isArray(brief.verify) && brief.verify.length) parts.push(`Must verify (do not assert unverified):\n- ${(brief.verify as string[]).join('\n- ')}`);
-  return parts.join('\n\n');
-}
-
-async function approve(idea: Idea): Promise<Record<string, unknown>> {
+async function approve(req: NextRequest, idea: Idea): Promise<Record<string, unknown>> {
   const sb = supabaseAdmin();
   const settings = await getEditorialSettings();
 
-  // Ground on the subject listing where the planner named one.
-  let subject: PipelineSubject | null = null;
-  if (idea.subject_listing_id) {
-    const { data } = await sb.from('directory_listings').select('*').eq('id', idea.subject_listing_id).maybeSingle();
-    subject = subjectFromListing(data as Record<string, unknown> | null);
-  }
   const brief = idea.research_brief || {};
   const wantFranchise = typeof brief.franchise === 'string' ? brief.franchise : null;
   const suggestion = suggestCommission({
-    subjectName: subject?.name ?? idea.working_title,
-    category: subject?.category ?? idea.subcategory_key,
-    district: subject?.district ?? null,
+    subjectName: idea.working_title,
+    category: idea.subcategory_key,
+    district: null,
     franchise: wantFranchise,
   });
   const franchise = wantFranchise && isFranchise(wantFranchise) ? wantFranchise : suggestion.franchise;
@@ -75,35 +58,33 @@ async function approve(idea: Idea): Promise<Record<string, unknown>> {
 
   await sb.from('editorial_ideas').update({ status: 'approved', blog_post_id: blogId, assigned_to: 'ai' }).eq('id', idea.id);
 
-  // Auto-draft when autonomy is switched on: the AI editor writes the first version.
-  let drafted = false;
+  // Auto-draft: hand the heavy write to the dedicated draft route in the background.
+  // It runs as its own function (full 60s) and advances the piece to 'drafting'; this
+  // request returns immediately, so it never times out.
+  let queuedDraft = false;
   if (settings.autonomy === 'auto-draft') {
-    try {
-      const d = await draftPiece({
-        kind: suggestion.kind,
-        franchise,
-        notes: briefToNotes(brief, idea.angle),
-        subject: subject ?? { name: title, category: idea.subcategory_key, district: null, summary: null, website: null, tags: null },
+    const key = process.env.ENRICH_SECRET || '';
+    if (key) {
+      const origin = req.nextUrl.origin;
+      after(async () => {
+        try {
+          await fetch(`${origin}/api/editorial/draft?key=${encodeURIComponent(key)}&id=${blogId}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+          });
+        } catch { /* the draft route runs as an independent invocation; best effort */ }
       });
-      if (d.bodyMd) {
-        const html = mdToHtml(d.bodyMd);
-        await sb.from('blog_posts').update({
-          title_en: d.title || title,
-          content_en: html,
-          pipeline_status: 'editing',
-          word_count: d.bodyMd.split(/\s+/).filter(Boolean).length,
-        }).eq('id', blogId);
-        await sb.from('editorial_ideas').update({ status: 'drafting' }).eq('id', idea.id);
-        drafted = true;
-      }
-    } catch { /* leave it commissioned; the /api/editorial/draft route can finish it */ }
+      await sb.from('editorial_ideas').update({ status: 'drafting' }).eq('id', idea.id);
+      queuedDraft = true;
+    }
   }
 
   return {
     ok: true, action: 'approve', blogPostId: blogId, slug,
     franchise, franchiseName: getFranchise(franchise)?.name ?? franchise,
-    autoDrafted: drafted,
-    note: drafted ? 'Approved and drafted — now in Editing.' : 'Approved and commissioned. Draft it via the pipeline (auto-draft is off, or it will run next).',
+    queuedDraft,
+    note: queuedDraft
+      ? 'Approved and commissioned. The AI editor is drafting it in the background — it will appear in the pipeline (Editing) shortly.'
+      : 'Approved and commissioned. Draft it from the pipeline.',
   };
 }
 
@@ -135,5 +116,5 @@ export async function POST(req: NextRequest) {
   if (idea.status === 'approved' || idea.status === 'drafting' || idea.blog_post_id) {
     return NextResponse.json({ ok: false, error: 'This idea has already been approved.' }, { status: 409 });
   }
-  return NextResponse.json(await approve(idea));
+  return NextResponse.json(await approve(req, idea));
 }

@@ -22,8 +22,8 @@ export default function IdeaActions({ id }: { id: string }) {
       const d = await r.json();
       if (d.ok) {
         setState('done');
-        setMsg(action === 'approve' ? (d.autoDrafted ? 'Approved · drafted' : 'Approved · commissioned') : 'Rejected');
-        setTimeout(() => location.reload(), 800);
+        setMsg(action === 'approve' ? (d.queuedDraft ? 'Approved · drafting…' : 'Approved · commissioned') : 'Rejected');
+        setTimeout(() => location.reload(), 900);
       } else { setState('err'); setMsg(d.error || 'Failed'); }
     } catch (e) { setState('err'); setMsg((e as Error).message); }
   }
