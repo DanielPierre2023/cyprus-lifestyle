@@ -18,6 +18,7 @@ import {
   articleJsonLd,
   faqJsonLd,
   breadcrumbJsonLd,
+  reviewJsonLd,
   ld,
 } from '@/lib/seo';
 
@@ -28,6 +29,8 @@ export const article = articleJsonLd;
 export const faqPage = faqJsonLd;
 /** BreadcrumbList JSON-LD. `breadcrumb(locale, [{ name, path }])` in order. */
 export const breadcrumb = breadcrumbJsonLd;
+/** Review JSON-LD for a review piece (star snippets when a real rating exists). */
+export const review = reviewJsonLd;
 
 type ListingArg = Parameters<typeof listingJsonLd>[0] & {
   phone?: string | null;

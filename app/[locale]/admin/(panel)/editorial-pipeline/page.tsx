@@ -4,6 +4,7 @@ import {
   type PipelineStatus,
 } from '@/lib/editorial/pipeline';
 import CoverActions from '@/components/admin/CoverActions';
+import PackageActions from '@/components/admin/PackageActions';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,7 @@ type Piece = {
   angle: string | null; subject_listing_id: string | null;
   questions: unknown; scheduled_at: string | null; source_lang: string | null;
   updated_at: string | null; title_en: string | null; title_el: string | null;
-  cover_image: string | null;
+  cover_image: string | null; seo_title_en: string | null; excerpt_en: string | null;
 };
 
 // Human labels + the gold-scale accent used across the admin.
@@ -38,7 +39,7 @@ export default async function EditorialPipelineTab() {
   const sb = await supabaseServer();
 
   const { data } = await sb.from('blog_posts')
-    .select('id, slug, kind, franchise, pipeline_status, angle, subject_listing_id, questions, scheduled_at, source_lang, updated_at, title_en, title_el, cover_image')
+    .select('id, slug, kind, franchise, pipeline_status, angle, subject_listing_id, questions, scheduled_at, source_lang, updated_at, title_en, title_el, cover_image, seo_title_en, excerpt_en')
     .not('pipeline_status', 'is', null)
     .order('updated_at', { ascending: false })
     .limit(400);
@@ -113,7 +114,10 @@ export default async function EditorialPipelineTab() {
                       </div>
                       {subj ? <div className="sub" style={{ margin: '2px 0 0', fontSize: 11, color: '#C9A24C' }}>↳ {subj}</div> : null}
                       {st === 'scheduled' && p.scheduled_at ? <div className="sub" style={{ margin: '2px 0 0', fontSize: 11 }}>{new Date(p.scheduled_at).toLocaleString('en-GB')}</div> : null}
-                      <div style={{ marginTop: 6 }}><CoverActions id={p.id} hasCover={!!p.cover_image} /></div>
+                      <div style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <CoverActions id={p.id} hasCover={!!p.cover_image} />
+                        <PackageActions id={p.id} hasSeo={!!(p.seo_title_en || p.excerpt_en)} />
+                      </div>
                     </div>
                   );
                 })}

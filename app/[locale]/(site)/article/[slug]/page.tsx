@@ -3,9 +3,9 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { getArticle, getByCategory, getLatest, getEventsByDistrict, getUpcomingEvents, type Card, type EventItem } from '@/lib/queries';
+import { getArticle, getByCategory, getLatest, getEventsByDistrict, getUpcomingEvents, getReviewSubject, type Card, type EventItem } from '@/lib/queries';
 import { pageMetadata } from '@/lib/seo';
-import { JsonLd, article, breadcrumb } from '@/lib/seo/jsonld';
+import { JsonLd, article, breadcrumb, faqPage, review } from '@/lib/seo/jsonld';
 import ArticleCard from '@/components/ArticleCard';
 import CommentSection from '@/components/CommentSection';
 import CoverImage from '@/components/CoverImage';
@@ -122,10 +122,29 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
     { name: a.title, path: `/article/${a.slug}` },
   ]);
 
+  // FAQ rich result ("People also ask") — invisible structured data.
+  const faqLd = a.faq.length ? faqPage(a.faq) : null;
+
+  // Review rich result — star snippets, emitted ONLY when a real rating exists
+  // (from an editor's field-note visit) and the reviewed business is known.
+  let reviewLd: Record<string, unknown> | null = null;
+  if (a.review_rating && a.subject_listing_id) {
+    const subject = await getReviewSubject(l, a.subject_listing_id);
+    if (subject) {
+      reviewLd = review({
+        locale: l, slug: a.slug, headline: a.title, rating: a.review_rating,
+        author: a.author_name, authorSlug: a.author_slug, publishedAt: a.published_at,
+        item: subject,
+      });
+    }
+  }
+
   return (
     <>
       <JsonLd data={artLd} />
       <JsonLd data={crumbLd} />
+      {faqLd ? <JsonLd data={faqLd} /> : null}
+      {reviewLd ? <JsonLd data={reviewLd} /> : null}
       <article>
         <header className="article-hero">
           <CoverImage src={a.cover_image} seed={a.slug} alt="" className="hero-media" sizes="100vw" priority />

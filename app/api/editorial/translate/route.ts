@@ -6,8 +6,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { denyReason } from '@/lib/editorial/gate';
-import { translatePiece } from '@/lib/editorial/generate';
+import { translatePiece, translatePackage, packagePiece } from '@/lib/editorial/generate';
 import { LOCALES } from '@/lib/editorial/pipeline';
+import { packageColumns, packageFromPiece, packageIsEmpty, pieceToPackageInput } from '@/lib/editorial/packageWrite';
+import type { PackageResult } from '@/lib/editorial/generate';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -30,13 +32,30 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
   // Mark the piece as being translated.
   await sb.from('blog_posts').update({ pipeline_status: 'translating' }).eq('id', id);
 
+  // The SEO + editorial package is translated alongside the body, so every edition
+  // ships complete (excerpt, summary, SEO title/description, tags, FAQ). If the source
+  // edition has no package yet (an older piece), generate it once from the source body.
+  let sourcePkg = packageFromPiece(p, source);
+  if (packageIsEmpty(sourcePkg)) {
+    const gen = await packagePiece(pieceToPackageInput(p, source, srcBody));
+    if (!packageIsEmpty(gen)) {
+      sourcePkg = gen;
+      await sb.from('blog_posts').update(packageColumns(source, gen)).eq('id', id);
+    }
+  }
+  const havePkg = !packageIsEmpty(sourcePkg);
+
   // Loop the seven locales; the source is a no-op. The other six run in parallel
-  // (Haiku, independent) so the whole set finishes within the function budget.
+  // (Haiku, independent) so the whole set finishes within the function budget. Each
+  // locale translates the body AND the package concurrently.
   const targets = LOCALES.filter((l) => l !== source);
   const results = await Promise.all(
     targets.map(async (locale) => {
-      const t = await translatePiece(srcTitle, srcBody, locale);
-      return { locale, ...t };
+      const [t, pkg] = await Promise.all([
+        translatePiece(srcTitle, srcBody, locale),
+        havePkg ? translatePackage(sourcePkg, locale) : Promise.resolve<PackageResult | null>(null),
+      ]);
+      return { locale, ...t, pkg };
     }),
   );
 
@@ -44,6 +63,9 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
   const translated: string[] = [];
   const failed: { locale: string; error: string }[] = [];
   for (const r of results) {
+    // The package is independent of the body: store it whenever we have one, even if
+    // the body translation for that edition failed and will be retried.
+    if (r.pkg && !packageIsEmpty(r.pkg)) Object.assign(upd, packageColumns(r.locale, r.pkg));
     if (r.error || !r.body) { failed.push({ locale: r.locale, error: r.error || 'empty translation' }); continue; }
     upd[`content_${r.locale}`] = r.body;
     if (r.title) upd[`title_${r.locale}`] = r.title;

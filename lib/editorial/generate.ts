@@ -19,6 +19,11 @@ import {
   type PipelineSubject, type PieceKind,
 } from '@/lib/editorial/pipeline';
 import { craftBlock, antiAiRules, deAiScrub, lintAiTells, polishSystem } from '@/lib/editorial/craft';
+import {
+  packageSystem, packageUser, translatePackageSystem, translatePackageUser,
+  coercePackage, fillPackage, clampText, SEO,
+  type PackageFields,
+} from '@/lib/editorial/seo';
 
 // ── grounding ─────────────────────────────────────────────────────────────────
 // A compact block of relevant knowledge-base intents, so the dossier is anchored in
@@ -182,4 +187,88 @@ export async function polishPiece(
   const outBody = deAiScrub(typeof j.body_md === 'string' ? j.body_md.trim() : '');
   if (!outBody) return { title: outTitle, bodyMd: '', tellsBefore, tellsAfter: tellsBefore, error: 'Could not parse the polished body from the model response.' };
   return { title: outTitle, bodyMd: outBody, tellsBefore, tellsAfter: lintAiTells(`${outTitle}\n${outBody}`) };
+}
+
+// ── 5. package: the SEO + editorial package for one edition ───────────────────────
+// From a finished title + body, produce the standfirst (excerpt), the card/search
+// summary, the SEO title + meta description, tags, and FAQ — in the source language.
+// Haiku keeps it cheap; every text field is de-AI-scrubbed and length-clamped, and a
+// deterministic fallback guarantees no field is ever left empty.
+export interface PackageInput {
+  title: string;
+  body: string;                 // markdown or HTML
+  locale?: string;              // source locale (for language + anti-AI rules)
+  category?: string | null;
+  place?: string | null;        // district, e.g. 'Limassol'
+  franchise?: string | null;
+  kind?: string | null;
+}
+export interface PackageResult extends PackageFields { error?: string }
+
+function scrubClampPackage(p: PackageFields): PackageFields {
+  return {
+    seoTitle: clampText(deAiScrub(p.seoTitle), SEO.titleMax),
+    seoDescription: clampText(deAiScrub(p.seoDescription), SEO.descMax),
+    excerpt: clampText(deAiScrub(p.excerpt), SEO.excerptMax),
+    summary: clampText(deAiScrub(p.summary), SEO.summaryMax),
+    tags: p.tags,
+    faq: p.faq.map((f) => ({ q: deAiScrub(f.q), a: clampText(deAiScrub(f.a), 320) })),
+  };
+}
+
+export async function packagePiece(input: PackageInput): Promise<PackageResult> {
+  const title = String(input.title || '').trim();
+  const body = String(input.body || '');
+  if (!title && !body.trim()) {
+    return { seoTitle: '', seoDescription: '', excerpt: '', summary: '', tags: [], faq: [], error: 'Nothing to package (no title or body).' };
+  }
+  const locale = input.locale && isLocale(input.locale) ? input.locale : 'en';
+  const langName = isLocale(locale) ? LOCALE_NAMES[locale] : 'English';
+
+  const r = await callClaude({
+    systemInstruction: packageSystem({
+      langName, category: input.category ?? null, place: input.place ?? null,
+      franchise: input.franchise ?? null, kind: input.kind ?? null,
+    }) + '\n\n' + antiAiRules(langName),
+    userMessage: packageUser(title, body),
+    model: CLAUDE_HAIKU,
+    jsonMode: true,
+    maxTokens: 1200,
+    timeoutMs: 45_000,
+    fn: 'editorial-package',
+  });
+  if (r.error || !r.text) {
+    // Degrade to the deterministic package rather than leaving fields empty.
+    return { ...fillPackage({}, title, body), error: r.error || 'No response from the model.' };
+  }
+  const parsed = scrubClampPackage(coercePackage(parseAiJson(r.text)));
+  return fillPackage(parsed, title, body);
+}
+
+// ── 6. translate the package into a target edition ───────────────────────────────
+// Translates/localises an existing package (from the source language) into a target
+// locale, enforcing the SEO length budgets in that language. Any field the model
+// leaves empty falls back to the source value (better than blank).
+export async function translatePackage(pkg: PackageFields, targetLocale: string): Promise<PackageResult> {
+  const langName = isLocale(targetLocale) ? LOCALE_NAMES[targetLocale] : targetLocale;
+  const r = await callClaude({
+    systemInstruction: translatePackageSystem(langName) + '\n\n' + antiAiRules(langName),
+    userMessage: translatePackageUser(pkg),
+    model: CLAUDE_HAIKU,
+    jsonMode: true,
+    maxTokens: 1200,
+    timeoutMs: 45_000,
+    fn: 'editorial-translate-package',
+  });
+  if (r.error || !r.text) return { ...pkg, error: r.error || 'No response from the model.' };
+  const t = scrubClampPackage(coercePackage(parseAiJson(r.text)));
+  // Per-field fallback to the source package so a partial translation is never blank.
+  return {
+    seoTitle: t.seoTitle || pkg.seoTitle,
+    seoDescription: t.seoDescription || pkg.seoDescription,
+    excerpt: t.excerpt || pkg.excerpt,
+    summary: t.summary || pkg.summary,
+    tags: t.tags.length ? t.tags : pkg.tags,
+    faq: t.faq.length ? t.faq : pkg.faq,
+  };
 }

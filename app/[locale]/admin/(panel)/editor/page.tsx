@@ -64,6 +64,34 @@ export default function EditorTab() {
     else setMsg(`AI clean (${tab}): nothing to change (score ${r.scoreBefore}). ${tab === 'en' || tab === 'ro' ? 'The AI pass runs for EL/AR only.' : ''}`);
   }
 
+  // AI SEO: write the standfirst (excerpt), the card/search summary, the SEO title +
+  // meta description (and, in English, the tags) for the ACTIVE language from its body.
+  // Stateless — fills the form; nothing is saved until you click Save.
+  async function aiSeo() {
+    const title = f[`title_${tab}`] || f.title_en || '';
+    const bodyHtml = f[`content_${tab}`] || f.content_en || '';
+    if (!title && !bodyHtml) { setMsg('Write a headline and body first.'); return; }
+    setBusy('seo'); setMsg('Writing SEO…');
+    try {
+      const r = await fetch('/api/admin/editorial/package', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: { title, body: bodyHtml, locale: tab, category: f.category, place: f.county || '' } }),
+      }).then((x) => x.json());
+      if (!r.ok || !r.package) { setMsg(r.error || 'SEO generation failed.'); setBusy(''); return; }
+      const p = r.package;
+      setF((prev) => ({
+        ...prev,
+        [`excerpt_${tab}`]: p.excerpt || prev[`excerpt_${tab}`],
+        [`summary_${tab}`]: p.summary || prev[`summary_${tab}`],
+        [`seo_title_${tab}`]: p.seoTitle || prev[`seo_title_${tab}`],
+        [`seo_description_${tab}`]: p.seoDescription || prev[`seo_description_${tab}`],
+        ...(tab === 'en' && Array.isArray(p.tags) && p.tags.length ? { tags_en_str: p.tags.join(', ') } : {}),
+      }));
+      setMsg(`AI SEO (${tab}): standfirst, summary and SEO title/description${tab === 'en' ? ' + tags' : ''} filled. Review and save.`);
+    } catch (e) { setMsg((e as Error).message); }
+    setBusy('');
+  }
+
   async function save(publish?: boolean) {
     setBusy('save'); setMsg('');
     const status = publish ? 'published' : f.status;
@@ -155,6 +183,7 @@ export default function EditorTab() {
         <button className="abtn" disabled={!!busy} onClick={() => save(true)}>Save & publish</button>
         <button className="abtn ghost" onClick={proof}>Proof ({tab})</button>
         <button className="abtn ghost" disabled={!!busy} onClick={aiClean}>{busy === 'ai' ? 'Cleaning…' : `AI clean (${tab})`}</button>
+        <button className="abtn ghost" disabled={!!busy} onClick={aiSeo}>{busy === 'seo' ? 'Writing SEO…' : `AI SEO (${tab})`}</button>
       </div>
       {msg ? <p style={{ color: '#1c6b34', marginTop: 10 }}>{msg}</p> : null}
     </>

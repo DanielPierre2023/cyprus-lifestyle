@@ -17,6 +17,14 @@ export interface Article extends Card {
   content: string; summary: string; tags: string[]; county: string | null;
   seo_title: string; seo_description: string; source_url: string | null; updated_at: string | null;
   sponsored: boolean; sponsor_name: string | null; sponsor_url: string | null;
+  faq: { q: string; a: string }[];
+  review_rating: number | null; subject_listing_id: string | null; franchise: string | null;
+}
+
+/** The reviewed business, for Review star structured data on review pieces. */
+export interface ReviewSubject {
+  name: string; type: string; image: string | null; url: string | null;
+  district: string | null; address: string | null;
 }
 
 function pick(r: Record<string, unknown>, base: string, locale: Locale): string {
@@ -86,27 +94,58 @@ export async function searchArticles(locale: Locale, q: string, limit = 24): Pro
 export async function getArticle(locale: Locale, slug: string): Promise<Article | null> {
   const l = locale;
   const cols = `id, slug, category, county, cover_image, cover_image_credit, author_name, published_at, updated_at, reading_time_min, source_url,
-    sponsored, sponsor_name, sponsor_url,
+    sponsored, sponsor_name, sponsor_url, review_rating, subject_listing_id, franchise,
     title_${l}, title_en, excerpt_${l}, excerpt_en, summary_${l}, summary_en, content_${l}, content_en,
-    seo_title_${l}, seo_title_en, seo_description_${l}, seo_description_en, tags_${l}, tags_en, author:authors(slug)`;
+    seo_title_${l}, seo_title_en, seo_description_${l}, seo_description_en, tags_${l}, tags_en,
+    faq_${l}, faq_en, author:authors(slug)`;
   const { data } = await supabaseAdmin().from('blog_posts').select(cols)
     .eq('status', 'published').eq('slug', slug).maybeSingle();
   if (!data) return null;
   const r = data as unknown as Record<string, unknown>;
   const tags = (r[`tags_${l}`] as string[]) || (r.tags_en as string[]) || [];
+  const faqRaw = (Array.isArray(r[`faq_${l}`]) && (r[`faq_${l}`] as unknown[]).length ? r[`faq_${l}`] : r.faq_en) as unknown;
+  const faq = (Array.isArray(faqRaw) ? faqRaw : [])
+    .map((x) => (x && typeof x === 'object' ? x as Record<string, unknown> : {}))
+    .map((o) => ({ q: String(o.q ?? '').trim(), a: String(o.a ?? '').trim() }))
+    .filter((f) => f.q && f.a);
+  const rating = Number(r.review_rating);
   return {
     ...toCard(r, l),
     county: (r.county as string) ?? null,
     content: pick(r, 'content', l),
     summary: pick(r, 'summary', l),
     seo_title: pick(r, 'seo_title', l) || pick(r, 'title', l),
-    seo_description: pick(r, 'seo_description', l) || pick(r, 'excerpt', l),
+    seo_description: pick(r, 'seo_description', l) || pick(r, 'summary', l) || pick(r, 'excerpt', l),
     source_url: (r.source_url as string) ?? null,
     updated_at: (r.updated_at as string) ?? null,
     tags: Array.isArray(tags) ? tags : [],
     sponsored: Boolean(r.sponsored),
     sponsor_name: (r.sponsor_name as string) ?? null,
     sponsor_url: (r.sponsor_url as string) ?? null,
+    faq,
+    review_rating: Number.isFinite(rating) && rating > 0 ? rating : null,
+    subject_listing_id: (r.subject_listing_id as string) ?? null,
+    franchise: (r.franchise as string) ?? null,
+  };
+}
+
+/** Fetch the reviewed business for Review star structured data (review pieces). */
+export async function getReviewSubject(locale: Locale, id: string): Promise<ReviewSubject | null> {
+  const l = locale;
+  const { data } = await supabaseAdmin().from('directory_listings')
+    .select(`type, district, address, url, image, name_${l}, name_en`)
+    .eq('id', id).maybeSingle();
+  if (!data) return null;
+  const r = data as Record<string, unknown>;
+  const name = String(r[`name_${l}`] || r.name_en || '').trim();
+  if (!name) return null;
+  return {
+    name,
+    type: String(r.type || 'vendor'),
+    image: (r.image as string) ?? null,
+    url: (r.url as string) ?? null,
+    district: (r.district as string) ?? null,
+    address: (r.address as string) ?? null,
   };
 }
 

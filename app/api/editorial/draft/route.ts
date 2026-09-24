@@ -12,6 +12,8 @@ import { draftPiece } from '@/lib/editorial/generate';
 import { mdToHtml, isPieceKind, isFranchise, type PipelineSubject, type PieceKind } from '@/lib/editorial/pipeline';
 import { getEditorialSettings } from '@/lib/editorial/settings';
 import { attachCover, coverInputFromPiece, type CoverResult } from '@/lib/editorial/cover';
+import { packagePiece } from '@/lib/editorial/generate';
+import { packageColumns, pieceToPackageInput, packageIsEmpty } from '@/lib/editorial/packageWrite';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -72,29 +74,50 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
   const { error: ue } = await sb.from('blog_posts').update(upd).eq('id', id);
   if (ue) return { ok: false, error: `Drafted the piece but could not save it: ${ue.message}` };
 
-  // Auto-attach a real, matching cover (best-effort, STOCK only, time-boxed) — same
-  // policy as the admin draft route: never risk the 60s budget, AI covers are on-demand.
+  // Enrich the fresh draft (best-effort, time-boxed, CONCURRENT) — same policy as the
+  // admin draft route: a real cover photo + the source-edition SEO/editorial package
+  // (excerpt, summary, SEO title/description, tags, FAQ). Never risks the 60s budget;
+  // translation carries the package into the other six editions.
+  const box = <T>(pr: Promise<T>, ms: number) =>
+    Promise.race<T | null>([pr, new Promise<null>((r) => setTimeout(() => r(null), ms))]);
+  const titleForMeta = res.title || (p[`title_${sourceLang}`] as string) || '';
+
   let cover: { source: string; url: string } | null = null;
+  let seo: { seo: boolean; tags: number; faq: number } | null = null;
   try {
     const settings = await getEditorialSettings();
-    if (settings.autoCover && !p.cover_image) {
-      const ci = coverInputFromPiece({ ...p, [`title_${sourceLang}`]: res.title || p[`title_${sourceLang}`] }, sourceLang);
-      const c = await Promise.race<CoverResult | null>([
-        attachCover(id, ci, 'stock', { existing: (p.cover_image as string) || null }),
-        new Promise<null>((r) => setTimeout(() => r(null), 12000)),
-      ]);
-      if (c) cover = { source: c.source, url: c.url };
-    }
-  } catch { /* imagery is best-effort */ }
+    const wantCover = settings.autoCover && !p.cover_image;
+    const [c, sk] = await Promise.all([
+      wantCover
+        ? box(attachCover(
+            id,
+            coverInputFromPiece({ ...p, [`title_${sourceLang}`]: titleForMeta }, sourceLang),
+            'stock',
+            { existing: (p.cover_image as string) || null },
+          ), 12000)
+        : Promise.resolve<CoverResult | null>(null),
+      box((async () => {
+        try {
+          const pkg = await packagePiece(pieceToPackageInput({ ...p, [`title_${sourceLang}`]: titleForMeta }, sourceLang, res.bodyMd));
+          if (packageIsEmpty(pkg)) return null;
+          await sb.from('blog_posts').update(packageColumns(sourceLang, pkg)).eq('id', id);
+          return pkg;
+        } catch { return null; }
+      })(), 16000),
+    ]);
+    if (c) cover = { source: c.source, url: c.url };
+    if (sk) seo = { seo: !!sk.seoTitle, tags: sk.tags.length, faq: sk.faq.length };
+  } catch { /* enrichment is best-effort */ }
 
   return {
     ok: true,
     id,
-    title: res.title || (p[`title_${sourceLang}`] as string) || '',
+    title: titleForMeta,
     words,
     sourceLang,
     pipeline_status: 'drafting',
     cover,
+    seo,
     note: `Draft written (${words} words). Next: edit, then POST /api/editorial/translate?id=${id}`,
   };
 }

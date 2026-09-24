@@ -165,6 +165,47 @@ export function listingJsonLd(a: {
   };
 }
 
+/** Review JSON-LD for a review piece (restaurant/hotel/etc.). Emits star-rating
+ *  structured data ONLY when a real rating is present (never fabricated). */
+export function reviewJsonLd(a: {
+  locale: Locale; slug: string; headline: string; rating?: number | null;
+  author?: string | null; authorSlug?: string | null; publishedAt?: string | null;
+  item: { name: string; type?: string | null; image?: string | null; url?: string | null; district?: string | null; address?: string | null };
+}) {
+  const author = a.author && a.authorSlug
+    ? { '@type': 'Person', name: a.author, url: urlFor(a.locale, `/author/${a.authorSlug}`) }
+    : { '@type': 'Organization', name: a.author || SITE_NAME, url: SITE_URL };
+  const itemReviewed: Record<string, unknown> = {
+    '@type': LISTING_SCHEMA_TYPE[(a.item.type || '').toLowerCase()] || 'LocalBusiness',
+    name: a.item.name,
+    image: a.item.image ? [a.item.image] : undefined,
+    url: a.item.url || undefined,
+    areaServed: 'CY',
+  };
+  if (a.item.address || a.item.district) {
+    itemReviewed.address = {
+      '@type': 'PostalAddress',
+      streetAddress: a.item.address || undefined,
+      addressRegion: a.item.district ? a.item.district[0].toUpperCase() + a.item.district.slice(1) : undefined,
+      addressCountry: 'CY',
+    };
+  }
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Review',
+    mainEntityOfPage: { '@type': 'WebPage', '@id': urlFor(a.locale, `/article/${a.slug}`) },
+    name: a.headline,
+    itemReviewed,
+    reviewRating: (typeof a.rating === 'number' && a.rating > 0)
+      ? { '@type': 'Rating', ratingValue: a.rating, bestRating: 5, worstRating: 1 }
+      : undefined,
+    author,
+    datePublished: a.publishedAt || undefined,
+    publisher: { '@id': `${SITE_URL}/#organization` },
+    inLanguage: a.locale,
+  };
+}
+
 /** ItemList JSON-LD for a directory listing page. */
 export function itemListJsonLd(locale: Locale, items: { name: string; type: string; slug: string }[]) {
   return {
