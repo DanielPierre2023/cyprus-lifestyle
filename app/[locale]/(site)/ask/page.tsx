@@ -3,7 +3,9 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { isLocale, type Locale } from '@/lib/locales';
 import { Link } from '@/lib/i18n/routing';
-import { breadcrumbJsonLd, ld, pageMetadata } from '@/lib/seo';
+import { pageMetadata } from '@/lib/seo';
+import { JsonLd, breadcrumb, faqPage } from '@/lib/seo/jsonld';
+import { ALL_INTENTS } from '@/lib/knowledge/qa';
 import Concierge, { type ConciergeLabels } from '@/components/Concierge';
 
 export const revalidate = 3600;
@@ -41,14 +43,19 @@ export default async function AskPage({ params }: { params: Promise<{ locale: st
       trust: t('concierge.req.trust'), trustLink: t('concierge.req.trustLink'),
     },
   };
-  const crumbLd = breadcrumbJsonLd(l, [
+  const crumbLd = breadcrumb(l, [
     { name: t('brand.name'), path: '/' },
     { name: t('concierge.title'), path: '/ask' },
   ]);
+  // FAQPage from the knowledge base's real questions + answers (English source —
+  // the same grounding the concierge answers from). A representative sample keeps
+  // the structured data lean while covering the top visitor intents.
+  const faqLd = faqPage(ALL_INTENTS.slice(0, 12).map((h) => ({ q: h.item.q, a: h.item.a })));
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(crumbLd) }} />
+      <JsonLd data={crumbLd} />
+      <JsonLd data={faqLd} />
       <div className="wrap dept">
         <span className="kicker">{t('brand.name')}</span>
         <h1>{t('concierge.title')}</h1>

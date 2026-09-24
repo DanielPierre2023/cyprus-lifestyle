@@ -5,7 +5,8 @@ import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
 import { DIRECTORY_TYPES, getListing, getNearby, getPeers, getEventsByDistrict, getCollectionBySlug } from '@/lib/queries';
 import { collectionSlug, slugifyDistrict, districtLabel } from '@/lib/collections';
-import { breadcrumbJsonLd, ld, listingJsonLd, pageMetadata } from '@/lib/seo';
+import { pageMetadata } from '@/lib/seo';
+import { JsonLd, localBusiness, breadcrumb } from '@/lib/seo/jsonld';
 import DirectoryMap from '@/components/DirectoryMap';
 import CoverImage from '@/components/CoverImage';
 import TrackView from '@/components/TrackView';
@@ -54,12 +55,13 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
 
   const label = t(`directory.${x.type}`);
   const typeLabels: Record<string, string> = Object.fromEntries(DIRECTORY_TYPES.map((ty) => [ty, t(`directory.${ty}`)]));
-  const listLd = listingJsonLd({
+  const listLd = localBusiness({
     locale: l, slug: x.slug, type: x.type, name: x.name, description: x.summary,
     url: x.url, image: x.image, address: x.address, lat: x.lat, lng: x.lng,
     district: x.district, priceRange: x.price_band, rating: x.rating, ratingCount: x.rating_count,
+    phone: x.phone,
   });
-  const crumbLd = breadcrumbJsonLd(l, [
+  const crumbLd = breadcrumb(l, [
     { name: t('brand.name'), path: '/' },
     { name: t('directory.title'), path: '/directory' },
     { name: label, path: `/directory/${x.type}` },
@@ -80,8 +82,8 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
   return (
     <>
       <TrackView slug={x.slug} type={x.type} name={x.name} image={x.image} district={x.district} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(listLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(crumbLd) }} />
+      <JsonLd data={listLd} />
+      <JsonLd data={crumbLd} />
 
       {/* ── Hero ── */}
       <div className="wrap" style={{ paddingTop: 22 }}>

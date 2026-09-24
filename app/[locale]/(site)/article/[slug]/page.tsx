@@ -4,7 +4,8 @@ import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
 import { getArticle, getByCategory, getLatest, getEventsByDistrict, getUpcomingEvents, type Card, type EventItem } from '@/lib/queries';
-import { pageMetadata, articleJsonLd, breadcrumbJsonLd, ld } from '@/lib/seo';
+import { pageMetadata } from '@/lib/seo';
+import { JsonLd, article, breadcrumb } from '@/lib/seo/jsonld';
 import ArticleCard from '@/components/ArticleCard';
 import CommentSection from '@/components/CommentSection';
 import CoverImage from '@/components/CoverImage';
@@ -110,12 +111,12 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
   }
   const ask = ASK[l] || ASK.en;
 
-  const artLd = articleJsonLd({
+  const artLd = article({
     locale: l, slug: a.slug, title: a.title, description: a.excerpt,
     image: a.cover_image, author: a.author_name, authorSlug: a.author_slug,
     publishedAt: a.published_at, updatedAt: a.updated_at, section: catLabel || a.category,
   });
-  const crumbLd = breadcrumbJsonLd(l, [
+  const crumbLd = breadcrumb(l, [
     { name: t('brand.name'), path: '/' },
     ...(a.category ? [{ name: catLabel, path: `/${a.category}` }] : []),
     { name: a.title, path: `/article/${a.slug}` },
@@ -123,8 +124,8 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(artLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(crumbLd) }} />
+      <JsonLd data={artLd} />
+      <JsonLd data={crumbLd} />
       <article>
         <header className="article-hero">
           <CoverImage src={a.cover_image} seed={a.slug} alt="" className="hero-media" sizes="100vw" priority />

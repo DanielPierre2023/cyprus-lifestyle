@@ -28,6 +28,15 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: { default: SITE_NAME, template: `%s · ${SITE_NAME}` },
   description: 'The island, in full colour — Cyprus business, property, culture and good living, in seven languages.',
+  // Site-wide self-referential canonical fallback. `'./'` is resolved by Next
+  // against the current request pathname, so every route gets a correct
+  // self-canonical even if it never sets its own. Content pages that call
+  // `pageMetadata()` provide their own `alternates` (canonical + all 7 hreflang
+  // + x-default, computed per-pathname — next-intl's recommended pattern), which
+  // fully override this default. Per-locale hreflang is intentionally NOT set
+  // here: a root layout cannot know the sub-path, and with `as-needed` locale
+  // prefixes a static alternate set would be wrong for sub-pages.
+  alternates: { canonical: './' },
   openGraph: { siteName: SITE_NAME, type: 'website' },
   robots: { index: true, follow: true },
 };

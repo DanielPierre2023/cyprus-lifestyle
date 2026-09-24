@@ -9,6 +9,7 @@ const TABS = [
   { href: '/admin/editor', label: 'Editor' },
   { href: '/admin/ai', label: 'AI' },
   { href: '/admin/editorial', label: 'Editorial Studio' },
+  { href: '/admin/editorial-pipeline', label: 'Editorial Pipeline' },
   { href: '/admin/articles', label: 'Articles (Articole)' },
   { href: '/admin/scraper', label: 'Scraper RSS' },
   { href: '/admin/comments', label: 'Comments (Comentarii)' },
