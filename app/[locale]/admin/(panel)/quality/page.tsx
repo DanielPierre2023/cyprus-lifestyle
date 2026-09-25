@@ -4,6 +4,12 @@ import {
   scanPosts, rankWorst,
   type RawPost, type Edition, type Level,
 } from '@/lib/editorial/qualityScan';
+import RepairActions from '@/components/admin/RepairActions';
+import QualityBulkClean from '@/components/admin/QualityBulkClean';
+
+// AI-tell score at/above which a clean pass is worth a model call (matches the
+// proofread threshold; below this an edition already reads clean/low).
+const REPAIR_THRESHOLD = 16;
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +49,12 @@ export default async function QualityTab() {
 
   const { scanned, perLang, editions } = scanPosts((data as RawPost[] | null) || []);
   const worst = rankWorst(editions, WORST_CAP);
+
+  // Editions a one-click clean can actually improve: translated (not English-served)
+  // and still reading medium+ on the AI-tell score.
+  const repairTargets = worst
+    .filter((f) => !f.untranslated && f.score >= REPAIR_THRESHOLD && f.id)
+    .map((f) => ({ id: f.id, locale: f.lang }));
 
   const totalEditions = LANGS.reduce((a, l) => a + perLang[l].total, 0);
   const totalUntranslated = LANGS.reduce((a, l) => a + perLang[l].untranslated, 0);
@@ -87,12 +99,16 @@ export default async function QualityTab() {
         })}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', borderBottom: '2px solid #C9A24C', paddingBottom: 6, marginTop: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', borderBottom: '2px solid #C9A24C', paddingBottom: 6, marginTop: 22, gap: 16, flexWrap: 'wrap' }}>
         <h1 style={{ fontSize: 18, margin: 0 }}>Worst offenders</h1>
-        <span className="sub" style={{ margin: 0 }}>Untranslated first, then by AI score — up to {WORST_CAP}.</span>
+        <QualityBulkClean targets={repairTargets} />
       </div>
+      <p className="sub" style={{ marginTop: 8 }}>
+        Untranslated first, then by AI score — up to {WORST_CAP}. <strong>Clean</strong> humanises + copy-edits the edition in its own
+        language; <strong>Rewrite</strong> re-reports it natively from the source (deeper, for the poorest translations).
+      </p>
       <table className="adm-t" style={{ marginTop: 10 }}>
-        <thead><tr><th>Article</th><th>Edition</th><th>Status</th></tr></thead>
+        <thead><tr><th>Article</th><th>Edition</th><th>Status</th><th>Fix</th></tr></thead>
         <tbody>
           {worst.map((f, i) => {
             const color = f.untranslated ? '#9a2020' : toneForLevel(f.level);
@@ -111,11 +127,18 @@ export default async function QualityTab() {
                     ? <>Untranslated <span className="sub" style={{ margin: 0 }}>(serving English)</span></>
                     : <>AI: {f.level} · {f.score}</>}
                 </td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  {f.untranslated
+                    ? <span className="sub" style={{ margin: 0 }}>run backfill</span>
+                    : f.id && f.score >= REPAIR_THRESHOLD
+                      ? <RepairActions id={f.id} locale={f.lang} />
+                      : <span className="sub" style={{ margin: 0, color: '#1f7a3f' }}>ok</span>}
+                </td>
               </tr>
             );
           })}
           {worst.length === 0
-            ? <tr><td colSpan={3} className="sub" style={{ margin: 0 }}>{scanned ? 'Every edition is translated and reading clean.' : 'No published articles to scan yet.'}</td></tr>
+            ? <tr><td colSpan={4} className="sub" style={{ margin: 0 }}>{scanned ? 'Every edition is translated and reading clean.' : 'No published articles to scan yet.'}</td></tr>
             : null}
         </tbody>
       </table>
