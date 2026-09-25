@@ -33,6 +33,7 @@ export default function Header() {
           </div>
           <div className="r">
             <LocaleSwitch placement="down" variant="util" />
+            <Link className="sub" href="/live">{t('live')}</Link>
             <Link className="sub" href="/directory">{t('directory')}</Link>
             <Link className="sub hide" href="/search" aria-label={t('search')}>{t('search')}</Link>
             <Link className="sub" href="/membership">{t('membership')}</Link>

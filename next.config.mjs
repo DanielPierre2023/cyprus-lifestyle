@@ -6,6 +6,15 @@ const withNextIntl = createNextIntlPlugin('./lib/i18n/request.ts');
 // styles (no nonce pipeline here), so 'unsafe-inline' is required for those;
 // everything else is locked down. Supabase (REST + realtime) and Vercel's
 // cookieless analytics are explicitly allowed.
+//
+// Map stack (MapLibre GL + CARTO GL vector basemap + Open-Meteo nowcast):
+//   • cdn.jsdelivr.net  — the pinned, SRI-verified MapLibre GL script + stylesheet
+//     (loaded at runtime; see lib/map/maplibre.ts). SRI means a tampered payload
+//     is rejected even though the host is allow-listed.
+//   • *.basemaps.cartocdn.com — the free CARTO GL vector style, tiles, glyphs, sprites.
+//   • api.open-meteo.com / marine-api.open-meteo.com — free weather + sea-temperature
+//     nowcast for the map/webcams (no API key).
+//   • worker-src blob: — MapLibre GL runs its tile worker from a blob: URL.
 const csp = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -13,13 +22,17 @@ const csp = [
   "frame-ancestors 'self'",
   "form-action 'self'",
   "img-src 'self' data: blob: https:",
+  // Live-webcam embeds: YouTube Live (privacy-enhanced host) + Windy. Venue cams
+  // that aren't on these hosts are linked out (opened on the source), not framed.
+  "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://*.windy.com",
   // The concierge plays its neural-voice reply from a blob: URL, so media-src must
   // allow blob: (without this, default-src 'self' blocks the audio entirely).
   "media-src 'self' blob: data:",
   "font-src 'self' data:",
-  "style-src 'self' 'unsafe-inline'",
-  "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://va.vercel-scripts.com https://vitals.vercel-insights.com",
+  "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+  "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com https://cdn.jsdelivr.net",
+  "worker-src 'self' blob:",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://va.vercel-scripts.com https://vitals.vercel-insights.com https://*.basemaps.cartocdn.com https://api.open-meteo.com https://marine-api.open-meteo.com",
   "manifest-src 'self'",
   'upgrade-insecure-requests',
 ].join('; ');

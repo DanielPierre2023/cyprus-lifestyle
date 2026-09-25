@@ -24,7 +24,8 @@
     "directory": "Verzeichnis",
     "membership": "Mitgliedschaft",
     "editions": "Ausgaben",
-    "city": "Nikosia"
+    "city": "Nikosia",
+    "live": "Live"
   },
   "common": {
     "readMore": "Weiterlesen",
@@ -553,5 +554,17 @@
     "exploreLabel": "Das Verzeichnis entdecken",
     "askTitle": "Fragen Sie in Ihrer Sprache",
     "askBody": "Der Concierge antwortet in Ihrer Sprache und bringt Sie mit den richtigen Adressen in ganz Zypern zusammen."
+  },
+  "live": {
+    "all": "Alle",
+    "beach": "Strände",
+    "mountain": "Berge",
+    "city": "Städte",
+    "village": "Dörfer",
+    "watchLive": "Live ansehen",
+    "snapshot": "Schnappschuss",
+    "seaTemp": "Meer",
+    "none": "Noch keine Kameras in dieser Ansicht.",
+    "live": "Live"
   }
 }

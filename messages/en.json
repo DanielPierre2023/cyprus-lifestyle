@@ -24,7 +24,8 @@
     "directory": "Directory",
     "membership": "Membership",
     "editions": "editions",
-    "city": "Nicosia"
+    "city": "Nicosia",
+    "live": "Live"
   },
   "common": {
     "readMore": "Read more",
@@ -553,5 +554,17 @@
     "exploreLabel": "Explore the directory",
     "askTitle": "Ask in your language",
     "askBody": "The concierge answers in your language and connects you to the right places across Cyprus."
+  },
+  "live": {
+    "all": "All",
+    "beach": "Beaches",
+    "mountain": "Mountains",
+    "city": "Cities",
+    "village": "Villages",
+    "watchLive": "Watch live",
+    "snapshot": "Snapshot",
+    "seaTemp": "Sea",
+    "none": "No cameras in this view yet.",
+    "live": "Live"
   }
 }

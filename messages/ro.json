@@ -24,7 +24,8 @@
     "directory": "Ghid",
     "membership": "Membri",
     "editions": "ediții",
-    "city": "Nicosia"
+    "city": "Nicosia",
+    "live": "În direct"
   },
   "common": {
     "readMore": "Citește mai mult",
@@ -553,5 +554,17 @@
     "exploreLabel": "Explorează directorul",
     "askTitle": "Întreabă în limba ta",
     "askBody": "Concierge-ul îți răspunde în limba ta și te pune în legătură cu locurile potrivite din întregul Cipru."
+  },
+  "live": {
+    "all": "Toate",
+    "beach": "Plaje",
+    "mountain": "Munți",
+    "city": "Orașe",
+    "village": "Sate",
+    "watchLive": "Vezi în direct",
+    "snapshot": "Instantaneu",
+    "seaTemp": "Marea",
+    "none": "Nicio cameră în această vizualizare încă.",
+    "live": "În direct"
   }
 }

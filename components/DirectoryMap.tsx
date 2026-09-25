@@ -1,6 +1,6 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import 'leaflet/dist/leaflet.css';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { loadMaplibre, cartoGlStyle, type MlMap, type MlPopup, type GeoFeature } from '@/lib/map/maplibre';
 
 export interface MapPoint {
   lat: number;
@@ -23,11 +23,24 @@ export const TYPE_COLORS: Record<string, string> = {
 };
 const GOLD = '#C9A24C';
 
-const CARTO_ATTR = '&copy; OpenStreetMap contributors &copy; CARTO';
-const OSM_ATTR = '&copy; OpenStreetMap contributors';
-
+// HTML-escape for popup content — escapes quotes too so a value can never break
+// out of an attribute (e.g. an image URL or name containing a double quote).
 function esc(s: string): string {
-  return String(s).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] as string));
+  return String(s).replace(/[<>&"']/g, (c) => (
+    { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c] as string
+  ));
+}
+
+function normType(t?: string): string {
+  return t && TYPE_COLORS[t] ? t : 'vendor';
+}
+
+// A MapLibre "match" expression that colours each point by its type.
+function colorExpression(): unknown {
+  const match: unknown[] = ['match', ['get', 'type']];
+  for (const [type, color] of Object.entries(TYPE_COLORS)) match.push(type, color);
+  match.push(GOLD); // default
+  return match;
 }
 
 export default function DirectoryMap({
@@ -42,100 +55,154 @@ export default function DirectoryMap({
   ariaLabel?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<import('leaflet').Map | undefined>(undefined);
-  const groupsRef = useRef<Record<string, import('leaflet').FeatureGroup>>({});
+  const mapRef = useRef<MlMap | null>(null);
+  const popupRef = useRef<MlPopup | null>(null);
+  const readyRef = useRef(false);
+  const [ready, setReady] = useState(false);
   const [off, setOff] = useState<Record<string, boolean>>({});
 
   // Types present in the data, in a stable order matching TYPE_COLORS.
-  const present = Object.keys(TYPE_COLORS).filter((t) => points.some((p) => p.type === t));
+  const present = useMemo(
+    () => Object.keys(TYPE_COLORS).filter((t) => points.some((p) => normType(p.type) === t)),
+    [points],
+  );
 
+  const features = useMemo<GeoFeature[]>(() => points
+    .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
+    .filter((p) => !off[normType(p.type)])
+    .map((p) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+      properties: { name: p.name, type: normType(p.type), href: p.href || '', image: p.image || '' },
+    })), [points, off]);
+
+  // Init the map once.
   useEffect(() => {
     let cancelled = false;
+    const el = ref.current;
+    if (!el) return;
     (async () => {
-      const L = (await import('leaflet')).default;
-      const el = ref.current;
-      if (cancelled || !el || el.dataset.init === '1') return;
-      el.dataset.init = '1';
-      const pts = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
-      const map = L.map(el, { scrollWheelZoom: false, preferCanvas: true, zoomControl: true });
+      let maplibregl;
+      try { maplibregl = await loadMaplibre(); } catch { return; }
+      if (cancelled || mapRef.current) return;
+      const map = new maplibregl.Map({
+        container: el,
+        style: cartoGlStyle(),
+        center: [33.2, 34.92],
+        zoom: 7.4,
+        attributionControl: { compact: true },
+        scrollZoom: false,
+        cooperativeGestures: true,
+      });
       mapRef.current = map;
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
-      const cartoKey = process.env.NEXT_PUBLIC_CARTO_KEY;
-      const style = process.env.NEXT_PUBLIC_MAP_TILE_STYLE || 'voyager';
-      let tileUrl: string; let attr: string;
-      if (process.env.NEXT_PUBLIC_MAP_TILE_URL) {
-        tileUrl = process.env.NEXT_PUBLIC_MAP_TILE_URL.replace('{lang}', locale).replace('{key}', cartoKey || '');
-        attr = process.env.NEXT_PUBLIC_MAP_TILE_ATTR || CARTO_ATTR;
-      } else if (cartoKey) {
-        tileUrl = `https://{s}.basemaps.cartocdn.com/rastertiles/${style}/{z}/{x}/{y}.png?key=${cartoKey}`;
-        attr = process.env.NEXT_PUBLIC_MAP_TILE_ATTR || CARTO_ATTR;
-      } else {
-        tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-        attr = OSM_ATTR;
-      }
-      L.tileLayer(tileUrl, { attribution: attr, subdomains: 'abc', maxZoom: 19 }).addTo(map);
-
-      // One FeatureGroup per type so the legend can toggle each independently.
-      const groups: Record<string, import('leaflet').FeatureGroup> = {};
-      for (const p of pts) {
-        const key = (p.type && TYPE_COLORS[p.type]) ? p.type : 'vendor';
-        const color = TYPE_COLORS[key] || GOLD;
-        const m = L.circleMarker([p.lat, p.lng], {
-          radius: 6, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 0.95, bubblingMouseEvents: false,
+      map.on('load', () => {
+        if (cancelled) return;
+        map.addSource('dir', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features },
+          cluster: true,
+          clusterRadius: 48,
+          clusterMaxZoom: 13,
         });
-        const label = (typeLabels && p.type && typeLabels[p.type]) ? typeLabels[p.type] : (p.type || '');
-        const img = p.image ? `<span class="mp-img" style="background-image:url('${esc(p.image)}')"></span>` : '';
-        const link = p.href ? `<a class="mp-go" href="${esc(p.href)}">${esc(viewLabel)} →</a>` : '';
-        m.bindPopup(
-          `<div class="mp">${img}<div class="mp-b">${label ? `<span class="mp-t" style="color:${color}">${esc(label)}</span>` : ''}<b>${esc(p.name)}</b>${link}</div></div>`,
-          { minWidth: 200, maxWidth: 240, closeButton: true, className: 'mp-pop' },
-        );
-        (groups[key] ||= L.featureGroup()).addLayer(m);
-      }
-      groupsRef.current = groups;
-      const all = L.featureGroup(Object.values(groups)).addTo(map);
-      if (pts.length) map.fitBounds(all.getBounds().pad(0.15), { maxZoom: 12 });
-      else map.setView([34.92, 33.0], 8);
+        // Cluster bubbles.
+        map.addLayer({
+          id: 'clusters', type: 'circle', source: 'dir', filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': '#0B0E11',
+            'circle-opacity': 0.85,
+            'circle-stroke-color': GOLD,
+            'circle-stroke-width': 1.5,
+            'circle-radius': ['step', ['get', 'point_count'], 15, 25, 20, 100, 26, 500, 34],
+          },
+        });
+        map.addLayer({
+          id: 'cluster-count', type: 'symbol', source: 'dir', filter: ['has', 'point_count'],
+          layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-size': 12, 'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'] },
+          paint: { 'text-color': '#F4EFE6' },
+        });
+        // Individual points, coloured by type.
+        map.addLayer({
+          id: 'points', type: 'circle', source: 'dir', filter: ['!', ['has', 'point_count']],
+          paint: {
+            'circle-color': colorExpression(),
+            'circle-radius': 6,
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 1.5,
+          },
+        });
+
+        // Cluster click → zoom to expansion.
+        map.on('click', 'clusters', (e) => {
+          const f = e.features?.[0];
+          if (!f) return;
+          const clusterId = f.properties.cluster_id as number;
+          const src = map.getSource('dir');
+          src?.getClusterExpansionZoom(clusterId).then((zoom) => {
+            map.easeTo({ center: f.geometry.coordinates, zoom });
+          }).catch(() => {});
+        });
+        // Point click → popup.
+        map.on('click', 'points', (e) => {
+          const f = e.features?.[0];
+          if (!f) return;
+          const p = f.properties as { name?: string; type?: string; href?: string; image?: string };
+          const type = normType(p.type);
+          const color = TYPE_COLORS[type] || GOLD;
+          const label = (typeLabels && p.type && typeLabels[p.type]) ? typeLabels[p.type] : (p.type || '');
+          const img = p.image ? `<span class="mp-img" style="background-image:url('${esc(p.image)}')"></span>` : '';
+          const link = p.href ? `<a class="mp-go" href="${esc(p.href)}">${esc(viewLabel)} →</a>` : '';
+          popupRef.current?.remove();
+          popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: '240px', className: 'mp-pop' })
+            .setLngLat(f.geometry.coordinates)
+            .setHTML(`<div class="mp">${img}<div class="mp-b">${label ? `<span class="mp-t" style="color:${color}">${esc(label)}</span>` : ''}<b>${esc(p.name || '')}</b>${link}</div></div>`)
+            .addTo(map);
+        });
+        for (const layer of ['clusters', 'points']) {
+          map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
+          map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
+        }
+
+        // Fit to the data once.
+        fitToData(mapRef.current, maplibregl);
+        readyRef.current = true;
+        setReady(true);
+      });
     })();
     return () => {
       cancelled = true;
-      if (mapRef.current) { mapRef.current.remove(); mapRef.current = undefined; }
-      groupsRef.current = {};
-      if (ref.current) delete ref.current.dataset.init;
+      popupRef.current?.remove();
+      popupRef.current = null;
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+      readyRef.current = false;
     };
-    // typeLabels is only read for popup text; excluded from deps so a new object
-    // identity per render never forces a full map rebuild.
+    // Init once; data changes are handled by the sync effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [points, locale]);
+  }, [locale]);
 
-  // Legend toggle → show/hide a type's group on the already-built map.
+  // Push filtered data to the source whenever the visible set changes.
   useEffect(() => {
-    const map = mapRef.current; const groups = groupsRef.current;
+    if (!readyRef.current) return;
+    const src = mapRef.current?.getSource('dir');
+    src?.setData({ type: 'FeatureCollection', features });
+  }, [features]);
+
+  function fitToData(map: MlMap | null, maplibregl: Awaited<ReturnType<typeof loadMaplibre>>) {
     if (!map) return;
-    for (const [key, group] of Object.entries(groups)) {
-      if (off[key]) { if (map.hasLayer(group)) map.removeLayer(group); }
-      else if (!map.hasLayer(group)) map.addLayer(group);
-    }
-  }, [off]);
+    const b = new maplibregl.LngLatBounds();
+    let n = 0;
+    for (const f of features) { b.extend(f.geometry.coordinates); n++; }
+    if (n > 0 && !b.isEmpty()) map.fitBounds(b, { padding: 48, maxZoom: 12, duration: 0 });
+  }
 
   const legend = typeLabels ? present : [];
-  const visibleCount = points.filter((p) => {
-    const key = (p.type && TYPE_COLORS[p.type]) ? p.type : 'vendor';
-    return !off[key];
-  }).length;
-
-  // Map temporarily disabled site-wide until the luxury-grade map is ready
-  // (editorial decision). Flip MAP_ENABLED back to true to restore it everywhere.
-  const MAP_ENABLED = false;
-  if (!MAP_ENABLED) return null;
+  const visibleCount = points.filter((p) => !off[normType(p.type)]).length;
 
   return (
-    // isolate: keep Leaflet's internal z-indexes (panes 400–700, controls up to
-    // 1000) inside this box so they can't render over the fixed concierge chat.
     <div style={{ position: 'relative', isolation: 'isolate' }}>
       <style>{`
-        .mp-pop .leaflet-popup-content-wrapper{border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:0;overflow:hidden}
-        .mp-pop .leaflet-popup-content{margin:0;width:auto!important}
+        .maplibregl-popup.mp-pop .maplibregl-popup-content{border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:0;overflow:hidden}
         .mp{display:flex;flex-direction:column;width:210px;font-family:var(--font-jost,system-ui,sans-serif)}
         .mp-img{display:block;height:112px;background-size:cover;background-position:center;background-color:#0B0E11}
         .mp-b{padding:10px 12px 12px}
@@ -143,8 +210,8 @@ export default function DirectoryMap({
         .mp-b b{font-family:var(--disp,Georgia,serif);font-weight:600;font-size:16px;line-height:1.2;color:#12181c;display:block}
         .mp-go{display:inline-block;margin-top:8px;font-size:12px;font-weight:600;letter-spacing:.04em;color:#8a5b12;text-decoration:none}
         .mp-go:hover{text-decoration:underline}
-        .dm-badge{position:absolute;top:10px;left:10px;z-index:500;background:rgba(255,255,255,.94);border:1px solid #e3d9c4;border-radius:999px;padding:5px 12px;font:600 12px/1 var(--font-jost,system-ui,sans-serif);color:#5b5647;box-shadow:0 2px 10px rgba(0,0,0,.08);letter-spacing:.02em}
-        .dm-legend{position:absolute;top:10px;right:10px;z-index:500;background:rgba(255,255,255,.94);border:1px solid #e3d9c4;border-radius:6px;padding:7px;box-shadow:0 2px 10px rgba(0,0,0,.08);max-width:170px}
+        .dm-badge{position:absolute;top:10px;left:10px;z-index:5;background:rgba(255,255,255,.94);border:1px solid #e3d9c4;border-radius:999px;padding:5px 12px;font:600 12px/1 var(--font-jost,system-ui,sans-serif);color:#5b5647;box-shadow:0 2px 10px rgba(0,0,0,.08);letter-spacing:.02em}
+        .dm-legend{position:absolute;top:10px;right:10px;z-index:5;background:rgba(255,255,255,.94);border:1px solid #e3d9c4;border-radius:6px;padding:7px;box-shadow:0 2px 10px rgba(0,0,0,.08);max-width:170px}
         .dm-legend button{display:flex;align-items:center;gap:7px;width:100%;background:none;border:0;padding:3px 5px;border-radius:4px;cursor:pointer;font:600 11px/1.4 var(--font-jost,system-ui,sans-serif);color:#5b5647;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}
         .dm-legend button:hover{background:#f3ecdd}
         .dm-legend .sw{width:11px;height:11px;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15);flex:0 0 auto}
@@ -158,7 +225,7 @@ export default function DirectoryMap({
           {legend.map((t) => (
             <button key={t} type="button" className={off[t] ? 'is-off' : ''}
               onClick={() => setOff((o) => ({ ...o, [t]: !o[t] }))}
-              aria-pressed={!off[t]} title={off[t] ? 'Show' : 'Hide'}>
+              aria-pressed={!off[t]} title={off[t] ? 'Show' : 'Hide'} disabled={!ready && !off[t]}>
               <span className="sw" style={{ background: TYPE_COLORS[t] || GOLD }} />
               <span className="lbl">{typeLabels![t]}</span>
             </button>

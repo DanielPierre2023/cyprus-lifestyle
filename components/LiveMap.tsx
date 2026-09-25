@@ -1,35 +1,36 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import 'leaflet/dist/leaflet.css';
 import { TYPE_COLORS } from '@/components/DirectoryMap';
+import { loadMaplibre, cartoGlStyle, type MlMap, type MlPopup, type MaplibreGL, type GeoFeature } from '@/lib/map/maplibre';
 
 export interface LiveItem { id: string; name: string; type: string; district: string | null; lat: number; lng: number; href: string; }
 
 const GOLD = '#C9A24C';
 const ITEM_COLORS: Record<string, string> = { ...TYPE_COLORS, event: GOLD };
-const CARTO_ATTR = '&copy; OpenStreetMap contributors &copy; CARTO';
-const OSM_ATTR = '&copy; OpenStreetMap contributors';
 
-function tile(locale: string): { url: string; attr: string } {
-  const cartoKey = process.env.NEXT_PUBLIC_CARTO_KEY;
-  const style = process.env.NEXT_PUBLIC_MAP_TILE_STYLE || 'voyager';
-  if (process.env.NEXT_PUBLIC_MAP_TILE_URL) {
-    return { url: process.env.NEXT_PUBLIC_MAP_TILE_URL.replace('{lang}', locale).replace('{key}', cartoKey || ''), attr: process.env.NEXT_PUBLIC_MAP_TILE_ATTR || CARTO_ATTR };
-  }
-  if (cartoKey) return { url: `https://{s}.basemaps.cartocdn.com/rastertiles/${style}/{z}/{x}/{y}.png?key=${cartoKey}`, attr: process.env.NEXT_PUBLIC_MAP_TILE_ATTR || CARTO_ATTR };
-  return { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: OSM_ATTR };
+function esc(s: string): string {
+  return String(s).replace(/[<>&"']/g, (c) => (
+    { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c] as string
+  ));
+}
+
+// Colour points by type via a MapLibre "match" expression.
+function colorExpression(): unknown {
+  const match: unknown[] = ['match', ['get', 'type']];
+  for (const [type, color] of Object.entries(ITEM_COLORS)) match.push(type, color);
+  match.push(GOLD);
+  return match;
 }
 
 export default function LiveMap({ items, locale = 'en', labels, ui }: { items: LiveItem[]; locale?: string; labels: Record<string, string>; ui: { search: string; inView: string; noMatches: string; mapAria: string } }) {
   const mapEl = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<import('leaflet').Map | null>(null);
-  const layerRef = useRef<import('leaflet').FeatureGroup | null>(null);
-  const markerById = useRef<Record<string, import('leaflet').CircleMarker>>({});
-  const LRef = useRef<typeof import('leaflet') | null>(null);
+  const mapRef = useRef<MlMap | null>(null);
+  const mlRef = useRef<MaplibreGL | null>(null);
+  const popupRef = useRef<MlPopup | null>(null);
+  const readyRef = useRef(false);
 
   const types = useMemo(() => {
     const present = Array.from(new Set(items.map((i) => i.type)));
-    // stable, listings first then event
     const order = ['restaurant', 'winery', 'hotel', 'beach', 'development', 'vendor', 'event'];
     return present.sort((a, b) => order.indexOf(a) - order.indexOf(b));
   }, [items]);
@@ -43,56 +44,129 @@ export default function LiveMap({ items, locale = 'en', labels, ui }: { items: L
     return items.filter((i) => (enabled[i.type] ?? true) && (!term || i.name.toLowerCase().includes(term) || (i.district || '').toLowerCase().includes(term)));
   }, [items, enabled, q]);
 
-  // init map once
+  const features = useMemo<GeoFeature[]>(() => shown
+    .filter((i) => Number.isFinite(i.lat) && Number.isFinite(i.lng))
+    .map((i) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [i.lng, i.lat] },
+      properties: { id: i.id, name: i.name, type: i.type, href: i.href, district: i.district || '' },
+    })), [shown]);
+
+  // Init the map once.
   useEffect(() => {
     let cancelled = false;
+    const el = mapEl.current;
+    if (!el) return;
     (async () => {
-      const L = (await import('leaflet')).default;
-      if (cancelled || !mapEl.current || mapRef.current) return;
-      LRef.current = L;
-      const map = L.map(mapEl.current, { scrollWheelZoom: true, zoomControl: true, preferCanvas: true });
-      const { url, attr } = tile(locale);
-      L.tileLayer(url, { attribution: attr, subdomains: 'abc', maxZoom: 19 }).addTo(map);
-      map.setView([34.92, 33.0], 9);
+      let maplibregl: MaplibreGL;
+      try { maplibregl = await loadMaplibre(); } catch { return; }
+      if (cancelled || mapRef.current) return;
+      mlRef.current = maplibregl;
+      const map = new maplibregl.Map({
+        container: el,
+        style: cartoGlStyle(),
+        center: [33.0, 34.92],
+        zoom: 8,
+        attributionControl: { compact: true },
+      });
       mapRef.current = map;
-      renderMarkers();
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+
+      map.on('load', () => {
+        if (cancelled) return;
+        map.resize();
+        map.addSource('items', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features },
+          cluster: true,
+          clusterRadius: 46,
+          clusterMaxZoom: 13,
+        });
+        map.addLayer({
+          id: 'clusters', type: 'circle', source: 'items', filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': '#0B0E11', 'circle-opacity': 0.85,
+            'circle-stroke-color': GOLD, 'circle-stroke-width': 1.5,
+            'circle-radius': ['step', ['get', 'point_count'], 15, 25, 20, 100, 26, 500, 34],
+          },
+        });
+        map.addLayer({
+          id: 'cluster-count', type: 'symbol', source: 'items', filter: ['has', 'point_count'],
+          layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-size': 12, 'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'] },
+          paint: { 'text-color': '#F4EFE6' },
+        });
+        map.addLayer({
+          id: 'points', type: 'circle', source: 'items', filter: ['!', ['has', 'point_count']],
+          paint: {
+            'circle-color': colorExpression(),
+            'circle-radius': ['case', ['==', ['get', 'type'], 'event'], 8, 6],
+            'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.5,
+          },
+        });
+
+        map.on('click', 'clusters', (e) => {
+          const f = e.features?.[0];
+          if (!f) return;
+          const clusterId = f.properties.cluster_id as number;
+          map.getSource('items')?.getClusterExpansionZoom(clusterId)
+            .then((zoom) => map.easeTo({ center: f.geometry.coordinates, zoom }))
+            .catch(() => {});
+        });
+        map.on('click', 'points', (e) => {
+          const f = e.features?.[0];
+          if (!f) return;
+          openPopup(f.geometry.coordinates, f.properties as { name?: string; href?: string; district?: string });
+        });
+        for (const layer of ['clusters', 'points']) {
+          map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
+          map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
+        }
+
+        fitToData();
+        readyRef.current = true;
+      });
     })();
-    return () => { cancelled = true; if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
+    return () => {
+      cancelled = true;
+      popupRef.current?.remove();
+      popupRef.current = null;
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+      readyRef.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [locale]);
 
-  // re-render markers when the filtered set changes
-  useEffect(() => { renderMarkers(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [shown]);
+  // Sync filtered data → source.
+  useEffect(() => {
+    if (!readyRef.current) return;
+    mapRef.current?.getSource('items')?.setData({ type: 'FeatureCollection', features });
+  }, [features]);
 
-  function renderMarkers() {
-    const L = LRef.current; const map = mapRef.current;
-    if (!L || !map) return;
-    if (layerRef.current) { layerRef.current.remove(); layerRef.current = null; }
-    markerById.current = {};
-    const markers = shown.map((i) => {
-      const color = ITEM_COLORS[i.type] || GOLD;
-      const m = L.circleMarker([i.lat, i.lng], { radius: i.type === 'event' ? 8 : 6, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 0.95 });
-      const safe = i.name.replace(/[<>&]/g, '');
-      m.bindPopup(`<a href="${i.href}" style="color:#8a5b12;font-weight:600">${safe}</a>${i.district ? `<br><span style="color:#8a8371;font-size:12px">${i.district}</span>` : ''}`);
-      markerById.current[i.id] = m;
-      return m;
-    });
-    const group = L.featureGroup(markers).addTo(map);
-    layerRef.current = group;
-    if (markers.length) { try { map.fitBounds(group.getBounds().pad(0.2), { maxZoom: 12 }); } catch { /* single point */ } }
+  function fitToData() {
+    const map = mapRef.current; const maplibregl = mlRef.current;
+    if (!map || !maplibregl) return;
+    const b = new maplibregl.LngLatBounds();
+    let n = 0;
+    for (const f of features) { b.extend(f.geometry.coordinates); n++; }
+    if (n > 0 && !b.isEmpty()) map.fitBounds(b, { padding: 40, maxZoom: 12, duration: 0 });
+  }
+
+  function openPopup(coords: [number, number], p: { name?: string; href?: string; district?: string }) {
+    const map = mapRef.current; const maplibregl = mlRef.current;
+    if (!map || !maplibregl) return;
+    popupRef.current?.remove();
+    popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: '240px' })
+      .setLngLat(coords)
+      .setHTML(`<a href="${esc(p.href || '')}" style="color:#8a5b12;font-weight:600">${esc(p.name || '')}</a>${p.district ? `<br><span style="color:#8a8371;font-size:12px">${esc(p.district)}</span>` : ''}`)
+      .addTo(map);
   }
 
   function focus(i: LiveItem) {
-    const map = mapRef.current; const m = markerById.current[i.id];
+    const map = mapRef.current;
     if (!map) return;
-    map.setView([i.lat, i.lng], 14, { animate: true });
-    if (m) m.openPopup();
+    map.flyTo({ center: [i.lng, i.lat], zoom: 14 });
+    openPopup([i.lng, i.lat], { name: i.name, href: i.href, district: i.district || '' });
   }
-
-  // Map temporarily disabled until the luxury-grade map is ready (editorial
-  // decision). Flip MAP_ENABLED back to true to restore it.
-  const MAP_ENABLED = false;
-  if (!MAP_ENABLED) return null;
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', minHeight: 'calc(100vh - 120px)', border: '1px solid #1c2128', borderRadius: 6, overflow: 'hidden', isolation: 'isolate' }}>

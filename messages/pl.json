@@ -24,7 +24,8 @@
     "directory": "Katalog",
     "membership": "Członkostwo",
     "editions": "edycje",
-    "city": "Nikozja"
+    "city": "Nikozja",
+    "live": "Na żywo"
   },
   "common": {
     "readMore": "Czytaj dalej",
@@ -553,5 +554,17 @@
     "exploreLabel": "Przeglądaj katalog",
     "askTitle": "Zapytaj w swoim języku",
     "askBody": "Nasz concierge odpowie w Twoim języku i połączy Cię z właściwymi miejscami na całym Cyprze."
+  },
+  "live": {
+    "all": "Wszystkie",
+    "beach": "Plaże",
+    "mountain": "Góry",
+    "city": "Miasta",
+    "village": "Wsie",
+    "watchLive": "Oglądaj na żywo",
+    "snapshot": "Migawka",
+    "seaTemp": "Morze",
+    "none": "Brak kamer w tym widoku.",
+    "live": "Na żywo"
   }
 }
