@@ -53,7 +53,7 @@ export default async function MapPage({ params }: { params: Promise<{ locale: st
         <p className="dek" style={{ maxWidth: '60ch' }}>{DEK[l] || DEK.en}</p>
         <div className="rule-orn orn"><span className="diamond" /></div>
       </div>
-      <LiveMap items={items} locale={l} labels={labels} ui={{ search: t('directory.searchPlaces'), inView: t('directory.inView'), noMatches: t('directory.noMatches'), mapAria: t('directory.mapAria') }} />
+      <LiveMap items={items} locale={l} labels={labels} ui={{ search: t('directory.searchPlaces'), inView: t('directory.inView'), noMatches: t('directory.noMatches'), mapAria: t('directory.mapAria'), live: t('nav.live'), watchLive: t('live.watchLive') }} />
     </div>
   );
 }

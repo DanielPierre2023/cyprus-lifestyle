@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TYPE_COLORS } from '@/components/DirectoryMap';
-import { loadMaplibre, cartoGlStyle, type MlMap, type MlPopup, type MaplibreGL, type GeoFeature } from '@/lib/map/maplibre';
+import { loadMaplibre, cartoGlStyle, type MlMap, type MlPopup, type MaplibreGL, type GeoFeature, type GeoJSON } from '@/lib/map/maplibre';
 
 export interface LiveItem { id: string; name: string; type: string; district: string | null; lat: number; lng: number; href: string; }
 
@@ -22,7 +22,7 @@ function colorExpression(): unknown {
   return match;
 }
 
-export default function LiveMap({ items, locale = 'en', labels, ui }: { items: LiveItem[]; locale?: string; labels: Record<string, string>; ui: { search: string; inView: string; noMatches: string; mapAria: string } }) {
+export default function LiveMap({ items, locale = 'en', labels, ui }: { items: LiveItem[]; locale?: string; labels: Record<string, string>; ui: { search: string; inView: string; noMatches: string; mapAria: string; live: string; watchLive: string } }) {
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MlMap | null>(null);
   const mlRef = useRef<MaplibreGL | null>(null);
@@ -37,6 +37,7 @@ export default function LiveMap({ items, locale = 'en', labels, ui }: { items: L
 
   const [enabled, setEnabled] = useState<Record<string, boolean>>({});
   const [q, setQ] = useState('');
+  const [showCams, setShowCams] = useState(true);
   useEffect(() => { const e: Record<string, boolean> = {}; types.forEach((t) => (e[t] = true)); setEnabled(e); }, [types]);
 
   const shown = useMemo(() => {
@@ -104,6 +105,22 @@ export default function LiveMap({ items, locale = 'en', labels, ui }: { items: L
           },
         });
 
+        // ── Live-webcam layer (distinct gold-ringed marker), fetched from the API ──
+        map.addSource('webcams', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({
+          id: 'webcams', type: 'circle', source: 'webcams',
+          paint: {
+            'circle-color': '#0B0E11',
+            'circle-radius': 7,
+            'circle-stroke-color': GOLD,
+            'circle-stroke-width': 3,
+          },
+        });
+        fetch(`/api/map/webcams.geojson?locale=${encodeURIComponent(locale)}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((gj) => { if (!cancelled && gj) mapRef.current?.getSource('webcams')?.setData(gj as GeoJSON); })
+          .catch(() => {});
+
         map.on('click', 'clusters', (e) => {
           const f = e.features?.[0];
           if (!f) return;
@@ -117,7 +134,12 @@ export default function LiveMap({ items, locale = 'en', labels, ui }: { items: L
           if (!f) return;
           openPopup(f.geometry.coordinates, f.properties as { name?: string; href?: string; district?: string });
         });
-        for (const layer of ['clusters', 'points']) {
+        map.on('click', 'webcams', (e) => {
+          const f = e.features?.[0];
+          if (!f) return;
+          openCamPopup(f.geometry.coordinates, f.properties as { name?: string; url?: string; area?: string; district?: string });
+        });
+        for (const layer of ['clusters', 'points', 'webcams']) {
           map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
           map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
         }
@@ -136,11 +158,17 @@ export default function LiveMap({ items, locale = 'en', labels, ui }: { items: L
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale]);
 
-  // Sync filtered data → source.
+  // Sync filtered business data → source.
   useEffect(() => {
     if (!readyRef.current) return;
     mapRef.current?.getSource('items')?.setData({ type: 'FeatureCollection', features });
   }, [features]);
+
+  // Toggle the webcam layer.
+  useEffect(() => {
+    if (!readyRef.current) return;
+    try { mapRef.current?.setLayoutProperty('webcams', 'visibility', showCams ? 'visible' : 'none'); } catch { /* layer not ready yet */ }
+  }, [showCams]);
 
   function fitToData() {
     const map = mapRef.current; const maplibregl = mlRef.current;
@@ -158,6 +186,19 @@ export default function LiveMap({ items, locale = 'en', labels, ui }: { items: L
     popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: '240px' })
       .setLngLat(coords)
       .setHTML(`<a href="${esc(p.href || '')}" style="color:#8a5b12;font-weight:600">${esc(p.name || '')}</a>${p.district ? `<br><span style="color:#8a8371;font-size:12px">${esc(p.district)}</span>` : ''}`)
+      .addTo(map);
+  }
+
+  function openCamPopup(coords: [number, number], p: { name?: string; url?: string; area?: string; district?: string }) {
+    const map = mapRef.current; const maplibregl = mlRef.current;
+    if (!map || !maplibregl) return;
+    const place = [p.area, p.district].filter(Boolean).join(' · ');
+    const external = !!(p.url && /^https?:\/\//.test(p.url));
+    const target = external ? ' target="_blank" rel="noopener nofollow"' : '';
+    popupRef.current?.remove();
+    popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: '240px' })
+      .setLngLat(coords)
+      .setHTML(`<b style="font-family:var(--disp,Georgia,serif);color:#12181c">${esc(p.name || '')}</b>${place ? `<br><span style="color:#8a8371;font-size:12px">${esc(place)}</span>` : ''}${p.url ? `<br><a href="${esc(p.url)}"${target} style="display:inline-block;margin-top:6px;color:#8a5b12;font-weight:600;font-size:12px">${esc(ui.watchLive)} →</a>` : ''}`)
       .addTo(map);
   }
 
@@ -187,6 +228,16 @@ export default function LiveMap({ items, locale = 'en', labels, ui }: { items: L
                 {labels[tp] || tp}
               </button>
             ))}
+            {/* Live-webcam layer toggle */}
+            <button type="button" onClick={() => setShowCams((v) => !v)}
+              style={{
+                fontSize: 12, padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
+                border: `1px solid ${GOLD}`,
+                background: showCams ? GOLD : 'transparent',
+                color: showCams ? '#0B0E11' : '#8a8f98', fontWeight: 600,
+              }}>
+              📹 {ui.live}
+            </button>
           </div>
         </div>
         <div style={{ padding: '8px 8px', fontSize: 11, color: '#8a8f98', textTransform: 'uppercase', letterSpacing: '.06em' }}>{shown.length} {ui.inView}</div>

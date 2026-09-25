@@ -70,11 +70,12 @@ create index if not exists webcams_geo_idx        on public.webcams (lat, lng) w
 -- The full registry is populated by the curation pass (scrape of the public cam
 -- index for facts + a geocode pass to fill lat/lng, then swap beach cams to
 -- YouTube-Live / Windy / owned embeds where available). These three are direct,
--- publicly-listed source pages, so we link out to them. Coordinates are left null
--- here and filled by the geocode pass (lib/geo.ts geocode()).
-insert into public.webcams (slug, name_en, provider, external_url, district, area, category, tags, status, sort)
+-- publicly-listed source pages, so we link out to them. Coordinates below were
+-- geocoded via Nominatim (the same service lib/geo.ts uses). Re-running the file
+-- refreshes coords for these rows without disturbing anything you add later.
+insert into public.webcams (slug, name_en, provider, external_url, lat, lng, district, area, category, tags, status, sort)
 values
-  ('troodos-north-face', 'Troodos — North Face slope (Cyprus Ski Club)', 'link', 'https://www.cyprusski.com/north-face-camera', 'Limassol', 'Troodos, Mount Olympus', 'mountain', array['skiing','winter'], 'published', 10),
-  ('nissi-beach-ayia-napa', 'Nissi Beach', 'link', 'https://vassosnissiplage.com/live-camera/', 'Famagusta', 'Ayia Napa', 'beach', array['blue-flag','family-friendly'], 'published', 20),
-  ('denizkizi-kyrenia', 'Denizkizi Beach', 'link', 'https://denizkizi.com/live/', 'Kyrenia', 'Kyrenia', 'beach', array['palm-lined'], 'published', 30)
-on conflict (slug) do nothing;
+  ('troodos-north-face', 'Troodos — North Face slope (Cyprus Ski Club)', 'link', 'https://www.cyprusski.com/north-face-camera', 34.9366134, 32.8649502, 'Limassol', 'Troodos, Mount Olympus', 'mountain', array['skiing','winter'], 'published', 10),
+  ('nissi-beach-ayia-napa', 'Nissi Beach', 'link', 'https://vassosnissiplage.com/live-camera/', 34.9874851, 33.9678021, 'Famagusta', 'Ayia Napa', 'beach', array['blue-flag','family-friendly'], 'published', 20),
+  ('denizkizi-kyrenia', 'Denizkizi Beach', 'link', 'https://denizkizi.com/live/', 35.3501672, 33.2247541, 'Kyrenia', 'Kyrenia', 'beach', array['palm-lined'], 'published', 30)
+on conflict (slug) do update set lat = excluded.lat, lng = excluded.lng, external_url = excluded.external_url, status = excluded.status;
