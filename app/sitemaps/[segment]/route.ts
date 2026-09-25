@@ -14,6 +14,7 @@ import {
   urlsetXml,
   listingChunkEntries,
   articleChunkEntries,
+  newsChildXml,
   type UrlEntry,
 } from '@/lib/seo/sitemap';
 
@@ -71,6 +72,13 @@ export async function GET(
   ctx: { params: Promise<{ segment: string }> },
 ): Promise<Response> {
   const { segment } = await ctx.params;
+
+  // The Google News child uses a different (news:) schema, so it returns directly
+  // rather than going through urlsetXml. Handled here because this dynamic route
+  // otherwise shadows a static /sitemaps/news sibling.
+  if (segment === 'news') {
+    return new Response(await newsChildXml(), { headers: XML_HEADERS });
+  }
 
   let entries: UrlEntry[] | null = null;
   if (segment === 'pages') {

@@ -13,7 +13,7 @@
 //     paginated internally.
 import 'server-only';
 import { LOCALES, DEFAULT_LOCALE } from '@/lib/locales';
-import { SITE_URL, urlFor } from '@/lib/seo';
+import { SITE_URL, SITE_NAME, urlFor } from '@/lib/seo';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 /** Max URLs per child sitemap. Kept well under the 50k / 50MB hard limits — with
@@ -154,4 +154,50 @@ export function articleChunkEntries(chunk: number): Promise<UrlEntry[]> {
     lastmod: (r.updated_at as string) ?? (r.published_at as string) ?? null,
     image: (r.cover_image as string) ?? null,
   }));
+}
+
+// ── Google News sitemap ─────────────────────────────────────────────────────
+// The `news` child of the sitemap index. Google News ingests only the trailing
+// ~48h and caps a News sitemap at 1000 URLs, so we query exactly that window.
+// Served through the /sitemaps/[segment] handler (segment === 'news'); kept here
+// so the builder sits with the other sitemap helpers. Best-effort: any read
+// failure yields an empty but valid <urlset>, never an error.
+const NEWS_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+interface NewsRow { slug: string | null; published_at: string | null; title_en: string | null }
+
+async function recentNewsRows(): Promise<NewsRow[]> {
+  try {
+    const since = new Date(Date.now() - NEWS_WINDOW_MS).toISOString();
+    const { data, error } = await supabaseAdmin()
+      .from('blog_posts')
+      .select('slug, published_at, title_en')
+      .eq('status', 'published')
+      .gte('published_at', since)
+      .order('published_at', { ascending: false })
+      .limit(1000);
+    if (error) return [];
+    return (data || []) as unknown as NewsRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Full Google News <urlset> XML for the last 48h of published articles. */
+export async function newsChildXml(): Promise<string> {
+  const rows = await recentNewsRows();
+  let s = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  s += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">\n';
+  for (const r of rows) {
+    if (!r.slug || !r.published_at) continue;
+    const d = new Date(r.published_at);
+    if (Number.isNaN(d.getTime())) continue;
+    const loc = xmlEscape(urlFor(DEFAULT_LOCALE, `/article/${r.slug}`));
+    const title = xmlEscape(r.title_en || r.slug);
+    s += `<url>\n<loc>${loc}</loc>\n<news:news>\n<news:publication>\n`;
+    s += `<news:name>${xmlEscape(SITE_NAME)}</news:name>\n<news:language>en</news:language>\n`;
+    s += `</news:publication>\n<news:publication_date>${d.toISOString()}</news:publication_date>\n`;
+    s += `<news:title>${title}</news:title>\n</news:news>\n</url>\n`;
+  }
+  return s + '</urlset>\n';
 }
