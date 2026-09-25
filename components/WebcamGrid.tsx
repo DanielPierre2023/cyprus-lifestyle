@@ -39,7 +39,6 @@ export default function WebcamGrid({
   };
 }) {
   const [cat, setCat] = useState<Cat>('all');
-  const [playing, setPlaying] = useState<Record<string, boolean>>({});
 
   const cats: Cat[] = ['all', 'beach', 'mountain', 'city', 'village'];
   const shown = useMemo(() => cams.filter((c) => cat === 'all' || c.category === cat), [cams, cat]);
@@ -52,21 +51,23 @@ export default function WebcamGrid({
         .wc-filters button.on{background:${GOLD};border-color:${GOLD};color:#0B0E11}
         .wc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
         .wc-card{border:1px solid #e3d9c4;border-radius:8px;overflow:hidden;background:#fff;box-shadow:0 4px 20px rgba(0,0,0,.05);display:flex;flex-direction:column}
-        .wc-media{position:relative;aspect-ratio:16/9;background:#0B0E11;display:block;width:100%;border:0;padding:0;cursor:pointer}
+        .wc-media{position:relative;aspect-ratio:16/9;background:#0B0E11;display:block;width:100%;border:0;padding:0}
+        .wc-media.wc-link{cursor:pointer}
         .wc-media img{width:100%;height:100%;object-fit:cover;display:block;opacity:.92}
         .wc-media .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#5b6470;font:600 13px var(--font-jost,system-ui,sans-serif);letter-spacing:.1em;text-transform:uppercase}
-        .wc-badge{position:absolute;top:8px;left:8px;font:700 10px/1 var(--font-jost,system-ui,sans-serif);letter-spacing:.1em;padding:4px 8px;border-radius:999px;text-transform:uppercase}
+        .wc-badge{position:absolute;top:8px;left:8px;z-index:2;font:700 10px/1 var(--font-jost,system-ui,sans-serif);letter-spacing:.1em;padding:4px 8px;border-radius:999px;text-transform:uppercase;pointer-events:none}
         .wc-badge.live{background:#C0492E;color:#fff}
         .wc-badge.snap{background:rgba(11,14,17,.8);color:#e7e0d2}
         .wc-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
         .wc-play span{width:54px;height:54px;border-radius:50%;background:rgba(201,162,76,.92);color:#0B0E11;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 16px rgba(0,0,0,.3)}
-        .wc-temp{position:absolute;bottom:8px;right:8px;background:rgba(255,255,255,.92);border-radius:6px;padding:4px 8px;font:600 12px var(--font-jost,system-ui,sans-serif);color:#12181c}
+        .wc-temp{position:absolute;bottom:8px;right:8px;z-index:2;background:rgba(255,255,255,.92);border-radius:6px;padding:4px 8px;font:600 12px var(--font-jost,system-ui,sans-serif);color:#12181c;pointer-events:none}
+        .wc-embed .wc-temp{top:8px;bottom:auto}
         .wc-body{padding:12px 14px 14px}
         .wc-body h3{margin:0;font-family:var(--disp,Georgia,serif);font-weight:600;font-size:17px;line-height:1.2;color:#12181c}
         .wc-meta{margin:3px 0 0;font-size:12px;color:#8a8371}
         .wc-tags{margin-top:8px;display:flex;flex-wrap:wrap;gap:5px}
         .wc-tags span{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#8a5b12;border:1px solid #ecdfc2;border-radius:999px;padding:2px 7px}
-        .wc-frame{aspect-ratio:16/9;width:100%;border:0;display:block;background:#0B0E11}
+        .wc-frame{position:absolute;inset:0;height:100%;width:100%;border:0;display:block;background:#0B0E11}
         .wc-none{padding:30px;color:#8a8371;text-align:center}
       `}</style>
 
@@ -83,22 +84,21 @@ export default function WebcamGrid({
           {shown.map((c) => {
             const src = embedSrc(c);
             const isLive = c.provider !== 'snapshot';
-            const canEmbed = !!src;
-            const isPlaying = playing[c.slug];
             return (
               <div className="wc-card" key={c.slug}>
-                {isPlaying && src ? (
-                  <iframe className="wc-frame" src={src} title={c.name}
-                    allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen loading="lazy" referrerPolicy="strict-origin-when-cross-origin" />
-                ) : canEmbed ? (
-                  <button className="wc-media" type="button" onClick={() => setPlaying((p) => ({ ...p, [c.slug]: true }))} aria-label={`${labels.watchLive}: ${c.name}`}>
-                    {c.thumbUrl ? <img src={c.thumbUrl} alt="" loading="lazy" /> : <span className="ph">{c.area || c.name}</span>}
-                    <span className={`wc-badge ${isLive ? 'live' : 'snap'}`}>{isLive ? labels.live : labels.snapshot}</span>
-                    <span className="wc-play"><span>▶</span></span>
+                {src ? (
+                  // Embeddable cams (Windy/YouTube/iframe) render the live player DIRECTLY,
+                  // so the camera is visible on load — no click needed, no click-away.
+                  <div className="wc-media wc-embed">
+                    <iframe className="wc-frame" src={src} title={c.name}
+                      allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen
+                      loading="lazy" referrerPolicy="strict-origin-when-cross-origin" />
                     {c.category === 'beach' && c.seaTempC != null ? <span className="wc-temp">{labels.seaTemp} {Math.round(c.seaTempC)}°</span> : null}
-                  </button>
+                  </div>
                 ) : (
-                  <a className="wc-media" href={c.externalUrl || '#'} target="_blank" rel="noopener noreferrer" aria-label={`${labels.watchLive}: ${c.name}`}>
+                  // Non-embeddable cams (paralieslive beaches, Skyline, venue cams): open the
+                  // source in a new tab. These stay links until we have embed permission.
+                  <a className="wc-media wc-link" href={c.externalUrl || '#'} target="_blank" rel="noopener noreferrer" aria-label={`${labels.watchLive}: ${c.name}`}>
                     {c.thumbUrl ? <img src={c.thumbUrl} alt="" loading="lazy" /> : <span className="ph">{c.area || c.name}</span>}
                     <span className={`wc-badge ${isLive ? 'live' : 'snap'}`}>{isLive ? labels.live : labels.snapshot}</span>
                     <span className="wc-play"><span>↗</span></span>
