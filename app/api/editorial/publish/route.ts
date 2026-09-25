@@ -8,6 +8,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { denyReason } from '@/lib/editorial/gate';
+import { getEditorialSettings } from '@/lib/editorial/settings';
+import { proofread, AI_PROOFREAD_LANGS } from '@/lib/desk/proofread';
+import type { Lang } from '@/lib/antiAi';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -17,18 +20,38 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
   if (!id) return { ok: false, error: 'Missing ?id= (the piece id).' };
   const sb = supabaseAdmin();
 
-  const { data: piece, error } = await sb.from('blog_posts')
-    .select('id, slug, status, published_at, scheduled_at, subject_listing_id')
-    .eq('id', id).maybeSingle();
+  const { data: piece, error } = await sb.from('blog_posts').select('*').eq('id', id).maybeSingle();
   if (error) return { ok: false, error: `Could not load the piece: ${error.message}` };
   if (!piece) return { ok: false, error: 'No piece with that id.' };
   const p = piece as {
     id: string; slug: string; status: string | null;
     published_at: string | null; scheduled_at: string | null; subject_listing_id: string | null;
   };
+  const row = piece as Record<string, unknown>;
+
+  // AUTO-CLEAN BEFORE GO-LIVE. Any inflected edition (el/ar/de/pl/ru) that still
+  // reads medium+ on the AI-tell score gets the proofread pass right now, so the
+  // published version is clean however the piece reached publish (translated, then
+  // hand-edited, re-published, etc.). proofread() self-gates on the score, so a
+  // clean edition triggers no model call and costs nothing. Toggle via settings.
+  const clean: Record<string, unknown> = {};
+  const autoCleaned: string[] = [];
+  try {
+    if ((await getEditorialSettings()).autoClean) {
+      for (const l of AI_PROOFREAD_LANGS as Lang[]) {
+        const body = String(row[`content_${l}`] || '');
+        if (!body.trim()) continue;
+        try {
+          const pr = await proofread({ text: body, lang: l, isHtml: true, title: String(row[`title_${l}`] || '') });
+          if (pr.changed && pr.text) { clean[`content_${l}`] = pr.text; autoCleaned.push(l); }
+        } catch { /* keep the existing edition on any proofread failure */ }
+      }
+    }
+  } catch { /* settings unavailable → publish without the clean pass */ }
 
   const publishedAt = p.published_at || p.scheduled_at || new Date().toISOString();
   const { error: ue } = await sb.from('blog_posts').update({
+    ...clean,
     status: 'published',
     pipeline_status: 'published',
     published_at: publishedAt,
@@ -58,6 +81,7 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
     status: 'published',
     pipeline_status: 'published',
     published_at: publishedAt,
+    autoCleaned,
     elevated,
     note: elevated ? 'Published and the subject business elevated in the directory.' : 'Published (no subject listing to elevate).',
   };
