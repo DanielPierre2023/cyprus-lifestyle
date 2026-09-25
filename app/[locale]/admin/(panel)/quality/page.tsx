@@ -3,7 +3,7 @@ import {
   LANGS, EDITION_NAMES, SCAN_COLS, WORST_CAP,
   scanPosts, rankWorst,
   type RawPost, type Edition, type Level,
-} from '@/app/api/admin/editorial/quality-scan/route';
+} from '@/lib/editorial/qualityScan';
 
 export const dynamic = 'force-dynamic';
 
