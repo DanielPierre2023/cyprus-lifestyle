@@ -32,7 +32,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
   "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com https://cdn.jsdelivr.net",
   "worker-src 'self' blob:",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://va.vercel-scripts.com https://vitals.vercel-insights.com https://*.basemaps.cartocdn.com https://api.open-meteo.com https://marine-api.open-meteo.com",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://va.vercel-scripts.com https://vitals.vercel-insights.com https://basemaps.cartocdn.com https://api.open-meteo.com https://marine-api.open-meteo.com",
   "manifest-src 'self'",
   'upgrade-insecure-requests',
 ].join('; ');
