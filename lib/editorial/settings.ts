@@ -13,6 +13,9 @@
 //                    "Photo" / "AI image" buttons and the /cover route):
 //                    'stock' (real photo) · 'ai' (illustration) · 'stock-then-ai'
 //                    (a real photo if one fits, else an AI illustration) · 'off'.
+//   • autoClean      when translating, any edition that still reads medium+ on the
+//                    AI-tell score gets the proofread/clean pass automatically before
+//                    it goes live, so the Quality board mostly stays green on its own.
 // Server-only. Reads degrade to sensible defaults if the row is missing.
 // ============================================================================
 import 'server-only';
@@ -27,6 +30,7 @@ export interface EditorialSettings {
   sectionsPerRun: number;
   autoCover: boolean;
   imageSource: ImageSource;
+  autoClean: boolean;
 }
 const IMAGE_SOURCES: ImageSource[] = ['off', 'stock', 'ai', 'stock-then-ai'];
 export const DEFAULT_EDITORIAL_SETTINGS: EditorialSettings = {
@@ -36,6 +40,7 @@ export const DEFAULT_EDITORIAL_SETTINGS: EditorialSettings = {
   sectionsPerRun: 4,
   autoCover: true,             // every new draft gets a real, matching photo
   imageSource: 'stock-then-ai', // on-demand: a real photo first, an AI illustration if none fits
+  autoClean: true,             // auto-clean medium+ editions at translate time
 };
 
 export async function getEditorialSettings(): Promise<EditorialSettings> {
@@ -52,6 +57,7 @@ export async function getEditorialSettings(): Promise<EditorialSettings> {
       autoCover: typeof v.autoCover === 'boolean' ? v.autoCover : DEFAULT_EDITORIAL_SETTINGS.autoCover,
       imageSource: IMAGE_SOURCES.includes(v.imageSource as ImageSource)
         ? (v.imageSource as ImageSource) : DEFAULT_EDITORIAL_SETTINGS.imageSource,
+      autoClean: typeof v.autoClean === 'boolean' ? v.autoClean : DEFAULT_EDITORIAL_SETTINGS.autoClean,
     };
   } catch {
     return DEFAULT_EDITORIAL_SETTINGS;

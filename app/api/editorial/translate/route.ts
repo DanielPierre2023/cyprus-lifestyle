@@ -11,6 +11,9 @@ import { LOCALES } from '@/lib/editorial/pipeline';
 import { packageColumns, packageFromPiece, packageIsEmpty, pieceToPackageInput } from '@/lib/editorial/packageWrite';
 import type { PackageResult } from '@/lib/editorial/generate';
 import { shouldTranscreate, parseTranscreateFlag } from '@/lib/editorial/transcreation';
+import { getEditorialSettings } from '@/lib/editorial/settings';
+import { proofread, AI_PROOFREAD_LANGS } from '@/lib/desk/proofread';
+import type { Lang } from '@/lib/antiAi';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -37,6 +40,10 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
   const explicit = parseTranscreateFlag(req.nextUrl.searchParams.get('transcreate'));
   const franchise = typeof p.franchise === 'string' ? p.franchise : '';
   const wantTranscreate = shouldTranscreate(franchise, explicit);
+
+  // Auto-clean: medium+ inflected editions get the proofread pass before they go
+  // live, so the Quality board mostly stays green on its own (toggle in settings).
+  const autoClean = (await getEditorialSettings()).autoClean;
 
   // COMPARE MODE: `?compare=1[&locale=xx]` returns BOTH renderings for one edition
   // and saves NOTHING — so the desk can judge transcreation against the humanised
@@ -75,12 +82,22 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
   // each edition natively (Sonnet); if a transcreation fails, fall back to faithful
   // translation so no edition is ever left empty.
   async function renderBody(locale: string) {
+    let base;
     if (wantTranscreate) {
       const tc = await transcreatePiece(srcTitle, srcBody, locale);
-      if (!tc.error && tc.body) return tc;
-      return translatePiece(srcTitle, srcBody, locale);
+      base = !tc.error && tc.body ? tc : await translatePiece(srcTitle, srcBody, locale);
+    } else {
+      base = await translatePiece(srcTitle, srcBody, locale);
     }
-    return translatePiece(srcTitle, srcBody, locale);
+    // Auto-clean the inflected editions (el/ar/de/pl/ru). proofread() self-gates on
+    // the AI-tell threshold, so a clean edition triggers no model call and no cost.
+    if (autoClean && base.body && AI_PROOFREAD_LANGS.includes(locale as Lang)) {
+      try {
+        const pr = await proofread({ text: base.body, lang: locale as Lang, isHtml: true, title: base.title });
+        if (pr.text) base = { ...base, body: pr.text };
+      } catch { /* keep the base render on any proofread failure */ }
+    }
+    return base;
   }
 
   // Loop the seven locales; the source is a no-op. The other six run in parallel

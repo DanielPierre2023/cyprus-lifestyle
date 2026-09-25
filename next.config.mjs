@@ -55,15 +55,19 @@ const nextConfig = {
     return [{ source: '/:path*', headers: securityHeaders }];
   },
   images: {
-    // Narrowed from a wildcard to the ONLY hosts next/image actually loads, so the
-    // Vercel image optimiser can never be pointed at an arbitrary third-party host
-    // (an SSRF-ish surface and a cost leak). Every cover and listing photo is one of:
-    //   • our Supabase Storage buckets  (listings/ and blog-images/) — enrich-directory
-    //     downloads Google Places / og:image bytes INTO storage, it never hot-links;
-    //   • images.unsplash.com           — the Unsplash cover fallback (writer + picker);
-    //   • picsum.photos                 — the seeded editorial cover fallback.
-    // Advertiser banners and the directory map use a plain <img>/CSS background, so
-    // they don't pass through next/image and are unaffected by this list.
+    // COVERS ARE SERVED UNOPTIMISED — deliberately. Routing every cover through the
+    // Vercel image optimiser (/_next/image) exhausted the plan's optimisation quota,
+    // after which the optimiser returns HTTP 402 for uncached images and covers
+    // vanish site-wide (the source files are fine — they 200 from Supabase/Unsplash).
+    // The sources are already web-optimised (Supabase serves WebP; Unsplash urls.regular
+    // is ~1080px; picsum is sized), so we skip the optimiser entirely: images load
+    // straight from the source CDN. Free, reliable, and no recurring optimisation bill.
+    // To re-enable optimisation later, remove `unoptimized` and raise the Vercel plan's
+    // image quota.
+    unoptimized: true,
+    // Kept for when optimisation is re-enabled: the ONLY hosts next/image may load.
+    // Every cover/listing photo is a Supabase Storage object, images.unsplash.com,
+    // or picsum.photos. Advertiser banners + the directory map use plain <img>/CSS.
     remotePatterns: [
       { protocol: 'https', hostname: '*.supabase.co' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
