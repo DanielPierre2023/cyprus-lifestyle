@@ -11,7 +11,7 @@ const withNextIntl = createNextIntlPlugin('./lib/i18n/request.ts');
 //   • cdn.jsdelivr.net  — the pinned, SRI-verified MapLibre GL script + stylesheet
 //     (loaded at runtime; see lib/map/maplibre.ts). SRI means a tampered payload
 //     is rejected even though the host is allow-listed.
-//   • *.basemaps.cartocdn.com — the free CARTO GL vector style, tiles, glyphs, sprites.
+//   • basemaps.cartocdn.com — the free CARTO GL vector style, tiles, glyphs, sprites.
 //   • api.open-meteo.com / marine-api.open-meteo.com — free weather + sea-temperature
 //     nowcast for the map/webcams (no API key).
 //   • worker-src blob: — MapLibre GL runs its tile worker from a blob: URL.
