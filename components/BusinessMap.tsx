@@ -1,9 +1,10 @@
 'use client';
 // ============================================================================
 // Interactive directory map (paralieslive-style), embedded on /directory.
-// Left sidebar = canonical categories (icon + count); click one → all its
-// businesses drop as pins; click a pin → popup with photo/phone/email/website/
-// directions. Cyprus-only, centred on Larnaca, hand-drag + street-level zoom.
+// Left sidebar = canonical categories (icon + count); click one → EVERY business
+// in it drops on the map as its own pin (no clustering); click a pin → popup with
+// photo/phone/email/website/directions. Cyprus-only, framed on the island,
+// hand-drag + street-level zoom.
 //
 // Self-contained: depends only on loadMaplibre()/cartoGlStyle() (already in the
 // repo) and pure metadata types. The MapLibre runtime surface it uses is typed
@@ -14,15 +15,16 @@ import { loadMaplibre, cartoGlStyle } from '@/lib/map/maplibre';
 import type { BizCategory, BizLabels } from '@/lib/directory/map-meta';
 
 const GOLD = '#C9A24C';
-const LARNACA: [number, number] = [33.62, 34.92];
+// Frame the inhabited south of Cyprus (SW lng/lat → NE lng/lat), so the map opens
+// on land, not on empty grey sea.
+const CYPRUS_BOUNDS: [LngLat, LngLat] = [[32.26, 34.56], [34.12, 35.42]];
 
 // ---- Local MapLibre runtime types (only what this component calls) ----------
 type LngLat = [number, number];
 interface GJFeature { type: 'Feature'; geometry: { type: 'Point'; coordinates: LngLat }; properties: Record<string, unknown> }
 interface GJ { type: 'FeatureCollection'; features: GJFeature[] }
-interface MlSource { setData(d: GJ): void; getClusterExpansionZoom(id: number): Promise<number> }
+interface MlSource { setData(d: GJ): void }
 interface MlPopup { setLngLat(c: LngLat): MlPopup; setHTML(h: string): MlPopup; addTo(m: MlMap): MlPopup; remove(): void }
-interface MlMarker { setLngLat(c: LngLat): MlMarker; addTo(m: MlMap): MlMarker; remove(): MlMarker }
 interface MlEvtFeature { properties: Record<string, unknown>; geometry: { type: string; coordinates: LngLat } }
 interface MlEvent { features?: MlEvtFeature[] }
 interface MlMap {
@@ -34,17 +36,14 @@ interface MlMap {
   addImage(id: string, image: ImageData, opts?: Record<string, unknown>): void;
   updateImage(id: string, image: ImageData): void;
   hasImage(id: string): boolean;
-  isSourceLoaded(id: string): boolean;
-  querySourceFeatures(source: string, params?: Record<string, unknown>): MlEvtFeature[];
   getCanvas(): HTMLCanvasElement;
-  easeTo(opts: Record<string, unknown>): void;
+  fitBounds(bounds: [LngLat, LngLat], opts?: Record<string, unknown>): void;
   resize(): void;
   remove(): void;
 }
 interface MlGL {
   Map: new (opts: Record<string, unknown>) => MlMap;
   Popup: new (opts?: Record<string, unknown>) => MlPopup;
-  Marker: new (opts?: Record<string, unknown>) => MlMarker;
   NavigationControl: new (opts?: Record<string, unknown>) => unknown;
   GeolocateControl: new (opts?: Record<string, unknown>) => unknown;
 }
@@ -82,7 +81,7 @@ export default function BusinessMap({
   const mapRef = useRef<MlMap | null>(null);
   const glRef = useRef<MlGL | null>(null);
   const popupRef = useRef<MlPopup | null>(null);
-  const clusterMarkers = useRef<MlMarker[]>([]);
+  const roRef = useRef<ResizeObserver | null>(null);
   const readyRef = useRef(false);
   const curRef = useRef<string>('');
 
@@ -102,32 +101,6 @@ export default function BusinessMap({
     try { if (map.hasImage('cat-icon')) map.updateImage('cat-icon', img); else map.addImage('cat-icon', img, { pixelRatio: 2 }); } catch { /* noop */ }
   }
 
-  function refreshClusters() {
-    const map = mapRef.current; const gl = glRef.current;
-    if (!map || !gl || !readyRef.current) return;
-    try {
-      clusterMarkers.current.forEach((m) => m.remove());
-      clusterMarkers.current = [];
-      if (!map.isSourceLoaded('biz')) return;
-      const feats = map.querySourceFeatures('biz', { filter: ['has', 'point_count'] });
-      const seen = new Set<number>();
-      for (const f of feats) {
-        const id = (f.properties as { cluster_id?: number }).cluster_id;
-        if (id == null || seen.has(id)) continue;
-        seen.add(id);
-        const el = document.createElement('div');
-        el.className = 'bm-cl';
-        el.textContent = String((f.properties as { point_count_abbreviated?: string }).point_count_abbreviated ?? '');
-        el.onclick = () => {
-          map.getSource('biz')?.getClusterExpansionZoom(id)
-            .then((z) => map.easeTo({ center: f.geometry.coordinates, zoom: Math.max(z, 13) }))
-            .catch(() => {});
-        };
-        clusterMarkers.current.push(new gl.Marker({ element: el }).setLngLat(f.geometry.coordinates).addTo(map));
-      }
-    } catch { /* noop */ }
-  }
-
   async function loadCategory(cat: string) {
     if (!cat) return;
     setSel(cat); curRef.current = cat;
@@ -140,7 +113,6 @@ export default function BusinessMap({
       if (curRef.current !== cat) return; // a newer click won
       mapRef.current?.getSource('biz')?.setData(gj);
       setShown(gj.features.length);
-      setTimeout(refreshClusters, 250);
     } catch {
       setShown(0);
     } finally {
@@ -162,7 +134,7 @@ export default function BusinessMap({
     if (p.url) a.push(`<a class="bm-act" href="${esc(p.url)}" target="_blank" rel="noopener nofollow">↗ ${esc(labels.website)}</a>`);
     a.push(`<a class="bm-act" href="https://www.google.com/maps/dir/?api=1&destination=${coords[1]},${coords[0]}" target="_blank" rel="noopener noreferrer">➤ ${esc(labels.directions)}</a>`);
     popupRef.current?.remove();
-    popupRef.current = new gl.Popup({ closeButton: true, maxWidth: '250px', className: 'bm-pop', offset: 26 })
+    popupRef.current = new gl.Popup({ closeButton: true, maxWidth: '250px', className: 'bm-pop', offset: 14 })
       .setLngLat(coords)
       .setHTML(`<div class="bm-card">${media}<div class="bm-b"><span class="bm-t">${esc(c.icon)} ${esc(c.label)}</span><b>${esc(p.name || '')}</b>${place ? `<span class="bm-place">${esc(place)}</span>` : ''}<span class="bm-acts">${a.join('')}</span></div></div>`)
       .addTo(map);
@@ -181,12 +153,12 @@ export default function BusinessMap({
       const map = new gl.Map({
         container: el,
         style: cartoGlStyle(),
-        center: LARNACA,
-        zoom: 8.4,
+        bounds: CYPRUS_BOUNDS,
+        fitBoundsOptions: { padding: 24 },
         minZoom: 7,
         maxZoom: 19,
         // Locked to Cyprus; drag (hand) + scroll/pinch zoom down to street level.
-        maxBounds: [[31.9, 34.4], [35.1, 36.0]],
+        maxBounds: [[31.9, 34.4], [34.9, 35.9]],
         attributionControl: { compact: true },
       });
       mapRef.current = map;
@@ -197,35 +169,49 @@ export default function BusinessMap({
         }), 'top-right');
       } catch { /* geolocate optional */ }
 
+      // Repaint whenever the container changes size (e.g. scrolled into view),
+      // so the map never renders as a blank/half-drawn grey box.
+      try {
+        const ro = new ResizeObserver(() => { try { map.resize(); } catch { /* noop */ } });
+        ro.observe(el);
+        roRef.current = ro;
+      } catch { /* ResizeObserver optional */ }
+
       map.on('load', () => {
         if (cancelled) return;
         map.resize();
+        map.fitBounds(CYPRUS_BOUNDS, { padding: 24, animate: false });
         setIcon(defaultCat);
-        map.addSource('biz', {
-          type: 'geojson', data: { type: 'FeatureCollection', features: [] },
-          cluster: true, clusterRadius: 46, clusterMaxZoom: 15,
-        });
+        // NO clustering — every business is its own point.
+        map.addSource('biz', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        // Base dot — a native circle that ALWAYS renders, so a pin can never be
+        // invisible even if the emoji icon image fails to load.
         map.addLayer({
-          id: 'pts', type: 'symbol', source: 'biz', filter: ['!', ['has', 'point_count']],
-          layout: { 'icon-image': 'cat-icon', 'icon-size': 0.5, 'icon-allow-overlap': true, 'icon-anchor': 'bottom' },
+          id: 'pts-dot', type: 'circle', source: 'biz',
+          paint: { 'circle-radius': 7, 'circle-color': '#ffffff', 'circle-stroke-color': GOLD, 'circle-stroke-width': 2 },
         });
-        map.on('click', 'pts', (e) => {
+        // Category emoji on top of the dot.
+        map.addLayer({
+          id: 'pts', type: 'symbol', source: 'biz',
+          layout: { 'icon-image': 'cat-icon', 'icon-size': 0.4, 'icon-allow-overlap': true, 'icon-anchor': 'center' },
+        });
+        const onPointClick = (e: MlEvent) => {
           const f = e.features?.[0];
           if (!f) return;
           openPopup(f.geometry.coordinates as LngLat, f.properties as Record<string, string>);
-        });
-        map.on('mouseenter', 'pts', () => { map.getCanvas().style.cursor = 'pointer'; });
-        map.on('mouseleave', 'pts', () => { map.getCanvas().style.cursor = ''; });
-        map.on('moveend', refreshClusters);
-        map.on('idle', refreshClusters);
+        };
+        map.on('click', 'pts-dot', onPointClick);
+        map.on('click', 'pts', onPointClick);
+        map.on('mouseenter', 'pts-dot', () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'pts-dot', () => { map.getCanvas().style.cursor = ''; });
         readyRef.current = true;
         loadCategory(defaultCat);
       });
     })();
     return () => {
       cancelled = true;
-      clusterMarkers.current.forEach((m) => m.remove());
-      clusterMarkers.current = [];
+      try { roRef.current?.disconnect(); } catch { /* noop */ }
+      roRef.current = null;
       popupRef.current?.remove();
       popupRef.current = null;
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
@@ -244,13 +230,13 @@ export default function BusinessMap({
     <div className="bm-wrap">
       <style>{`
         .bm-wrap{display:flex;flex-wrap:wrap;border:1px solid #1c2128;border-radius:12px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.12);background:#0B0E11;isolation:isolate;min-height:560px;height:80vh;max-height:900px}
-        .bm-side{flex:1 1 300px;max-width:330px;min-width:250px;background:#0B0E11;color:#e7e0d2;display:flex;flex-direction:column;border-right:1px solid #1c2128}
-        .bm-head{padding:15px 16px 12px;border-bottom:1px solid #1c2128}
+        .bm-side{flex:1 1 300px;max-width:330px;min-width:250px;min-height:0;background:#0B0E11;color:#e7e0d2;display:flex;flex-direction:column;border-right:1px solid #1c2128}
+        .bm-head{padding:15px 16px 12px;border-bottom:1px solid #1c2128;flex:0 0 auto}
         .bm-head h2{margin:0;font-family:var(--disp,Georgia,serif);font-weight:600;font-size:19px;color:#fff}
         .bm-head p{margin:3px 0 0;font-size:12px;color:#8a8f98}
         .bm-search{margin-top:11px;width:100%;background:#161b22;border:1px solid #262d36;color:#e7e0d2;border-radius:8px;padding:9px 12px;font-size:14px}
         .bm-search::placeholder{color:#6b727c}
-        .bm-list{overflow-y:auto;flex:1;padding:6px 0 12px}
+        .bm-list{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1 1 auto;min-height:0;padding:6px 0 12px}
         .bm-row{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;padding:8px 15px;cursor:pointer;color:#e7e0d2;text-align:left;font:inherit}
         .bm-row:hover{background:#12161c}
         .bm-row.on{background:#1b2230}
@@ -261,7 +247,6 @@ export default function BusinessMap({
         .bm-mapcol{flex:2 1 500px;min-width:300px;position:relative}
         .bm-map{position:absolute;inset:0}
         .bm-status{position:absolute;top:10px;left:10px;z-index:4;background:rgba(11,14,17,.86);color:#e7e0d2;border:1px solid #2a323c;border-radius:999px;padding:6px 13px;font:600 12px/1 var(--font-jost,system-ui,sans-serif);pointer-events:none}
-        .bm-cl{background:#0B0E11;color:#fff;border:2px solid ${GOLD};border-radius:999px;min-width:32px;height:32px;display:flex;align-items:center;justify-content:center;font:700 12px/1 system-ui,sans-serif;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.5);padding:0 6px}
         .maplibregl-popup.bm-pop .maplibregl-popup-content{border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.28);padding:0;overflow:hidden}
         .bm-card{display:flex;flex-direction:column;width:224px;font-family:var(--font-jost,system-ui,sans-serif)}
         .bm-im{display:block;height:116px;background-size:cover;background-position:center;background:#12242b}
@@ -274,7 +259,7 @@ export default function BusinessMap({
         .bm-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
         .bm-act{font-size:12px;font-weight:600;color:#8a5b12;text-decoration:none;border:1px solid #ecdfc2;border-radius:999px;padding:4px 9px}
         .bm-act:hover{background:#f6efdf;text-decoration:none}
-        @media(max-width:760px){.bm-wrap{flex-direction:column;height:auto;max-height:none}.bm-side{max-width:none;width:100%;border-right:0;border-bottom:1px solid #1c2128}.bm-list{max-height:170px}.bm-mapcol{width:100%;height:64vh;min-height:400px;flex:none}}
+        @media(max-width:760px){.bm-wrap{flex-direction:column;height:auto;max-height:none}.bm-side{max-width:none;width:100%;border-right:0;border-bottom:1px solid #1c2128}.bm-list{max-height:180px}.bm-mapcol{width:100%;height:64vh;min-height:400px;flex:none}}
       `}</style>
 
       <div className="bm-side">
