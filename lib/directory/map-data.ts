@@ -59,28 +59,35 @@ export async function getBusinessesForMap(
 ): Promise<MapBusiness[]> {
   if (!opts.cat) return [];
   const sb = supabaseAdmin();
-  const limit = Math.min(opts.limit ?? 8000, 12000);
-  const { data } = await sb.from('directory_listings')
-    .select(`slug, type, canonical_category, district, address, lat, lng, image, phone, email, url, featured, name_${locale}, name_en`)
-    .in('status', MAP_STATUSES as unknown as string[])
-    .not('lat', 'is', null).not('lng', 'is', null).not('north', 'is', true)
-    .eq('canonical_category', opts.cat)
-    .order('featured', { ascending: false, nullsFirst: false })
-    .limit(limit);
-  const rows = (data || []) as Record<string, unknown>[];
+  const cap = Math.min(opts.limit ?? 8000, 12000);
+  const cols = `slug, type, canonical_category, district, address, lat, lng, image, phone, email, url, featured, name_${locale}, name_en`;
   const out: MapBusiness[] = [];
-  for (const r of rows) {
-    const lat = Number(r.lat), lng = Number(r.lng);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-    out.push({
-      slug: String(r.slug), type: String(r.type || 'vendor'),
-      name: String(r[`name_${locale}`] || r.name_en || r.slug),
-      lat, lng,
-      image: (r.image as string) || null, phone: (r.phone as string) || null,
-      email: (r.email as string) || null, url: (r.url as string) || null,
-      district: (r.district as string) || null, address: (r.address as string) || null,
-      cat: (r.canonical_category as string) || null,
-    });
+  const page = 1000; // Supabase caps each request at ~1000 rows — page through to get them ALL.
+  for (let from = 0; from < cap; from += page) {
+    const to = Math.min(from + page, cap) - 1;
+    const { data } = await sb.from('directory_listings')
+      .select(cols)
+      .in('status', MAP_STATUSES as unknown as string[])
+      .not('lat', 'is', null).not('lng', 'is', null).not('north', 'is', true)
+      .eq('canonical_category', opts.cat)
+      .order('featured', { ascending: false, nullsFirst: false })
+      .order('slug', { ascending: true }) // stable secondary sort so pages don't overlap/skip
+      .range(from, to);
+    const rows = (data || []) as unknown as Record<string, unknown>[];
+    for (const r of rows) {
+      const lat = Number(r.lat), lng = Number(r.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      out.push({
+        slug: String(r.slug), type: String(r.type || 'vendor'),
+        name: String(r[`name_${locale}`] || r.name_en || r.slug),
+        lat, lng,
+        image: (r.image as string) || null, phone: (r.phone as string) || null,
+        email: (r.email as string) || null, url: (r.url as string) || null,
+        district: (r.district as string) || null, address: (r.address as string) || null,
+        cat: (r.canonical_category as string) || null,
+      });
+    }
+    if (rows.length < page) break; // last page reached
   }
   return out;
 }
