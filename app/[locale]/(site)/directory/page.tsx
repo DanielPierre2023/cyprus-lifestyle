@@ -3,10 +3,13 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { DIRECTORY_TYPES, getListings, getDirectoryMapPoints, getDirectoryCounts, getGroupCounts } from '@/lib/queries';
+import { DIRECTORY_TYPES, getListings, getDirectoryCounts, getGroupCounts } from '@/lib/queries';
 import { TAXONOMY, groupColor } from '@/lib/taxonomy';
+import { categoryLabel } from '@/lib/directory/taxonomy';
+import { getMapCategories } from '@/lib/directory/map-data';
+import { categoryIcon, bizLabels, type BizCategory } from '@/lib/directory/map-meta';
 import { breadcrumbJsonLd, itemListJsonLd, ld, pageMetadata } from '@/lib/seo';
-import DirectoryMap from '@/components/DirectoryMap';
+import BusinessMap from '@/components/BusinessMap';
 import CoverImage from '@/components/CoverImage';
 import Concierge, { type ConciergeLabels } from '@/components/Concierge';
 import RecentlyViewed from '@/components/RecentlyViewed';
@@ -28,16 +31,21 @@ export default async function DirectoryIndex({ params }: { params: Promise<{ loc
   setRequestLocale(locale);
   const l = locale as Locale;
   const t = await getTranslations();
-  // Map = every published listing (paginated past the 1000 cap). Chips = true head
-  // counts. Sections = a small preview per category (the full list lives on /directory/[type]).
-  const [rawPoints, counts, groupCounts, previews] = await Promise.all([
-    getDirectoryMapPoints(l),
+  // Map = the interactive business map (categories + on-demand pins, paralieslive-style).
+  // Chips = true head counts. Sections = a small preview per category (the full list
+  // lives on /directory/[type]).
+  const [mapCats, counts, groupCounts, previews] = await Promise.all([
+    getMapCategories(),
     getDirectoryCounts(),
     getGroupCounts(),
     Promise.all(DIRECTORY_TYPES.map(async (ty) => ({ ty, items: await getListings(l, ty, PREVIEW) }))),
   ]);
   const catGroups = TAXONOMY.filter((g) => (groupCounts[g.key] || 0) > 0);
-  const points = rawPoints.map((p) => ({ lat: p.lat, lng: p.lng, name: p.name, type: p.type, image: p.image, href: `/${l}/directory/${p.type}/${p.slug}` }));
+  // Sidebar categories: canonical key → human label + emoji icon + geocoded count.
+  const bizCategories: BizCategory[] = mapCats.categories.map((c) => ({
+    k: c.cat, label: categoryLabel(c.cat), icon: categoryIcon(c.cat), count: c.count,
+  }));
+  const mapLabels = bizLabels(l);
   const typeLabels: Record<string, string> = Object.fromEntries(DIRECTORY_TYPES.map((ty) => [ty, t(`directory.${ty}`)]));
   const groups = previews.map((g) => ({ ...g, count: counts[g.ty] || 0 })).filter((g) => g.count > 0);
   const sample = previews.flatMap((g) => g.items).slice(0, 50);
@@ -123,14 +131,13 @@ export default async function DirectoryIndex({ params }: { params: Promise<{ loc
           .dir-concierge .cnc-input{background:#fff}
           .dir-concierge .cnc-ex-t,.dir-concierge .cnc-chip{color:#cdc4af}
           .dir-concierge .cnc-chip{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.18)}
-          .dir-concierge .cnc-chip:hover{color:#fff;border-color:#C9A24C}
           .dir-concierge .cnc-answer{color:#f3ecdd}
           .dir-concierge .cnc-picks-t{color:#cdc4af}
         `}</style>
       </div>
 
-      {points.length ? (
-        <div className="wrap section"><DirectoryMap points={points} typeLabels={typeLabels} locale={l} viewLabel={t('directory.view')} placesLabel={t('directory.places')} ariaLabel={t('directory.mapAria')} /></div>
+      {bizCategories.length ? (
+        <div className="wrap section"><BusinessMap locale={l} categories={bizCategories} labels={mapLabels} /></div>
       ) : null}
 
       <div className="wrap section"><RecentlyViewed title={t('recent.title')} /></div>
