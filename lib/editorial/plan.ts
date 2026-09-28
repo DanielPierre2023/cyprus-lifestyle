@@ -16,6 +16,7 @@ import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { callClaude, CLAUDE_SONNET, parseAiJson } from '@/lib/ai';
 import { embedText } from '@/lib/concierge/embed';
+import { topReaderDemand } from '@/lib/concierge/analytics';
 import { getSection } from '@/lib/editorial/taxonomy';
 import { getEditorialSettings } from '@/lib/editorial/settings';
 import {
@@ -86,7 +87,7 @@ async function isSemanticDup(embedding: number[] | null): Promise<boolean> {
 
 async function processSection(
   gap: PlanGapRow, monthIndex: number, opts: PlannerRunOptions, settings: { webSearch: boolean; ideasPerSection: number },
-  budgetLeftMs: () => number,
+  budgetLeftMs: () => number, demand: string[],
 ): Promise<{ section: string; created: number; skippedDup: number; error?: string; webFallback?: boolean; webSource?: string }> {
   const section = getSection(gap.section_key);
   if (!section) return { section: gap.section_key, created: 0, skippedDup: 0, error: 'unknown section' };
@@ -105,7 +106,7 @@ async function processSection(
   // One ideation attempt. `useTool` turns on Anthropic web_search; `webText` is the
   // research block (Tavily digest, or the directive that tells the tool to search).
   async function ideate(useTool: boolean, webText: string) {
-    const signals: PlannerSignals = { seasonal: seasonalNote(monthIndex), web: webText, demand: [], candidates };
+    const signals: PlannerSignals = { seasonal: seasonalNote(monthIndex), web: webText, demand, candidates };
     const userMessage = ideatePrompt({ section: section!, departmentName: gap.department_name, monthIndex, count: want, signals, existingTitles: existing });
     return callClaude({
       systemInstruction: plannerSystem(), userMessage, model: CLAUDE_SONNET, jsonMode: true,
@@ -180,6 +181,10 @@ export async function runPlanner(opts: PlannerRunOptions = {}): Promise<Record<s
     ? opts.monthIndex : new Date().getUTCMonth() + 1;
   const maxIdeas = opts.maxIdeas && opts.maxIdeas > 0 ? opts.maxIdeas : 1000;
 
+  // Reader demand — the questions people actually ask the concierge (poorly-answered
+  // first). A global signal fed to every section's ideation; best-effort, never blocks.
+  const demand = await topReaderDemand();
+
   // SENSE — the biggest gaps first.
   let q = supabaseAdmin().from('editorial_plan').select('*').gt('gap', 0).order('gap', { ascending: false });
   if (opts.sectionKey) q = supabaseAdmin().from('editorial_plan').select('*').eq('section_key', opts.sectionKey);
@@ -194,7 +199,7 @@ export async function runPlanner(opts: PlannerRunOptions = {}): Promise<Record<s
 
   for (const gap of gaps.slice(0, sectionLimit)) {
     if (budgetLeft() < 12_000 || totalCreated >= maxIdeas) break;
-    const res = await processSection(gap, monthIndex, opts, settings, budgetLeft);
+    const res = await processSection(gap, monthIndex, opts, settings, budgetLeft, demand);
     results.push(res);
     totalCreated += res.created;
   }
@@ -206,6 +211,7 @@ export async function runPlanner(opts: PlannerRunOptions = {}): Promise<Record<s
     autonomy: settings.autonomy,
     webSearch: opts.webSearch == null ? settings.webSearch : !!opts.webSearch,
     dryRun: !!opts.dryRun,
+    readerDemand: demand.length,
     sectionsProcessed: results.length,
     ideasCreated: totalCreated,
     results,

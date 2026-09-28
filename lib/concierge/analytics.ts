@@ -45,3 +45,38 @@ export async function logConciergeTurn(t: TurnLog): Promise<void> {
     });
   } catch { /* analytics must never break a reply */ }
 }
+
+// Reader demand for the editorial planner: the questions people actually put to the
+// concierge lately — the ones we answered poorly (deferred/partial) FIRST, then the
+// most frequent. Distinct, trimmed, best-effort (never throws). Feeds
+// PlannerSignals.demand so the newsroom writes what the audience is asking for.
+export async function topReaderDemand(limit = 18, days = 45): Promise<string[]> {
+  try {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabaseAdmin()
+      .from('concierge_events')
+      .select('question, coverage')
+      .gte('created_at', since)
+      .not('question', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(600);
+    if (error || !data) return [];
+    const rows = data as { question: string | null; coverage: string | null }[];
+    const agg = new Map<string, { q: string; count: number; unmet: boolean }>();
+    for (const r of rows) {
+      const q = (r.question || '').trim();
+      if (q.length < 8) continue; // skip greetings / trivial turns
+      const key = q.toLowerCase().replace(/\s+/g, ' ').slice(0, 120);
+      const unmet = r.coverage === 'deferred' || r.coverage === 'partial';
+      const cur = agg.get(key);
+      if (cur) { cur.count++; cur.unmet = cur.unmet || unmet; }
+      else agg.set(key, { q: q.slice(0, 160), count: 1, unmet });
+    }
+    return [...agg.values()]
+      .sort((a, b) => (Number(b.unmet) - Number(a.unmet)) || (b.count - a.count))
+      .slice(0, limit)
+      .map((x) => x.q);
+  } catch {
+    return [];
+  }
+}
