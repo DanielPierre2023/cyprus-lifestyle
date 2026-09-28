@@ -139,6 +139,13 @@ export async function GET(req: Request) {
       needs: ['WHATSAPP_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_VERIFY_TOKEN'],
       unlocks: 'The concierge answering on WhatsApp. Entirely optional.',
     },
+    {
+      key: 'telegram',
+      label: 'Telegram concierge (optional)',
+      ready: has(env.TELEGRAM_BOT_TOKEN),
+      needs: ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_SECRET_TOKEN'],
+      unlocks: 'The concierge answering on Telegram.',
+    },
   ];
 
   const missing = Array.from(new Set(features.filter((f) => !f.ready).flatMap((f) => f.needs)));
