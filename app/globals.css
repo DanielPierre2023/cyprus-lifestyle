@@ -211,8 +211,8 @@ html[lang="ar"] .display, html[lang="ar"] .disp, html[lang="ar"] .brand { font-f
 
 /* ── Forms (contact / advertise) ───────────────────────────────────────────── */
 .cform { max-width: 540px; margin: 0 auto; }
-.cform input, .cform textarea { width: 100%; padding: 14px 16px; border: 1px solid var(--line); margin-bottom: 12px; font-family: var(--body); font-size: 16px; background: #fff; color: var(--ink); }
-.cform input:focus, .cform textarea:focus { outline: none; border-color: var(--gold); }
+.cform input, .cform select, .cform textarea { width: 100%; padding: 14px 16px; border: 1px solid var(--line); margin-bottom: 12px; font-family: var(--body); font-size: 16px; background: #fff; color: var(--ink); }
+.cform input:focus, .cform select:focus, .cform textarea:focus { outline: none; border-color: var(--gold); }
 .cform .btn { margin-top: 4px; padding: 14px 26px; }
 .cform .note { font-family: var(--sans); font-size: 13px; letter-spacing: .04em; margin-top: 10px; }
 .article .kicker { display: block; margin-bottom: 14px; }
