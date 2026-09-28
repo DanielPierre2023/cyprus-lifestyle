@@ -27,6 +27,8 @@ export default function CrmConsole() {
   const [deals, setDeals] = useState<Row[]>([]);
   const [stats, setStats] = useState<Record<string, number>>({});
   const [msg, setMsg] = useState('');
+  const [prospects, setProspects] = useState<Row[]>([]);
+  const [prospectErr, setProspectErr] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,6 +54,19 @@ export default function CrmConsole() {
     setStats({ total: tot, contacted, won, live });
   }, [sb]);
   useEffect(() => { loadStats(); }, [loadStats]);
+
+  // Top prospects — the opportunity ranking (crm_prospect_scores view, 0124),
+  // best-scoring non-customers first.
+  const loadProspects = useCallback(async () => {
+    const { data, error } = await sb.from('crm_prospect_scores')
+      .select('id, name, category, district, rating, lead_score, reason')
+      .not('status', 'in', '(won,live)')
+      .order('lead_score', { ascending: false })
+      .limit(50);
+    if (error) { setProspectErr(error.message); setProspects([]); return; }
+    setProspectErr(''); setProspects((data as Row[]) || []);
+  }, [sb]);
+  useEffect(() => { loadProspects(); }, [loadProspects]);
 
   async function setField(id: string, field: string, value: string) {
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
@@ -151,6 +166,25 @@ export default function CrmConsole() {
         <span style={{ fontSize: 13, color: '#8a8371' }}>Page {page + 1} of {pages}</span>
         <button className="abtn ghost" disabled={page + 1 >= pages} onClick={() => setPage((p) => p + 1)}>Next →</button>
       </div>
+
+      <h2 style={{ marginTop: 34, fontSize: 18 }}>Top prospects</h2>
+      <p className="sub" style={{ marginBottom: 12 }}>Ranked by opportunity so outreach hits the best targets first — highest-value gaps at the top.</p>
+      <table className="adm-t">
+        <thead><tr><th>Account</th><th>Category</th><th>District</th><th>Rating</th><th>Score</th><th>Why</th></tr></thead>
+        <tbody>
+          {prospects.map((p) => (
+            <tr key={p.id}>
+              <td><strong>{p.name}</strong></td>
+              <td style={{ fontSize: 13 }}>{p.category || '—'}</td>
+              <td style={{ fontSize: 13 }}>{p.district || '—'}</td>
+              <td>{p.rating ?? '—'}</td>
+              <td><strong>{p.lead_score}</strong></td>
+              <td style={{ fontSize: 13, color: '#5b5647' }}>{p.reason || '—'}</td>
+            </tr>
+          ))}
+          {prospects.length === 0 ? <tr><td colSpan={6}>{prospectErr || 'No scored prospects yet.'}</td></tr> : null}
+        </tbody>
+      </table>
     </>
   );
 }

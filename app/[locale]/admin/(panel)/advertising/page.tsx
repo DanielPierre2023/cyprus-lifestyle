@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase/client';
+import BannerEditor from '@/components/admin/BannerEditor';
 
 type Row = Record<string, any>;
 const eur = (n: number | null) => (n == null ? '—' : `€${Number(n).toLocaleString('en-IE')}`);
@@ -79,6 +80,8 @@ export default function AdvertisingTab() {
           {orders.length === 0 ? <tr><td colSpan={6}>No orders yet. Self-serve orders appear here once Stripe is live.</td></tr> : null}
         </tbody>
       </table>
+
+      <BannerEditor />
     </>
   );
 }

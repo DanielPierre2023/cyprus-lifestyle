@@ -501,8 +501,14 @@ export async function getDirectoryCounts(): Promise<Record<string, number>> {
 export interface Banner { id: string; advertiser_name: string; headline: string; body: string; cta: string; url: string; image_url: string | null; bg_color: string; accent_color: string }
 export async function getBanner(locale: Locale, slot = 'sidebar-homepage'): Promise<Banner | null> {
   const l = locale;
+  // Select every localised copy column (all seven locales) and resolve the active
+  // one via pick(), which falls back to the English column when the locale column
+  // is empty — so de/pl/ru banners render just like en/el/ro/ar.
   const { data } = await supabaseAdmin().from('sponsor_banners')
-    .select(`id, advertiser_name, url, image_url, bg_color, accent_color, headline_${l}, headline_en, body_${l}, body_en, cta_${l}, cta_en`)
+    .select(`id, advertiser_name, url, image_url, bg_color, accent_color,
+      headline_en, headline_el, headline_ro, headline_ar, headline_de, headline_pl, headline_ru,
+      body_en, body_el, body_ro, body_ar, body_de, body_pl, body_ru,
+      cta_en, cta_el, cta_ro, cta_ar, cta_de, cta_pl, cta_ru`)
     .eq('slot', slot).eq('is_active', true).order('weight', { ascending: false }).limit(1);
   const rows = (data || []) as unknown as Record<string, unknown>[];
   if (!rows.length) return null;
@@ -512,6 +518,24 @@ export async function getBanner(locale: Locale, slot = 'sidebar-homepage'): Prom
     image_url: (r.image_url as string) ?? null, bg_color: String(r.bg_color || '#0B0E11'), accent_color: String(r.accent_color || '#C9A24C'),
     headline: pick(r, 'headline', l), body: pick(r, 'body', l), cta: pick(r, 'cta', l),
   };
+}
+
+// The "Presented by …" section sponsor, driven by the section_sponsors mapping
+// (0123). Server-only read via the service role; best-effort so a missing table
+// or empty mapping simply renders nothing. Keyed by the public section key the
+// category page passes (e.g. 'table', 'property', 'culture').
+export interface SectionSponsor { name: string; logo: string | null; url: string | null }
+export async function getSectionSponsor(sectionKey: string): Promise<SectionSponsor | null> {
+  try {
+    const { data } = await supabaseAdmin().from('section_sponsors')
+      .select('sponsor_name, sponsor_logo, sponsor_url')
+      .eq('section_key', sectionKey).eq('is_active', true).limit(1).maybeSingle();
+    if (!data) return null;
+    const r = data as Record<string, unknown>;
+    const name = String(r.sponsor_name || '').trim();
+    if (!name) return null;
+    return { name, logo: (r.sponsor_logo as string) || null, url: (r.sponsor_url as string) || null };
+  } catch { return null; }
 }
 
 export interface Author {

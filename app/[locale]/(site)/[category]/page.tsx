@@ -3,12 +3,13 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { getByCategory } from '@/lib/queries';
+import { getByCategory, getSectionSponsor } from '@/lib/queries';
 import { departments as editorialDepartments, getSection } from '@/lib/editorial/taxonomy';
 import { pageMetadata, breadcrumbJsonLd, ld } from '@/lib/seo';
 import ArticleCard from '@/components/ArticleCard';
 import CoverImage from '@/components/CoverImage';
 import NewsletterSignup from '@/components/NewsletterSignup';
+import SectionSponsor from '@/components/SectionSponsor';
 
 export const revalidate = 300;
 
@@ -40,7 +41,10 @@ export default async function CategoryPage({ params }: { params: Promise<{ local
   setRequestLocale(locale);
   const l = locale as Locale;
   const t = await getTranslations();
-  const cards = await getByCategory(l, category, 25);
+  const [cards, sponsor] = await Promise.all([
+    getByCategory(l, category, 25),
+    getSectionSponsor(category),
+  ]);
 
   const label = t.has(`nav.${category}`) ? t(`nav.${category}`) : (getSection(category)?.name || category);
   const desc = t.has(`sections.${category}`) ? t(`sections.${category}`) : (getSection(category)?.description || '');
@@ -57,6 +61,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ local
         <span className="kicker">{t('brand.name')}</span>
         <h1>{label}</h1>
         {desc ? <p className="desc">{desc}</p> : null}
+        <SectionSponsor sponsor={sponsor} locale={l} />
         <div className="rule-orn orn"><span className="diamond" /></div>
       </div>
 
