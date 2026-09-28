@@ -14,9 +14,12 @@ import { loadMaplibre, cartoGlStyle } from '@/lib/map/maplibre';
 import { categoryIcon, catLabel, type BizCategory, type BizLabels } from '@/lib/directory/map-meta';
 
 const GOLD = '#C9A24C';
-// Centre on the Cyprus landmass (slightly inland of Larnaca) — plain center+zoom,
-// the render config proven to work, so the map opens on land not on grey sea.
-const ISLAND_CENTER: [number, number] = [33.35, 34.92];
+// Open on the SOUTH of Cyprus — the government-controlled south coast where every
+// business is (Paphos → Limassol → Larnaca → Protaras). Plain center+zoom, no
+// maxBounds: a maxBounds box narrower than the viewport makes MapLibre ignore the
+// centre and lock the view to the box centre (which fell in the sea to the north),
+// and it makes dragging rubber-band. Free panning + this centre fixes both.
+const SOUTH_CENTER: [number, number] = [33.15, 34.80];
 
 // ---- Local MapLibre runtime types (only what this component calls) ----------
 type LngLat = [number, number];
@@ -159,12 +162,14 @@ export default function BusinessMap({
       const map = new gl.Map({
         container: el,
         style: cartoGlStyle(),
-        center: ISLAND_CENTER,
-        zoom: 8.4,
+        center: SOUTH_CENTER,
+        zoom: 8.6,
         minZoom: 7,
         maxZoom: 19,
-        // Locked to Cyprus; drag (hand) + scroll/pinch zoom down to street level.
-        maxBounds: [[31.9, 34.4], [35.1, 36.0]],
+        // Flat pan/zoom, no rotation — cleaner cursor navigation. No maxBounds:
+        // free dragging, and the view opens exactly on SOUTH_CENTER.
+        dragRotate: false,
+        pitchWithRotate: false,
         attributionControl: { compact: true },
       });
       mapRef.current = map;
