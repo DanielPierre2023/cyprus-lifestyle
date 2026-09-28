@@ -16,6 +16,33 @@ const API = 'https://api.telegram.org';
 const SITE = (process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.eu').replace(/\/$/, '');
 const TG_LIMIT = 4000; // Telegram's hard limit is 4096 chars/message; we chunk well under it.
 
+// Resolve the user's Telegram app language to one of our seven editions (else English).
+const UI_LANGS = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'];
+function tgLocale(code?: string): string {
+  const c = (code || '').slice(0, 2).toLowerCase();
+  return UI_LANGS.includes(c) ? c : 'en';
+}
+
+// /start & /help welcome, per edition (the name is never translated).
+const WELCOME: Record<string, string> = {
+  en: 'Welcome to Cyprus Lifestyle — your personal concierge for the island. Ask me where to dine, stay, swim or go out; about property, relocation, residency or business; or the practical, from a late-night pharmacy to an emergency number. Tell me what you need, in any language.',
+  el: 'Καλώς ήρθατε στο Cyprus Lifestyle — ο προσωπικός σας κονσιέρζ για το νησί. Ρωτήστε με πού να δειπνήσετε, να μείνετε, να κολυμπήσετε ή να βγείτε· για ακίνητα, μετεγκατάσταση, διαμονή ή επιχειρήσεις· ή τα πρακτικά, από ένα διανυκτερεύον φαρμακείο έως έναν αριθμό έκτακτης ανάγκης. Πείτε μου τι χρειάζεστε, σε οποιαδήποτε γλώσσα.',
+  ro: 'Bine ați venit la Cyprus Lifestyle — concierge-ul dumneavoastră personal pentru insulă. Întrebați-mă unde să luați masa, să vă cazați, să înotați sau să ieșiți; despre proprietăți, relocare, rezidență sau afaceri; ori despre lucruri practice, de la o farmacie non-stop la un număr de urgență. Spuneți-mi de ce aveți nevoie, în orice limbă.',
+  ar: 'مرحبًا بكم في Cyprus Lifestyle — الكونسيرج الشخصي لكم في الجزيرة. اسألوني أين تتناولون العشاء أو تقيمون أو تسبحون أو تخرجون؛ عن العقارات والانتقال والإقامة والأعمال؛ أو الأمور العملية، من صيدلية مناوبة إلى رقم للطوارئ. أخبروني بما تحتاجون، بأي لغة.',
+  de: 'Willkommen bei Cyprus Lifestyle — Ihr persönlicher Concierge für die Insel. Fragen Sie mich, wo Sie essen, übernachten, schwimmen oder ausgehen können; nach Immobilien, Umzug, Aufenthalt oder Business; oder nach Praktischem, von der Nachtapotheke bis zur Notrufnummer. Sagen Sie mir, was Sie brauchen — in jeder Sprache.',
+  pl: 'Witamy w Cyprus Lifestyle — Twój osobisty concierge na wyspie. Zapytaj mnie, gdzie zjeść, się zatrzymać, popływać czy wyjść; o nieruchomości, przeprowadzkę, rezydencję lub biznes; albo o sprawy praktyczne, od nocnej apteki po numer alarmowy. Powiedz, czego potrzebujesz — w dowolnym języku.',
+  ru: 'Добро пожаловать в Cyprus Lifestyle — ваш личный консьерж на острове. Спросите, где поужинать, остановиться, искупаться или провести вечер; о недвижимости, переезде, ВНЖ или бизнесе; или о практичном — от круглосуточной аптеки до номера экстренной службы. Скажите, что вам нужно, на любом языке.',
+};
+
+// Topic shortcuts (the /setcommands menu). Each maps to a natural query, localized so
+// the concierge answers in the user's language.
+const SHORTCUTS: Record<string, Record<string, string>> = {
+  '/dine': { en: 'Where should I dine in Cyprus tonight?', el: 'Πού να δειπνήσω στην Κύπρο απόψε;', ro: 'Unde să iau cina în Cipru diseară?', ar: 'أين أتناول العشاء في قبرص الليلة؟', de: 'Wo soll ich heute Abend in Zypern essen?', pl: 'Gdzie zjeść dziś wieczorem na Cyprze?', ru: 'Где поужинать на Кипре сегодня вечером?' },
+  '/stay': { en: 'Where should I stay in Cyprus?', el: 'Πού να μείνω στην Κύπρο;', ro: 'Unde să mă cazez în Cipru?', ar: 'أين أقيم في قبرص؟', de: 'Wo soll ich in Zypern übernachten?', pl: 'Gdzie się zatrzymać na Cyprze?', ru: 'Где остановиться на Кипре?' },
+  '/relocate': { en: 'How do I move to Cyprus — property, residency and tax?', el: 'Πώς να μετεγκατασταθώ στην Κύπρο — ακίνητα, διαμονή και φορολογία;', ro: 'Cum mă mut în Cipru — proprietăți, rezidență și taxe?', ar: 'كيف أنتقل للعيش في قبرص — العقارات والإقامة والضرائب؟', de: 'Wie ziehe ich nach Zypern um — Immobilien, Aufenthalt und Steuern?', pl: 'Jak przeprowadzić się na Cypr — nieruchomości, rezydencja i podatki?', ru: 'Как переехать на Кипр — недвижимость, ВНЖ и налоги?' },
+  '/events': { en: "What's on in Cyprus this week?", el: 'Τι εκδηλώσεις έχει η Κύπρος αυτή την εβδομάδα;', ro: 'Ce evenimente sunt în Cipru săptămâna aceasta?', ar: 'ما الفعاليات في قبرص هذا الأسبوع؟', de: 'Was ist diese Woche in Zypern los?', pl: 'Co dzieje się na Cyprze w tym tygodniu?', ru: 'Какие события на Кипре на этой неделе?' },
+};
+
 // ── Liveness check (Telegram doesn't verify GET; handy for a quick curl) ─────────
 export async function GET() {
   return new Response('ok', { status: 200, headers: { 'Content-Type': 'text/plain' } });
@@ -34,7 +61,7 @@ export async function POST(req: NextRequest) {
   return new Response('OK', { status: 200 });
 }
 
-interface TgMessage { message_id: number; chat?: { id: number | string }; text?: string }
+interface TgMessage { message_id: number; chat?: { id: number | string }; text?: string; from?: { language_code?: string } }
 interface TgUpdate { message?: TgMessage }
 
 async function handleUpdate(body: TgUpdate) {
@@ -47,11 +74,22 @@ async function handleUpdate(body: TgUpdate) {
   const text = typeof msg?.text === 'string' ? msg.text : '';
   if (chatId == null || !text.trim()) return;
 
-  await handleTextMessage(token, String(chatId), text);
+  await handleTextMessage(token, String(chatId), text, tgLocale(msg?.from?.language_code));
 }
 
-async function handleTextMessage(token: string, chatId: string, raw: string) {
+async function handleTextMessage(token: string, chatId: string, raw: string, uiLocale: string) {
   const text = raw.trim().slice(0, 1000);
+
+  // Slash commands. /start & /help send a fixed, localized welcome (in the user's
+  // Telegram language). Topic shortcuts map to a natural, localized query so the
+  // concierge answers in that language. Anything else flows to the brain unchanged.
+  const cmd = text.toLowerCase().split(/[\s@]/)[0];
+  if (cmd === '/start' || cmd === '/help') {
+    await sendText(token, chatId, `${WELCOME[uiLocale] || WELCOME.en}\n\n${SITE}`);
+    return;
+  }
+  const query = SHORTCUTS[cmd] ? (SHORTCUTS[cmd][uiLocale] || SHORTCUTS[cmd].en) : text;
+
   const sb = supabaseAdmin();
 
   // Load memory.
@@ -61,8 +99,8 @@ async function handleTextMessage(token: string, chatId: string, raw: string) {
     if (data && Array.isArray(data.messages)) history = data.messages as ChatMessage[];
   } catch { /* no memory available — answer statelessly */ }
 
-  const locale = detectLocale(text);
-  const convo: ChatMessage[] = [...history, { role: 'user', content: text }];
+  const locale = detectLocale(query);
+  const convo: ChatMessage[] = [...history, { role: 'user', content: query }];
 
   let reply = '';
   try {
