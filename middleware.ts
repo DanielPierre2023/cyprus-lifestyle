@@ -58,6 +58,9 @@ export default function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Everything except API, Next internals and files with an extension.
-  matcher: ['/((?!api|_next|_vercel|.*\\..*).*)'],
+  // Everything except API, Next internals, the /sitemaps/* route handlers, and
+  // files with an extension. NOTE: '/sitemaps' MUST stay excluded — without it the
+  // i18n middleware rewrites /sitemaps/<segment> toward a localized page that does
+  // not exist, and Next then serves /404 (so every sitemap-index child 404s).
+  matcher: ['/((?!api|_next|_vercel|sitemaps|.*\\..*).*)'],
 };
