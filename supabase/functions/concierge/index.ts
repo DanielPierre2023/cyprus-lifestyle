@@ -4,14 +4,28 @@
 // ----------------------------------------------------------------------------
 // A visitor asks in plain language ("a quiet beachfront dinner in Paphos for an
 // anniversary", "family hotel near a sandy beach", "who builds new apartments in
-// Limassol?"). We RETRIEVE real candidates from the published directory + agenda,
-// then ask the model to PICK from those candidates and explain why — it can only
-// choose from what we hand it, so it can never invent a place that doesn't exist.
+// Limassol?", "tell me about Zya Cafe"). We RETRIEVE real candidates from the
+// published directory, then ask the model to PICK from those candidates and
+// explain why — it can only choose from what we hand it, so it can never invent
+// a place that doesn't exist.
 //
-// Reuses the secrets already in Supabase (CLAUDE_API_KEY, SONNET_MODEL,
-// NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY). Nothing new to configure.
-// Deploy with Verify JWT OFF (it's called by the site's /api/concierge route,
-// which gates and rate-limits it and passes the shared secret).
+// PLAN 1 — HYBRID RETRIEVAL (this version). retrieve() now blends three signals
+// instead of the old ILIKE-only pass:
+//   1) NAME   — match_directory_name RPC: exact / partial / MISSPELLED names
+//               (pg_trgm word similarity). Highest priority, not rating-capped.
+//               This is what fixes "the concierge can't find <named place>".
+//   2) SEMANTIC — match_directory RPC: pgvector cosine over directory_embeddings
+//               (the 17k vectors that already exist), embedding the query with
+//               the SAME model that built them.
+//   3) STRUCTURED — type x district top-rated (a supporting signal, not the gate).
+// Results are merged, de-duped, ranked, and only PUBLISHED rows are hydrated.
+// If embeddings are unavailable/misconfigured, semantic is skipped and the name +
+// structured signals still work — so retrieval never regresses below before.
+//
+// Secrets reused: CLAUDE_API_KEY, SONNET_MODEL, NEXT_PUBLIC_SUPABASE_URL,
+// SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY (already set on the project; used for
+// the query embedding). Optional: EMBEDDING_MODEL (default text-embedding-3-small).
+// Deploy with Verify JWT OFF (called by the site's /api/concierge route).
 // ============================================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -26,6 +40,10 @@ const CLAUDE_KEY = Deno.env.get("CLAUDE_API_KEY") || "";
 const MODEL = Deno.env.get("SONNET_MODEL") || "claude-sonnet-5";
 const SUPABASE_URL = Deno.env.get("NEXT_PUBLIC_SUPABASE_URL") || Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+// Query embedding: MUST be the same model that built public.directory_embeddings.
+const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY") || "";
+const EMBED_MODEL = Deno.env.get("EMBEDDING_MODEL") || "text-embedding-3-small";
+const EMBED_DIM = 1536; // directory_embeddings / kb_embeddings are vector(1536)
 
 const LOCALES = ["en", "el", "ro", "ar", "de", "pl", "ru"];
 const DISTRICTS = ["paphos", "limassol", "larnaca", "nicosia", "famagusta", "ayia napa", "protaras", "paralimni"];
@@ -75,6 +93,39 @@ async function rest(query: string): Promise<Record<string, unknown>[]> {
   } catch { return []; }
 }
 
+// PostgREST RPC call (for match_directory / match_directory_name). Returns rows or [].
+async function rpc(fn: string, args: Record<string, unknown>): Promise<Record<string, unknown>[]> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+      method: "POST",
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch { return []; }
+}
+
+// Embed the visitor's query with the SAME model that built directory_embeddings.
+// Returns a 1536-dim vector, or null (caller then skips semantic search cleanly).
+async function embedQuery(text: string): Promise<number[] | null> {
+  if (!OPENAI_KEY || !text) return null;
+  try {
+    const res = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${OPENAI_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: EMBED_MODEL, input: text.slice(0, 2000) }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const v = data?.data?.[0]?.embedding;
+    return Array.isArray(v) && v.length === EMBED_DIM ? (v as number[]) : null;
+  } catch { return null; }
+}
+
 interface Tool { name: string; description: string; input_schema: Record<string, unknown>; }
 
 // Force a structured answer via tool use. Retries once on a transient failure.
@@ -116,12 +167,12 @@ async function claudeTool(system: string, user: string, tool: Tool, maxTokens: n
   throw new Error(lastErr || "the concierge did not return a valid result");
 }
 
-// Parse obvious type/district signals from the query to steer retrieval.
+// Parse obvious type/district signals from the query to steer the structured pass.
 function readIntent(q: string): { types: string[]; districts: string[] } {
   const s = q.toLowerCase();
   const types: string[] = [];
   const add = (t: string, ...words: string[]) => { if (words.some((w) => s.includes(w)) && !types.includes(t)) types.push(t); };
-  add("restaurant", "restaurant", "dinner", "lunch", "eat", "dining", "food", "meze", "taverna", "cuisine", "brunch");
+  add("restaurant", "restaurant", "dinner", "lunch", "eat", "dining", "food", "meze", "taverna", "cuisine", "brunch", "cafe", "café", "coffee", "bakery", "bar", "pub");
   add("hotel", "hotel", "stay", "resort", "accommodation", "spa", "suite", "room");
   add("beach", "beach", "sea", "swim", "sand", "coast", "sunbathe", "bay");
   add("winery", "wine", "winery", "vineyard", "tasting");
@@ -137,59 +188,76 @@ interface Cand {
   price_band: string | null; tags: string[]; image: string | null;
 }
 
+// Hybrid retrieval: NAME (fuzzy) + SEMANTIC (vector) + STRUCTURED (type x district),
+// merged and ranked. Only published rows are hydrated and returned.
 async function retrieve(locale: string, q: string): Promise<Cand[]> {
   const { types, districts } = readIntent(q);
+  const district = districts.length === 1 ? districts[0] : null;
   const cols = encodeURIComponent(`slug,type,district,price_band,rating,rating_count,tags,image,name_${locale},name_en,summary_${locale},summary_en`);
   const base = `directory_listings?select=${cols}&status=eq.published`;
   const order = "order=rating.desc.nullslast,rating_count.desc.nullslast";
-  const seen = new Set<string>();
-  const out: Cand[] = [];
-  const push = (rows: Record<string, unknown>[]) => {
-    for (const r of rows) {
-      const slug = str(r.slug);
-      if (!slug || seen.has(slug)) continue;
-      seen.add(slug);
-      out.push({
-        slug, type: str(r.type),
-        name: str(r[`name_${locale}`] || r.name_en),
-        district: (r.district as string) ?? null,
-        summary: str(r[`summary_${locale}`] || r.summary_en),
-        rating: (r.rating as number) ?? null,
-        rating_count: (r.rating_count as number) ?? null,
-        price_band: (r.price_band as string) ?? null,
-        tags: Array.isArray(r.tags) ? (r.tags as string[]) : [],
-        image: (r.image as string) ?? null,
-      });
+
+  // Best score per slug across the three signals (name outranks semantic outranks structured).
+  const score = new Map<string, number>();
+  const bump = (slug: string, s: number) => { if (!slug) return; const cur = score.get(slug) ?? 0; if (s > cur) score.set(slug, s); };
+
+  // 1) NAME — exact / partial / misspelled. Highest band (1.0 + similarity).
+  for (const r of await rpc("match_directory_name", { q, match_count: 14 })) {
+    bump(str(r.slug), 1.0 + Number(r.score ?? 0));
+  }
+
+  // 2) SEMANTIC — pgvector cosine over the existing directory_embeddings.
+  const emb = await embedQuery(q);
+  if (emb) {
+    const args: Record<string, unknown> = { query_embedding: emb, match_count: 24 };
+    if (district) args.filter_district = district;
+    for (const r of await rpc("match_directory", args)) {
+      const sim = Number(r.similarity ?? 0);
+      if (sim >= 0.30) bump(str(r.slug), 0.5 + sim * 0.4); // ~0.6..0.9 band, below name
     }
-  };
-
-  // 1) Keyword match on name/summary (EN + locale), best-rated first.
-  const terms = q.replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((w) => w.length > 3).slice(0, 5);
-  if (terms.length) {
-    const conds = terms.flatMap((t) => {
-      const v = t.replace(/[(),*]/g, ""); // keep the OR grammar safe
-      return [`name_${locale}.ilike.*${v}*`, `name_en.ilike.*${v}*`, `summary_${locale}.ilike.*${v}*`, `summary_en.ilike.*${v}*`];
-    }).join(",");
-    push(await rest(`${base}&or=(${encodeURIComponent(conds)})&${order}&limit=24`));
   }
 
-  // 2) Type × district top-rated (the structured signal).
+  // 3) STRUCTURED — type x district top-rated (supporting signal).
   for (const ty of types) {
-    const dfilter = districts.length === 1 ? `&district=eq.${encodeURIComponent(districts[0])}` : "";
-    push(await rest(`${base}&type=eq.${ty}${dfilter}&${order}&limit=12`));
+    const dfilter = district ? `&district=eq.${encodeURIComponent(district)}` : "";
+    for (const r of await rest(`${base}&type=eq.${ty}${dfilter}&${order}&limit=10`)) bump(str(r.slug), 0.4);
   }
 
-  // 3) District-only fallback (top-rated across types).
-  if (out.length < 6 && districts.length) {
-    push(await rest(`${base}&district=eq.${encodeURIComponent(districts[0])}&${order}&limit=16`));
+  // Fallbacks so there is always something to reason over.
+  if (score.size < 6 && district) {
+    for (const r of await rest(`${base}&district=eq.${encodeURIComponent(district)}&${order}&limit=12`)) bump(str(r.slug), 0.2);
+  }
+  if (score.size < 4) {
+    for (const r of await rest(`${base}&${order}&limit=10`)) bump(str(r.slug), 0.1);
   }
 
-  // 4) Last resort: overall top-rated so there's always something to reason over.
-  if (out.length < 4) {
-    push(await rest(`${base}&${order}&limit=12`));
-  }
+  const ranked = [...score.keys()].sort((a, b) => (score.get(b)! - score.get(a)!)).slice(0, 40);
+  if (!ranked.length) return [];
 
-  return out.slice(0, 40);
+  // Hydrate the ranked slugs (published only) in one request.
+  // Slugs are URL-safe ([a-z0-9-]); keep the in-list commas literal for PostgREST.
+  const inList = ranked.map((s) => s.replace(/[(),"\s]/g, "")).filter(Boolean).join(",");
+  const rows = await rest(`${base}&slug=in.(${inList})&limit=40`);
+  const bySlug = new Map<string, Record<string, unknown>>();
+  for (const r of rows) bySlug.set(str(r.slug), r);
+
+  const out: Cand[] = [];
+  for (const slug of ranked) {
+    const r = bySlug.get(slug);
+    if (!r) continue; // e.g. a 'listed'-only slug from the vector RPC — dropped (no page)
+    out.push({
+      slug, type: str(r.type),
+      name: str(r[`name_${locale}`] || r.name_en),
+      district: (r.district as string) ?? null,
+      summary: str(r[`summary_${locale}`] || r.summary_en),
+      rating: (r.rating as number) ?? null,
+      rating_count: (r.rating_count as number) ?? null,
+      price_band: (r.price_band as string) ?? null,
+      tags: Array.isArray(r.tags) ? (r.tags as string[]) : [],
+      image: (r.image as string) ?? null,
+    });
+  }
+  return out;
 }
 
 const TOOL_PICKS: Tool = {
