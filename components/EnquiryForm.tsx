@@ -1,10 +1,12 @@
 'use client';
 // "Request info" — an enquiry form on a listing hub. Posts to /api/directory/lead,
 // which records the lead and emails the desk. The lead-gen layer of the directory:
-// featured/verified businesses receive real enquiries. Hidden `company` field is
-// the honeypot the server checks.
+// featured/verified businesses receive real enquiries. The hidden HoneypotField is
+// the spam trap the server checks (field name in lib/honeypot.ts).
 import { useState } from 'react';
 import type { Locale } from '@/lib/locales';
+import HoneypotField from '@/components/HoneypotField';
+import { HONEYPOT_FIELD } from '@/lib/honeypot';
 
 export interface EnquiryLabels {
   title: string; intro: string; name: string; email: string; message: string;
@@ -13,7 +15,8 @@ export interface EnquiryLabels {
 
 export default function EnquiryForm({ listingSlug, listingType, listingName, locale, labels }:
 { listingSlug: string; listingType: string; listingName: string; locale: Locale; labels: EnquiryLabels }) {
-  const [f, setF] = useState({ name: '', email: '', message: '', company: '' }); // company = honeypot
+  const [f, setF] = useState({ name: '', email: '', message: '' });
+  const [hp, setHp] = useState(''); // honeypot — must stay empty for a real person
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const [err, setErr] = useState('');
 
@@ -24,7 +27,7 @@ export default function EnquiryForm({ listingSlug, listingType, listingName, loc
     try {
       const res = await fetch('/api/directory/lead', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...f, listingSlug, listingType, listingName, locale }),
+        body: JSON.stringify({ ...f, [HONEYPOT_FIELD]: hp, listingSlug, listingType, listingName, locale }),
       });
       const d = await res.json();
       if (d.ok) setState('done');
@@ -44,7 +47,7 @@ export default function EnquiryForm({ listingSlug, listingType, listingName, loc
       <input className="enq-in" required type="email" placeholder={labels.email} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
       <textarea className="enq-in enq-ta" rows={3} placeholder={labels.message} value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} />
       {/* honeypot */}
-      <input tabIndex={-1} autoComplete="off" aria-hidden="true" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} style={{ position: 'absolute', left: '-9999px', width: 1, height: 1 }} />
+      <HoneypotField value={hp} onChange={setHp} />
       <button className="btn enq-btn" type="submit" disabled={state === 'sending'}>{state === 'sending' ? labels.sending : labels.send}</button>
       {state === 'error' ? <p className="enq-err">{err}</p> : null}
       <style>{ENQ_CSS}</style>

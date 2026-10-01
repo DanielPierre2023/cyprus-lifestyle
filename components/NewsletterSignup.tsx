@@ -1,13 +1,15 @@
 'use client';
 import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
+import HoneypotField from '@/components/HoneypotField';
+import { HONEYPOT_FIELD } from '@/lib/honeypot';
 
 export default function NewsletterSignup() {
   const tn = useTranslations('newsletter');
   const th = useTranslations('home');
   const locale = useLocale();
   const [email, setEmail] = useState('');
-  const [company, setCompany] = useState('');
+  const [hp, setHp] = useState(''); // honeypot — must stay empty for a real person
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
 
   async function submit(e: React.FormEvent) {
@@ -16,7 +18,7 @@ export default function NewsletterSignup() {
     try {
       const res = await fetch('/api/newsletter/subscribe', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, language: locale, company }),
+        body: JSON.stringify({ email, language: locale, [HONEYPOT_FIELD]: hp }),
       });
       setState(res.ok ? 'done' : 'error');
     } catch { setState('error'); }
@@ -33,9 +35,7 @@ export default function NewsletterSignup() {
             <p className="gold">{tn('success')}</p>
           ) : (
             <form className="field" onSubmit={submit}>
-              <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}>
-                <label>Company<input type="text" tabIndex={-1} autoComplete="off" value={company} onChange={(e) => setCompany(e.target.value)} /></label>
-              </div>
+              <HoneypotField value={hp} onChange={setHp} />
               <input type="email" required placeholder={tn('placeholder')} value={email}
                 onChange={(e) => setEmail(e.target.value)} aria-label={tn('placeholder')} />
               <button className="btn" type="submit" disabled={state === 'sending'}>{tn('cta')}</button>

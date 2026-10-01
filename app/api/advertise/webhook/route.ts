@@ -1,14 +1,36 @@
 // POST /api/advertise/webhook — Stripe events. Verifies the signature against
-// STRIPE_WEBHOOK_SECRET, then reconciles the matching ad_orders row. Register the
-// endpoint URL in the Stripe dashboard and paste its signing secret into Vercel.
+// STRIPE_WEBHOOK_SECRET, then reconciles the matching ad_orders row / concierge member.
+// Register the endpoint URL in the Stripe dashboard and paste its signing secret into Vercel.
+//
+// Delivery semantics (Stripe redelivers any non-2xx for up to ~3 days with back-off):
+//   • MEMBERSHIP writes are strict — a paid membership, a cancellation, a failed payment.
+//     If the write does not land we answer 500 so Stripe retries, and answer 2xx only once
+//     it is durably recorded. These writes are idempotent (keyed on the Stripe
+//     subscription / session id), so a redelivery never duplicates or double-applies.
+//   • Event types we don't handle are acknowledged with 2xx on purpose.
+//   • The advertising-order checkout branch keeps its historical best-effort behaviour:
+//     its CRM / fulfilment side effects are not idempotent, so a blanket retry there could
+//     duplicate deals and emails.
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { verifyWebhook } from '@/lib/stripe';
 import { onboardingEmail, type OrderLike } from '@/lib/fulfilment';
 import { sendEmail } from '@/lib/email';
+import { recordMembershipCheckout } from '@/lib/concierge/membership';
+import { logServerError } from '@/lib/monitor.server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+// Answer 500 so Stripe redelivers — what we want whenever a write that matters did not
+// land. Logs the event id/type, the step and the DB error text only: never the payload
+// (customer PII) and never a secret.
+async function retryLater(event: Record<string, unknown>, step: string, detail: string) {
+  await logServerError('stripe-webhook', new Error(`${step} failed: ${detail}`.slice(0, 300)), {
+    eventId: String(event.id || ''), type: String(event.type || ''), step,
+  });
+  return NextResponse.json({ ok: false, error: 'processing failed — Stripe will retry' }, { status: 500 });
+}
 
 export async function POST(req: NextRequest) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -23,21 +45,24 @@ export async function POST(req: NextRequest) {
   const sb = supabaseAdmin();
   const now = new Date().toISOString();
 
+  // Flipped on as soon as we enter a membership-affecting branch, so the catch below knows
+  // whether an unexpected error may be swallowed (ad-order branch) or must trigger a retry.
+  let strict = false;
   try {
     const meta = (obj.metadata as Record<string, string>) || {};
     // Concierge membership — handled here so one Stripe endpoint covers both flows.
     if (type === 'checkout.session.completed' && meta.kind === 'membership') {
+      strict = true;
       const md = (obj.customer_details as Record<string, unknown>) || {};
-      await sb.from('concierge_members').upsert({
+      const rec = await recordMembershipCheckout(sb, {
         cid: meta.cid || (obj.client_reference_id as string) || null,
         email: (md.email as string) || (obj.customer_email as string) || null,
         tier: meta.tier || 'concierge',
-        status: 'active',
-        stripe_customer_id: (obj.customer as string) || null,
-        stripe_subscription_id: (obj.subscription as string) || null,
-        stripe_session_id: (obj.id as string) || null,
-        updated_at: now,
-      }, { onConflict: 'stripe_subscription_id' });
+        customerId: (obj.customer as string) || null,
+        subscriptionId: (obj.subscription as string) || null,
+        sessionId: (obj.id as string) || null,
+      }, now);
+      if (!rec.ok) return await retryLater(event, 'membership checkout write', rec.error);
       return NextResponse.json({ received: true });
     }
     if (type === 'checkout.session.completed') {
@@ -86,17 +111,31 @@ export async function POST(req: NextRequest) {
       }
     } else if (type === 'customer.subscription.deleted') {
       if (obj.id) {
-        await sb.from('ad_orders').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
-        await sb.from('concierge_members').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
+        strict = true;
+        // Both are plain, idempotent status writes, so a retry is always safe. Run both even
+        // if the first fails, then report either failure (a member whose cancellation is not
+        // recorded would keep premium access).
+        const ad = await sb.from('ad_orders').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
+        const mem = await sb.from('concierge_members').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
+        const err = ad.error || mem.error;
+        if (err) return await retryLater(event, 'subscription cancel write', err.message);
       }
     } else if (type === 'invoice.payment_failed') {
       if (obj.subscription) {
-        await sb.from('ad_orders').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
-        await sb.from('concierge_members').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
+        strict = true;
+        const ad = await sb.from('ad_orders').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
+        const mem = await sb.from('concierge_members').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
+        const err = ad.error || mem.error;
+        if (err) return await retryLater(event, 'payment-failed write', err.message);
       }
     }
-  } catch {
-    // Never fail the webhook on our own logic error — Stripe would retry endlessly.
+  } catch (e) {
+    // Membership branches: an unexpected error must not look like success → retry.
+    if (strict) return retryLater(event, 'unexpected error', (e as Error).message);
+    // Advertising-order branch: unchanged — never fail the webhook on our own logic error
+    // (its side effects aren't idempotent, so retrying could duplicate them). Now logged,
+    // so a swallowed failure is at least visible in the admin error log.
+    await logServerError('stripe-webhook:ad-order', e, { eventId: String(event.id || ''), type });
   }
   return NextResponse.json({ received: true });
 }

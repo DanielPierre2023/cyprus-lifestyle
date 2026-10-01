@@ -1,195 +1,440 @@
-diff --git a/app/api/directory/businesses/route.ts b/app/api/directory/businesses/route.ts
-index eb4ed2d..40c80f5 100644
---- a/app/api/directory/businesses/route.ts
-+++ b/app/api/directory/businesses/route.ts
-@@ -28,7 +28,6 @@ export async function GET(req: NextRequest) {
-       name: b.name,
-       image: b.image || '',
-       phone: b.phone || '',
--      email: b.email || '',
-       url: b.url || '',
-       district: b.district || '',
-       address: b.address || '',
+diff --git a/app/api/advertise/webhook/route.ts b/app/api/advertise/webhook/route.ts
+index 1dd0b86..55f3f11 100644
+--- a/app/api/advertise/webhook/route.ts
++++ b/app/api/advertise/webhook/route.ts
+@@ -1,15 +1,37 @@
+ // POST /api/advertise/webhook — Stripe events. Verifies the signature against
+-// STRIPE_WEBHOOK_SECRET, then reconciles the matching ad_orders row. Register the
+-// endpoint URL in the Stripe dashboard and paste its signing secret into Vercel.
++// STRIPE_WEBHOOK_SECRET, then reconciles the matching ad_orders row / concierge member.
++// Register the endpoint URL in the Stripe dashboard and paste its signing secret into Vercel.
++//
++// Delivery semantics (Stripe redelivers any non-2xx for up to ~3 days with back-off):
++//   • MEMBERSHIP writes are strict — a paid membership, a cancellation, a failed payment.
++//     If the write does not land we answer 500 so Stripe retries, and answer 2xx only once
++//     it is durably recorded. These writes are idempotent (keyed on the Stripe
++//     subscription / session id), so a redelivery never duplicates or double-applies.
++//   • Event types we don't handle are acknowledged with 2xx on purpose.
++//   • The advertising-order checkout branch keeps its historical best-effort behaviour:
++//     its CRM / fulfilment side effects are not idempotent, so a blanket retry there could
++//     duplicate deals and emails.
+ import { NextRequest, NextResponse } from 'next/server';
+ import { supabaseAdmin } from '@/lib/supabase/admin';
+ import { verifyWebhook } from '@/lib/stripe';
+ import { onboardingEmail, type OrderLike } from '@/lib/fulfilment';
+ import { sendEmail } from '@/lib/email';
++import { recordMembershipCheckout } from '@/lib/concierge/membership';
++import { logServerError } from '@/lib/monitor.server';
+ 
+ export const runtime = 'nodejs';
+ export const dynamic = 'force-dynamic';
+ 
++// Answer 500 so Stripe redelivers — what we want whenever a write that matters did not
++// land. Logs the event id/type, the step and the DB error text only: never the payload
++// (customer PII) and never a secret.
++async function retryLater(event: Record<string, unknown>, step: string, detail: string) {
++  await logServerError('stripe-webhook', new Error(`${step} failed: ${detail}`.slice(0, 300)), {
++    eventId: String(event.id || ''), type: String(event.type || ''), step,
++  });
++  return NextResponse.json({ ok: false, error: 'processing failed — Stripe will retry' }, { status: 500 });
++}
++
+ export async function POST(req: NextRequest) {
+   const secret = process.env.STRIPE_WEBHOOK_SECRET;
+   if (!secret) return NextResponse.json({ ok: false, error: 'not configured' }, { status: 400 });
+@@ -23,21 +45,24 @@ export async function POST(req: NextRequest) {
+   const sb = supabaseAdmin();
+   const now = new Date().toISOString();
+ 
++  // Flipped on as soon as we enter a membership-affecting branch, so the catch below knows
++  // whether an unexpected error may be swallowed (ad-order branch) or must trigger a retry.
++  let strict = false;
+   try {
+     const meta = (obj.metadata as Record<string, string>) || {};
+     // Concierge membership — handled here so one Stripe endpoint covers both flows.
+     if (type === 'checkout.session.completed' && meta.kind === 'membership') {
++      strict = true;
+       const md = (obj.customer_details as Record<string, unknown>) || {};
+-      await sb.from('concierge_members').upsert({
++      const rec = await recordMembershipCheckout(sb, {
+         cid: meta.cid || (obj.client_reference_id as string) || null,
+         email: (md.email as string) || (obj.customer_email as string) || null,
+         tier: meta.tier || 'concierge',
+-        status: 'active',
+-        stripe_customer_id: (obj.customer as string) || null,
+-        stripe_subscription_id: (obj.subscription as string) || null,
+-        stripe_session_id: (obj.id as string) || null,
+-        updated_at: now,
+-      }, { onConflict: 'stripe_subscription_id' });
++        customerId: (obj.customer as string) || null,
++        subscriptionId: (obj.subscription as string) || null,
++        sessionId: (obj.id as string) || null,
++      }, now);
++      if (!rec.ok) return await retryLater(event, 'membership checkout write', rec.error);
+       return NextResponse.json({ received: true });
+     }
+     if (type === 'checkout.session.completed') {
+@@ -86,17 +111,31 @@ export async function POST(req: NextRequest) {
+       }
+     } else if (type === 'customer.subscription.deleted') {
+       if (obj.id) {
+-        await sb.from('ad_orders').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
+-        await sb.from('concierge_members').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
++        strict = true;
++        // Both are plain, idempotent status writes, so a retry is always safe. Run both even
++        // if the first fails, then report either failure (a member whose cancellation is not
++        // recorded would keep premium access).
++        const ad = await sb.from('ad_orders').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
++        const mem = await sb.from('concierge_members').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
++        const err = ad.error || mem.error;
++        if (err) return await retryLater(event, 'subscription cancel write', err.message);
+       }
+     } else if (type === 'invoice.payment_failed') {
+       if (obj.subscription) {
+-        await sb.from('ad_orders').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
+-        await sb.from('concierge_members').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
++        strict = true;
++        const ad = await sb.from('ad_orders').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
++        const mem = await sb.from('concierge_members').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
++        const err = ad.error || mem.error;
++        if (err) return await retryLater(event, 'payment-failed write', err.message);
+       }
+     }
+-  } catch {
+-    // Never fail the webhook on our own logic error — Stripe would retry endlessly.
++  } catch (e) {
++    // Membership branches: an unexpected error must not look like success → retry.
++    if (strict) return retryLater(event, 'unexpected error', (e as Error).message);
++    // Advertising-order branch: unchanged — never fail the webhook on our own logic error
++    // (its side effects aren't idempotent, so retrying could duplicate them). Now logged,
++    // so a swallowed failure is at least visible in the admin error log.
++    await logServerError('stripe-webhook:ad-order', e, { eventId: String(event.id || ''), type });
+   }
+   return NextResponse.json({ received: true });
+ }
+diff --git a/components/AdvertiseFunnel.tsx b/components/AdvertiseFunnel.tsx
+index dedca91..2e290f6 100644
+--- a/components/AdvertiseFunnel.tsx
++++ b/components/AdvertiseFunnel.tsx
+@@ -1,5 +1,7 @@
+ 'use client';
+ import { useEffect, useState } from 'react';
++import HoneypotField from '@/components/HoneypotField';
++import { HONEYPOT_FIELD } from '@/lib/honeypot';
+ 
+ export interface RateItem {
+   slot: string;
+@@ -234,7 +236,10 @@ export default function AdvertiseFunnel({ items, locale = 'en', status }: { item
+ 
+ function QuoteModal({ item, locale, d, onClose }: { item: RateItem; locale: string; d: Dict; onClose: () => void }) {
+   const [state, setState] = useState<'idle' | 'sending' | 'ok' | 'err'>('idle');
+-  const [f, setF] = useState({ name: '', email: '', company: '', message: '', website: '' }); // website = honeypot
++  // `company` is a REAL, visible field (stored on the lead) — it must never double as the
++  // spam trap. The trap is the separate hidden `hp` value below (see lib/honeypot.ts).
++  const [f, setF] = useState({ name: '', email: '', company: '', message: '' });
++  const [hp, setHp] = useState('');
+ 
+   useEffect(() => {
+     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+@@ -248,7 +253,7 @@ function QuoteModal({ item, locale, d, onClose }: { item: RateItem; locale: stri
+     try {
+       const res = await fetch('/api/advertise/lead', {
+         method: 'POST', headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ ...f, slot: item.slot, label: item.label, locale }),
++        body: JSON.stringify({ ...f, [HONEYPOT_FIELD]: hp, slot: item.slot, label: item.label, locale }),
+       });
+       const j = await res.json().catch(() => ({}));
+       setState(j.ok ? 'ok' : 'err');
+@@ -274,8 +279,8 @@ function QuoteModal({ item, locale, d, onClose }: { item: RateItem; locale: stri
+             <input style={input} type="email" placeholder={d.fEmail} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
+             <input style={input} placeholder={d.fCompany} value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} />
+             <textarea style={{ ...input, minHeight: 84, resize: 'vertical' }} placeholder={d.fMessage} value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} />
+-            {/* honeypot */}
+-            <input tabIndex={-1} autoComplete="off" value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} style={{ position: 'absolute', left: '-9999px', width: 1, height: 1 }} aria-hidden="true" />
++            {/* honeypot — hidden spam trap the server checks (lib/ratelimit.ts isHoneypot) */}
++            <HoneypotField value={hp} onChange={setHp} />
+             {state === 'err' ? <p style={{ color: '#C0492E', fontSize: 13, margin: '10px 0 0' }}>{d.err}</p> : null}
+             <button onClick={submit} disabled={state === 'sending'} className="btn"
+               style={{ marginTop: 14, width: '100%', background: GOLD, color: '#0B0E11', border: 'none', padding: '12px 16px', cursor: 'pointer', fontWeight: 600 }}>
+diff --git a/components/CommentSection.tsx b/components/CommentSection.tsx
+index a2ef98e..28def58 100644
+--- a/components/CommentSection.tsx
++++ b/components/CommentSection.tsx
+@@ -1,6 +1,8 @@
+ 'use client';
+ import { useEffect, useState } from 'react';
+ import { useTranslations } from 'next-intl';
++import HoneypotField from '@/components/HoneypotField';
++import { HONEYPOT_FIELD } from '@/lib/honeypot';
+ 
+ interface C { id: string; author_name: string; content: string; created_at: string }
+ 
+@@ -9,7 +11,7 @@ export default function CommentSection({ postId }: { postId: string }) {
+   const [list, setList] = useState<C[]>([]);
+   const [name, setName] = useState('');
+   const [content, setContent] = useState('');
+-  const [company, setCompany] = useState('');
++  const [hp, setHp] = useState(''); // honeypot — must stay empty for a real person
+   const [state, setState] = useState<'idle' | 'sending' | 'done'>('idle');
+ 
+   useEffect(() => {
+@@ -21,7 +23,7 @@ export default function CommentSection({ postId }: { postId: string }) {
+     setState('sending');
+     const res = await fetch('/api/comments', {
+       method: 'POST', headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({ post_id: postId, author_name: name, content, company }),
++      body: JSON.stringify({ post_id: postId, author_name: name, content, [HONEYPOT_FIELD]: hp }),
+     });
+     if (res.ok) { setState('done'); setContent(''); }
+     else setState('idle');
+@@ -40,9 +42,7 @@ export default function CommentSection({ postId }: { postId: string }) {
+         <p className="gold" style={{ marginTop: 16 }}>{t('pending')}</p>
+       ) : (
+         <form onSubmit={submit} style={{ marginTop: 20 }}>
+-          <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}>
+-            <label>Company<input type="text" tabIndex={-1} autoComplete="off" value={company} onChange={(e) => setCompany(e.target.value)} /></label>
+-          </div>
++          <HoneypotField value={hp} onChange={setHp} />
+           <input placeholder={t('name')} required value={name} onChange={(e) => setName(e.target.value)} />
+           <textarea placeholder={t('placeholder')} required rows={4} value={content} onChange={(e) => setContent(e.target.value)} />
+           <button className="btn" type="submit" disabled={state === 'sending'}>{t('submit')}</button>
+diff --git a/components/ContactForm.tsx b/components/ContactForm.tsx
+index 1e4612f..4e42795 100644
+--- a/components/ContactForm.tsx
++++ b/components/ContactForm.tsx
+@@ -1,6 +1,8 @@
+ 'use client';
+ import { useState } from 'react';
+ import { useTranslations, useLocale } from 'next-intl';
++import HoneypotField from '@/components/HoneypotField';
++import { HONEYPOT_FIELD } from '@/lib/honeypot';
+ 
+ // The enquiry classes the form offers. Values are stable enums; labels are localized
+ // below. Kept in-component (a bounded set) so this feature ships without editing the
+@@ -23,19 +25,18 @@ export default function ContactForm() {
+   const t = useTranslations('contactForm');
+   const locale = useLocale();
+   const lx = L[(locale as Loc)] || L.en;
+-  const [f, setF] = useState({ name: '', email: '', subject: '', message: '', company: '', requestClass: '', phone: '', district: '' });
++  const [f, setF] = useState({ name: '', email: '', subject: '', message: '', requestClass: '', phone: '', district: '' });
++  const [hp, setHp] = useState(''); // honeypot — must stay empty for a real person
+   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+   async function submit(e: React.FormEvent) {
+     e.preventDefault(); setState('sending');
+-    const res = await fetch('/api/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...f, locale }) });
++    const res = await fetch('/api/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...f, [HONEYPOT_FIELD]: hp, locale }) });
+     setState(res.ok ? 'done' : 'error');
+   }
+   if (state === 'done') return <p className="gold cform" style={{ textAlign: 'center' }}>{t('success')}</p>;
+   return (
+     <form className="cform" onSubmit={submit}>
+-      <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}>
+-        <label>Company<input type="text" tabIndex={-1} autoComplete="off" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} /></label>
+-      </div>
++      <HoneypotField value={hp} onChange={setHp} />
+       <input placeholder={t('name')} required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+       <input type="email" placeholder={t('email')} required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
+       <select required aria-label={lx.topic} value={f.requestClass} onChange={(e) => setF({ ...f, requestClass: e.target.value })}>
+diff --git a/components/EnquiryForm.tsx b/components/EnquiryForm.tsx
+index e182c77..664f793 100644
+--- a/components/EnquiryForm.tsx
++++ b/components/EnquiryForm.tsx
+@@ -1,10 +1,12 @@
+ 'use client';
+ // "Request info" — an enquiry form on a listing hub. Posts to /api/directory/lead,
+ // which records the lead and emails the desk. The lead-gen layer of the directory:
+-// featured/verified businesses receive real enquiries. Hidden `company` field is
+-// the honeypot the server checks.
++// featured/verified businesses receive real enquiries. The hidden HoneypotField is
++// the spam trap the server checks (field name in lib/honeypot.ts).
+ import { useState } from 'react';
+ import type { Locale } from '@/lib/locales';
++import HoneypotField from '@/components/HoneypotField';
++import { HONEYPOT_FIELD } from '@/lib/honeypot';
+ 
+ export interface EnquiryLabels {
+   title: string; intro: string; name: string; email: string; message: string;
+@@ -13,7 +15,8 @@ export interface EnquiryLabels {
+ 
+ export default function EnquiryForm({ listingSlug, listingType, listingName, locale, labels }:
+ { listingSlug: string; listingType: string; listingName: string; locale: Locale; labels: EnquiryLabels }) {
+-  const [f, setF] = useState({ name: '', email: '', message: '', company: '' }); // company = honeypot
++  const [f, setF] = useState({ name: '', email: '', message: '' });
++  const [hp, setHp] = useState(''); // honeypot — must stay empty for a real person
+   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+   const [err, setErr] = useState('');
+ 
+@@ -24,7 +27,7 @@ export default function EnquiryForm({ listingSlug, listingType, listingName, loc
+     try {
+       const res = await fetch('/api/directory/lead', {
+         method: 'POST', headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ ...f, listingSlug, listingType, listingName, locale }),
++        body: JSON.stringify({ ...f, [HONEYPOT_FIELD]: hp, listingSlug, listingType, listingName, locale }),
+       });
+       const d = await res.json();
+       if (d.ok) setState('done');
+@@ -44,7 +47,7 @@ export default function EnquiryForm({ listingSlug, listingType, listingName, loc
+       <input className="enq-in" required type="email" placeholder={labels.email} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
+       <textarea className="enq-in enq-ta" rows={3} placeholder={labels.message} value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} />
+       {/* honeypot */}
+-      <input tabIndex={-1} autoComplete="off" aria-hidden="true" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} style={{ position: 'absolute', left: '-9999px', width: 1, height: 1 }} />
++      <HoneypotField value={hp} onChange={setHp} />
+       <button className="btn enq-btn" type="submit" disabled={state === 'sending'}>{state === 'sending' ? labels.sending : labels.send}</button>
+       {state === 'error' ? <p className="enq-err">{err}</p> : null}
+       <style>{ENQ_CSS}</style>
+diff --git a/components/NewsletterSignup.tsx b/components/NewsletterSignup.tsx
+index 412196b..51dee4c 100644
+--- a/components/NewsletterSignup.tsx
++++ b/components/NewsletterSignup.tsx
+@@ -1,13 +1,15 @@
+ 'use client';
+ import { useState } from 'react';
+ import { useTranslations, useLocale } from 'next-intl';
++import HoneypotField from '@/components/HoneypotField';
++import { HONEYPOT_FIELD } from '@/lib/honeypot';
+ 
+ export default function NewsletterSignup() {
+   const tn = useTranslations('newsletter');
+   const th = useTranslations('home');
+   const locale = useLocale();
+   const [email, setEmail] = useState('');
+-  const [company, setCompany] = useState('');
++  const [hp, setHp] = useState(''); // honeypot — must stay empty for a real person
+   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+ 
+   async function submit(e: React.FormEvent) {
+@@ -16,7 +18,7 @@ export default function NewsletterSignup() {
+     try {
+       const res = await fetch('/api/newsletter/subscribe', {
+         method: 'POST', headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ email, language: locale, company }),
++        body: JSON.stringify({ email, language: locale, [HONEYPOT_FIELD]: hp }),
+       });
+       setState(res.ok ? 'done' : 'error');
+     } catch { setState('error'); }
+@@ -33,9 +35,7 @@ export default function NewsletterSignup() {
+             <p className="gold">{tn('success')}</p>
+           ) : (
+             <form className="field" onSubmit={submit}>
+-              <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}>
+-                <label>Company<input type="text" tabIndex={-1} autoComplete="off" value={company} onChange={(e) => setCompany(e.target.value)} /></label>
+-              </div>
++              <HoneypotField value={hp} onChange={setHp} />
+               <input type="email" required placeholder={tn('placeholder')} value={email}
+                 onChange={(e) => setEmail(e.target.value)} aria-label={tn('placeholder')} />
+               <button className="btn" type="submit" disabled={state === 'sending'}>{tn('cta')}</button>
 diff --git a/lib/concierge/membership.ts b/lib/concierge/membership.ts
-index fdaa699..e6d79e0 100644
+index e6d79e0..c9ef964 100644
 --- a/lib/concierge/membership.ts
 +++ b/lib/concierge/membership.ts
-@@ -33,7 +33,10 @@ export async function linkEmailToCid(cid: string, email: string): Promise<boolea
-   try {
-     const sb = supabaseAdmin();
-     const { data } = await sb.from('concierge_members')
--      .select('id, cid').ilike('email', e).eq('status', 'active').limit(1).maybeSingle();
-+      // Escape LIKE wildcards: without this, email='%' matches ANY active member and
-+      // this call would re-point that member's account to the caller's browser (cid) —
-+      // an account takeover. ilike stays (case-insensitive exact match on the address).
-+      .select('id, cid').ilike('email', e.replace(/([\\%_])/g, '\\$1')).eq('status', 'active').limit(1).maybeSingle();
-     if (!data) return false;
-     await sb.from('concierge_members').update({ cid, updated_at: new Date().toISOString() }).eq('id', data.id as string);
-     return true;
-diff --git a/lib/crm.ts b/lib/crm.ts
-index 13f93d2..543879d 100644
---- a/lib/crm.ts
-+++ b/lib/crm.ts
-@@ -21,7 +21,7 @@ export async function logInboundToAccount(
-   try {
-     const domain = (opts.email.split('@')[1] || '').toLowerCase().trim();
-     if (!domain || domain.length < 3 || GENERIC.has(domain)) return null;
--    const { data } = await sb.from('crm_orgs').select('id').ilike('website', `%${domain}%`).limit(1);
-+    const { data } = await sb.from('crm_orgs').select('id').ilike('website', `%${domain.replace(/([\\%_])/g, '\\$1')}%`).limit(1);
-     const orgId = (data as { id: string }[] | null)?.[0]?.id || null;
-     if (!orgId) return null;
-     await sb.from('crm_activities').insert({
-diff --git a/lib/directory/map-data.ts b/lib/directory/map-data.ts
-index 34cb543..58ff39c 100644
---- a/lib/directory/map-data.ts
-+++ b/lib/directory/map-data.ts
-@@ -48,7 +48,7 @@ export async function getMapCategories(): Promise<{ categories: MapCategory[]; t
+@@ -4,6 +4,7 @@
+ // checkout, or linked by email across devices. All best-effort: any failure means
+ // "not a member", so the concierge simply serves the free tier.
+ import 'server-only';
++import type { SupabaseClient } from '@supabase/supabase-js';
+ import { supabaseAdmin } from '@/lib/supabase/admin';
+ import { isValidCid } from '@/lib/concierge/memory';
  
- export interface MapBusiness {
-   slug: string; type: string; name: string; lat: number; lng: number;
--  image: string | null; phone: string | null; email: string | null; url: string | null;
-+  image: string | null; phone: string | null; url: string | null;
-   district: string | null; address: string | null; cat: string | null;
+@@ -43,6 +44,74 @@ export async function linkEmailToCid(cid: string, email: string): Promise<boolea
+   } catch { return false; }
  }
  
-@@ -60,7 +60,7 @@ export async function getBusinessesForMap(
-   if (!opts.cat) return [];
-   const sb = supabaseAdmin();
-   const cap = Math.min(opts.limit ?? 8000, 12000);
--  const cols = `slug, type, canonical_category, district, address, lat, lng, image, phone, email, url, featured, name_${locale}, name_en`;
-+  const cols = `slug, type, canonical_category, district, address, lat, lng, image, phone, url, featured, status, name_${locale}, name_en`;
-   const out: MapBusiness[] = [];
-   const page = 1000; // Supabase caps each request at ~1000 rows — page through to get them ALL.
-   for (let from = 0; from < cap; from += page) {
-@@ -81,8 +81,12 @@ export async function getBusinessesForMap(
-         slug: String(r.slug), type: String(r.type || 'vendor'),
-         name: String(r[`name_${locale}`] || r.name_en || r.slug),
-         lat, lng,
--        image: (r.image as string) || null, phone: (r.phone as string) || null,
--        email: (r.email as string) || null, url: (r.url as string) || null,
-+        image: (r.image as string) || null,
-+        // Phone only for PUBLISHED listings (already on the public site). Never for the
-+        // bulk-imported 'listed' set, and email is never emitted to the public map at all —
-+        // the map needs a pin and a link, not a scrapeable contact dump of 15k businesses.
-+        phone: String(r.status) === 'published' ? ((r.phone as string) || null) : null,
-+        url: (r.url as string) || null,
-         district: (r.district as string) || null, address: (r.address as string) || null,
-         cat: (r.canonical_category as string) || null,
-       });
-diff --git a/lib/og/card.tsx b/lib/og/card.tsx
-index f62e9bd..2e5b104 100644
---- a/lib/og/card.tsx
-+++ b/lib/og/card.tsx
-@@ -17,6 +17,30 @@ const fontsPromise = (async () => {
-   return { serif, arabic };
- })();
- 
-+// SSRF guard for the cover fetch. coverUrl arrives from the public ?c= query param,
-+// so only fetch genuinely public https images — never let it reach loopback, private
-+// (RFC1918), link-local / cloud-metadata (169.254.x) or *.internal/.local targets, and
-+// reject IP-literal and credentialed URLs outright. (Follow-up hardening: a strict host
-+// allowlist + resolving the IP would also close DNS-rebinding; this blocks the common
-+// vectors and we also disable redirects below so a public URL can't bounce internal.)
-+function isPublicHttpsUrl(raw: string): boolean {
-+  let u: URL;
-+  try { u = new URL(raw); } catch { return false; }
-+  if (u.protocol !== 'https:') return false;
-+  if (u.username || u.password) return false;
-+  const host = u.hostname.toLowerCase();
-+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.internal') || host.endsWith('.local')) return false;
-+  // Reject every IPv6 literal (covers ::1, fe80:: link-local, fc00::/7 ULA).
-+  if (host.includes(':') || u.hostname.startsWith('[')) return false;
-+  // Reject private / loopback / link-local / multicast IPv4 literals.
-+  const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-+  if (m) {
-+    const a = Number(m[1]), b = Number(m[2]);
-+    if (a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || a >= 224) return false;
++// ── Recording a paid membership (called by the Stripe webhook) ───────────────────────
++// Unlike the entitlement reads above, this write is deliberately NOT best-effort: the
++// webhook must know whether the member was durably recorded so it can answer 5xx (Stripe
++// then redelivers) instead of 200 (Stripe gives up — the member paid and is never
++// recorded).
++//
++// Why not supabase `.upsert(row, { onConflict: 'stripe_subscription_id' })`, as before?
++// The only unique index on that column (migration 0050, concierge_members_sub_idx) is
++// PARTIAL — `where stripe_subscription_id is not null`. PostgREST emits a bare
++// `ON CONFLICT (stripe_subscription_id)`; Postgres can only match a partial index when the
++// statement repeats its predicate, so every call failed with error 42P10 and no member
++// row was ever written (the result was never read, so it looked like success).
++// Instead: update the row for this subscription if it exists, else insert. That needs no
++// schema change, is idempotent (a redelivered event refreshes the same row), and if two
++// deliveries race, the partial index still rejects the duplicate insert (23505), which we
++// resolve by updating the row that won.
++export interface MembershipCheckout {
++  sessionId: string | null;       // Stripe Checkout Session id (cs_…)
++  subscriptionId: string | null;  // Stripe Subscription id (sub_…) — the membership's identity
++  customerId: string | null;      // Stripe Customer id (cus_…)
++  cid: string | null;             // anonymous browser id the member checked out from
++  email: string | null;
++  tier: string;
++}
++export type RecordMembershipResult =
++  | { ok: true; action: 'inserted' | 'updated' }
++  | { ok: false; error: string };
++
++export async function recordMembershipCheckout(
++  sb: SupabaseClient, m: MembershipCheckout, nowIso: string = new Date().toISOString(),
++): Promise<RecordMembershipResult> {
++  // The stable identity of this membership across Stripe redeliveries: a retry of the
++  // same event carries the same ids, so it always finds the row the first attempt wrote.
++  const key: [string, string] | null = m.subscriptionId ? ['stripe_subscription_id', m.subscriptionId]
++    : m.sessionId ? ['stripe_session_id', m.sessionId]
++    : null;
++  if (!key) return { ok: false, error: 'membership event carries no subscription or session id' };
++
++  const row = {
++    cid: m.cid, email: m.email, tier: m.tier, status: 'active',
++    stripe_customer_id: m.customerId, stripe_subscription_id: m.subscriptionId, stripe_session_id: m.sessionId,
++    updated_at: nowIso,
++  };
++  const refresh = () => sb.from('concierge_members').update(row).eq(key[0], key[1]).select('id');
++
++  try {
++    // 1) Already recorded (a Stripe retry or duplicate delivery) → refresh that row.
++    let r = await refresh();
++    if (r.error) return { ok: false, error: r.error.message };
++    if (r.data && r.data.length > 0) return { ok: true, action: 'updated' };
++
++    // 2) First delivery → insert.
++    const ins = await sb.from('concierge_members').insert(row);
++    if (!ins.error) return { ok: true, action: 'inserted' };
++
++    // 3) A concurrent delivery inserted the same subscription between steps 1 and 2 and
++    //    the unique index rejected ours (23505) → the row exists now, so refresh it.
++    if (ins.error.code === '23505') {
++      r = await refresh();
++      if (r.error) return { ok: false, error: r.error.message };
++      if (r.data && r.data.length > 0) return { ok: true, action: 'updated' };
++    }
++    return { ok: false, error: ins.error.message };
++  } catch (e) {
++    return { ok: false, error: (e as Error).message || 'unexpected error' };
 +  }
-+  return true;
 +}
 +
- export async function ogImage(opts: { title: string; kicker?: string; locale: Locale; coverUrl?: string | null }) {
-   const { title, kicker, locale, coverUrl } = opts;
-   const { serif, arabic } = await fontsPromise;
-@@ -26,13 +50,17 @@ export async function ogImage(opts: { title: string; kicker?: string; locale: Lo
-   const big = title.length > 58 ? 54 : title.length > 40 ? 64 : 74;
- 
-   let cover: string | null = null;
--  if (coverUrl) {
-+  // Only fetch a vetted public https image; disallow redirects (a public URL could 302
-+  // to an internal one), cap the time and the size so a hostile URL can't hang or flood.
-+  if (coverUrl && isPublicHttpsUrl(coverUrl)) {
-     try {
--      const res = await fetch(coverUrl);
--      if (res.ok) {
-+      const res = await fetch(coverUrl, { redirect: 'error', signal: AbortSignal.timeout(4000) });
-+      const ct = res.headers.get('content-type') || '';
-+      if (res.ok && ct.startsWith('image/')) {
-         const buf = Buffer.from(await res.arrayBuffer());
--        const ct = res.headers.get('content-type') || 'image/jpeg';
--        cover = `data:${ct};base64,${buf.toString('base64')}`;
-+        if (buf.byteLength <= 8_000_000) {
-+          cover = `data:${ct};base64,${buf.toString('base64')}`;
-+        }
-       }
-     } catch { cover = null; }
-   }
+ // The system-prompt note that upgrades the concierge for a member.
+ export const MEMBER_BLOCK =
+   '\n\nThis guest is a Cyprus Lifestyle MEMBER. Give them your very best: be especially thorough, anticipatory and generous with detail and time; go a step beyond what was asked. For anything bespoke or high-stakes, warmly offer to hand them to their dedicated human concierge.';
 diff --git a/lib/ratelimit.ts b/lib/ratelimit.ts
-index 7b44d38..1fc16dc 100644
+index 1fc16dc..a9a3403 100644
 --- a/lib/ratelimit.ts
 +++ b/lib/ratelimit.ts
-@@ -1,5 +1,5 @@
+@@ -1,6 +1,7 @@
  import 'server-only';
--import { Ratelimit } from '@upstash/ratelimit';
-+import { Ratelimit, type Duration } from '@upstash/ratelimit';
+ import { Ratelimit, type Duration } from '@upstash/ratelimit';
  import { Redis } from '@upstash/redis';
++import { HONEYPOT_FIELD } from '@/lib/honeypot';
  
  // Graceful rate limiter. If Upstash is configured (UPSTASH_REDIS_REST_URL/TOKEN)
-@@ -7,15 +7,31 @@ import { Redis } from '@upstash/redis';
- // otherwise it falls back to a best-effort per-instance in-memory window so the
- // app still throttles naive floods without any external service.
- 
--let distributed: Ratelimit | null | undefined;
--function getDistributed(): Ratelimit | null {
--  if (distributed !== undefined) return distributed;
-+// One Redis client, reused across buckets.
-+let redis: Redis | null | undefined;
-+function getRedis(): Redis | null {
-+  if (redis !== undefined) return redis;
-   const url = process.env.UPSTASH_REDIS_REST_URL;
-   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
--  distributed = url && token
--    ? new Ratelimit({ redis: new Redis({ url, token }), limiter: Ratelimit.slidingWindow(5, '60 s'), prefix: 'cl:rl' })
--    : null;
--  return distributed;
-+  redis = url && token ? new Redis({ url, token }) : null;
-+  return redis;
-+}
-+
-+// One Ratelimit per (limit, window) so each bucket gets the limit the CALLER asked for.
-+// The previous version hard-coded slidingWindow(5, '60 s') once and reused it for every
-+// bucket, so with Upstash configured EVERY endpoint was throttled at 5/60s regardless of
-+// the arguments passed (e.g. the concierge route asks for 12/60s but silently got 5).
-+const limiters = new Map<string, Ratelimit>();
-+function getDistributed(limit: number, windowSec: number): Ratelimit | null {
-+  const r = getRedis();
-+  if (!r) return null;
-+  const key = `${limit}:${windowSec}`;
-+  let rl = limiters.get(key);
-+  if (!rl) {
-+    rl = new Ratelimit({ redis: r, limiter: Ratelimit.slidingWindow(limit, `${windowSec} s` as Duration), prefix: 'cl:rl' });
-+    limiters.set(key, rl);
-+  }
-+  return rl;
+ // it uses a distributed sliding window that holds across serverless instances;
+@@ -60,7 +61,13 @@ export async function rateLimit(req: Request, bucket: string, limit = 5, windowS
+   return memoryAllow(key, limit, windowSec * 1000);
  }
  
- const mem = new Map<string, number[]>();
-@@ -36,7 +52,7 @@ export function clientIp(req: Request): string {
- /** Returns true if the request is allowed, false if it should be throttled. */
- export async function rateLimit(req: Request, bucket: string, limit = 5, windowSec = 60): Promise<boolean> {
-   const key = `${bucket}:${clientIp(req)}`;
--  const rl = getDistributed();
-+  const rl = getDistributed(limit, windowSec);
-   if (rl) {
-     try { const { success } = await rl.limit(key); return success; }
-     catch { return true; } // never block on limiter failure
+-/** Honeypot: a hidden field bots fill in. Returns true if the submission looks like spam. */
++/**
++ * Honeypot: a hidden field (HONEYPOT_FIELD, rendered by components/HoneypotField.tsx)
++ * that humans never see and naive bots fill in. Returns true if the submission looks
++ * like spam. It must NOT look at any real form field — in particular not `company`,
++ * which the advertise quote form genuinely collects (see lib/honeypot.ts).
++ */
+ export function isHoneypot(body: Record<string, unknown>): boolean {
+-  return typeof body.company === 'string' && body.company.trim().length > 0;
++  const v = body[HONEYPOT_FIELD];
++  return typeof v === 'string' && v.trim().length > 0;
+ }

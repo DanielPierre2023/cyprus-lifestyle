@@ -174,9 +174,13 @@ export function listingJsonLd(a: {
     sameAs: a.url ? [a.url] : undefined,
     image: a.image ? [a.image] : undefined,
     priceRange: a.priceRange || undefined,
-    aggregateRating: (typeof a.rating === 'number' && a.rating > 0 && a.ratingCount && a.ratingCount > 0)
-      ? { '@type': 'AggregateRating', ratingValue: a.rating, reviewCount: a.ratingCount, bestRating: 5 }
-      : undefined,
+    // "Own the Data": we no longer publish an `aggregateRating` here. The ratings
+    // we hold on listed/reference rows are GOOGLE-DERIVED (scraped), so emitting
+    // them as our own structured data is a ToS/credibility liability. The
+    // `rating`/`ratingCount` args are intentionally left unused for now.
+    // Once first-party reviews exist (directory_reviews + the Bayesian
+    // directory_first_party_rating RPC, Phase 1 migration), repopulate this from
+    // THAT owned aggregate — e.g. aggregateRating built from getFirstPartyRating().
     address: (a.address || a.district)
       ? {
         '@type': 'PostalAddress',

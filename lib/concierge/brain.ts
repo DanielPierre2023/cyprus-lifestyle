@@ -843,23 +843,24 @@ export async function runConcierge(
   return { text, ctx };
 }
 
-// Resilient fallback: the Supabase edge `concierge` function holds its own model
-// key, so if streaming from the Next side is unavailable (key not set here, or a
-// transient error) we still return a grounded answer rather than failing.
-async function edgeAnswer(q: string, locale: string): Promise<string> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key || !q) return '';
+// Resilient fallback: if STREAMING from the Next side is unavailable (a transient
+// error, or an empty stream) we make ONE non-streaming Claude call with the SAME
+// grounded system prompt and history, so the web chat still returns a grounded
+// answer in one piece. This previously called the Supabase edge `concierge`
+// function; that function is now deprecated, so the fallback stays entirely on the
+// Next side (same model key, no re-retrieval) with no external dependency.
+async function directAnswer(system: string, history: ChatMessage[]): Promise<string> {
+  if (!process.env.CLAUDE_API_KEY) return '';
   try {
-    const res = await fetch(`${url}/functions/v1/concierge`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ q, locale, secret: key }),
-      signal: AbortSignal.timeout(40_000),
+    const res = await fetch(ANTHROPIC_URL, {
+      method: 'POST', headers: anthropicHeaders(),
+      body: JSON.stringify(buildAnthropicBody(system, history, false)),
+      signal: AbortSignal.timeout(60_000),
     });
-    const d = await res.json().catch(() => ({}));
-    return typeof d.answer === 'string' ? d.answer : '';
-  } catch { return ''; }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { console.error('[concierge] fallback', res.status, JSON.stringify(data).slice(0, 300)); return ''; }
+    return extractText(data);
+  } catch (e) { console.error('[concierge] fallback', (e as Error).message); return ''; }
 }
 
 // ── Streaming answer (web) — yields SSE-ready events ──────────────────────────
@@ -922,10 +923,10 @@ export async function* streamConcierge(messages: ChatMessage[], locale: string, 
     } catch (e) { errDetail = (e as Error).message; console.error('[concierge]', errDetail); }
   }
 
-  // Fallback: no key here, an error, or an empty stream → the edge concierge
-  // (which holds its own key) answers, grounded, in one piece.
+  // Fallback: an error here or an empty stream → one non-streaming Claude call with
+  // the SAME grounded prompt and history, so the web chat still answers in one piece.
   if (!gotText) {
-    const ans = await edgeAnswer(q, loc);
+    const ans = await directAnswer(system, history);
     if (ans) { gotText = true; yield { type: 'delta', text: ans }; }
   }
 

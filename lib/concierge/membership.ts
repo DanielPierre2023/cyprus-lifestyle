@@ -4,6 +4,7 @@
 // checkout, or linked by email across devices. All best-effort: any failure means
 // "not a member", so the concierge simply serves the free tier.
 import 'server-only';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isValidCid } from '@/lib/concierge/memory';
 
@@ -41,6 +42,74 @@ export async function linkEmailToCid(cid: string, email: string): Promise<boolea
     await sb.from('concierge_members').update({ cid, updated_at: new Date().toISOString() }).eq('id', data.id as string);
     return true;
   } catch { return false; }
+}
+
+// ── Recording a paid membership (called by the Stripe webhook) ───────────────────────
+// Unlike the entitlement reads above, this write is deliberately NOT best-effort: the
+// webhook must know whether the member was durably recorded so it can answer 5xx (Stripe
+// then redelivers) instead of 200 (Stripe gives up — the member paid and is never
+// recorded).
+//
+// Why not supabase `.upsert(row, { onConflict: 'stripe_subscription_id' })`, as before?
+// The only unique index on that column (migration 0050, concierge_members_sub_idx) is
+// PARTIAL — `where stripe_subscription_id is not null`. PostgREST emits a bare
+// `ON CONFLICT (stripe_subscription_id)`; Postgres can only match a partial index when the
+// statement repeats its predicate, so every call failed with error 42P10 and no member
+// row was ever written (the result was never read, so it looked like success).
+// Instead: update the row for this subscription if it exists, else insert. That needs no
+// schema change, is idempotent (a redelivered event refreshes the same row), and if two
+// deliveries race, the partial index still rejects the duplicate insert (23505), which we
+// resolve by updating the row that won.
+export interface MembershipCheckout {
+  sessionId: string | null;       // Stripe Checkout Session id (cs_…)
+  subscriptionId: string | null;  // Stripe Subscription id (sub_…) — the membership's identity
+  customerId: string | null;      // Stripe Customer id (cus_…)
+  cid: string | null;             // anonymous browser id the member checked out from
+  email: string | null;
+  tier: string;
+}
+export type RecordMembershipResult =
+  | { ok: true; action: 'inserted' | 'updated' }
+  | { ok: false; error: string };
+
+export async function recordMembershipCheckout(
+  sb: SupabaseClient, m: MembershipCheckout, nowIso: string = new Date().toISOString(),
+): Promise<RecordMembershipResult> {
+  // The stable identity of this membership across Stripe redeliveries: a retry of the
+  // same event carries the same ids, so it always finds the row the first attempt wrote.
+  const key: [string, string] | null = m.subscriptionId ? ['stripe_subscription_id', m.subscriptionId]
+    : m.sessionId ? ['stripe_session_id', m.sessionId]
+    : null;
+  if (!key) return { ok: false, error: 'membership event carries no subscription or session id' };
+
+  const row = {
+    cid: m.cid, email: m.email, tier: m.tier, status: 'active',
+    stripe_customer_id: m.customerId, stripe_subscription_id: m.subscriptionId, stripe_session_id: m.sessionId,
+    updated_at: nowIso,
+  };
+  const refresh = () => sb.from('concierge_members').update(row).eq(key[0], key[1]).select('id');
+
+  try {
+    // 1) Already recorded (a Stripe retry or duplicate delivery) → refresh that row.
+    let r = await refresh();
+    if (r.error) return { ok: false, error: r.error.message };
+    if (r.data && r.data.length > 0) return { ok: true, action: 'updated' };
+
+    // 2) First delivery → insert.
+    const ins = await sb.from('concierge_members').insert(row);
+    if (!ins.error) return { ok: true, action: 'inserted' };
+
+    // 3) A concurrent delivery inserted the same subscription between steps 1 and 2 and
+    //    the unique index rejected ours (23505) → the row exists now, so refresh it.
+    if (ins.error.code === '23505') {
+      r = await refresh();
+      if (r.error) return { ok: false, error: r.error.message };
+      if (r.data && r.data.length > 0) return { ok: true, action: 'updated' };
+    }
+    return { ok: false, error: ins.error.message };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message || 'unexpected error' };
+  }
 }
 
 // The system-prompt note that upgrades the concierge for a member.

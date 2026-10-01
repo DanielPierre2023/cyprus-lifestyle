@@ -9,6 +9,7 @@ import { pageMetadata } from '@/lib/seo';
 import { JsonLd, localBusiness, breadcrumb } from '@/lib/seo/jsonld';
 import DirectoryMap from '@/components/DirectoryMap';
 import CoverImage from '@/components/CoverImage';
+import DirectoryReviews from '@/components/DirectoryReviews';
 import TrackView from '@/components/TrackView';
 import TrackedCTA from '@/components/TrackedCTA';
 import EnquiryForm, { type EnquiryLabels } from '@/components/EnquiryForm';
@@ -176,6 +177,9 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
               </div>
             </section>
           ) : null}
+
+          {/* First-party reviews (renders nothing until a listing has APPROVED reviews). */}
+          <DirectoryReviews slug={x.slug} locale={l} reviewsLabel={t('directory.reviews')} />
         </div>
 
         {/* ── Sticky facts / actions ── */}

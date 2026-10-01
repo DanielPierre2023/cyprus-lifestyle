@@ -1,5 +1,18 @@
 // supabase/functions/concierge/index.ts
 // ============================================================================
+// ⚠️ DEPRECATED (2026-10-01) — NO LONGER CALLED BY THE APP.
+// ----------------------------------------------------------------------------
+// The public "Ask the island" box (app/api/concierge/route.ts) now answers via the
+// SHARED concierge brain (lib/concierge/brain.ts) directly — the same grounded,
+// multilingual core that powers the streaming web chat, Telegram and WhatsApp. The
+// streaming chat's resilience fallback no longer calls this function either. So
+// nothing in the Next app invokes this edge function anymore.
+//
+// It is retained ONLY as a historical Supabase deploy artifact so any stray external
+// caller does not hit a surprise 404 during the transition. It can be removed from
+// the Supabase dashboard (Edge Functions → `concierge`) at a later clean-up. No
+// behaviour below has changed.
+// ============================================================================
 // CYPRUS LIFESTYLE — "Ask the island" concierge  (grounded, structured output)
 // ----------------------------------------------------------------------------
 // A visitor asks in plain language ("a quiet beachfront dinner in Paphos for an

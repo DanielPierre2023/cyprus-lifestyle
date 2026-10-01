@@ -6,8 +6,41 @@
 //   fallbackKind="brand" → on missing/broken src, show a tasteful on-brand
 //     placeholder instead of an unrelated stock photo (used across the directory,
 //     so a listing without a real photo never shows a random forest).
+//
+// OWNED-IMAGE GATE ("Own the Data", Part A1): many bulk-imported directory rows
+// carry an `image` that HOT-LINKS a third-party server (scraped). We must not
+// embed those. So when fallbackKind="brand" we render the given src ONLY when it
+// is a FIRST-PARTY ("owned") image (see isOwnedImage); otherwise we fall through
+// to the branded placeholder. Editorial covers (fallbackKind="photo") are
+// untouched. This is the ONE place the policy lives, so it is trivial to relax
+// later (e.g. add an owned-CDN host) once images are migrated to owned storage.
 import Image from 'next/image';
 import { useState } from 'react';
+
+/**
+ * Is `src` an image we OWN (safe to embed), vs a scraped third-party hot-link?
+ * Owned when the src is EITHER:
+ *   • a same-origin relative path ("/…", not protocol-relative "//…"), OR
+ *   • served from our own Supabase project host (NEXT_PUBLIC_SUPABASE_URL —
+ *     Supabase Storage objects live on that exact host), OR
+ *   • served from our own site host (NEXT_PUBLIC_SITE_URL).
+ * Any other absolute URL (any other host) is treated as NOT ours. Fails CLOSED:
+ * an unparseable src, or one on an un-configured host, is not embedded. To relax
+ * later, add the new owned host(s) to `ownedHosts` below — that is the whole policy.
+ */
+export function isOwnedImage(src: string | null | undefined): boolean {
+  if (!src) return false;
+  const s = src.trim();
+  if (!s) return false;
+  if (s.startsWith('//')) return false;            // protocol-relative → treat as external
+  if (s.startsWith('/')) return true;              // same-origin relative asset
+  const ownedHosts = new Set<string>();
+  for (const base of [process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SITE_URL]) {
+    if (base) { try { ownedHosts.add(new URL(base).host); } catch { /* ignore malformed env */ } }
+  }
+  try { return ownedHosts.has(new URL(s).host); }
+  catch { return false; }                          // not a vettable absolute URL → don't embed
+}
 
 export default function CoverImage({
   src, seed, alt = '', className, sizes = '100vw', priority = false, fallbackKind = 'photo',
@@ -16,7 +49,10 @@ export default function CoverImage({
   fallbackKind?: 'photo' | 'brand';
 }) {
   const stock = `https://picsum.photos/seed/${encodeURIComponent(seed || 'cyprus')}/1200/800`;
-  const [imgSrc, setImgSrc] = useState(src || (fallbackKind === 'brand' ? '' : stock));
+  // For directory listings (brand fallback) drop any src that isn't first-party,
+  // so a hot-linked third-party URL yields the branded placeholder, not an embed.
+  const vettedSrc = fallbackKind === 'brand' && !isOwnedImage(src) ? null : src;
+  const [imgSrc, setImgSrc] = useState(vettedSrc || (fallbackKind === 'brand' ? '' : stock));
   const [brandFail, setBrandFail] = useState(false);
 
   if (fallbackKind === 'brand' && (!imgSrc || brandFail)) {

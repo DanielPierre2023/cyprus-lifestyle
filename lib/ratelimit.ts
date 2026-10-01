@@ -1,6 +1,7 @@
 import 'server-only';
 import { Ratelimit, type Duration } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
+import { HONEYPOT_FIELD } from '@/lib/honeypot';
 
 // Graceful rate limiter. If Upstash is configured (UPSTASH_REDIS_REST_URL/TOKEN)
 // it uses a distributed sliding window that holds across serverless instances;
@@ -60,7 +61,13 @@ export async function rateLimit(req: Request, bucket: string, limit = 5, windowS
   return memoryAllow(key, limit, windowSec * 1000);
 }
 
-/** Honeypot: a hidden field bots fill in. Returns true if the submission looks like spam. */
+/**
+ * Honeypot: a hidden field (HONEYPOT_FIELD, rendered by components/HoneypotField.tsx)
+ * that humans never see and naive bots fill in. Returns true if the submission looks
+ * like spam. It must NOT look at any real form field — in particular not `company`,
+ * which the advertise quote form genuinely collects (see lib/honeypot.ts).
+ */
 export function isHoneypot(body: Record<string, unknown>): boolean {
-  return typeof body.company === 'string' && body.company.trim().length > 0;
+  const v = body[HONEYPOT_FIELD];
+  return typeof v === 'string' && v.trim().length > 0;
 }

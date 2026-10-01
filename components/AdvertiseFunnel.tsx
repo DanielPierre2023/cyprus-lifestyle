@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
+import HoneypotField from '@/components/HoneypotField';
+import { HONEYPOT_FIELD } from '@/lib/honeypot';
 
 export interface RateItem {
   slot: string;
@@ -234,7 +236,10 @@ export default function AdvertiseFunnel({ items, locale = 'en', status }: { item
 
 function QuoteModal({ item, locale, d, onClose }: { item: RateItem; locale: string; d: Dict; onClose: () => void }) {
   const [state, setState] = useState<'idle' | 'sending' | 'ok' | 'err'>('idle');
-  const [f, setF] = useState({ name: '', email: '', company: '', message: '', website: '' }); // website = honeypot
+  // `company` is a REAL, visible field (stored on the lead) — it must never double as the
+  // spam trap. The trap is the separate hidden `hp` value below (see lib/honeypot.ts).
+  const [f, setF] = useState({ name: '', email: '', company: '', message: '' });
+  const [hp, setHp] = useState('');
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -248,7 +253,7 @@ function QuoteModal({ item, locale, d, onClose }: { item: RateItem; locale: stri
     try {
       const res = await fetch('/api/advertise/lead', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...f, slot: item.slot, label: item.label, locale }),
+        body: JSON.stringify({ ...f, [HONEYPOT_FIELD]: hp, slot: item.slot, label: item.label, locale }),
       });
       const j = await res.json().catch(() => ({}));
       setState(j.ok ? 'ok' : 'err');
@@ -274,8 +279,8 @@ function QuoteModal({ item, locale, d, onClose }: { item: RateItem; locale: stri
             <input style={input} type="email" placeholder={d.fEmail} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
             <input style={input} placeholder={d.fCompany} value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} />
             <textarea style={{ ...input, minHeight: 84, resize: 'vertical' }} placeholder={d.fMessage} value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} />
-            {/* honeypot */}
-            <input tabIndex={-1} autoComplete="off" value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} style={{ position: 'absolute', left: '-9999px', width: 1, height: 1 }} aria-hidden="true" />
+            {/* honeypot — hidden spam trap the server checks (lib/ratelimit.ts isHoneypot) */}
+            <HoneypotField value={hp} onChange={setHp} />
             {state === 'err' ? <p style={{ color: '#C0492E', fontSize: 13, margin: '10px 0 0' }}>{d.err}</p> : null}
             <button onClick={submit} disabled={state === 'sending'} className="btn"
               style={{ marginTop: 14, width: '100%', background: GOLD, color: '#0B0E11', border: 'none', padding: '12px 16px', cursor: 'pointer', fontWeight: 600 }}>

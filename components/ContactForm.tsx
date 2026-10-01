@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
+import HoneypotField from '@/components/HoneypotField';
+import { HONEYPOT_FIELD } from '@/lib/honeypot';
 
 // The enquiry classes the form offers. Values are stable enums; labels are localized
 // below. Kept in-component (a bounded set) so this feature ships without editing the
@@ -23,19 +25,18 @@ export default function ContactForm() {
   const t = useTranslations('contactForm');
   const locale = useLocale();
   const lx = L[(locale as Loc)] || L.en;
-  const [f, setF] = useState({ name: '', email: '', subject: '', message: '', company: '', requestClass: '', phone: '', district: '' });
+  const [f, setF] = useState({ name: '', email: '', subject: '', message: '', requestClass: '', phone: '', district: '' });
+  const [hp, setHp] = useState(''); // honeypot — must stay empty for a real person
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setState('sending');
-    const res = await fetch('/api/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...f, locale }) });
+    const res = await fetch('/api/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...f, [HONEYPOT_FIELD]: hp, locale }) });
     setState(res.ok ? 'done' : 'error');
   }
   if (state === 'done') return <p className="gold cform" style={{ textAlign: 'center' }}>{t('success')}</p>;
   return (
     <form className="cform" onSubmit={submit}>
-      <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}>
-        <label>Company<input type="text" tabIndex={-1} autoComplete="off" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} /></label>
-      </div>
+      <HoneypotField value={hp} onChange={setHp} />
       <input placeholder={t('name')} required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
       <input type="email" placeholder={t('email')} required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
       <select required aria-label={lx.topic} value={f.requestClass} onChange={(e) => setF({ ...f, requestClass: e.target.value })}>
