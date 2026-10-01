@@ -1,62 +1,111 @@
-# Plan 2 — Concierge Knowledge Layer (ingest + embed)
+# Phase 0 — Security de-risk (code-only, no SQL)
 
-Loads the six scraped Cyprus sites into a `kb_docs` knowledge store the concierge
-can search semantically. Rows arrive **published=false** for your review, get
-embedded with the same `text-embedding-3-small` space as the directory, and go
-live only when you publish them.
+Four confirmed security fixes, re-verified against `main` at `829a82e`. All are
+additive, behaviour-preserving for legitimate users, and need no migration and no
+new env. One earlier suspicion (an "mdToHtml XSS") was **re-checked and dropped** —
+it is not exploitable; details at the end so you know it was looked at, not missed.
 
-**Design note (why not directory_listings):** the scrape captured page *metadata*
-(title, description, H1, og:image, phones), not clean geocoded place records or
-full article bodies. That's ideal as a *knowledge* layer but would pollute your
-curated `directory_listings` if forced in as places. So Plan 2 builds the KB
-cleanly; turning the genuine business rows (fashion stores, developers, venues)
-into reviewed directory entries is a separate, optional pass we can do later
-(needs geocoding + category cleanup).
+**Destination:** commit these six files → Vercel. Nothing to run in Supabase.
 
-## Files
-- `supabase/migrations/20261001090000_kb_docs.sql` — `kb_docs` table, `match_kb_docs`, `kb_docs_needing_embedding`
-- `supabase/functions/kb-ingest/index.ts` — ingest (CSV→kb_docs) + embed + publish
-
-## Deploy & run (Supabase Dashboard; no CLI)
-
-**1. SQL** — SQL Editor → paste the migration → Run. (Idempotent.)
-
-**2. Function** — Edge Functions → create `kb-ingest` → paste `index.ts` → Deploy, **Verify JWT OFF**.
-`OPENAI_API_KEY` and the service key are already on the project.
-
-**3. Ingest each source** — open `kb-ingest` → Invoke with `?key=<SERVICE_ROLE_KEY>` and this JSON body, once per source (CSV links valid ~24h — if expired, re-export each table from its cloud page, or ask me):
-
-| source | body `csv_url` |
-|---|---|
-| mycypruslife (463) | the mycypruslife link below |
-| cyprusbucketlist (93) | …bucketlist link |
-| imin (132) | …imin link |
-| cyprusfashion (85) | …fashion link |
-| cyprusdevelopers (73) | …developers link |
-| mycyprustravel (48) | …travel link |
-
-Example body:
-```json
-{ "mode": "ingest", "source": "mycypruslife", "csv_url": "PASTE_LINK" }
+```
+lib/directory/map-data.ts
+app/api/directory/businesses/route.ts
+lib/concierge/membership.ts
+lib/crm.ts
+lib/og/card.tsx
+lib/ratelimit.ts
 ```
 
-**4. Embed** — Invoke with body `{ "mode": "embed", "limit": 50 }` repeatedly until `remaining_estimate` is 0 (each call embeds a batch within a 40s budget).
+Full diff in `CHANGES.diff` (6 files, +71 / −21).
 
-**5. Review, then publish** — browse `kb_docs` (published=false) in the Table editor, drop any junk rows, then make a source live:
-```json
-{ "mode": "publish", "source": "mycypruslife" }
-```
-(or `"source": "all"`). Only published rows are returned to visitors.
+---
 
-## CSV export links (valid ~24h from 2026-10-01 09:13 UTC)
-- **mycypruslife**: https://cloud-api.ultimatewebscraper.com/mcp/export/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0YWJsZUlkIjoiNjJlZmEwYWYtZTU5Ny00YWMwLWE4ODUtODYzYzExZjJiM2FmIiwid29ya3NwYWNlSWQiOiI1YTRhMzg0ZS02OTkwLTQ2OTUtYTY3OS1mMDY2NzM1OWUzODciLCJmb3JtYXQiOiJjc3YiLCJjb2x1bW5JZHMiOlsidXJsIiwiczBfanNvbl9sZF9fbmFtZSIsInMwX2pzb25fbGRfX2Rlc2NyaXB0aW9uIiwiczFfcGFnZV9tZXRhZGF0YV9fdGl0bGUiLCJzMV9wYWdlX21ldGFkYXRhX19kZXNjcmlwdGlvbiIsInMxX3BhZ2VfbWV0YWRhdGFfX2ltYWdlIiwiczFfcGFnZV9tZXRhZGF0YV9faDEiLCJzMV9wYWdlX21ldGFkYXRhX19wYWdlX3R5cGUiXSwiaWF0IjoxNzkwODYzNTg1LCJleHAiOjE3OTA5NDk5ODUsImF1ZCI6InV3cy1tY3AtZXhwb3J0In0.AkSHweFhjvzLsl7LPQ-6RI4eqiiaCeIHiD1kUvy8qfM
-- **cyprusbucketlist**: https://cloud-api.ultimatewebscraper.com/mcp/export/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0YWJsZUlkIjoiYWJkNTEwYzUtODQxYi00Yjg3LWE5ZWQtMjA4ZGNhYjkzZTRkIiwid29ya3NwYWNlSWQiOiI1YTRhMzg0ZS02OTkwLTQ2OTUtYTY3OS1mMDY2NzM1OWUzODciLCJmb3JtYXQiOiJjc3YiLCJjb2x1bW5JZHMiOlsidXJsIiwiczBfanNvbl9sZF9fbmFtZSIsInMwX2pzb25fbGRfX2Rlc2NyaXB0aW9uIiwiczFfcGFnZV9tZXRhZGF0YV9fdGl0bGUiLCJzMV9wYWdlX21ldGFkYXRhX19kZXNjcmlwdGlvbiIsInMxX3BhZ2VfbWV0YWRhdGFfX2ltYWdlIiwiczFfcGFnZV9tZXRhZGF0YV9faDEiLCJzMV9wYWdlX21ldGFkYXRhX19wYWdlX3R5cGUiXSwiaWF0IjoxNzkwODYzNTg2LCJleHAiOjE3OTA5NDk5ODYsImF1ZCI6InV3cy1tY3AtZXhwb3J0In0.iuWyRxEve_l__2gKsVlflbYhzh159Ns-Um4tdS8fdMw
-- **imin-cyprus**: https://cloud-api.ultimatewebscraper.com/mcp/export/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0YWJsZUlkIjoiZmViMzUzY2EtOTcyZC00OTkyLThkMGQtYmYzZDVhYTgwNjMyIiwid29ya3NwYWNlSWQiOiI1YTRhMzg0ZS02OTkwLTQ2OTUtYTY3OS1mMDY2NzM1OWUzODciLCJmb3JtYXQiOiJjc3YiLCJjb2x1bW5JZHMiOlsidXJsIiwiczBfanNvbl9sZF9fbmFtZSIsInMwX2pzb25fbGRfX2Rlc2NyaXB0aW9uIiwiczFfcGFnZV9tZXRhZGF0YV9fdGl0bGUiLCJzMV9wYWdlX21ldGFkYXRhX19kZXNjcmlwdGlvbiIsInMxX3BhZ2VfbWV0YWRhdGFfX2ltYWdlIiwiczFfcGFnZV9tZXRhZGF0YV9faDEiLCJzMV9wYWdlX21ldGFkYXRhX19wYWdlX3R5cGUiXSwiaWF0IjoxNzkwODYzNTg4LCJleHAiOjE3OTA5NDk5ODgsImF1ZCI6InV3cy1tY3AtZXhwb3J0In0.Eet-lffvGgG3Wg6ZUgV4mMI_Aevw1ehHOBKvLS3YaHo
-- **cyprusfashion**: https://cloud-api.ultimatewebscraper.com/mcp/export/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0YWJsZUlkIjoiNmNjZDFlYjYtYzE2MC00NmQwLWE4MGEtNjYyZjU4MmZlNjgxIiwid29ya3NwYWNlSWQiOiI1YTRhMzg0ZS02OTkwLTQ2OTUtYTY3OS1mMDY2NzM1OWUzODciLCJmb3JtYXQiOiJjc3YiLCJjb2x1bW5JZHMiOlsidXJsIiwiczBfanNvbl9sZF9fbmFtZSIsInMwX2pzb25fbGRfX2Rlc2NyaXB0aW9uIiwiczFfcGFnZV9tZXRhZGF0YV9fdGl0bGUiLCJzMV9wYWdlX21ldGFkYXRhX19kZXNjcmlwdGlvbiIsInMxX3BhZ2VfbWV0YWRhdGFfX2ltYWdlIiwiczFfcGFnZV9tZXRhZGF0YV9faDEiLCJzMV9wYWdlX21ldGFkYXRhX19wYWdlX3R5cGUiXSwiaWF0IjoxNzkwODYzNTkwLCJleHAiOjE3OTA5NDk5OTAsImF1ZCI6InV3cy1tY3AtZXhwb3J0In0.7EdWxiQVYIUeTdkgvQF4hN97h_DzTWEP2O2cH0breMo
-- **cyprusdevelopers**: https://cloud-api.ultimatewebscraper.com/mcp/export/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0YWJsZUlkIjoiOTNkNTY4YWEtNDZjOC00MGYxLWI0ZDMtN2ZlZTkzODM0OGNmIiwid29ya3NwYWNlSWQiOiI1YTRhMzg0ZS02OTkwLTQ2OTUtYTY3OS1mMDY2NzM1OWUzODciLCJmb3JtYXQiOiJjc3YiLCJjb2x1bW5JZHMiOlsidXJsIiwiczBfanNvbl9sZF9fbmFtZSIsInMwX2pzb25fbGRfX2Rlc2NyaXB0aW9uIiwiczFfcGFnZV9tZXRhZGF0YV9fdGl0bGUiLCJzMV9wYWdlX21ldGFkYXRhX19kZXNjcmlwdGlvbiIsInMxX3BhZ2VfbWV0YWRhdGFfX2ltYWdlIiwiczFfcGFnZV9tZXRhZGF0YV9faDEiLCJzMV9wYWdlX21ldGFkYXRhX19wYWdlX3R5cGUiXSwiaWF0IjoxNzkwODYzNTkyLCJleHAiOjE3OTA5NDk5OTIsImF1ZCI6InV3cy1tY3AtZXhwb3J0In0.YMRZPgUauknUYVlnHreyANhcP4y6OH8OFi6WisFyahQ
-- **mycyprustravel**: https://cloud-api.ultimatewebscraper.com/mcp/export/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0YWJsZUlkIjoiMzUwNDcyZWItNmY3Yy00MDYwLTljMzMtZGI4ZWJiN2YxOWRlIiwid29ya3NwYWNlSWQiOiI1YTRhMzg0ZS02OTkwLTQ2OTUtYTY3OS1mMDY2NzM1OWUzODciLCJmb3JtYXQiOiJjc3YiLCJjb2x1bW5JZHMiOlsidXJsIiwiczBfanNvbl9sZF9fbmFtZSIsInMwX2pzb25fbGRfX2Rlc2NyaXB0aW9uIiwiczFfcGFnZV9tZXRhZGF0YV9fdGl0bGUiLCJzMV9wYWdlX21ldGFkYXRhX19kZXNjcmlwdGlvbiIsInMxX3BhZ2VfbWV0YWRhdGFfX2ltYWdlIiwiczFfcGFnZV9tZXRhZGF0YV9faDEiLCJzMV9wYWdlX21ldGFkYXRhX19wYWdlX3R5cGUiXSwiaWF0IjoxNzkwODYzNTk0LCJleHAiOjE3OTA5NDk5OTQsImF1ZCI6InV3cy1tY3AtZXhwb3J0In0.hK0G6rgOtygsfuNrO7aMBv6JF4mkQ-AE-U3KJXTPcxo
+## 1 — Unauthenticated PII dump on the directory map  *(highest impact)*
 
-## Final step (I'll deliver next)
-Once `kb_docs` is populated, embedded and published, I'll give you the concierge
-update that calls `match_kb_docs` so answers actually draw on this knowledge with
-"on our site" links — the Plan 1 concierge with the KB wiring added.
+**Was:** `GET /api/directory/businesses?cat=<category>` is public, uncapped and
+edge-cached, and returned `email` **and** `phone` for **every** geocoded business —
+all ~15k rows including the bulk-imported `listed` set that isn't even on the public
+site. Anyone could enumerate the ~85 categories and scrape the whole directory's
+contact details (third-party business PII, much of it Google-derived).
+
+**Now:** `email` is no longer selected or emitted to the public map at all, and
+`phone` is returned **only for `published`** listings (never the scraped `listed`
+set). The map still has everything it needs — pin, name, link. The info-window's
+email action in `BusinessMap.tsx` is already guarded by `if (p.email)`, so it simply
+stops rendering; no frontend change required.
+*(Files: `lib/directory/map-data.ts`, `app/api/directory/businesses/route.ts`.)*
+
+## 2 — Membership account-takeover via LIKE injection  *(highest impact)*
+
+**Was:** `linkEmailToCid()` did `.ilike('email', e)` with the caller's raw input. A
+request with `email = '%'` matches **any** active member, and the function then
+re-points that member's account to the caller's browser (`cid`) — i.e. it hijacks a
+real member's subscription and detaches them from it.
+
+**Now:** LIKE wildcards in the input are escaped (`\`, `%`, `_`), so the match is the
+exact address, case-insensitive — the intended behaviour. Same one-line hardening
+applied to the CRM domain lookup in `lib/crm.ts` (same class of bug, lower severity).
+The admin search boxes (`admin/crm`, `admin/editorial`) use `ilike` too but are
+admin-gated and intentional substring search — left as-is on purpose.
+*(Files: `lib/concierge/membership.ts`, `lib/crm.ts`.)*
+
+## 3 — SSRF in the OG image generator
+
+**Was:** `/api/og?c=<url>` passed the `c` param straight to `fetch(coverUrl)` in
+`lib/og/card.tsx` with no validation — the server would fetch any URL an attacker
+supplied (internal services, `169.254.169.254` metadata, other hosts, using the site
+as a proxy).
+
+**Now:** the cover is fetched only when the URL passes `isPublicHttpsUrl()` — https
+only, no credentials, and loopback / private (RFC1918) / link-local / metadata / IPv6
+/ `*.internal` / `*.local` targets rejected. Redirects are disabled (`redirect:
+'error'`, so a public URL can't 302 to an internal one), with a 4s timeout and an 8 MB
+cap. Legitimate public cover images are unaffected.
+*Follow-up (not in this ZIP): a strict host allowlist + IP-resolution would also close
+DNS-rebinding; this already blocks the common vectors.*
+*(File: `lib/og/card.tsx`.)*
+
+## 4 — Rate limiter ignored per-endpoint limits in production
+
+**Was:** the distributed (Upstash) limiter was built once as
+`slidingWindow(5, '60 s')` and reused for every bucket, so whenever Upstash is
+configured **every endpoint was throttled at 5 requests / 60s** regardless of the
+limit passed — e.g. the concierge asks for 12/60s but silently got 5, and no bucket
+could be made stricter than 5 either. (The in-memory fallback already honoured the
+args; only the production path was wrong.)
+
+**Now:** one `Ratelimit` is created per `(limit, window)` and reused, so each bucket
+gets the limit the caller actually requested. One shared Redis client. Still fails
+open (never blocks on a limiter error).
+*(File: `lib/ratelimit.ts`.)*
+
+---
+
+## Verified before shipping
+- `npm run typecheck` → clean (exit 0).
+- `npm test` → all 30 suites pass.
+- Changes are additive and degrade safely (map email action self-hides; OG falls back
+  to the text card; limiter fails open).
+
+## Smoke tests after deploy
+- `GET /api/directory/businesses?cat=<any category>` → feature `properties` contain
+  **no `email`**, and `phone` only on `published` rows.
+- Join membership on one device, then "link by email" on another with your real email
+  → still links. (And `email=%` style input no longer matches anyone.)
+- Open any article/listing OG image (`/api/og?...`) → still renders with its cover.
+  `/api/og?c=http://169.254.169.254/` → renders the **text-only** card (fetch refused).
+- Concierge under load → allowed up to its own limit (12/60s), not 5.
+
+---
+
+## Re-checked and intentionally NOT changed
+- **`mdToHtml` ("XSS")** — not exploitable. It `escapeHtml`s every block's text first,
+  and `inline()` only turns `[text](https://…)` into `<a>` *after* escaping, with the
+  URL capture stopping at whitespace — so no new tag and no attribute can be injected.
+  No change made.
+- **Admin `ilike` search** (`admin/crm`, `admin/editorial`) — admin-gated, intentional
+  substring search. Left as-is.
+
+*Separate from security (revenue correctness, not in this ZIP): the honeypot uses the
+`company` field, and the membership Stripe webhook's error handling — both flagged for
+a later pass. Say the word and I'll verify and fix those next.*

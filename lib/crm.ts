@@ -21,7 +21,7 @@ export async function logInboundToAccount(
   try {
     const domain = (opts.email.split('@')[1] || '').toLowerCase().trim();
     if (!domain || domain.length < 3 || GENERIC.has(domain)) return null;
-    const { data } = await sb.from('crm_orgs').select('id').ilike('website', `%${domain}%`).limit(1);
+    const { data } = await sb.from('crm_orgs').select('id').ilike('website', `%${domain.replace(/([\\%_])/g, '\\$1')}%`).limit(1);
     const orgId = (data as { id: string }[] | null)?.[0]?.id || null;
     if (!orgId) return null;
     await sb.from('crm_activities').insert({

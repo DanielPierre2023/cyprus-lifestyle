@@ -25,6 +25,11 @@ import { geocode, haversineMeters, bbox } from '@/lib/geo';
 
 export const CONCIERGE_MODEL = process.env.SONNET_MODEL || CLAUDE_SONNET;
 const NEIGHBOURHOOD_RADIUS_M = Number(process.env.NEIGHBOURHOOD_RADIUS_M || 2500);
+// Minimum pgvector cosine similarity (1 − distance) for a semantic directory hit to
+// count. match_directory returns the nearest N regardless of closeness, so without a
+// floor a query with no good match still pulls in weak, off-topic listings. The web
+// edge function uses ~0.30; keep it env-tunable. Hits missing a score are kept.
+const SEMANTIC_FLOOR = Number(process.env.CONCIERGE_SEMANTIC_FLOOR || 0.28);
 // Statuses the CONCIERGE may recommend from. 'published' is the public website set;
 // 'listed' is the bulk-imported directory (real businesses shown to the concierge for
 // "what's near me" but NOT on the public website — the site filters status='published').
@@ -499,6 +504,27 @@ async function hydrateSlugs(locale: string, slugs: string[]): Promise<Pick[]> {
   } catch { return []; }
 }
 
+// ── Fuzzy NAME recall (pg_trgm) ───────────────────────────────────────────────
+// Finds a listing by a short or MISSPELLED name — "Zya", "Zya Cafe" → stored
+// "Zya Caffee" — using word-similarity across all seven stored name columns. This
+// was the ONE leg the web "Ask the island" edge function had and this shared brain
+// (web chat / Telegram / WhatsApp / email) did not, so a guest who named a place
+// found it on one surface and not the others. It calls the SAME match_directory_name
+// RPC the edge function uses (the RPC filters status='published' internally and
+// orders by score), so every channel now resolves named places identically. It is
+// the highest-precision leg and is fused FIRST. Degrades cleanly to [] if the RPC
+// is unavailable, so retrieval never regresses below the keyword/semantic legs.
+async function searchByName(locale: string, q: string, limit = 12): Promise<Pick[]> {
+  const query = q.trim();
+  if (query.length < 2) return [];
+  try {
+    const { data, error } = await supabaseAdmin().rpc('match_directory_name', { q: query, match_count: limit });
+    if (error || !Array.isArray(data)) return [];
+    const slugs = (data as { slug: string }[]).map((r) => String(r.slug)).filter(Boolean).slice(0, limit);
+    return hydrateSlugs(locale, slugs);
+  } catch { return []; }
+}
+
 // ── Semantic recall (pgvector) — one query embedding feeds both the KB and the
 // whole directory. Returns [] whenever embeddings aren't configured, so the
 // concierge always degrades cleanly to keyword search. ────────────────────────
@@ -522,7 +548,9 @@ async function vectorDirectory(locale: string, vec: number[] | null, limit = 8, 
     if (district) params.filter_district = district;
     const { data, error } = await supabaseAdmin().rpc('match_directory', params);
     if (error || !Array.isArray(data)) return [];
-    const slugs = (data as { slug: string }[]).map((r) => String(r.slug)).filter(Boolean).slice(0, limit);
+    const slugs = (data as { slug: string; similarity?: number }[])
+      .filter((r) => r.similarity == null || Number(r.similarity) >= SEMANTIC_FLOOR)
+      .map((r) => String(r.slug)).filter(Boolean).slice(0, limit);
     return hydrateSlugs(locale, slugs);
   } catch { return []; }
 }
@@ -575,18 +603,20 @@ export async function assembleContext(locale: string, latestUser: string): Promi
   const kwAugP = (understanding && augmented !== latestUser)
     ? searchDirectory(locale, augmented, 10, { luxuryFirst: understanding.luxury }).catch(() => [] as Pick[])
     : Promise.resolve([] as Pick[]);
-  const [kbVecIds, vecDistrict, vecGlobal, kwAug, canonExact] = await Promise.all([
+  const [kbVecIds, vecDistrict, vecGlobal, kwAug, canonExact, nameHits] = await Promise.all([
     vectorKbIds(qvec),
     intentDistrict ? vectorDirectory(locale, qvec, 15, intentDistrict) : Promise.resolve([] as Pick[]),
     vectorDirectory(locale, qvec, 12),
     kwAugP,
     targetCanonical ? searchByCanonical(locale, targetCanonical, intentDistrict, 14) : Promise.resolve([] as Pick[]),
+    searchByName(locale, latestUser, 12),
   ]);
 
   // Fusion, most-precise first: EXACT canonical category (clean, language-agnostic) →
   // precise keyword → category+district by MEANING (vector) → raw keyword → global
   // meaning. Deduped by slug.
   let candidates: Pick[] = [];
+  candidates = mergeDirHits(candidates, nameHits, 24);     // exact/fuzzy NAMED place leads (parity with the web Ask box)
   candidates = mergeDirHits(candidates, canonExact, 24);
   candidates = mergeDirHits(candidates, kwAug, 24);
   candidates = mergeDirHits(candidates, vecDistrict, 24);
@@ -655,16 +685,18 @@ export async function retrievalTrace(locale: string, q: string): Promise<Retriev
   const intentDistrict = (understanding?.district) || readIntent(q).districts[0] || readIntent(augmented).districts[0] || null;
   const targetCanonical = mapToCanonical(`${q} ${understanding?.keywords?.join(' ') || ''} ${understanding?.subtype || ''}`);
   const qvec = await embedText(q);
-  const [kw, kwAug, vecDistrict, vecGlobal, canonExact] = await Promise.all([
+  const [kw, kwAug, vecDistrict, vecGlobal, canonExact, nameHits] = await Promise.all([
     searchDirectory(loc, q, 10).catch(() => [] as Pick[]),
     (understanding && augmented !== q) ? searchDirectory(loc, augmented, 10).catch(() => [] as Pick[]) : Promise.resolve([] as Pick[]),
     intentDistrict ? vectorDirectory(loc, qvec, 12, intentDistrict) : Promise.resolve([] as Pick[]),
     vectorDirectory(loc, qvec, 12),
     targetCanonical ? searchByCanonical(loc, targetCanonical, intentDistrict, 12) : Promise.resolve([] as Pick[]),
+    searchByName(loc, q, 12).catch(() => [] as Pick[]),
   ]);
   // The fused + reranked order — what the guest actually sees (the proof the ordering
   // works). Respects CONCIERGE_RERANK: with it off this is the plain fused order.
   let fused: Pick[] = [];
+  fused = mergeDirHits(fused, nameHits, 24);
   fused = mergeDirHits(fused, canonExact, 24);
   fused = mergeDirHits(fused, kwAug, 24);
   fused = mergeDirHits(fused, vecDistrict, 24);
@@ -676,6 +708,7 @@ export async function retrievalTrace(locale: string, q: string): Promise<Retriev
   return {
     query: q, locale: loc, augmented, intentDistrict, targetCanonical, understanding, hasEmbedding: !!qvec,
     legs: [
+      { name: 'name(fuzzy)', count: nameHits.length, sample: sample(nameHits) },
       { name: 'canonical(exact)', count: canonExact.length, sample: sample(canonExact) },
       { name: 'keyword(raw)', count: kw.length, sample: sample(kw) },
       { name: 'keyword(augmented)', count: kwAug.length, sample: sample(kwAug) },

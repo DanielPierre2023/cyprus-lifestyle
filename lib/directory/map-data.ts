@@ -48,7 +48,7 @@ export async function getMapCategories(): Promise<{ categories: MapCategory[]; t
 
 export interface MapBusiness {
   slug: string; type: string; name: string; lat: number; lng: number;
-  image: string | null; phone: string | null; email: string | null; url: string | null;
+  image: string | null; phone: string | null; url: string | null;
   district: string | null; address: string | null; cat: string | null;
 }
 
@@ -60,7 +60,7 @@ export async function getBusinessesForMap(
   if (!opts.cat) return [];
   const sb = supabaseAdmin();
   const cap = Math.min(opts.limit ?? 8000, 12000);
-  const cols = `slug, type, canonical_category, district, address, lat, lng, image, phone, email, url, featured, name_${locale}, name_en`;
+  const cols = `slug, type, canonical_category, district, address, lat, lng, image, phone, url, featured, status, name_${locale}, name_en`;
   const out: MapBusiness[] = [];
   const page = 1000; // Supabase caps each request at ~1000 rows — page through to get them ALL.
   for (let from = 0; from < cap; from += page) {
@@ -81,8 +81,12 @@ export async function getBusinessesForMap(
         slug: String(r.slug), type: String(r.type || 'vendor'),
         name: String(r[`name_${locale}`] || r.name_en || r.slug),
         lat, lng,
-        image: (r.image as string) || null, phone: (r.phone as string) || null,
-        email: (r.email as string) || null, url: (r.url as string) || null,
+        image: (r.image as string) || null,
+        // Phone only for PUBLISHED listings (already on the public site). Never for the
+        // bulk-imported 'listed' set, and email is never emitted to the public map at all —
+        // the map needs a pin and a link, not a scrapeable contact dump of 15k businesses.
+        phone: String(r.status) === 'published' ? ((r.phone as string) || null) : null,
+        url: (r.url as string) || null,
         district: (r.district as string) || null, address: (r.address as string) || null,
         cat: (r.canonical_category as string) || null,
       });

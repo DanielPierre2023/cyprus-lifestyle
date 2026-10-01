@@ -33,7 +33,10 @@ export async function linkEmailToCid(cid: string, email: string): Promise<boolea
   try {
     const sb = supabaseAdmin();
     const { data } = await sb.from('concierge_members')
-      .select('id, cid').ilike('email', e).eq('status', 'active').limit(1).maybeSingle();
+      // Escape LIKE wildcards: without this, email='%' matches ANY active member and
+      // this call would re-point that member's account to the caller's browser (cid) —
+      // an account takeover. ilike stays (case-insensitive exact match on the address).
+      .select('id, cid').ilike('email', e.replace(/([\\%_])/g, '\\$1')).eq('status', 'active').limit(1).maybeSingle();
     if (!data) return false;
     await sb.from('concierge_members').update({ cid, updated_at: new Date().toISOString() }).eq('id', data.id as string);
     return true;

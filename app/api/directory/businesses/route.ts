@@ -28,7 +28,6 @@ export async function GET(req: NextRequest) {
       name: b.name,
       image: b.image || '',
       phone: b.phone || '',
-      email: b.email || '',
       url: b.url || '',
       district: b.district || '',
       address: b.address || '',

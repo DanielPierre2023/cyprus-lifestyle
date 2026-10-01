@@ -1,0 +1,195 @@
+diff --git a/app/api/directory/businesses/route.ts b/app/api/directory/businesses/route.ts
+index eb4ed2d..40c80f5 100644
+--- a/app/api/directory/businesses/route.ts
++++ b/app/api/directory/businesses/route.ts
+@@ -28,7 +28,6 @@ export async function GET(req: NextRequest) {
+       name: b.name,
+       image: b.image || '',
+       phone: b.phone || '',
+-      email: b.email || '',
+       url: b.url || '',
+       district: b.district || '',
+       address: b.address || '',
+diff --git a/lib/concierge/membership.ts b/lib/concierge/membership.ts
+index fdaa699..e6d79e0 100644
+--- a/lib/concierge/membership.ts
++++ b/lib/concierge/membership.ts
+@@ -33,7 +33,10 @@ export async function linkEmailToCid(cid: string, email: string): Promise<boolea
+   try {
+     const sb = supabaseAdmin();
+     const { data } = await sb.from('concierge_members')
+-      .select('id, cid').ilike('email', e).eq('status', 'active').limit(1).maybeSingle();
++      // Escape LIKE wildcards: without this, email='%' matches ANY active member and
++      // this call would re-point that member's account to the caller's browser (cid) —
++      // an account takeover. ilike stays (case-insensitive exact match on the address).
++      .select('id, cid').ilike('email', e.replace(/([\\%_])/g, '\\$1')).eq('status', 'active').limit(1).maybeSingle();
+     if (!data) return false;
+     await sb.from('concierge_members').update({ cid, updated_at: new Date().toISOString() }).eq('id', data.id as string);
+     return true;
+diff --git a/lib/crm.ts b/lib/crm.ts
+index 13f93d2..543879d 100644
+--- a/lib/crm.ts
++++ b/lib/crm.ts
+@@ -21,7 +21,7 @@ export async function logInboundToAccount(
+   try {
+     const domain = (opts.email.split('@')[1] || '').toLowerCase().trim();
+     if (!domain || domain.length < 3 || GENERIC.has(domain)) return null;
+-    const { data } = await sb.from('crm_orgs').select('id').ilike('website', `%${domain}%`).limit(1);
++    const { data } = await sb.from('crm_orgs').select('id').ilike('website', `%${domain.replace(/([\\%_])/g, '\\$1')}%`).limit(1);
+     const orgId = (data as { id: string }[] | null)?.[0]?.id || null;
+     if (!orgId) return null;
+     await sb.from('crm_activities').insert({
+diff --git a/lib/directory/map-data.ts b/lib/directory/map-data.ts
+index 34cb543..58ff39c 100644
+--- a/lib/directory/map-data.ts
++++ b/lib/directory/map-data.ts
+@@ -48,7 +48,7 @@ export async function getMapCategories(): Promise<{ categories: MapCategory[]; t
+ 
+ export interface MapBusiness {
+   slug: string; type: string; name: string; lat: number; lng: number;
+-  image: string | null; phone: string | null; email: string | null; url: string | null;
++  image: string | null; phone: string | null; url: string | null;
+   district: string | null; address: string | null; cat: string | null;
+ }
+ 
+@@ -60,7 +60,7 @@ export async function getBusinessesForMap(
+   if (!opts.cat) return [];
+   const sb = supabaseAdmin();
+   const cap = Math.min(opts.limit ?? 8000, 12000);
+-  const cols = `slug, type, canonical_category, district, address, lat, lng, image, phone, email, url, featured, name_${locale}, name_en`;
++  const cols = `slug, type, canonical_category, district, address, lat, lng, image, phone, url, featured, status, name_${locale}, name_en`;
+   const out: MapBusiness[] = [];
+   const page = 1000; // Supabase caps each request at ~1000 rows — page through to get them ALL.
+   for (let from = 0; from < cap; from += page) {
+@@ -81,8 +81,12 @@ export async function getBusinessesForMap(
+         slug: String(r.slug), type: String(r.type || 'vendor'),
+         name: String(r[`name_${locale}`] || r.name_en || r.slug),
+         lat, lng,
+-        image: (r.image as string) || null, phone: (r.phone as string) || null,
+-        email: (r.email as string) || null, url: (r.url as string) || null,
++        image: (r.image as string) || null,
++        // Phone only for PUBLISHED listings (already on the public site). Never for the
++        // bulk-imported 'listed' set, and email is never emitted to the public map at all —
++        // the map needs a pin and a link, not a scrapeable contact dump of 15k businesses.
++        phone: String(r.status) === 'published' ? ((r.phone as string) || null) : null,
++        url: (r.url as string) || null,
+         district: (r.district as string) || null, address: (r.address as string) || null,
+         cat: (r.canonical_category as string) || null,
+       });
+diff --git a/lib/og/card.tsx b/lib/og/card.tsx
+index f62e9bd..2e5b104 100644
+--- a/lib/og/card.tsx
++++ b/lib/og/card.tsx
+@@ -17,6 +17,30 @@ const fontsPromise = (async () => {
+   return { serif, arabic };
+ })();
+ 
++// SSRF guard for the cover fetch. coverUrl arrives from the public ?c= query param,
++// so only fetch genuinely public https images — never let it reach loopback, private
++// (RFC1918), link-local / cloud-metadata (169.254.x) or *.internal/.local targets, and
++// reject IP-literal and credentialed URLs outright. (Follow-up hardening: a strict host
++// allowlist + resolving the IP would also close DNS-rebinding; this blocks the common
++// vectors and we also disable redirects below so a public URL can't bounce internal.)
++function isPublicHttpsUrl(raw: string): boolean {
++  let u: URL;
++  try { u = new URL(raw); } catch { return false; }
++  if (u.protocol !== 'https:') return false;
++  if (u.username || u.password) return false;
++  const host = u.hostname.toLowerCase();
++  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.internal') || host.endsWith('.local')) return false;
++  // Reject every IPv6 literal (covers ::1, fe80:: link-local, fc00::/7 ULA).
++  if (host.includes(':') || u.hostname.startsWith('[')) return false;
++  // Reject private / loopback / link-local / multicast IPv4 literals.
++  const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
++  if (m) {
++    const a = Number(m[1]), b = Number(m[2]);
++    if (a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || a >= 224) return false;
++  }
++  return true;
++}
++
+ export async function ogImage(opts: { title: string; kicker?: string; locale: Locale; coverUrl?: string | null }) {
+   const { title, kicker, locale, coverUrl } = opts;
+   const { serif, arabic } = await fontsPromise;
+@@ -26,13 +50,17 @@ export async function ogImage(opts: { title: string; kicker?: string; locale: Lo
+   const big = title.length > 58 ? 54 : title.length > 40 ? 64 : 74;
+ 
+   let cover: string | null = null;
+-  if (coverUrl) {
++  // Only fetch a vetted public https image; disallow redirects (a public URL could 302
++  // to an internal one), cap the time and the size so a hostile URL can't hang or flood.
++  if (coverUrl && isPublicHttpsUrl(coverUrl)) {
+     try {
+-      const res = await fetch(coverUrl);
+-      if (res.ok) {
++      const res = await fetch(coverUrl, { redirect: 'error', signal: AbortSignal.timeout(4000) });
++      const ct = res.headers.get('content-type') || '';
++      if (res.ok && ct.startsWith('image/')) {
+         const buf = Buffer.from(await res.arrayBuffer());
+-        const ct = res.headers.get('content-type') || 'image/jpeg';
+-        cover = `data:${ct};base64,${buf.toString('base64')}`;
++        if (buf.byteLength <= 8_000_000) {
++          cover = `data:${ct};base64,${buf.toString('base64')}`;
++        }
+       }
+     } catch { cover = null; }
+   }
+diff --git a/lib/ratelimit.ts b/lib/ratelimit.ts
+index 7b44d38..1fc16dc 100644
+--- a/lib/ratelimit.ts
++++ b/lib/ratelimit.ts
+@@ -1,5 +1,5 @@
+ import 'server-only';
+-import { Ratelimit } from '@upstash/ratelimit';
++import { Ratelimit, type Duration } from '@upstash/ratelimit';
+ import { Redis } from '@upstash/redis';
+ 
+ // Graceful rate limiter. If Upstash is configured (UPSTASH_REDIS_REST_URL/TOKEN)
+@@ -7,15 +7,31 @@ import { Redis } from '@upstash/redis';
+ // otherwise it falls back to a best-effort per-instance in-memory window so the
+ // app still throttles naive floods without any external service.
+ 
+-let distributed: Ratelimit | null | undefined;
+-function getDistributed(): Ratelimit | null {
+-  if (distributed !== undefined) return distributed;
++// One Redis client, reused across buckets.
++let redis: Redis | null | undefined;
++function getRedis(): Redis | null {
++  if (redis !== undefined) return redis;
+   const url = process.env.UPSTASH_REDIS_REST_URL;
+   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+-  distributed = url && token
+-    ? new Ratelimit({ redis: new Redis({ url, token }), limiter: Ratelimit.slidingWindow(5, '60 s'), prefix: 'cl:rl' })
+-    : null;
+-  return distributed;
++  redis = url && token ? new Redis({ url, token }) : null;
++  return redis;
++}
++
++// One Ratelimit per (limit, window) so each bucket gets the limit the CALLER asked for.
++// The previous version hard-coded slidingWindow(5, '60 s') once and reused it for every
++// bucket, so with Upstash configured EVERY endpoint was throttled at 5/60s regardless of
++// the arguments passed (e.g. the concierge route asks for 12/60s but silently got 5).
++const limiters = new Map<string, Ratelimit>();
++function getDistributed(limit: number, windowSec: number): Ratelimit | null {
++  const r = getRedis();
++  if (!r) return null;
++  const key = `${limit}:${windowSec}`;
++  let rl = limiters.get(key);
++  if (!rl) {
++    rl = new Ratelimit({ redis: r, limiter: Ratelimit.slidingWindow(limit, `${windowSec} s` as Duration), prefix: 'cl:rl' });
++    limiters.set(key, rl);
++  }
++  return rl;
+ }
+ 
+ const mem = new Map<string, number[]>();
+@@ -36,7 +52,7 @@ export function clientIp(req: Request): string {
+ /** Returns true if the request is allowed, false if it should be throttled. */
+ export async function rateLimit(req: Request, bucket: string, limit = 5, windowSec = 60): Promise<boolean> {
+   const key = `${bucket}:${clientIp(req)}`;
+-  const rl = getDistributed();
++  const rl = getDistributed(limit, windowSec);
+   if (rl) {
+     try { const { success } = await rl.limit(key); return success; }
+     catch { return true; } // never block on limiter failure
