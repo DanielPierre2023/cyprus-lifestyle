@@ -1,0 +1,151 @@
+# Safety follow-ups — diff vs the three ZIPs you already have
+
+## app/api/advertise/webhook/route.ts (ad-order first-write check)
+@@ -8,9 +8,11 @@
+ //     it is durably recorded. These writes are idempotent (keyed on the Stripe
+ //     subscription / session id), so a redelivery never duplicates or double-applies.
+ //   • Event types we don't handle are acknowledged with 2xx on purpose.
+-//   • The advertising-order checkout branch keeps its historical best-effort behaviour:
+-//     its CRM / fulfilment side effects are not idempotent, so a blanket retry there could
+-//     duplicate deals and emails.
++//   • The advertising-order checkout branch now checks its ONE reconciliation write (mark
++//     the order paid): a real DB failure there answers 500 for a retry, since no side-effect
++//     has run yet. Its downstream CRM / fulfilment / email side-effects stay best-effort
++//     (not idempotent, so a blanket retry could duplicate deals and emails) — swallowed but
++//     logged. A no-match / malformed id is acknowledged, not retried.
+ import { NextRequest, NextResponse } from 'next/server';
+ import { supabaseAdmin } from '@/lib/supabase/admin';
+ import { verifyWebhook } from '@/lib/stripe';
+@@ -77,8 +79,19 @@
+         updated_at: now,
+       };
+       let order: Record<string, unknown> | null = null;
+-      if (orderId) { const { data } = await sb.from('ad_orders').update(patch).eq('id', orderId).select('*').single(); order = data; }
+-      else if (obj.id) { const { data } = await sb.from('ad_orders').update(patch).eq('stripe_session_id', obj.id as string).select('*').single(); order = data; }
++      // The reconciliation write that marks the order paid. Check its error BEFORE any
++      // (non-idempotent) CRM / fulfilment / email side-effect runs — nothing below has
++      // happened yet, so a retry here is safe. A real DB failure → 500 so Stripe retries.
++      // "No matching row" (PGRST116) and a malformed id (22P02) are PERMANENT — an order we
++      // don't track, or a foreign event — so acknowledge them instead of retry-storming.
++      const ACK = new Set(['PGRST116', '22P02']);
++      const sel = orderId
++        ? await sb.from('ad_orders').update(patch).eq('id', orderId).select('*').single()
++        : obj.id
++          ? await sb.from('ad_orders').update(patch).eq('stripe_session_id', obj.id as string).select('*').single()
++          : null;
++      if (sel?.error && !ACK.has(sel.error.code || '')) return await retryLater(event, 'ad-order checkout write', sel.error.message);
++      order = sel?.data ?? null;
+ 
+       // Attach the sale to a CRM account: match/create, link, log the win, open a
+       // live/won deal, and move the account to 'live'. Best-effort — a CRM hiccup
+
+## components/CoverImage.tsx (isOwnedImage moved to lib/images)
+@@ -16,31 +16,10 @@
+ // later (e.g. add an owned-CDN host) once images are migrated to owned storage.
+ import Image from 'next/image';
+ import { useState } from 'react';
+-
+-/**
+- * Is `src` an image we OWN (safe to embed), vs a scraped third-party hot-link?
+- * Owned when the src is EITHER:
+- *   • a same-origin relative path ("/…", not protocol-relative "//…"), OR
+- *   • served from our own Supabase project host (NEXT_PUBLIC_SUPABASE_URL —
+- *     Supabase Storage objects live on that exact host), OR
+- *   • served from our own site host (NEXT_PUBLIC_SITE_URL).
+- * Any other absolute URL (any other host) is treated as NOT ours. Fails CLOSED:
+- * an unparseable src, or one on an un-configured host, is not embedded. To relax
+- * later, add the new owned host(s) to `ownedHosts` below — that is the whole policy.
+- */
+-export function isOwnedImage(src: string | null | undefined): boolean {
+-  if (!src) return false;
+-  const s = src.trim();
+-  if (!s) return false;
+-  if (s.startsWith('//')) return false;            // protocol-relative → treat as external
+-  if (s.startsWith('/')) return true;              // same-origin relative asset
+-  const ownedHosts = new Set<string>();
+-  for (const base of [process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SITE_URL]) {
+-    if (base) { try { ownedHosts.add(new URL(base).host); } catch { /* ignore malformed env */ } }
+-  }
+-  try { return ownedHosts.has(new URL(s).host); }
+-  catch { return false; }                          // not a vettable absolute URL → don't embed
+-}
++// The owned-vs-hot-link policy lives in lib/images.ts now (shared with DirectoryMap,
++// lib/seo and server code). Re-exported here so existing importers keep working.
++import { isOwnedImage } from '@/lib/images';
++export { isOwnedImage };
+ 
+ export default function CoverImage({
+   src, seed, alt = '', className, sizes = '100vw', priority = false, fallbackKind = 'photo',
+
+## lib/seo.ts (gate OG cover)
+@@ -1,6 +1,7 @@
+ // Centralised SEO helpers: canonical + hreflang alternates and JSON-LD builders.
+ // Routing is next-intl `as-needed` — the default locale (en) has no path prefix.
+ import { LOCALES, DEFAULT_LOCALE, LOCALE_NAME, type Locale } from '@/lib/locales';
++import { isOwnedImage } from '@/lib/images';
+ 
+ export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.eu').replace(/\/+$/, '');
+ export const SITE_NAME = 'Cyprus Lifestyle';
+@@ -33,7 +34,9 @@
+   p.set('t', o.title.slice(0, 200));
+   if (o.kicker) p.set('k', o.kicker.slice(0, 60));
+   p.set('l', o.locale);
+-  if (o.cover) p.set('c', o.cover);
++  // Only pass a cover we OWN — never hot-link a scraped third-party image into our OG
++  // card. A non-owned cover is dropped and the card renders text-only (branded).
++  if (o.cover && isOwnedImage(o.cover)) p.set('c', o.cover);
+   return `${SITE_URL}/api/og?${p.toString()}`;
+ }
+ 
+
+## components/DirectoryMap.tsx (gate popup image)
+@@ -1,6 +1,7 @@
+ 'use client';
+ import { useEffect, useMemo, useRef, useState } from 'react';
+ import { loadMaplibre, cartoGlStyle, type MlMap, type MlPopup, type GeoFeature } from '@/lib/map/maplibre';
++import { isOwnedImage } from '@/lib/images';
+ 
+ export interface MapPoint {
+   lat: number;
+@@ -73,7 +74,9 @@
+     .map((p) => ({
+       type: 'Feature',
+       geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+-      properties: { name: p.name, type: normType(p.type), href: p.href || '', image: p.image || '' },
++      // Only put an image in the popup when it is OURS — never hot-link a scraped
++      // third-party image into a map popup (the popup shows no image otherwise).
++      properties: { name: p.name, type: normType(p.type), href: p.href || '', image: isOwnedImage(p.image) ? (p.image as string) : '' },
+     })), [points, off]);
+ 
+   // Init the map once.
+
+## lib/images.ts (NEW — shared owned-image policy)
+@@ -0,0 +1,28 @@
++// lib/images.ts
++// Single source of truth for the "owned vs hot-linked image" policy ("Own the Data").
++// Pure module (no 'use client' / 'server-only') so it can be imported from client
++// components (CoverImage, DirectoryMap), server components, and server modules (lib/seo).
++//
++// Many bulk-imported directory rows carry an `image` that HOT-LINKS a third-party
++// server (scraped). We must never embed those — not in a card, a map popup, or an OG
++// social card. An image counts as OURS (safe to embed) when it is EITHER:
++//   • a same-origin relative path ("/…", but not protocol-relative "//…"), OR
++//   • served from our own Supabase project host (NEXT_PUBLIC_SUPABASE_URL — Supabase
++//     Storage objects live on that exact host), OR
++//   • served from our own site host (NEXT_PUBLIC_SITE_URL).
++// Any other absolute URL is treated as NOT ours. Fails CLOSED: an unparseable src, or
++// one on an un-configured host, is not embedded. To relax later (e.g. an owned CDN),
++// add the new host(s) to `ownedHosts` below — that is the whole policy, in one place.
++export function isOwnedImage(src: string | null | undefined): boolean {
++  if (!src) return false;
++  const s = src.trim();
++  if (!s) return false;
++  if (s.startsWith('//')) return false;            // protocol-relative → treat as external
++  if (s.startsWith('/')) return true;              // same-origin relative asset
++  const ownedHosts = new Set<string>();
++  for (const base of [process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SITE_URL]) {
++    if (base) { try { ownedHosts.add(new URL(base).host); } catch { /* ignore malformed env */ } }
++  }
++  try { return ownedHosts.has(new URL(s).host); }
++  catch { return false; }                          // not a vettable absolute URL → don't embed
++}
