@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadMaplibre, cartoGlStyle, type MlMap, type MlPopup, type GeoFeature } from '@/lib/map/maplibre';
+import { isOwnedImage } from '@/lib/images';
 
 export interface MapPoint {
   lat: number;
@@ -73,7 +74,9 @@ export default function DirectoryMap({
     .map((p) => ({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-      properties: { name: p.name, type: normType(p.type), href: p.href || '', image: p.image || '' },
+      // Only put an image in the popup when it is OURS — never hot-link a scraped
+      // third-party image into a map popup (the popup shows no image otherwise).
+      properties: { name: p.name, type: normType(p.type), href: p.href || '', image: isOwnedImage(p.image) ? (p.image as string) : '' },
     })), [points, off]);
 
   // Init the map once.

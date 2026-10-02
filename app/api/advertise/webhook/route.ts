@@ -8,9 +8,11 @@
 //     it is durably recorded. These writes are idempotent (keyed on the Stripe
 //     subscription / session id), so a redelivery never duplicates or double-applies.
 //   • Event types we don't handle are acknowledged with 2xx on purpose.
-//   • The advertising-order checkout branch keeps its historical best-effort behaviour:
-//     its CRM / fulfilment side effects are not idempotent, so a blanket retry there could
-//     duplicate deals and emails.
+//   • The advertising-order checkout branch now checks its ONE reconciliation write (mark
+//     the order paid): a real DB failure there answers 500 for a retry, since no side-effect
+//     has run yet. Its downstream CRM / fulfilment / email side-effects stay best-effort
+//     (not idempotent, so a blanket retry could duplicate deals and emails) — swallowed but
+//     logged. A no-match / malformed id is acknowledged, not retried.
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { verifyWebhook } from '@/lib/stripe';
@@ -77,8 +79,19 @@ export async function POST(req: NextRequest) {
         updated_at: now,
       };
       let order: Record<string, unknown> | null = null;
-      if (orderId) { const { data } = await sb.from('ad_orders').update(patch).eq('id', orderId).select('*').single(); order = data; }
-      else if (obj.id) { const { data } = await sb.from('ad_orders').update(patch).eq('stripe_session_id', obj.id as string).select('*').single(); order = data; }
+      // The reconciliation write that marks the order paid. Check its error BEFORE any
+      // (non-idempotent) CRM / fulfilment / email side-effect runs — nothing below has
+      // happened yet, so a retry here is safe. A real DB failure → 500 so Stripe retries.
+      // "No matching row" (PGRST116) and a malformed id (22P02) are PERMANENT — an order we
+      // don't track, or a foreign event — so acknowledge them instead of retry-storming.
+      const ACK = new Set(['PGRST116', '22P02']);
+      const sel = orderId
+        ? await sb.from('ad_orders').update(patch).eq('id', orderId).select('*').single()
+        : obj.id
+          ? await sb.from('ad_orders').update(patch).eq('stripe_session_id', obj.id as string).select('*').single()
+          : null;
+      if (sel?.error && !ACK.has(sel.error.code || '')) return await retryLater(event, 'ad-order checkout write', sel.error.message);
+      order = sel?.data ?? null;
 
       // Attach the sale to a CRM account: match/create, link, log the win, open a
       // live/won deal, and move the account to 'live'. Best-effort — a CRM hiccup
