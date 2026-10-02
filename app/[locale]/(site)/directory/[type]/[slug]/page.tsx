@@ -3,9 +3,9 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { DIRECTORY_TYPES, getListing, getNearby, getPeers, getEventsByDistrict, getCollectionBySlug } from '@/lib/queries';
+import { DIRECTORY_TYPES, getListing, getNearby, getPeers, getEventsByDistrict, getCollectionBySlug, isStubText } from '@/lib/queries';
 import { collectionSlug, slugifyDistrict, districtLabel } from '@/lib/collections';
-import { pageMetadata } from '@/lib/seo';
+import { pageMetadata, robotsForStub } from '@/lib/seo';
 import { JsonLd, localBusiness, breadcrumb } from '@/lib/seo/jsonld';
 import DirectoryMap from '@/components/DirectoryMap';
 import CoverImage from '@/components/CoverImage';
@@ -26,6 +26,9 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return pageMetadata({
     locale: locale as Locale, path: `/directory/${type}/${slug}`,
     title: listing.name, description: listing.summary, cover: listing.image, kicker: 'Cyprus Lifestyle',
+    // Page-level SEO gate: a hollow "stub" listing is noindex'd until it has real text
+    // (complements the sitemap exclusion). Auto-clears once a real description exists.
+    robots: robotsForStub(isStubText(listing.summary, listing.name)),
   });
 }
 
@@ -208,6 +211,13 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
           <EnquiryForm listingSlug={x.slug} listingType={x.type} listingName={x.name} locale={l} labels={enqLabels} />
           {/* Claim-to-own: lets the business verify ownership and flip the listing to owned data. */}
           <ClaimListing slug={x.slug} verified={x.provenance === 'owner-verified'} />
+          {/* Owner editor entry point — only for already owner-verified listings. The manage
+              page emails a secure management link to the owner contact on file. */}
+          {x.provenance === 'owner-verified' ? (
+            <Link className="lh-manage" href={{ pathname: '/directory/manage', query: { slug: x.slug } }}>
+              Own this business? Manage your listing →
+            </Link>
+          ) : null}
           <p className="lh-trust">◆ {t('trust.independent')} <Link href="/standards">{t('trust.link')} →</Link></p>
         </aside>
       </div>
@@ -260,6 +270,8 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
         .lh-ride-apps a{font-family:var(--sans);font-size:13px;color:#8a5b12;font-weight:600;border:1px solid var(--line,#e0d6c1);border-radius:999px;padding:3px 11px}
         .lh-ride-apps a:hover{border-color:#C9A24C;text-decoration:none}
         .lh-map{border-radius:6px;overflow:hidden}
+        .lh-manage{font-family:var(--sans);font-size:13px;font-weight:600;color:#8a5b12;text-align:center;display:block;border:1px solid var(--line,#e0d6c1);border-radius:6px;padding:11px 14px;background:#fff}
+        .lh-manage:hover{border-color:#C9A24C;text-decoration:none}
         .lh-trust{font-family:var(--sans);font-size:12px;color:var(--ink-soft,#5b5346);line-height:1.5;margin:2px 0 0}
         .lh-trust a{color:#8a5b12;font-weight:600}
         @media (max-width:900px){.lh-grid{grid-template-columns:1fr;gap:26px}.lh-side{position:static}}
