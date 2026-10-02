@@ -58,6 +58,14 @@ export interface VerifyResult {
   remaining?: number;
 }
 
+export interface PeekResult {
+  ok: boolean;
+  /** Business display name, for the branded confirm page (present only when ok). */
+  bizName?: string;
+  slug?: string;
+  error?: 'expired' | 'invalid' | 'not_found';
+}
+
 const EMAIL_LINK_TTL_MS = 72 * 60 * 60 * 1000; // 72 hours
 const OTP_TTL_MS = 10 * 60 * 1000;             // 10 minutes
 const OTP_MAX_ATTEMPTS = 5;
@@ -170,9 +178,9 @@ async function sendVerifyLink(to: string, bizName: string, token: string): Promi
     heading: `Confirm your claim of ${bizName}`,
     bodyHtml:
       `<p>Someone asked to claim and verify the Cyprus Lifestyle listing for <strong>${esc(bizName)}</strong>.</p>` +
-      `<p>If this was you (or your business), confirm below to take ownership of the listing. The link is valid for 72 hours and can be used once.</p>` +
+      `<p>If this was you (or your business), open the secure confirmation page below and click <strong>Confirm</strong> to take ownership of the listing. The link is valid for 72 hours and can be used once — ownership transfers only when you click Confirm on that page, so it is safe to open.</p>` +
       `<p>If you did not request this, you can safely ignore this email — nothing will change.</p>`,
-    ctaLabel: 'Confirm & verify',
+    ctaLabel: 'Review your claim',
     ctaUrl: url,
     preheader: `Verify your claim of ${bizName} on Cyprus Lifestyle`,
   });
@@ -414,6 +422,46 @@ export async function verifyClaimToken(token: string): Promise<VerifyResult> {
       `${name} is now owner-verified`,
     );
     return { ok: true, slug, type };
+  } catch {
+    return { ok: false, error: 'not_found' };
+  }
+}
+
+/**
+ * READ-ONLY lookup of an email-link claim by its token. This exists so the verify route
+ * can render a branded CONFIRM page on GET **without** consuming the single-use token or
+ * flipping the listing — that only happens on the deliberate POST (verifyClaimToken).
+ * It is what makes the link safe against email security scanners / mailbox link
+ * prefetchers, which issue background GETs: they reach this read only, never the flip.
+ * Validates the claim is pending + unexpired and returns the business name for display.
+ * NEVER mutates any row and NEVER throws.
+ */
+export async function peekClaimToken(token: string): Promise<PeekResult> {
+  const t = String(token ?? '').trim();
+  if (!t) return { ok: false, error: 'not_found' };
+  try {
+    const sb = supabaseAdmin();
+    const nowIso = new Date().toISOString();
+    const { data } = await sb.from('directory_claims')
+      .select('id, listing_slug, status, expires_at')
+      .eq('token_hash', sha256(t))
+      .maybeSingle();
+    const claim = data as Record<string, unknown> | null;
+    if (!claim) return { ok: false, error: 'not_found' };
+    // Single-use: a token on an already-settled claim is dead (mirror verifyClaimToken).
+    if (String(claim.status) !== 'pending') return { ok: false, error: 'not_found' };
+    // Expiry is REPORTED here but not persisted — peek must not write. The status flip to
+    // 'expired' happens if/when the claimant actually submits the confirm (verifyClaimToken).
+    if (claim.expires_at && String(claim.expires_at) < nowIso) return { ok: false, error: 'expired' };
+
+    const slug = String(claim.listing_slug);
+    let bizName = slug;
+    try {
+      const { data: L } = await sb.from('directory_listings').select('name_en').eq('slug', slug).maybeSingle();
+      const r = (L || {}) as Record<string, unknown>;
+      bizName = String(r.name_en || slug);
+    } catch { /* fall back to the slug for display */ }
+    return { ok: true, bizName, slug };
   } catch {
     return { ok: false, error: 'not_found' };
   }

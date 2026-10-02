@@ -1,1116 +1,561 @@
-diff --git a/app/api/admin/enrich-stubs/route.ts b/app/api/admin/enrich-stubs/route.ts
-new file mode 100644
-index 0000000..6d5f579
---- /dev/null
-+++ b/app/api/admin/enrich-stubs/route.ts
-@@ -0,0 +1,90 @@
-+// Admin — STUB ENRICHMENT for the public directory.
-+//
-+// ~2,066 PUBLISHED directory_listings carry a HOLLOW "stub" summary (empty / too
-+// short / placeholder / boilerplate). They are live and indexable, which hurts SEO
-+// and trust. This route finds them and fills summary_en with a GROUNDED, model-
-+// generated 2-4 sentence description built ONLY from the fields the listing already
-+// has (name, category, district, tags, its own imported text) — no invented prices
-+// or claims. A validation gate rejects anything doubtful and marks it 'review'
-+// instead of publishing it. The sitemap SEO gate keeps still-hollow stubs out of
-+// the index until a real description exists, and lets a filled one back in
-+// automatically. Idempotent, batched, concurrency-capped, resumable, dry-run-first.
-+//
-+//   GET                     → DRY-RUN census: how many stubs remain (by type) + a cost estimate
-+//   POST { limit?, concurrency?, translate?, model?, dryRun? }
-+//                           → generate + write up to `limit` stubs, then report
-+//
-+// Auth: an admin session, OR `Authorization: Bearer <ENRICH_STUBS_SECRET>` (falls
-+// back to CRON_SECRET) for a headless drain loop (see scripts/enrich-stubs.ts).
-+// Mirrors app/api/admin/backfill-translations (the house pattern for bulk jobs).
-+import { NextRequest, NextResponse } from 'next/server';
-+import { isAdmin } from '@/lib/supabase/server';
-+import { countStubs, enrichStubs } from '@/lib/directory/enrich';
-+
-+export const runtime = 'nodejs';
-+export const maxDuration = 60; // Hobby cap; raise to 300 on Vercel Pro for bigger batches
-+
-+// Rough per-row spend for the English blurb (Haiku): ~550 in + ~130 out tokens.
-+// in $1.0 / out $5.0 per 1M tok, + the 25% COST_MARKUP_PCT the ai layer applies.
-+// Actuals are logged to ai_spend_log; this is only a planning estimate.
-+const USD_PER_ROW_EN = +(((550 * 1.0 + 130 * 5.0) / 1_000_000) * 1.25).toFixed(6);
-+// Translation (opt-in) adds six faithful translations via Sonnet (pricier); ~6x.
-+const USD_PER_ROW_TRANSLATED = +(USD_PER_ROW_EN + 6 * ((320 * 3.0 + 130 * 15.0) / 1_000_000) * 1.25).toFixed(6);
-+
-+async function authed(req: NextRequest): Promise<boolean> {
-+  if (await isAdmin()) return true;
-+  const secret = process.env.ENRICH_STUBS_SECRET || process.env.CRON_SECRET;
-+  if (secret) {
-+    const hdr = req.headers.get('authorization') || '';
-+    if (hdr === `Bearer ${secret}`) return true;
+diff --git a/app/[locale]/(site)/partner/page.tsx b/app/[locale]/(site)/partner/page.tsx
+index a0d7348..eb05fd2 100644
+--- a/app/[locale]/(site)/partner/page.tsx
++++ b/app/[locale]/(site)/partner/page.tsx
+@@ -1,9 +1,17 @@
+ 'use client';
+-// Partner self-service portal (roadmap item 09). Two modes:
+-//  • no token → claim form: paste your listing link/slug + the email on file → we email a link.
+-//  • ?token=… → verify, then an edit form for the whitelisted fields; changes go to moderation.
++// Partner self-service portal.
++//  • no token → CLAIM-TO-OWN form: paste your listing + your details → the unified claim
++//    engine (/api/directory/claim) sends a secure confirmation link to the business's
++//    contact on file (or verifies by SMS OTP), and a confirmed claim makes you the
++//    verified owner. This is the SAME engine as the "Own this business?" box on a listing.
++//  • ?token=… → LEGACY moderated-edit path (roadmap item 09): verify a pre-existing claim
++//    token and edit whitelisted fields. The old /api/partner/claim step that minted these
++//    tokens has been retired, so this branch now only serves links emailed before the
++//    cut-over; it is kept intact so those in-flight claims don't break.
+ import { useEffect, useState, useCallback, Suspense } from 'react';
+ import { useSearchParams } from 'next/navigation';
++import HoneypotField from '@/components/HoneypotField';
++import { HONEYPOT_FIELD } from '@/lib/honeypot';
+ 
+ const SUMMARY_FIELDS = [
+   ['summary_en', 'Description (English)'],
+@@ -19,14 +27,20 @@ function slugFromInput(s: string): string {
+ function Portal() {
+   const params = useSearchParams();
+   const token = params.get('token') || '';
+-  const [mode, setMode] = useState<'claim' | 'verifying' | 'edit' | 'invalid'>(token ? 'verifying' : 'claim');
++  const [mode, setMode] = useState<'claim' | 'verifying' | 'edit' | 'invalid' | 'otp' | 'done'>(token ? 'verifying' : 'claim');
+   const [slug, setSlug] = useState('');
+   const [email, setEmail] = useState('');
++  const [claimantName, setClaimantName] = useState('');
++  const [phone, setPhone] = useState('');
++  const [hp, setHp] = useState(''); // honeypot — must stay empty for a real person
++  const [claimId, setClaimId] = useState('');
++  const [code, setCode] = useState('');
+   const [fields, setFields] = useState<Record<string, string>>({});
+   const [name, setName] = useState('');
+   const [msg, setMsg] = useState('');
+   const [busy, setBusy] = useState(false);
+ 
++  // ── legacy token-edit path (pre-cutover claim links only) ──────────────────
+   const verify = useCallback(async () => {
+     setBusy(true);
+     try {
+@@ -42,28 +56,45 @@ function Portal() {
+   }, [token]);
+   useEffect(() => { if (token) verify(); }, [token, verify]);
+ 
+-  async function submitClaim(e: React.FormEvent) {
++  async function submitEdit(e: React.FormEvent) {
+     e.preventDefault(); setBusy(true); setMsg('');
+     try {
+-      const res = await fetch('/api/partner/claim', {
++      const res = await fetch('/api/partner/edit', {
+         method: 'POST', headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ slug: slugFromInput(slug), email }),
++        body: JSON.stringify({ token, fields }),
+       });
+       const d = await res.json();
+-      setMsg(d.message || 'If that email is on file, we’ve sent a link.');
++      setMsg(d.ok ? (d.message || 'Submitted for review.') : ('Error: ' + (d.error || 'could not save')));
+     } catch { setMsg('Something went wrong — please try again.'); }
+     setBusy(false);
+   }
+ 
+-  async function submitEdit(e: React.FormEvent) {
++  // ── new claim-to-own path (unified engine) ─────────────────────────────────
++  async function submitClaim(e: React.FormEvent) {
+     e.preventDefault(); setBusy(true); setMsg('');
+     try {
+-      const res = await fetch('/api/partner/edit', {
++      const res = await fetch('/api/directory/claim', {
+         method: 'POST', headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ token, fields }),
++        body: JSON.stringify({ slug: slugFromInput(slug), name: claimantName, email, phone, [HONEYPOT_FIELD]: hp }),
+       });
+-      const d = await res.json();
+-      setMsg(d.ok ? (d.message || 'Submitted for review.') : ('Error: ' + (d.error || 'could not save')));
++      const d = await res.json().catch(() => ({}));
++      if (!res.ok || !d.ok) { setMsg(d.error || 'Something went wrong — please try again.'); setBusy(false); return; }
++      if (d.requiresCode && d.claimId) { setClaimId(String(d.claimId)); setMsg(d.message || ''); setMode('otp'); setBusy(false); return; }
++      setMsg(d.message || 'Thanks — please check your email to confirm your claim.'); setMode('done');
++    } catch { setMsg('Something went wrong — please try again.'); }
++    setBusy(false);
 +  }
-+  return false;
-+}
 +
-+// GET — pure diagnostic. Counts the stub backlog (by type) without generating or
-+// writing anything, so the desk sees the scope and cost before spending a cent.
-+export async function GET(req: NextRequest) {
-+  if (!(await authed(req))) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
-+  const census = await countStubs();
-+  return NextResponse.json({
-+    ok: true,
-+    published_scanned: census.publishedScanned,
-+    stubs: census.stubs,
-+    owner_verified_skipped: census.ownerVerifiedSkipped,
-+    already_generated: census.alreadyGenerated,
-+    by_type: census.byType,
-+    cost_estimate_usd: {
-+      english_only: +(census.stubs * USD_PER_ROW_EN).toFixed(2),
-+      with_translation: +(census.stubs * USD_PER_ROW_TRANSLATED).toFixed(2),
-+      per_row_en: USD_PER_ROW_EN,
-+      per_row_translated: USD_PER_ROW_TRANSLATED,
-+    },
-+    note: 'POST { limit } to fill a batch. Idempotent + resumable — POST again to continue. English blurb only by default; pass translate:true to also fill the six other editions.',
-+  });
-+}
-+
-+// POST — generate + write up to `limit` stubs, then report what is left.
-+export async function POST(req: NextRequest) {
-+  if (!(await authed(req))) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
-+  const body = await req.json().catch(() => ({}));
-+  const dryRun = body.dryRun === true;
-+  // Bound per-call work so it never trips the serverless timeout. Translation is ~6x
-+  // the model calls per row, so the ceiling is lower when it is on.
-+  const translate = body.translate === true;
-+  const hardMax = translate ? 15 : 40;
-+  const limit = Math.min(Math.max(1, Number(body.limit) || 10), hardMax);
-+  const concurrency = Math.min(Math.max(1, Number(body.concurrency) || 4), 8);
-+  const model = typeof body.model === 'string' && body.model ? body.model : undefined;
-+
-+  const report = await enrichStubs({ limit, dryRun, concurrency, translate, model });
-+
-+  return NextResponse.json({
-+    ok: true,
-+    ...report,
-+    note: dryRun
-+      ? 'Dry run — nothing written.'
-+      : (report.candidates >= limit
-+        ? 'A full batch was processed — more may remain. POST again to continue (idempotent).'
-+        : 'Backlog clear for this scope.'),
-+  });
-+}
-diff --git a/lib/directory/enrich.ts b/lib/directory/enrich.ts
-new file mode 100644
-index 0000000..6a7952c
---- /dev/null
-+++ b/lib/directory/enrich.ts
-@@ -0,0 +1,519 @@
-+// lib/directory/enrich.ts
-+// ============================================================================
-+// STUB-ENRICHMENT for the public directory.
-+//
-+// ~2,066 PUBLISHED directory_listings carry a HOLLOW "stub" summary (empty, too
-+// short, placeholder, or boilerplate). They are live and indexable, which hurts
-+// SEO and trust. This module provides:
-+//
-+//   • isStubText / isStub  — a precise, PURE heuristic for "hollow display text".
-+//   • countStubs           — a read-only dry-run census (counts, no writes).
-+//   • generateDescription  — a GROUNDED 2-4 sentence British-English blurb built
-+//                            ONLY from the fields the listing already has (name,
-+//                            category, district, tags, its own source text). It
-+//                            invents no prices, ratings, awards or history, and a
-+//                            validation gate rejects any output that slipped a
-+//                            fabricated fact or unverifiable claim through
-+//                            (conservative: mark 'review' rather than publish it).
-+//   • enrichStubs          — the idempotent, batched, concurrency-capped,
-+//                            resumable driver: find stubs → generate → write
-+//                            summary_en with a 'generated' flag → report.
-+//
-+// MULTILINGUAL: the English summary is the one GENERATED here (grounded). The six
-+// other editions (el/ro/ar/de/pl/ru) are produced the same way the rest of the
-+// site produces non-English copy — by FAITHFUL TRANSLATION of the grounded English
-+// via lib/translate.ts (translateText → the shared anti-AI humaniser), which adds
-+// no new facts. Translation is opt-in (translate:true) to keep per-row cost
-+// predictable; when a locale summary is absent the site already falls back to the
-+// English one (lib/queries.ts `pick`), so leaving them empty is safe.
-+//
-+// GROUNDING vs the claim-to-own workstream: a generated blurb is still REFERENCE
-+// data, so we leave directory_listings.provenance ('reference' | 'owner-verified')
-+// untouched and record the generated/owned/review marker in text_status instead —
-+// the two never collide. Owner-verified rows are never touched.
-+import 'server-only';
-+import { supabaseAdmin } from '@/lib/supabase/admin';
-+import { callClaude, CLAUDE_HAIKU } from '@/lib/ai';
-+import { humanizeText, scoreAiTells, type Lang } from '@/lib/antiAi';
-+import { translateText } from '@/lib/translate';
-+import { LOCALES, type Locale } from '@/lib/locales';
-+
-+// ── Stub-detection heuristic (PURE) ──────────────────────────────────────────
-+//
-+// A listing's DISPLAYED text is summary_<locale>, falling back to summary_en, so
-+// the gate keys on summary_en (what the reader and Google actually see). A summary
-+// is a STUB when it is hollow by ANY of these precise rules:
-+//
-+//   1. empty / whitespace only
-+//   2. a known PLACEHOLDER / boilerplate phrase ("coming soon", "n/a", lorem…)
-+//   3. too SHORT — under STUB_MIN_CHARS characters, or under STUB_MIN_WORDS words
-+//   4. a NAME ECHO — once the business name is removed, under 5 words of real text
-+//      remain (i.e. it is just "<Name>" or "<Name> — restaurant, Paphos")
-+//
-+// A genuine 2-sentence editorial blurb clears all four comfortably (≈120+ chars,
-+// ≈20+ words). The thresholds are deliberately conservative to avoid de-listing
-+// real content (a false positive removes a good page from the sitemap).
-+
-+/** Under this many characters of display text → stub. */
-+export const STUB_MIN_CHARS = 80;
-+/** Under this many words of display text → stub. */
-+export const STUB_MIN_WORDS = 12;
-+/** After removing the name, under this many words of real text → name-echo stub. */
-+export const STUB_MIN_WORDS_SANS_NAME = 5;
-+
-+// Phrases that ARE the stub (match the whole trimmed value, case-insensitive).
-+const PLACEHOLDER_EXACT: RegExp[] = [
-+  /^[\s.\-–—_·•*]*$/,                         // only punctuation / dashes / dots
-+  /^(n\.?\/?a\.?|na|tbd|tba|todo|xxx+|none|null|undefined|unknown|\?+)$/i,
-+];
-+// Phrases that, appearing ANYWHERE, mark the text as a placeholder (not real copy).
-+const PLACEHOLDER_CONTAINS: RegExp[] = [
-+  /lorem ipsum/i,
-+  /\bplaceholder\b/i,
-+  /no (description|summary|details?|info(?:rmation)?)\b/i,
-+  /(description|summary|details?|content|info(?:rmation)?)\s+(coming|to follow|pending|not (?:yet )?available|unavailable|will follow)/i,
-+  /\bcoming soon\b/i,
-+  /\bto be (?:added|written|completed|confirmed)\b/i,
-+  /\b(details?|more info(?:rmation)?)\s+(?:coming|soon|to follow)\b/i,
-+];
-+
-+function norm(s: string | null | undefined): string {
-+  return (s || '').replace(/\s+/g, ' ').trim();
-+}
-+function wordCount(s: string): number {
-+  const t = norm(s);
-+  return t ? t.split(/\s+/).length : 0;
-+}
-+
-+/**
-+ * The PURE core: is this piece of display text hollow? Optionally pass the
-+ * business name so the "name echo" rule can strip it. No I/O; unit-tested.
-+ */
-+export function isStubText(summary: string | null | undefined, name?: string | null): boolean {
-+  const s = norm(summary);
-+  if (!s) return true;                                         // (1) empty
-+  for (const re of PLACEHOLDER_EXACT) if (re.test(s)) return true;   // (2a) exact placeholder
-+  for (const re of PLACEHOLDER_CONTAINS) if (re.test(s)) return true; // (2b) placeholder phrase
-+  if (s.length < STUB_MIN_CHARS) return true;                 // (3a) too short (chars)
-+  if (wordCount(s) < STUB_MIN_WORDS) return true;             // (3b) too short (words)
-+  // (4) name echo: strip the name and any category/location filler and see what is
-+  // left. A real description still has substance after the name is removed.
-+  const nm = norm(name);
-+  if (nm && nm.length >= 3) {
-+    const sansName = s.replace(new RegExp(nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' ');
-+    if (wordCount(sansName) < STUB_MIN_WORDS_SANS_NAME) return true;
-+  }
-+  return false;
-+}
-+
-+// ── Row shapes ───────────────────────────────────────────────────────────────
-+/** Minimal shape for detection + the SEO gate. */
-+export interface StubRow {
-+  summary_en?: string | null;
-+  name_en?: string | null;
-+  provenance?: string | null;
-+  text_status?: string | null;
-+}
-+/** Full shape the generator grounds on (superset of StubRow). */
-+export interface EnrichRow extends StubRow {
-+  id: string;
-+  slug: string;
-+  type?: string | null;
-+  subtype?: string | null;
-+  canonical_category?: string | null;
-+  category_group?: string | null;
-+  district?: string | null;
-+  tags?: string[] | null;
-+  price_band?: string | null;
-+  source_description?: string | null;
-+}
-+
-+/**
-+ * Should the enrichment job treat this row as an enrichable stub?
-+ * TRUE only when the display text is hollow AND the row is safe to write:
-+ *   • never touch owner-verified / first-party rows (provenance)
-+ *   • never touch rows already enriched or marked owned (text_status) — idempotent
-+ */
-+export function isStub(row: StubRow): boolean {
-+  if ((row.provenance || '') === 'owner-verified') return false;
-+  const ts = row.text_status || '';
-+  if (ts === 'generated' || ts === 'owned') return false;
-+  return isStubText(row.summary_en, row.name_en);
-+}
-+
-+/**
-+ * SEO gate: should this PUBLISHED row appear in the sitemap / be indexable?
-+ * A row is publishable when it has REAL display text, OR it is owner-verified
-+ * (first-party rows are always surfaced). Reads live text, so it flips
-+ * automatically the moment a real description is written — no flag required.
-+ */
-+export function isPublishableListing(row: StubRow): boolean {
-+  if ((row.provenance || '') === 'owner-verified') return true;
-+  return !isStubText(row.summary_en, row.name_en);
-+}
-+
-+// ── Grounded generation ──────────────────────────────────────────────────────
-+export interface GroundingFacts {
-+  name: string;
-+  category: string | null;
-+  district: string | null;
-+  tags: string[];
-+  priceBand: string | null;
-+  ownText: string | null; // the business's own imported description (facts only)
-+}
-+
-+/** Pull the grounded facts out of a row (PURE). Nothing invented, nothing fetched. */
-+export function groundingFacts(row: EnrichRow): GroundingFacts {
-+  const category = norm(row.canonical_category) || norm(row.category_group) || norm(row.subtype) || norm(row.type) || null;
-+  const tags = Array.isArray(row.tags) ? row.tags.map((t) => norm(t)).filter(Boolean).slice(0, 12) : [];
-+  return {
-+    name: norm(row.name_en) || norm(row.slug),
-+    category: category ? category.replace(/[-_]+/g, ' ') : null,
-+    district: norm(row.district) || null,
-+    tags,
-+    priceBand: norm(row.price_band) || null,
-+    ownText: norm(row.source_description) || null,
-+  };
-+}
-+
-+const PRICE_BAND_WORDS: Record<string, string> = {
-+  '€': 'budget-friendly', '€€': 'mid-range', '€€€': 'upmarket', '€€€€': 'high-end',
-+};
-+
-+/** Build the grounded {system, user} prompt (PURE) — easy to inspect / test. */
-+export function buildDescriptionPrompt(facts: GroundingFacts): { system: string; user: string } {
-+  const system = [
-+    'You are a factual directory editor for Cyprus Lifestyle, a Cyprus guide.',
-+    'Write a concise description of ONE business for its directory listing.',
-+    '',
-+    'LENGTH & STYLE:',
-+    '- 2 to 4 sentences. British English. Plain text only — no markdown, no headings, no quotation marks, no lists.',
-+    '- Neutral and informative, not promotional. No em dashes or en dashes (— –); use commas, full stops or parentheses.',
-+    '- Avoid AI-tell words and filler (delve, nestled, boasts, "a testament to", "in the heart of", "a wide range of").',
-+    '',
-+    'GROUNDING — THIS IS A HARD RULE:',
-+    '- Use ONLY the facts given below. Do NOT invent or infer anything that is not stated.',
-+    '- Never state prices, figures, ratings, review counts, dates, years, phone numbers, URLs, addresses, opening hours, distances, ownership, history, menu items or specialities unless they appear in the facts.',
-+    '- Never use unverifiable praise or awards: no "best", "finest", "top", "leading", "renowned", "award-winning", "world-class", "five-star", "luxury", "number one".',
-+    '- Describe plainly WHAT the business is, its category, and WHERE it is. You may note its general type of offering from the tags, without embellishment.',
-+    '- If there is very little to say, write a short, correct, general description rather than padding it with invented detail.',
-+    '',
-+    'Output ONLY the description text. No preamble, no notes, no label.',
-+  ].join('\n');
-+
-+  const lines: string[] = [];
-+  lines.push(`Name: ${facts.name}`);
-+  if (facts.category) lines.push(`Category: ${facts.category}`);
-+  if (facts.district) lines.push(`District / location in Cyprus: ${facts.district}`);
-+  if (facts.tags.length) lines.push(`Tags (its own keywords): ${facts.tags.join(', ')}`);
-+  if (facts.priceBand && PRICE_BAND_WORDS[facts.priceBand]) {
-+    lines.push(`Price tier (describe only in general words, never a number): ${PRICE_BAND_WORDS[facts.priceBand]}`);
-+  }
-+  if (facts.ownText) {
-+    lines.push('');
-+    lines.push("The business's OWN description (use only the plain facts from it; do NOT copy it verbatim, and ignore any prices, claims, superlatives, contact details or links it contains):");
-+    lines.push(facts.ownText.slice(0, 800));
-+  }
-+  return { system, user: lines.join('\n') };
-+}
-+
-+// Patterns that betray a FABRICATED fact or an unverifiable claim in the output.
-+const BANNED_CLAIMS = /\b(best|finest|top|leading|renowned|famous|legendary|award[- ]winning|world[- ]class|five[- ]star|5[- ]star|luxur(?:y|ious)|number one|no\.?\s?1|#1|voted|premier|unrivalled|unparalleled)\b/i;
-+const CONTACT_LIKE = /(https?:\/\/|www\.|@[a-z0-9]|\+?\d[\d\s().-]{6,}\d)/i;
-+const MONEY_LIKE = /[€$£]|\b(eur|usd|gbp)\b/i;
-+
-+/**
-+ * Validate a generated description against its grounding (PURE, no I/O).
-+ * Returns the humanised text on success, or a reason the caller records as
-+ * 'review'. Conservative: anything that looks fabricated fails rather than ships.
-+ */
-+export function validateGeneratedDescription(
-+  raw: string,
-+  row: EnrichRow,
-+): { ok: true; text: string } | { ok: false; reason: string } {
-+  const facts = groundingFacts(row);
-+  let text = norm(raw).replace(/^["'`\s]+|["'`\s]+$/g, '');
-+  // Strip any stray code fences / leading label the model may add.
-+  text = text.replace(/^```[a-z]*\s*/i, '').replace(/```$/i, '').trim();
-+  if (!text) return { ok: false, reason: 'empty output' };
-+  if (text.length > 700) return { ok: false, reason: 'too long' };
-+  if (isStubText(text, facts.name)) return { ok: false, reason: 'output is itself a stub' };
-+  if (wordCount(text) < 14) return { ok: false, reason: 'too short / thin' };
-+  const sentences = text.split(/[.!?]+(?:\s|$)/).map((s) => s.trim()).filter(Boolean).length;
-+  if (sentences < 1 || sentences > 6) return { ok: false, reason: `sentence count ${sentences} out of range` };
-+  if (MONEY_LIKE.test(text)) return { ok: false, reason: 'contains a price / currency (not grounded)' };
-+  if (CONTACT_LIKE.test(text)) return { ok: false, reason: 'contains a URL / email / phone (not grounded)' };
-+  if (BANNED_CLAIMS.test(text)) return { ok: false, reason: 'contains an unverifiable claim / superlative' };
-+  // Digit runs (3+) are years / counts / prices. Allow only digits that appear in
-+  // the grounding facts (rare); otherwise reject as fabricated.
-+  const groundText = [facts.name, facts.category, facts.district, facts.tags.join(' '), facts.ownText || '']
-+    .join(' ').toLowerCase();
-+  const digitRuns = text.match(/\d{3,}/g) || [];
-+  for (const d of digitRuns) if (!groundText.includes(d)) return { ok: false, reason: `fabricated number "${d}"` };
-+  // Must be anchored to the entity it describes.
-+  if (facts.name.length >= 3 && !text.toLowerCase().includes(facts.name.toLowerCase())) {
-+    return { ok: false, reason: 'does not mention the business name' };
-+  }
-+  // House anti-AI humaniser (same path as the editorial pipeline).
-+  const humanised = humanizeText(text, 'en' as Lang);
-+  if (scoreAiTells({ content: humanised, lang: 'en' }).level === 'high') {
-+    return { ok: false, reason: 'reads as AI-generated (high tell score)' };
-+  }
-+  return { ok: true, text: humanised };
-+}
-+
-+export interface GenerateResult {
-+  ok: boolean;
-+  text?: string;
-+  reason?: string;
-+  usd?: number;
-+}
-+
-+/**
-+ * Generate ONE grounded English description for a listing. Returns { ok:false,
-+ * reason } when generation errors or the output fails the grounding gate — the
-+ * caller then records 'review' and leaves summary_en hollow (stays out of the
-+ * sitemap) rather than publishing anything doubtful.
-+ */
-+export async function generateDescription(
-+  row: EnrichRow,
-+  opts: { model?: string } = {},
-+): Promise<GenerateResult> {
-+  const facts = groundingFacts(row);
-+  if (!facts.name) return { ok: false, reason: 'no name to ground on' };
-+  const { system, user } = buildDescriptionPrompt(facts);
-+  const { text, error, usd } = await callClaude({
-+    systemInstruction: system,
-+    userMessage: user,
-+    model: opts.model || CLAUDE_HAIKU,
-+    maxTokens: 400,
-+    fn: 'directory-enrich',
-+  });
-+  if (error) return { ok: false, reason: `model error: ${error}`, usd };
-+  const v = validateGeneratedDescription(text || '', row);
-+  if (!v.ok) return { ok: false, reason: v.reason, usd };
-+  return { ok: true, text: v.text, usd };
-+}
-+
-+/** Translate a grounded English summary into the other editions (faithful, no new
-+ *  facts). Best-effort per locale; a failed locale is simply left empty (the site
-+ *  falls back to English). */
-+export async function translateSummary(
-+  english: string,
-+  targets: Locale[] = LOCALES.filter((l) => l !== 'en'),
-+): Promise<Record<string, string>> {
-+  const out: Record<string, string> = {};
-+  for (const l of targets) {
-+    if (l === 'en') continue;
++  async function submitOtp(e: React.FormEvent) {
++    e.preventDefault(); setBusy(true); setMsg('');
 +    try {
-+      const t = await translateText(english, 'en', l, 'description');
-+      if (t && t.trim() && !isStubText(t)) out[`summary_${l}`] = t.trim();
-+    } catch { /* leave empty → English fallback */ }
-+  }
-+  return out;
-+}
-+
-+// ── DB access (service role) ─────────────────────────────────────────────────
-+const ENRICH_COLS =
-+  'id, slug, type, subtype, canonical_category, category_group, district, tags, price_band, provenance, name_en, summary_en, source_description';
-+const SCAN_PAGE = 1000;
-+
-+// Probe once whether the text_status column exists (the migration is optional).
-+let _hasTextStatus: boolean | null = null;
-+export async function hasTextStatusColumn(): Promise<boolean> {
-+  if (_hasTextStatus !== null) return _hasTextStatus;
-+  try {
-+    const { error } = await supabaseAdmin()
-+      .from('directory_listings').select('text_status').limit(1);
-+    _hasTextStatus = !error;
-+  } catch {
-+    _hasTextStatus = false;
-+  }
-+  return _hasTextStatus;
-+}
-+
-+export interface StubCensus {
-+  publishedScanned: number;
-+  stubs: number;
-+  ownerVerifiedSkipped: number;
-+  alreadyGenerated: number;
-+  byType: Record<string, number>;
-+}
-+
-+/**
-+ * DRY-RUN census: scan PUBLISHED rows and count how many are enrichable stubs,
-+ * broken down by type. Read-only — no writes, no model calls, no cost.
-+ */
-+export async function countStubs(opts: { maxScan?: number } = {}): Promise<StubCensus> {
-+  const maxScan = opts.maxScan ?? 30_000;
-+  const withTs = await hasTextStatusColumn();
-+  const cols = withTs ? 'type, name_en, summary_en, provenance, text_status' : 'type, name_en, summary_en, provenance';
-+  const sb = supabaseAdmin();
-+  const census: StubCensus = { publishedScanned: 0, stubs: 0, ownerVerifiedSkipped: 0, alreadyGenerated: 0, byType: {} };
-+  for (let from = 0; from < maxScan; from += SCAN_PAGE) {
-+    const { data, error } = await sb.from('directory_listings').select(cols)
-+      .eq('status', 'published').order('slug', { ascending: true }).range(from, from + SCAN_PAGE - 1);
-+    if (error) break;
-+    const rows = (data || []) as unknown as (StubRow & { type?: string | null })[];
-+    for (const r of rows) {
-+      census.publishedScanned++;
-+      if ((r.provenance || '') === 'owner-verified') { census.ownerVerifiedSkipped++; continue; }
-+      if (withTs && (r.text_status === 'generated' || r.text_status === 'owned')) { census.alreadyGenerated++; continue; }
-+      if (isStubText(r.summary_en, r.name_en)) {
-+        census.stubs++;
-+        const ty = r.type || 'unknown';
-+        census.byType[ty] = (census.byType[ty] || 0) + 1;
-+      }
-+    }
-+    if (rows.length < SCAN_PAGE) break;
-+  }
-+  return census;
-+}
-+
-+/**
-+ * Fetch up to `limit` enrichable stub rows (full grounding columns). Pages through
-+ * PUBLISHED rows (skipping owner-verified / already-generated via the text_status
-+ * pre-filter when available) and JS-filters with isStub. Resumable: re-running
-+ * naturally skips rows whose summary_en is no longer hollow.
-+ */
-+export async function fetchStubCandidates(limit: number, opts: { maxScan?: number } = {}): Promise<EnrichRow[]> {
-+  const maxScan = opts.maxScan ?? 30_000;
-+  const withTs = await hasTextStatusColumn();
-+  const cols = withTs ? `${ENRICH_COLS}, text_status` : ENRICH_COLS;
-+  const sb = supabaseAdmin();
-+  const out: EnrichRow[] = [];
-+  for (let from = 0; from < maxScan && out.length < limit; from += SCAN_PAGE) {
-+    let q = sb.from('directory_listings').select(cols).eq('status', 'published');
-+    // Narrow to not-yet-handled rows at the DB when the column exists.
-+    if (withTs) q = q.or('text_status.is.null,text_status.eq.stub,text_status.eq.review');
-+    const { data, error } = await q.order('slug', { ascending: true }).range(from, from + SCAN_PAGE - 1);
-+    if (error) break;
-+    const rows = (data || []) as unknown as EnrichRow[];
-+    for (const r of rows) {
-+      if (isStub(r)) out.push(r);
-+      if (out.length >= limit) break;
-+    }
-+    if (rows.length < SCAN_PAGE) break;
-+  }
-+  return out;
-+}
-+
-+// Tiny concurrency pool — run `fn` over `items`, at most `n` in flight.
-+async function mapPool<T, R>(items: T[], n: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
-+  const results: R[] = new Array(items.length);
-+  let next = 0;
-+  const workers = Array.from({ length: Math.max(1, Math.min(n, items.length)) }, async () => {
-+    for (;;) {
-+      const i = next++;
-+      if (i >= items.length) return;
-+      results[i] = await fn(items[i], i);
-+    }
-+  });
-+  await Promise.all(workers);
-+  return results;
-+}
-+
-+export interface EnrichOptions {
-+  /** Max stub rows to process this run. Default 50. */
-+  limit?: number;
-+  /** Count only — no model calls, no writes. Default false. */
-+  dryRun?: boolean;
-+  /** Max concurrent model calls. Default 4. */
-+  concurrency?: number;
-+  /** Also translate the generated English into the six other editions. Default false. */
-+  translate?: boolean;
-+  /** Override the model (default: Haiku — cheap + sufficient for a short blurb). */
-+  model?: string;
-+  /** How far to scan for candidates. Default 30000. */
-+  maxScan?: number;
-+  /** Per-row callback for progress logging (optional). */
-+  onRow?: (ev: { slug: string; status: 'generated' | 'review' | 'error'; reason?: string }) => void;
-+}
-+
-+export interface EnrichReport {
-+  dryRun: boolean;
-+  scanned?: number;
-+  candidates: number;
-+  generated: number;
-+  review: number;
-+  errors: number;
-+  usd: number;
-+  translated: number;
-+  census?: StubCensus;
-+  samples: { slug: string; status: string; reason?: string }[];
-+}
-+
-+/**
-+ * The driver. Idempotent, batched, concurrency-capped, resumable, dry-run-able.
-+ *   dryRun:true  → returns a census (counts by type) and writes nothing.
-+ *   dryRun:false → generates + validates + writes summary_en for up to `limit`
-+ *                  stubs, flags each row ('generated' | 'review') via text_status
-+ *                  when the column exists, and reports throughput + spend.
-+ */
-+export async function enrichStubs(opts: EnrichOptions = {}): Promise<EnrichReport> {
-+  const {
-+    limit = 50, dryRun = false, concurrency = 4, translate = false,
-+    model, maxScan = 30_000, onRow,
-+  } = opts;
-+
-+  if (dryRun) {
-+    const census = await countStubs({ maxScan });
-+    return {
-+      dryRun: true, scanned: census.publishedScanned, candidates: census.stubs,
-+      generated: 0, review: 0, errors: 0, usd: 0, translated: 0, census, samples: [],
-+    };
-+  }
-+
-+  const withTs = await hasTextStatusColumn();
-+  const sb = supabaseAdmin();
-+  const candidates = await fetchStubCandidates(limit, { maxScan });
-+
-+  let generated = 0, review = 0, errors = 0, translated = 0, usd = 0;
-+  const samples: { slug: string; status: string; reason?: string }[] = [];
-+
-+  await mapPool(candidates, concurrency, async (row) => {
-+    try {
-+      // Re-guard at write time: never clobber real or owner text.
-+      if (!isStub(row)) return;
-+      const gen = await generateDescription(row, { model });
-+      usd += gen.usd || 0;
-+
-+      if (!gen.ok || !gen.text) {
-+        review++;
-+        if (withTs) await sb.from('directory_listings')
-+          .update({ text_status: 'review' }).eq('id', row.id);
-+        samples.push({ slug: row.slug, status: 'review', reason: gen.reason });
-+        onRow?.({ slug: row.slug, status: 'review', reason: gen.reason });
-+        return;
-+      }
-+
-+      const patch: Record<string, unknown> = { summary_en: gen.text };
-+      if (withTs) { patch.text_status = 'generated'; patch.text_generated_at = new Date().toISOString(); }
-+      if (translate) {
-+        const tr = await translateSummary(gen.text);
-+        Object.assign(patch, tr);
-+        translated += Object.keys(tr).length;
-+      }
-+      const { error } = await sb.from('directory_listings').update(patch).eq('id', row.id);
-+      if (error) {
-+        errors++;
-+        samples.push({ slug: row.slug, status: 'error', reason: error.message });
-+        onRow?.({ slug: row.slug, status: 'error', reason: error.message });
-+        return;
-+      }
-+      generated++;
-+      if (samples.length < 5) samples.push({ slug: row.slug, status: 'generated' });
-+      onRow?.({ slug: row.slug, status: 'generated' });
-+    } catch (e) {
-+      errors++;
-+      const reason = (e as Error).message;
-+      samples.push({ slug: row.slug, status: 'error', reason });
-+      onRow?.({ slug: row.slug, status: 'error', reason });
-+    }
-+  });
-+
-+  return {
-+    dryRun: false, candidates: candidates.length,
-+    generated, review, errors, usd: +usd.toFixed(6), translated, samples,
-+  };
-+}
-diff --git a/lib/queries.ts b/lib/queries.ts
-index bb5410e..8e4393f 100644
---- a/lib/queries.ts
-+++ b/lib/queries.ts
-@@ -149,6 +149,17 @@ export async function getReviewSubject(locale: Locale, id: string): Promise<Revi
-   };
- }
++      const res = await fetch('/api/directory/claim/verify', {
++        method: 'POST', headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({ claimId, code }),
++      });
++      const d = await res.json().catch(() => ({}));
++      if (!res.ok || !d.ok) { setMsg(d.error || 'That code is not correct.'); setBusy(false); return; }
++      setMsg('Verified — thank you. Your listing is now an owner-verified profile.'); setMode('done');
+     } catch { setMsg('Something went wrong — please try again.'); }
+     setBusy(false);
+   }
+@@ -76,6 +107,27 @@ function Portal() {
+   if (mode === 'verifying') return <div style={wrap}><p>Verifying your link…</p></div>;
+   if (mode === 'invalid') return <div style={wrap}><h1>Manage your listing</h1><p className="sub">{msg}</p><p><a href="/partner">Start a new claim →</a></p></div>;
  
-+// ── Stub text / SEO gate ──────────────────────────────────────────────────────
-+// One obvious home, on the public read layer, for "is this listing's display text
-+// real?" ~2,066 PUBLISHED listings carry hollow "stub" summaries; the sitemap (and,
-+// optionally, the listing page's robots meta) gate on these so hollow stubs are not
-+// indexed before the enrichment job fills them. The heuristic + generator live in
-+// lib/directory/enrich.ts; re-exported here so SEO call sites import from one place.
-+//   • isStubText(summary, name?)   — pure: is this display text hollow?
-+//   • isStub(row)                  — enrichable stub? (also skips owner-verified / generated)
-+//   • isPublishableListing(row)    — SEO gate: has real text (or is owner-verified)?
-+export { isStubText, isStub, isPublishableListing, type StubRow } from '@/lib/directory/enrich';
-+
- // ── Directory / listings ─────────────────────────────────────────────────────
- export const DIRECTORY_TYPES = ['restaurant', 'winery', 'development', 'hotel', 'beach', 'vendor'] as const;
- export type DirectoryType = typeof DIRECTORY_TYPES[number];
-diff --git a/lib/seo.ts b/lib/seo.ts
-index 29b4a83..9a1d3c6 100644
---- a/lib/seo.ts
-+++ b/lib/seo.ts
-@@ -40,18 +40,41 @@ export function ogImageUrl(o: { title: string; kicker?: string; locale: Locale;
-   return `${SITE_URL}/api/og?${p.toString()}`;
- }
- 
-+/** Robots directive for a page the crawler should NOT index yet (but may follow).
-+ *  Used by the SEO gate for hollow directory "stub" listings — a PUBLISHED listing
-+ *  whose description has not been written/generated yet. */
-+export const STUB_ROBOTS = { index: false, follow: true } as const;
-+
-+/**
-+ * Robots directive for a directory listing: noindex while it is a hollow stub, the
-+ * page's normal (indexable) default once it has real text. Pure — the caller passes
-+ * the already-computed stub boolean (from `isStubText` in lib/queries), so this
-+ * helper stays free of any server-only import and safe to use from any page.
-+ *
-+ * Wire in the listing page's generateMetadata (one line) to complement the sitemap
-+ * exclusion with a page-level signal:
-+ *   robots: robotsForStub(isStubText(listing.summary, listing.name))
-+ */
-+export function robotsForStub(isStub: boolean): { index: boolean; follow: boolean } | undefined {
-+  return isStub ? { ...STUB_ROBOTS } : undefined;
-+}
-+
- /** A complete Metadata fragment for a page: title, description, alternates, Open Graph + branded social card. */
- export function pageMetadata(opts: {
-   locale: Locale; path: string; title: string; description?: string;
-   type?: 'website' | 'article'; absoluteTitle?: boolean;
-   ogTitle?: string; kicker?: string; cover?: string | null;
-+  robots?: { index: boolean; follow?: boolean };
- }) {
--  const { locale, path, title, description, type = 'website', absoluteTitle, ogTitle, kicker, cover } = opts;
-+  const { locale, path, title, description, type = 'website', absoluteTitle, ogTitle, kicker, cover, robots } = opts;
-   const images = [ogImageUrl({ title: ogTitle || title, kicker, locale, cover })];
-   return {
-     title: absoluteTitle ? { absolute: title } : title,
-     description,
-     alternates: alternatesFor(locale, path),
-+    // Omitted unless provided, so existing callers inherit the layout default
-+    // (index:true); the listing page passes robotsForStub(...) to noindex a stub.
-+    ...(robots ? { robots } : {}),
-     openGraph: {
-       title, description, type, url: urlFor(locale, path), siteName: SITE_NAME,
-       locale: OG_LOCALE[locale], images,
-diff --git a/lib/seo/sitemap.ts b/lib/seo/sitemap.ts
-index 569b2d4..6d794ab 100644
---- a/lib/seo/sitemap.ts
-+++ b/lib/seo/sitemap.ts
-@@ -15,6 +15,7 @@ import 'server-only';
- import { LOCALES, DEFAULT_LOCALE } from '@/lib/locales';
- import { SITE_URL, SITE_NAME, urlFor } from '@/lib/seo';
- import { supabaseAdmin } from '@/lib/supabase/admin';
-+import { isPublishableListing } from '@/lib/queries';
- 
- /** Max URLs per child sitemap. Kept well under the 50k / 50MB hard limits — with
-  *  seven hreflang alternates per URL a file of this size is ~10MB. */
-@@ -106,11 +107,14 @@ export async function chunkCount(table: PublishedTable): Promise<number> {
- // PAGE-sized requests to defeat Supabase's per-request row cap. Best-effort: on
- // any error it returns whatever it has gathered so far, so the sitemap route
- // never throws (a partial/empty child is still valid XML).
-+// `toEntry` may return null to SKIP a row (e.g. a hollow stub listing that should
-+// not be indexed). Pagination still advances by rows FETCHED, not entries emitted,
-+// so skipping never breaks the keyset walk — a chunk simply yields fewer URLs.
- async function fetchChunk(
-   table: PublishedTable,
-   select: string,
-   chunk: number,
--  toEntry: (r: Record<string, unknown>) => UrlEntry,
-+  toEntry: (r: Record<string, unknown>) => UrlEntry | null,
- ): Promise<UrlEntry[]> {
-   const start = chunk * CHUNK;
-   const end = start + CHUNK; // exclusive
-@@ -128,7 +132,10 @@ async function fetchChunk(
-         .range(offset, to);
-       if (error) break;
-       const rows = (data || []) as unknown as Record<string, unknown>[];
--      for (const r of rows) out.push(toEntry(r));
-+      for (const r of rows) {
-+        const e = toEntry(r);
-+        if (e) out.push(e);
-+      }
-       offset += rows.length;
-       if (rows.length < want) break; // reached the end of the table
-     }
-@@ -138,13 +145,27 @@ async function fetchChunk(
-   return out;
- }
- 
--/** Published directory listings for child sitemap `listings-<chunk>`. */
-+/**
-+ * Published directory listings for child sitemap `listings-<chunk>`.
-+ *
-+ * SEO GATE: hollow "stub" listings (empty / too-short / placeholder / boilerplate
-+ * summary) are EXCLUDED so Google does not index thin pages before the enrichment
-+ * job (scripts/enrich-stubs.ts) fills them. The gate reads the live summary text
-+ * via isPublishableListing, so a listing re-enters the sitemap automatically on the
-+ * next revalidation once a real description exists — no flag or backfill required.
-+ * Owner-verified (first-party) listings are always included.
-+ */
- export function listingChunkEntries(chunk: number): Promise<UrlEntry[]> {
--  return fetchChunk('directory_listings', 'slug, type, updated_at, image', chunk, (r) => ({
--    path: `/directory/${String(r.type)}/${String(r.slug)}`,
--    lastmod: (r.updated_at as string) ?? null,
--    image: (r.image as string) ?? null,
--  }));
-+  return fetchChunk(
-+    'directory_listings',
-+    'slug, type, updated_at, image, name_en, summary_en, provenance',
-+    chunk,
-+    (r) => (isPublishableListing(r) ? {
-+      path: `/directory/${String(r.type)}/${String(r.slug)}`,
-+      lastmod: (r.updated_at as string) ?? null,
-+      image: (r.image as string) ?? null,
-+    } : null),
++  if (mode === 'done') return (
++    <div style={wrap}>
++      <h1>Claim your listing</h1>
++      <p className="sub">{msg}</p>
++    </div>
 +  );
++
++  if (mode === 'otp') return (
++    <div style={wrap}>
++      <h1>Claim your listing</h1>
++      <p className="sub">{msg || 'Enter the 6-digit code we sent to the phone number on file for this business.'}</p>
++      <form onSubmit={submitOtp}>
++        <label style={label}>6-digit code
++          <input style={input} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={6}
++            value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} required />
++        </label>
++        <button style={button} disabled={busy}>{busy ? 'Verifying…' : 'Verify'}</button>
++      </form>
++    </div>
++  );
++
+   if (mode === 'edit') return (
+     <div style={wrap}>
+       <h1>Manage your listing</h1>
+@@ -96,12 +148,15 @@ function Portal() {
+ 
+   return (
+     <div style={wrap}>
+-      <h1>Manage your listing</h1>
+-      <p className="sub">Own a business listed on Cyprus Lifestyle? Confirm it’s yours and keep your details, description and offers up to date. Enter your listing and the email we have on file — we’ll send a secure link.</p>
++      <h1>Claim your listing</h1>
++      <p className="sub">Own a business listed on Cyprus Lifestyle? Claim your free verified profile and take control of your listing. Enter your listing and your details — we’ll send a secure confirmation link to the business’s contact on file (or verify by SMS), and our team will help you complete your profile. We never reveal the on-file address.</p>
+       <form onSubmit={submitClaim}>
++        <label style={label}>Your name<input style={input} value={claimantName} onChange={(e) => setClaimantName(e.target.value)} placeholder="Your full name" required /></label>
+         <label style={label}>Your listing (paste the link, or its name/slug)<input style={input} value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="https://cypruslifestyle.eu/directory/restaurant/…" required /></label>
+-        <label style={label}>Email on file for the business<input style={input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@yourbusiness.cy" required /></label>
+-        <button style={button} disabled={busy}>{busy ? 'Sending…' : 'Send me a verification link'}</button>
++        <label style={label}>Your email<input style={input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@yourbusiness.cy" required /></label>
++        <label style={label}>Business phone (optional)<input style={input} type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+357 …" /></label>
++        <HoneypotField value={hp} onChange={setHp} />
++        <button style={button} disabled={busy}>{busy ? 'Starting…' : 'Claim this listing'}</button>
+         {msg ? <p className="sub" style={{ marginTop: 14 }}>{msg}</p> : null}
+       </form>
+     </div>
+diff --git a/app/api/directory/claim/verify/route.ts b/app/api/directory/claim/verify/route.ts
+index 02a9794..e4ee980 100644
+--- a/app/api/directory/claim/verify/route.ts
++++ b/app/api/directory/claim/verify/route.ts
+@@ -1,25 +1,39 @@
+ // /api/directory/claim/verify
+-//   GET  ?token=…         — the email-verification link. Verifies the single-use token,
+-//                           flips the listing to owner-verified, and redirects to the
+-//                           listing with ?claimed=1 (or renders a branded success/failure
+-//                           page when the listing type is unknown or the token is bad).
+-//   POST { claimId, code } — the phone-OTP step (JSON in, JSON out) for the client widget.
++//   GET  ?token=…          — the email-verification link. It is now PREFETCH-SAFE: it only
++//                            PEEKS the token (read-only) and renders a branded CONFIRM page
++//                            ("Confirm you own <business>") with a Confirm button. It does
++//                            NOT consume the single-use token and does NOT flip ownership —
++//                            so email security scanners / mailbox link prefetchers (which
++//                            issue background GETs) can never auto-verify or burn the link.
++//   POST (form: token)     — the deliberate Confirm click. THIS is the only place the
++//                            single-use email token is consumed and the listing is flipped
++//                            to owner-verified; on success it 303-redirects to the listing
++//                            with ?claimed=1 (PRG), else a branded failure page.
++//   POST (json: claimId,code) — the phone-OTP step (JSON in, JSON out) for the client widget.
+ //
+-// All logic lives in lib/directory/claims.ts (service role). Never throws to the caller.
++// All state logic lives in lib/directory/claims.ts (service role). Tokens stay hashed,
++// single-use and expiring; the confirm page carries the opaque token in the POST body only
++// (never in a URL/log). Anti-enumeration is preserved: a bad/used/expired token renders the
++// same generic "can't be used" page on both GET and the confirm POST. Never throws.
+ import { NextRequest, NextResponse } from 'next/server';
+-import { verifyClaimToken, verifyClaimOtp } from '@/lib/directory/claims';
++import { peekClaimToken, verifyClaimToken, verifyClaimOtp } from '@/lib/directory/claims';
+ 
+ export const runtime = 'nodejs';
+ 
+-// A minimal, self-contained, on-brand result page (obsidian/gold/ivory) — no deps.
+-function resultPage(opts: { ok: boolean; title: string; heading: string; body: string; ctaUrl?: string; ctaLabel?: string }): string {
+-  const O = '#0B0E11', G = '#C9A24C', INK = '#16181C', IVORY = '#FBF8F1';
+-  const serif = "Georgia,'Times New Roman',serif";
+-  const cta = opts.ctaUrl && opts.ctaLabel
+-    ? `<a href="${opts.ctaUrl}" style="display:inline-block;margin-top:22px;background:${G};color:${O};text-decoration:none;font-family:${serif};font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:14px 30px;border-radius:2px">${opts.ctaLabel}</a>`
+-    : '';
+-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${opts.title}</title></head>
+-<body style="margin:0;padding:0;background:#F6F1E7;font-family:${serif};color:${INK}">
++// ── on-brand page scaffolding (obsidian/gold/ivory) — no deps ─────────────────
++const BRAND = { O: '#0B0E11', G: '#C9A24C', INK: '#16181C', IVORY: '#FBF8F1' };
++const SERIF = "Georgia,'Times New Roman',serif";
++
++const esc = (s: string): string =>
++  String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
++const escAttr = (s: string): string =>
++  String(s ?? '').replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c] as string));
++
++// The shared branded shell. noindex so a confirm/result URL never lands in a search index.
++function shell(title: string, innerHtml: string): string {
++  const { O, G, INK, IVORY } = BRAND;
++  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${esc(title)}</title></head>
++<body style="margin:0;padding:0;background:#F6F1E7;font-family:${SERIF};color:${INK}">
+ <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:48px 12px"><tr><td align="center">
+ <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:${IVORY};border:1px solid #e7ddc6;border-top:3px solid ${G}">
+   <tr><td style="background:${O};padding:30px 32px;text-align:center">
+@@ -27,58 +41,125 @@ function resultPage(opts: { ok: boolean; title: string; heading: string; body: s
+     <div style="color:${G};font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-top:10px">The Island, At Its Best</div>
+   </td></tr>
+   <tr><td style="padding:40px 40px 44px;text-align:center">
+-    <h1 style="margin:0 0 8px;font-weight:400;font-size:26px;color:${INK}">${opts.heading}</h1>
+-    <div style="width:54px;height:2px;background:${G};margin:16px auto"></div>
+-    <p style="font-size:17px;line-height:1.7;color:${INK};margin:0">${opts.body}</p>
+-    ${cta}
++    ${innerHtml}
+   </td></tr>
+ </table>
+ </td></tr></table></body></html>`;
  }
  
- /** Published articles for child sitemap `articles-<chunk>`. */
-diff --git a/scripts/enrich-stubs.ts b/scripts/enrich-stubs.ts
-new file mode 100644
-index 0000000..0e8f15a
---- /dev/null
-+++ b/scripts/enrich-stubs.ts
-@@ -0,0 +1,157 @@
-+/* Cyprus Lifestyle — STUB-ENRICHMENT driver (CLI).
-+ *
-+ * Drains the hollow-"stub" directory backlog by driving the admin endpoint
-+ * /api/admin/enrich-stubs (GET = dry-run census + cost, POST = fill a batch). The
-+ * heavy lifting (grounded generation, validation, writes, the SEO gate) lives in
-+ * lib/directory/enrich.ts and runs server-side inside Next, where the service-role
-+ * client + CLAUDE_API_KEY are available. This script is a thin, dependency-free
-+ * HTTP loop, so it runs under plain `tsx` (the lib modules are `server-only` and
-+ * cannot be imported into a bare Node process).
-+ *
-+ * Why a driver and not a direct DB script: every bulk DB+LLM job in this repo is an
-+ * admin route (see app/api/admin/backfill-translations). This matches that pattern
-+ * and reuses its auth, batching and timeout handling.
-+ *
-+ * ── Setup ────────────────────────────────────────────────────────────────────
-+ *   The target server must be running (next dev, or your deployed instance) and
-+ *   have SUPABASE_SERVICE_ROLE_KEY + CLAUDE_API_KEY configured. Auth uses an admin
-+ *   bearer secret: set ENRICH_STUBS_SECRET (or CRON_SECRET) on BOTH the server and
-+ *   here (this script reads .env.local / .env automatically on Node ≥ 20.12).
-+ *
-+ *   ENRICH_BASE_URL     where the app is running   (default http://localhost:3000)
-+ *   ENRICH_STUBS_SECRET admin bearer secret        (falls back to CRON_SECRET)
-+ *
-+ * ── Usage ────────────────────────────────────────────────────────────────────
-+ *   npx tsx scripts/enrich-stubs.ts                 # DRY RUN: census + cost (default, safe)
-+ *   npx tsx scripts/enrich-stubs.ts --run           # fill ONE batch (default limit 10)
-+ *   npx tsx scripts/enrich-stubs.ts --run --all     # loop batches until the backlog is clear
-+ *   npx tsx scripts/enrich-stubs.ts --run --all --limit 25 --concurrency 6
-+ *   npx tsx scripts/enrich-stubs.ts --run --all --translate   # also fill the 6 other editions
-+ *   npx tsx scripts/enrich-stubs.ts --base-url https://cypruslifestyle.eu --secret XXXX --run --all
-+ *
-+ * Idempotent + resumable: re-running only touches rows still hollow. Safe to Ctrl-C.
-+ */
-+
-+// Load .env.local then .env if present (Node ≥ 20.12). No-op / tolerant otherwise.
-+try {
-+  const load = (process as unknown as { loadEnvFile?: (p?: string) => void }).loadEnvFile;
-+  if (typeof load === 'function') { try { load('.env.local'); } catch { /* */ } try { load('.env'); } catch { /* */ } }
-+} catch { /* dotenv optional */ }
-+
-+type Flags = {
-+  run: boolean; all: boolean; dryRun: boolean; translate: boolean;
-+  limit: number; concurrency: number; batches: number;
-+  baseUrl: string; secret: string; model?: string;
-+};
-+
-+function parseArgs(argv: string[]): Flags {
-+  const f: Flags = {
-+    run: false, all: false, dryRun: true, translate: false,
-+    limit: 10, concurrency: 4, batches: 1,
-+    baseUrl: (process.env.ENRICH_BASE_URL || 'http://localhost:3000').replace(/\/+$/, ''),
-+    secret: process.env.ENRICH_STUBS_SECRET || process.env.CRON_SECRET || '',
-+  };
-+  for (let i = 0; i < argv.length; i++) {
-+    const a = argv[i];
-+    const val = () => argv[++i];
-+    if (a === '--run') { f.run = true; f.dryRun = false; }
-+    else if (a === '--dry-run') { f.run = false; f.dryRun = true; }
-+    else if (a === '--all') { f.all = true; }
-+    else if (a === '--translate') { f.translate = true; }
-+    else if (a === '--limit') f.limit = Math.max(1, Number(val()) || 10);
-+    else if (a === '--concurrency') f.concurrency = Math.max(1, Number(val()) || 4);
-+    else if (a === '--batches') f.batches = Math.max(1, Number(val()) || 1);
-+    else if (a === '--model') f.model = val();
-+    else if (a === '--base-url') f.baseUrl = String(val()).replace(/\/+$/, '');
-+    else if (a === '--secret') f.secret = String(val());
-+    else if (a === '--help' || a === '-h') { printHelp(); process.exit(0); }
-+  }
-+  if (f.all && f.batches === 1) f.batches = Infinity;
-+  return f;
++// A minimal, self-contained result page (success / failure, with an optional link CTA).
++function resultPage(opts: { title: string; heading: string; body: string; ctaUrl?: string; ctaLabel?: string }): string {
++  const { O, G, INK } = BRAND;
++  const cta = opts.ctaUrl && opts.ctaLabel
++    ? `<a href="${escAttr(opts.ctaUrl)}" style="display:inline-block;margin-top:22px;background:${G};color:${O};text-decoration:none;font-family:${SERIF};font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:14px 30px;border-radius:2px">${esc(opts.ctaLabel)}</a>`
++    : '';
++  return shell(opts.title, `
++    <h1 style="margin:0 0 8px;font-weight:400;font-size:26px;color:${INK}">${esc(opts.heading)}</h1>
++    <div style="width:54px;height:2px;background:${G};margin:16px auto"></div>
++    <p style="font-size:17px;line-height:1.7;color:${INK};margin:0">${opts.body}</p>
++    ${cta}`);
 +}
 +
-+function printHelp(): void {
-+  console.log(`
-+  enrich-stubs — fill hollow directory "stub" descriptions (grounded).
-+
-+  npx tsx scripts/enrich-stubs.ts [--run] [--all] [options]
-+
-+    (no flags)        DRY RUN — print the stub census + cost estimate, write nothing
-+    --run             fill one batch (default) ; --all loops until the backlog clears
-+    --limit N         rows per batch        (default 10)
-+    --concurrency N   parallel model calls  (default 4)
-+    --batches N       number of batches     (default 1 ; --all = unlimited)
-+    --translate       also fill el/ro/ar/de/pl/ru (faithful translation of the EN blurb)
-+    --model ID        override the model    (default: the server's Haiku default)
-+    --base-url URL    app URL               (env ENRICH_BASE_URL, default localhost:3000)
-+    --secret TOKEN    admin bearer          (env ENRICH_STUBS_SECRET / CRON_SECRET)
-+  `);
++// The CONFIRM page: a real form whose submit (POST) is the deliberate, prefetch-proof
++// verification step. The opaque token rides in a hidden field (POST body), never the URL.
++function confirmPage(opts: { token: string; bizName: string; actionPath: string }): string {
++  const { O, G, INK } = BRAND;
++  const name = esc(opts.bizName);
++  return shell(`Confirm your claim — ${opts.bizName}`, `
++    <h1 style="margin:0 0 8px;font-weight:400;font-size:26px;color:${INK}">Confirm you own ${name}</h1>
++    <div style="width:54px;height:2px;background:${G};margin:16px auto"></div>
++    <p style="font-size:17px;line-height:1.7;color:${INK};margin:0 0 6px">You're about to take ownership of the Cyprus Lifestyle listing for <strong>${name}</strong> and turn it into a verified, owner-managed profile.</p>
++    <p style="font-size:14px;line-height:1.6;color:#6b6350;margin:0">For your security nothing changes until you click Confirm below. If you didn't request this, simply close this page.</p>
++    <form method="POST" action="${escAttr(opts.actionPath)}" style="margin:0">
++      <input type="hidden" name="token" value="${escAttr(opts.token)}">
++      <button type="submit" style="display:inline-block;margin-top:22px;background:${G};color:${O};border:0;cursor:pointer;font-family:${SERIF};font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:14px 30px;border-radius:2px">Confirm &amp; verify ownership</button>
++    </form>`);
 +}
 +
-+const ENDPOINT = (base: string) => `${base}/api/admin/enrich-stubs`;
+ function html(markup: string, status = 200): NextResponse {
+   return new NextResponse(markup, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
+ }
+ 
++const INVALID_BODY =
++  'This verification link is no longer valid. It may have already been used, or it has been superseded by a newer link. Please start the claim again if you still need to verify.';
++const EXPIRED_BODY =
++  'This verification link has expired. Links are valid for 72 hours — please start the claim again to receive a fresh one.';
 +
-+async function req(method: 'GET' | 'POST', f: Flags, body?: unknown): Promise<any> {
-+  const res = await fetch(ENDPOINT(f.baseUrl), {
-+    method,
-+    headers: {
-+      'content-type': 'application/json',
-+      ...(f.secret ? { authorization: `Bearer ${f.secret}` } : {}),
-+    },
-+    body: body ? JSON.stringify(body) : undefined,
-+  });
-+  const text = await res.text();
-+  let json: any; try { json = JSON.parse(text); } catch { json = { raw: text }; }
-+  if (!res.ok) {
-+    throw new Error(`HTTP ${res.status} ${res.statusText} — ${json?.error || text.slice(0, 200)}`);
-+  }
-+  return json;
++function failurePage(error: 'expired' | 'invalid' | 'not_found' | undefined): NextResponse {
++  const body = error === 'expired' ? EXPIRED_BODY : INVALID_BODY;
++  return html(resultPage({
++    title: 'Claim link expired', heading: 'This link can’t be used',
++    body, ctaUrl: '/directory', ctaLabel: 'Browse the directory',
++  }), 410);
 +}
 +
-+async function main(): Promise<void> {
-+  const f = parseArgs(process.argv.slice(2));
-+  console.log(`\n  enrich-stubs → ${f.baseUrl}${f.secret ? '' : '  (no secret set — relying on an admin session)'}`);
++function missingTokenPage(): NextResponse {
++  return html(resultPage({
++    title: 'Claim link invalid', heading: 'This link is not valid',
++    body: 'The verification link is missing its token. Please use the most recent link we emailed you.',
++    ctaUrl: '/directory', ctaLabel: 'Browse the directory',
++  }), 400);
++}
 +
-+  // Always show the census first.
-+  let census: any;
-+  try {
-+    census = await req('GET', f);
-+  } catch (e) {
-+    console.error(`\n  ✗ Could not reach the endpoint: ${(e as Error).message}`);
-+    console.error('    Is the server running, and is ENRICH_STUBS_SECRET set on both sides?\n');
-+    process.exit(1);
-+  }
-+  console.log(`\n  Published scanned : ${census.published_scanned}`);
-+  console.log(`  Stubs remaining   : ${census.stubs}`);
-+  console.log(`  Owner-verified    : ${census.owner_verified_skipped} (skipped)`);
-+  console.log(`  Already generated : ${census.already_generated}`);
-+  const top = Object.entries(census.by_type || {}).sort((a: any, b: any) => b[1] - a[1]).slice(0, 10);
-+  if (top.length) console.log('  By type           : ' + top.map(([k, v]) => `${k}:${v}`).join('  '));
-+  const cost = census.cost_estimate_usd || {};
-+  console.log(`  Est. cost (EN)    : ~$${cost.english_only}  |  with translation: ~$${cost.with_translation}`);
++// Shared success rendering for a verified-but-type-unknown claim (can't deep-link the page).
++function verifiedPage(): NextResponse {
++  return html(resultPage({
++    title: 'Listing verified', heading: 'Your listing is verified',
++    body: 'Thank you — ownership is confirmed and your listing is now a verified first-party profile. Our team will be in touch to help you complete it.',
++    ctaUrl: '/directory', ctaLabel: 'Browse the directory',
++  }));
++}
 +
-+  if (!f.run) {
-+    console.log('\n  Dry run only. Re-run with --run (one batch) or --run --all (drain).\n');
-+    return;
-+  }
+ export async function GET(req: NextRequest) {
+-  const token = (new URL(req.url).searchParams.get('token') || '').trim();
+-  if (!token) {
+-    return html(resultPage({
+-      ok: false, title: 'Claim link invalid', heading: 'This link is not valid',
+-      body: 'The verification link is missing its token. Please use the most recent link we emailed you.',
+-      ctaUrl: '/directory', ctaLabel: 'Browse the directory',
+-    }), 400);
++  const url = new URL(req.url);
++  const token = (url.searchParams.get('token') || '').trim();
++  if (!token) return missingTokenPage();
 +
-+  console.log(`\n  Filling: limit ${f.limit}/batch, concurrency ${f.concurrency}${f.translate ? ', +translation' : ''}${f.batches === Infinity ? ', until clear' : `, ${f.batches} batch(es)`}\n`);
-+  let totalGen = 0, totalReview = 0, totalErr = 0, totalUsd = 0, n = 0;
-+  for (; n < f.batches; n++) {
-+    const r = await req('POST', f, {
-+      limit: f.limit, concurrency: f.concurrency, translate: f.translate, model: f.model,
-+    });
-+    totalGen += r.generated || 0; totalReview += r.review || 0; totalErr += r.errors || 0; totalUsd += r.usd || 0;
-+    console.log(`  batch ${n + 1}: generated ${r.generated}, review ${r.review}, errors ${r.errors}, $${(r.usd || 0).toFixed(4)}` +
-+      (r.translated ? `, +${r.translated} translations` : ''));
-+    // Stop when a batch produced no forward progress (backlog drained or all failing).
-+    if ((r.generated || 0) + (r.review || 0) + (r.errors || 0) === 0) { console.log('  (no candidates left)'); break; }
-+    if ((r.candidates || 0) < f.limit && n + 1 < f.batches) {
-+      // Last partial batch processed — nothing more to fetch.
-+      if ((r.candidates || 0) === 0) break;
++  // READ-ONLY: never consumes the token, never flips the listing. A prefetch/scanner GET
++  // reaches exactly this and nothing more.
++  const peek = await peekClaimToken(token);
++  if (peek.ok && peek.bizName) {
++    return html(confirmPage({ token, bizName: peek.bizName, actionPath: url.pathname }));
+   }
++  return failurePage(peek.error);
++}
+ 
+-  const res = await verifyClaimToken(token);
++export async function POST(req: NextRequest) {
++  const ct = (req.headers.get('content-type') || '').toLowerCase();
++  const isJson = ct.includes('application/json');
+ 
+-  if (res.ok && res.slug && res.type) {
+-    // Flip succeeded and we know where to send them — straight to the (now owned) listing.
+-    const to = new URL(`/directory/${res.type}/${res.slug}?claimed=1`, new URL(req.url).origin);
+-    return NextResponse.redirect(to, 303);
++  let token = '', claimId = '', code = '';
++  if (isJson) {
++    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
++    token = String(body.token || '').trim();
++    claimId = String(body.claimId || '').trim();
++    code = String(body.code || '').trim();
++  } else {
++    const form = await req.formData().catch(() => null);
++    if (form) {
++      token = String(form.get('token') || '').trim();
++      claimId = String(form.get('claimId') || '').trim();
++      code = String(form.get('code') || '').trim();
 +    }
+   }
+-  if (res.ok && res.slug) {
+-    // Verified, but type unknown — show a branded success page with a directory link.
+-    return html(resultPage({
+-      ok: true, title: 'Listing verified', heading: 'Your listing is verified',
+-      body: 'Thank you — ownership is confirmed and your listing is now a verified first-party profile. Our team will be in touch to help you complete it.',
+-      ctaUrl: '/directory', ctaLabel: 'Browse the directory',
+-    }));
++
++  // ── token-confirm path: the deliberate click on the branded confirm page. This is the
++  //    ONLY place the single-use email token is consumed and the listing is flipped. ──
++  if (token) {
++    const res = await verifyClaimToken(token);
++    if (res.ok && res.slug && res.type) {
++      // PRG: send the browser (GET) to the now-owned listing.
++      const to = new URL(`/directory/${res.type}/${res.slug}?claimed=1`, new URL(req.url).origin);
++      return NextResponse.redirect(to, 303);
++    }
++    if (res.ok && res.slug) return verifiedPage();
++    return failurePage(res.error === 'expired' ? 'expired' : 'invalid');
+   }
+ 
+-  const body = res.error === 'expired'
+-    ? 'This verification link has expired. Links are valid for 72 hours — please start the claim again to receive a fresh one.'
+-    : 'This verification link is no longer valid. It may have already been used, or it has been superseded by a newer link. Please start the claim again if you still need to verify.';
+-  return html(resultPage({
+-    ok: false, title: 'Claim link expired', heading: 'This link can’t be used',
+-    body, ctaUrl: '/directory', ctaLabel: 'Browse the directory',
+-  }), 410);
+-}
++  // A non-JSON (form) submit with no token is a malformed confirm.
++  if (!isJson) return missingTokenPage();
+ 
+-export async function POST(req: NextRequest) {
+-  const body = await req.json().catch(() => ({} as Record<string, unknown>));
+-  const claimId = String(body.claimId || '').trim();
+-  const code = String(body.code || '').trim();
++  // ── phone-OTP path — unchanged JSON contract for the on-page claim widget. ──
+   if (!claimId || !code) {
+     return NextResponse.json({ ok: false, error: 'A claim id and code are required.' }, { status: 400 });
+   }
+diff --git a/app/api/partner/claim/route.ts b/app/api/partner/claim/route.ts
+index 1eff709..5407b1c 100644
+--- a/app/api/partner/claim/route.ts
++++ b/app/api/partner/claim/route.ts
+@@ -1,43 +1,54 @@
+-// POST /api/partner/claim  { slug, email } — start an ownership claim (roadmap item 09).
+-// If the email matches what's on file for the listing (same address, email domain, or the
+-// site's domain), we email a one-time verification link. To avoid revealing on-file
+-// addresses, the response is ALWAYS the same generic success — a mismatch simply sends nothing.
++// POST /api/partner/claim  { slug, email, name?, phone?, [HONEYPOT_FIELD] }
++// ---------------------------------------------------------------------------
++// DEPRECATED — this used to be a SECOND, weaker claim path (roadmap item 09): it emailed a
++// verification link to WHOEVER matched the on-file email/domain, did NOT flip provenance,
++// and wrote to its own `listing_claims` table. It has been RETIRED in favour of the single
++// CLAIM-TO-OWN engine in lib/directory/claims.ts (canonical route: /api/directory/claim).
++//
++// To keep ONE claim path while NOT breaking any client still POSTing here, this endpoint now
++// DELEGATES to startClaim(): the honest-verification engine that
++//   • sends the secret only to the strongest proof-of-control recipient (on-file email →
++//     website-domain match → phone OTP → manual) — never "to whatever the caller typed";
++//   • FLIPS the listing to owner-verified on a confirmed claim (the old flow never did);
++//   • returns an anti-enumerating, byte-identical response across email/manual outcomes.
++// The in-repo UI (/partner) has been repointed to /api/directory/claim directly, so this
++// route is now only a compatibility shim. Prefer /api/directory/claim for new work.
+ import { NextRequest, NextResponse } from 'next/server';
+-import { rateLimit } from '@/lib/ratelimit';
+-import { supabaseAdmin } from '@/lib/supabase/admin';
+-import { brandedEmail, sendEmail } from '@/lib/email';
+-import { emailMatchesListing, newToken } from '@/lib/partners/claims';
++import { rateLimit, isHoneypot } from '@/lib/ratelimit';
++import { startClaim } from '@/lib/directory/claims';
+ 
+ export const runtime = 'nodejs';
+ 
+-const GENERIC = { ok: true, message: 'If that email is on file for this listing, we’ve sent a verification link. Please check your inbox.' };
++const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
++
++// A single generic, non-enumerating reply for inputs we don't forward (keeps parity with the
++// engine's own generic message, so this shim can never reveal whether a listing/email exists).
++const GENERIC =
++  "Thanks — we've started verifying your claim. If ownership can be confirmed, a verification link will be sent to the business's contact address on file (or to your email if it matches the business's own website). Otherwise our team will review your request and follow up with you by email.";
+ 
+ export async function POST(req: NextRequest) {
+-  if (!(await rateLimit(req, 'partner-claim', 8, 60))) return NextResponse.json(GENERIC);
+-  const body = await req.json().catch(() => ({}));
++  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
++  // Honeypot: accept silently so bots don't learn they were caught (matches /api/directory/claim).
++  if (isHoneypot(body)) return NextResponse.json({ ok: true });
++  if (!(await rateLimit(req, 'partner-claim', 8, 60))) {
++    return NextResponse.json({ ok: false, error: 'Too many requests — please wait a moment.' }, { status: 429 });
 +  }
-+  console.log(`\n  Done ${n + (n < f.batches ? 1 : 0)} batch(es): generated ${totalGen}, review ${totalReview}, errors ${totalErr}, spend ~$${totalUsd.toFixed(4)}`);
-+  console.log('  Re-run the same command to continue if stubs remain (idempotent).\n');
++
+   const slug = String(body.slug || '').trim().slice(0, 200);
+   const email = String(body.email || '').trim().toLowerCase().slice(0, 160);
+-  if (!slug || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return NextResponse.json(GENERIC);
+-
+-  const sb = supabaseAdmin();
+-  const { data: listing } = await sb.from('directory_listings')
+-    .select('slug, name_en, email, url, status').eq('slug', slug).eq('status', 'published').maybeSingle();
+-  const l = listing as { slug: string; name_en: string | null; email: string | null; url: string | null } | null;
+-  if (!l || !emailMatchesListing(email, l.email, l.url)) return NextResponse.json(GENERIC); // silent no-op
+-
+-  const token = newToken();
+-  const expires = new Date(Date.now() + 48 * 3600_000).toISOString();
+-  try {
+-    await sb.from('listing_claims').insert({ slug, email, token, token_expires: expires, status: 'pending' });
+-    const site = (process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.eu').replace(/\/$/, '');
+-    const link = `${site}/partner?token=${encodeURIComponent(token)}`;
+-    const html = brandedEmail({
+-      locale: 'en',
+-      heading: 'Confirm your listing',
+-      bodyHtml: `<p>Hello,</p><p>Someone (hopefully you) asked to manage the Cyprus Lifestyle listing for <strong>${(l.name_en || slug).replace(/[<>&]/g, '')}</strong>.</p><p>To confirm you represent this business and edit your listing, use the link below within 48 hours:</p><p><a href="${link}">Confirm and manage my listing →</a></p><p>If this wasn’t you, you can ignore this email — nothing will change.</p>`,
+-      preheader: 'Confirm your Cyprus Lifestyle listing',
+-    });
+-    await sendEmail({ to: email, subject: 'Confirm your Cyprus Lifestyle listing', html });
+-  } catch { /* generic response regardless */ }
+-  return NextResponse.json(GENERIC);
++  const name = String(body.name || '').trim().slice(0, 160) || null;
++  const phone = String(body.phone || '').trim().slice(0, 40) || null;
++
++  // Preserve the historical input contract: { slug, email } is enough. Invalid input gets the
++  // same generic success as before (no enumeration), without starting a claim.
++  if (!slug || !EMAIL_RE.test(email)) return NextResponse.json({ ok: true, message: GENERIC });
++
++  const res = await startClaim({ slug, name, email, phone });
++
++  // Phone-OTP is the only channel that must expose a code step; everything else returns the
++  // single generic message so nothing about the listing is leaked.
++  if (res.requiresCode && res.claimId) {
++    return NextResponse.json({ ok: true, requiresCode: true, claimId: res.claimId, message: res.message });
++  }
++  return NextResponse.json({ ok: true, message: res.message });
+ }
+diff --git a/lib/directory/claims.ts b/lib/directory/claims.ts
+index 3a9c786..4e8e315 100644
+--- a/lib/directory/claims.ts
++++ b/lib/directory/claims.ts
+@@ -58,6 +58,14 @@ export interface VerifyResult {
+   remaining?: number;
+ }
+ 
++export interface PeekResult {
++  ok: boolean;
++  /** Business display name, for the branded confirm page (present only when ok). */
++  bizName?: string;
++  slug?: string;
++  error?: 'expired' | 'invalid' | 'not_found';
 +}
 +
-+main().catch((e) => { console.error('\n  ✗', (e as Error).message, '\n'); process.exit(1); });
-diff --git a/scripts/tests/enrich.test.ts b/scripts/tests/enrich.test.ts
-new file mode 100644
-index 0000000..a776a4d
---- /dev/null
-+++ b/scripts/tests/enrich.test.ts
-@@ -0,0 +1,95 @@
-+// Stub-enrichment — pure-logic suite for lib/directory/enrich.ts.
-+// Covers the two things that must not regress: the STUB-DETECTION heuristic (a
-+// false positive de-lists a good page; a false negative keeps a hollow page
-+// indexed) and the GROUNDING VALIDATION gate (which must reject fabricated facts
-+// and unverifiable claims rather than publish them). The DB + model I/O is an
-+// integration concern and is not exercised here.
-+import {
-+  isStubText, isStub, isPublishableListing,
-+  groundingFacts, buildDescriptionPrompt, validateGeneratedDescription,
-+  STUB_MIN_CHARS, STUB_MIN_WORDS, type EnrichRow,
-+} from '@/lib/directory/enrich';
-+import { ok, eq, report } from './_harness';
+ const EMAIL_LINK_TTL_MS = 72 * 60 * 60 * 1000; // 72 hours
+ const OTP_TTL_MS = 10 * 60 * 1000;             // 10 minutes
+ const OTP_MAX_ATTEMPTS = 5;
+@@ -170,9 +178,9 @@ async function sendVerifyLink(to: string, bizName: string, token: string): Promi
+     heading: `Confirm your claim of ${bizName}`,
+     bodyHtml:
+       `<p>Someone asked to claim and verify the Cyprus Lifestyle listing for <strong>${esc(bizName)}</strong>.</p>` +
+-      `<p>If this was you (or your business), confirm below to take ownership of the listing. The link is valid for 72 hours and can be used once.</p>` +
++      `<p>If this was you (or your business), open the secure confirmation page below and click <strong>Confirm</strong> to take ownership of the listing. The link is valid for 72 hours and can be used once — ownership transfers only when you click Confirm on that page, so it is safe to open.</p>` +
+       `<p>If you did not request this, you can safely ignore this email — nothing will change.</p>`,
+-    ctaLabel: 'Confirm & verify',
++    ctaLabel: 'Review your claim',
+     ctaUrl: url,
+     preheader: `Verify your claim of ${bizName} on Cyprus Lifestyle`,
+   });
+@@ -419,6 +427,46 @@ export async function verifyClaimToken(token: string): Promise<VerifyResult> {
+   }
+ }
+ 
++/**
++ * READ-ONLY lookup of an email-link claim by its token. This exists so the verify route
++ * can render a branded CONFIRM page on GET **without** consuming the single-use token or
++ * flipping the listing — that only happens on the deliberate POST (verifyClaimToken).
++ * It is what makes the link safe against email security scanners / mailbox link
++ * prefetchers, which issue background GETs: they reach this read only, never the flip.
++ * Validates the claim is pending + unexpired and returns the business name for display.
++ * NEVER mutates any row and NEVER throws.
++ */
++export async function peekClaimToken(token: string): Promise<PeekResult> {
++  const t = String(token ?? '').trim();
++  if (!t) return { ok: false, error: 'not_found' };
++  try {
++    const sb = supabaseAdmin();
++    const nowIso = new Date().toISOString();
++    const { data } = await sb.from('directory_claims')
++      .select('id, listing_slug, status, expires_at')
++      .eq('token_hash', sha256(t))
++      .maybeSingle();
++    const claim = data as Record<string, unknown> | null;
++    if (!claim) return { ok: false, error: 'not_found' };
++    // Single-use: a token on an already-settled claim is dead (mirror verifyClaimToken).
++    if (String(claim.status) !== 'pending') return { ok: false, error: 'not_found' };
++    // Expiry is REPORTED here but not persisted — peek must not write. The status flip to
++    // 'expired' happens if/when the claimant actually submits the confirm (verifyClaimToken).
++    if (claim.expires_at && String(claim.expires_at) < nowIso) return { ok: false, error: 'expired' };
 +
-+const GOOD =
-+  'Blue Lagoon Taverna is a family-run restaurant in the old town of Paphos. It serves Cypriot meze and grilled fish, with seating indoors and on a shaded terrace.';
++    const slug = String(claim.listing_slug);
++    let bizName = slug;
++    try {
++      const { data: L } = await sb.from('directory_listings').select('name_en').eq('slug', slug).maybeSingle();
++      const r = (L || {}) as Record<string, unknown>;
++      bizName = String(r.name_en || slug);
++    } catch { /* fall back to the slug for display */ }
++    return { ok: true, bizName, slug };
++  } catch {
++    return { ok: false, error: 'not_found' };
++  }
++}
 +
-+// ── isStubText: the hollow cases ──────────────────────────────────────────────
-+ok('empty is a stub', isStubText(''));
-+ok('whitespace is a stub', isStubText('   \n  '));
-+ok('null is a stub', isStubText(null));
-+ok('"N/A" is a stub', isStubText('N/A'));
-+ok('"TBD" is a stub', isStubText('tbd'));
-+ok('dashes only is a stub', isStubText('—'));
-+ok('"coming soon" is a stub', isStubText('Full description coming soon.'));
-+ok('"no description" is a stub', isStubText('No description available for this business.'));
-+ok('lorem ipsum is a stub', isStubText('Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.'));
-+ok('placeholder phrase is a stub', isStubText('This is a placeholder summary for the listing record here now.'));
-+ok('short text is a stub', isStubText('A nice place in Paphos.'));
-+ok('few words is a stub', isStubText('Restaurant located in the district of Paphos town.'));
-+
-+// ── isStubText: the name-echo case (just the name + category + district) ──────
-+ok('name echo is a stub', isStubText('Blue Lagoon Taverna — restaurant, Paphos.', 'Blue Lagoon Taverna'));
-+ok('name repeated is a stub', isStubText('Blue Lagoon Taverna. Blue Lagoon Taverna in Paphos.', 'Blue Lagoon Taverna'));
-+
-+// ── isStubText: the real description is NOT a stub ────────────────────────────
-+ok('a real 2-sentence blurb is NOT a stub', !isStubText(GOOD, 'Blue Lagoon Taverna'));
-+ok('thresholds are the documented values', STUB_MIN_CHARS === 80 && STUB_MIN_WORDS === 12);
-+
-+// ── isStub: write-safety guards ───────────────────────────────────────────────
-+ok('a hollow published row is an enrichable stub', isStub({ summary_en: '', name_en: 'X Ltd' }));
-+ok('owner-verified rows are NEVER enriched', !isStub({ summary_en: '', name_en: 'X', provenance: 'owner-verified' }));
-+ok('already-generated rows are skipped (idempotent)', !isStub({ summary_en: '', name_en: 'X', text_status: 'generated' }));
-+ok('owned-text rows are skipped', !isStub({ summary_en: '', name_en: 'X', text_status: 'owned' }));
-+ok('a review-flagged hollow row is still a candidate', isStub({ summary_en: '', name_en: 'X', text_status: 'review' }));
-+ok('a row with real text is not a stub', !isStub({ summary_en: GOOD, name_en: 'Blue Lagoon Taverna' }));
-+
-+// ── isPublishableListing: the SEO gate ────────────────────────────────────────
-+ok('real text → publishable (in sitemap)', isPublishableListing({ summary_en: GOOD, name_en: 'Blue Lagoon Taverna' }));
-+ok('hollow text → NOT publishable (out of sitemap)', !isPublishableListing({ summary_en: '', name_en: 'X' }));
-+ok('owner-verified is always publishable even if thin', isPublishableListing({ summary_en: '', name_en: 'X', provenance: 'owner-verified' }));
-+
-+// ── groundingFacts ────────────────────────────────────────────────────────────
-+const row: EnrichRow = {
-+  id: '1', slug: 'blue-lagoon-taverna', name_en: 'Blue Lagoon Taverna', type: 'restaurant',
-+  canonical_category: 'fine-dining', district: 'Paphos', tags: ['meze', 'seafood'], price_band: '€€€',
-+  summary_en: '', source_description: 'A taverna by the harbour serving fish.',
-+};
-+const facts = groundingFacts(row);
-+eq('facts.name', facts.name, 'Blue Lagoon Taverna');
-+eq('facts.category normalises dashes', facts.category, 'fine dining');
-+eq('facts.district', facts.district, 'Paphos');
-+eq('facts.tags', facts.tags, ['meze', 'seafood']);
-+ok('facts.ownText carried through', facts.ownText === 'A taverna by the harbour serving fish.');
-+
-+// ── buildDescriptionPrompt ────────────────────────────────────────────────────
-+const prompt = buildDescriptionPrompt(facts);
-+ok('prompt system states the hard grounding rule', /Use ONLY the facts/i.test(prompt.system));
-+ok('prompt system bans superlatives', /never|do not|no .*best|unverifiable/i.test(prompt.system));
-+ok('prompt user carries the name', prompt.user.includes('Name: Blue Lagoon Taverna'));
-+ok('prompt user carries the district', /Paphos/.test(prompt.user));
-+
-+// ── validateGeneratedDescription: accept the grounded, reject the fabricated ──
-+const vGood = validateGeneratedDescription(GOOD, row);
-+ok('a grounded blurb passes', vGood.ok === true);
-+ok('the passing blurb still names the business', vGood.ok === true && /Blue Lagoon Taverna/i.test(vGood.text));
-+
-+const vMoney = validateGeneratedDescription('Blue Lagoon Taverna is a restaurant in Paphos where a meze spread costs about €25 per head in a relaxed setting.', row);
-+ok('a price (€) is rejected', vMoney.ok === false);
-+
-+const vUrl = validateGeneratedDescription('Blue Lagoon Taverna is a restaurant in Paphos; see www.bluelagoon.cy for the full menu and to book a table.', row);
-+ok('a URL is rejected', vUrl.ok === false);
-+
-+const vClaim = validateGeneratedDescription('Blue Lagoon Taverna is the best and most renowned restaurant in all of Paphos, serving award-winning Cypriot meze.', row);
-+ok('an unverifiable claim is rejected', vClaim.ok === false);
-+
-+const vYear = validateGeneratedDescription('Blue Lagoon Taverna is a restaurant in Paphos that was founded in 1987 and serves traditional Cypriot meze dishes.', row);
-+ok('a fabricated number (year) is rejected', vYear.ok === false);
-+
-+const vNoName = validateGeneratedDescription('A family-run restaurant in the old town of Paphos serving Cypriot meze and grilled fish on a shaded terrace.', row);
-+ok('output that omits the business name is rejected', vNoName.ok === false);
-+
-+const vShort = validateGeneratedDescription('A restaurant.', row);
-+ok('a thin / short output is rejected', vShort.ok === false);
-+
-+report('enrich.pure');
-diff --git a/supabase/migrations/20261001150000_stub_text_status.sql b/supabase/migrations/20261001150000_stub_text_status.sql
-new file mode 100644
-index 0000000..973fb71
---- /dev/null
-+++ b/supabase/migrations/20261001150000_stub_text_status.sql
-@@ -0,0 +1,82 @@
-+-- ============================================================================
-+-- Cyprus Lifestyle — STUB-ENRICHMENT · text_status flag   (additive, idempotent)
-+-- ----------------------------------------------------------------------------
-+-- Run in the Supabase Dashboard → SQL Editor (no CLI needed). Fully IDEMPOTENT
-+-- and safe to re-run: ADD COLUMN IF NOT EXISTS + CREATE INDEX IF NOT EXISTS only.
-+-- It never drops or destructively alters an existing column, and sets NO NOT NULL
-+-- and NO default that rewrites existing rows.
-+--
-+-- WHY
-+--   ~2,066 PUBLISHED directory_listings carry a HOLLOW "stub" summary (empty /
-+--   too short / boilerplate / placeholder). They are live and indexable, which
-+--   hurts SEO and trust. The enrichment job (scripts/enrich-stubs.ts and
-+--   /api/admin/enrich-stubs) writes a GROUNDED, model-generated description into
-+--   summary_en for those rows. This column records WHERE a listing's display text
-+--   came from, so generated copy stays DISTINGUISHABLE from first-party / owned
-+--   copy and the job stays idempotent + resumable.
-+--
-+--   text_status:
-+--     NULL        — not yet classified by the job (treat by text content).
-+--     'stub'      — classified hollow, not yet enriched.
-+--     'generated' — summary_en was written by the grounded generator (reference-
-+--                   grounded, NOT owner-authored). Distinct from owned text.
-+--     'review'    — generation ran but the output failed the grounding gate; held
-+--                   back for a human (summary_en left hollow → stays out of the
-+--                   sitemap). Conservative: never publish a hallucinated blurb.
-+--     'owned'     — first-party / owner-verified text (do not overwrite).
-+--
-+--   NOTE ON provenance: we deliberately do NOT overload directory_listings
-+--   .provenance ('reference' | 'owner-verified') for this. provenance is the
-+--   claim-to-own workstream's column (lib/directory/claims.ts, owner.ts); a
-+--   generated blurb is still reference data, so provenance stays 'reference' and
-+--   text_status carries the generated/owned/review marker instead. The two never
-+--   collide.
-+--
-+--   The SEO gate (sitemap exclusion + the noindex helper) does NOT depend on this
-+--   column — it reads the live summary text — so the gate works whether or not
-+--   this migration has been applied. The column only enriches tracking, idempotency
-+--   and the review hold-back. The job probes for the column at runtime and runs
-+--   fine without it.
-+-- ============================================================================
-+
-+-- Where the listing's DISPLAY text (summary_*) came from. Nullable, additive; no
-+-- default backfill so existing rows are untouched (NULL = "classify by content").
-+alter table public.directory_listings
-+  add column if not exists text_status text;
-+
-+-- When the grounded generator last wrote this listing's summary_en. Lets the desk
-+-- audit the enrichment run and lets the job report throughput.
-+alter table public.directory_listings
-+  add column if not exists text_generated_at timestamptz;
-+
-+-- Fast candidate lookup for the enrichment job's keyset scan: narrow PUBLISHED rows
-+-- to those not yet marked generated/owned (the unambiguous part of the filter),
-+-- ordered by id, so the batched re-runnable drain pages cheaply. The job still
-+-- confirms the hollow-text half of the filter per row in code (isStub), so nothing
-+-- with real text is ever regenerated. Rows leave this index as they flip to
-+-- 'generated' / 'owned'.
-+create index if not exists directory_text_status_pending_idx
-+  on public.directory_listings (id)
-+  where status = 'published'
-+    and (text_status is null or text_status in ('stub', 'review'));
-+
-+-- Partial index to count / find enriched rows quickly for reporting + rollback.
-+create index if not exists directory_text_status_generated_idx
-+  on public.directory_listings (text_generated_at)
-+  where text_status = 'generated';
-+
-+-- ----------------------------------------------------------------------------
-+-- Verification (safe to run) — distribution of text_status among PUBLISHED rows.
-+-- On a fresh apply every row is NULL (classify-by-content); after a run the
-+-- 'generated' / 'review' buckets fill. This does NOT compute the content-based
-+-- stub count (that is what `scripts/enrich-stubs.ts --dry-run` reports).
-+-- ----------------------------------------------------------------------------
-+select
-+  count(*)                                              as published_total,
-+  count(*) filter (where text_status is null)           as unclassified,
-+  count(*) filter (where text_status = 'stub')          as marked_stub,
-+  count(*) filter (where text_status = 'generated')     as generated,
-+  count(*) filter (where text_status = 'review')        as needs_review,
-+  count(*) filter (where text_status = 'owned')         as owned
-+from public.directory_listings
-+where status = 'published';
+ /**
+  * Verify a phone-OTP claim. Enforces expiry and an attempt limit (locks the claim
+  * after OTP_MAX_ATTEMPTS). On success, flips the listing. Never throws.
+diff --git a/lib/partners/claims.ts b/lib/partners/claims.ts
+index a74294d..3f64fd1 100644
+--- a/lib/partners/claims.ts
++++ b/lib/partners/claims.ts
+@@ -2,6 +2,14 @@
+ // Pure, testable pieces of the claim + moderated-edit flow. A partner proves control
+ // of the email/domain already on file for a listing (no new account system); edits are
+ // restricted to a whitelist and always go through moderation before touching the listing.
++//
++// DEPRECATION NOTE (claim initiation only): the CLAIM step this module powered
++// (`emailMatchesListing` + `newToken`, consumed by the now-retired /api/partner/claim) has
++// been superseded by the unified CLAIM-TO-OWN engine in lib/directory/claims.ts, which is a
++// stronger design (on-file-email priority, anti-enumeration, provenance flip). Those two
++// helpers are RETAINED here only for backward compatibility and the existing unit tests; new
++// claims flow through /api/directory/claim. The moderated-EDIT helpers below (`EDITABLE_FIELDS`,
++// `sanitizeEdit`) are unaffected and still back /api/partner/edit + the admin moderation tab.
+ 
+ // The ONLY fields a partner may propose. Must mirror apply_listing_edit()'s whitelist
+ // in migration 0089 (contact + descriptions + their own pitch — never status/featured/rating/coords).

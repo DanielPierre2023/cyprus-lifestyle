@@ -2,6 +2,14 @@
 // Pure, testable pieces of the claim + moderated-edit flow. A partner proves control
 // of the email/domain already on file for a listing (no new account system); edits are
 // restricted to a whitelist and always go through moderation before touching the listing.
+//
+// DEPRECATION NOTE (claim initiation only): the CLAIM step this module powered
+// (`emailMatchesListing` + `newToken`, consumed by the now-retired /api/partner/claim) has
+// been superseded by the unified CLAIM-TO-OWN engine in lib/directory/claims.ts, which is a
+// stronger design (on-file-email priority, anti-enumeration, provenance flip). Those two
+// helpers are RETAINED here only for backward compatibility and the existing unit tests; new
+// claims flow through /api/directory/claim. The moderated-EDIT helpers below (`EDITABLE_FIELDS`,
+// `sanitizeEdit`) are unaffected and still back /api/partner/edit + the admin moderation tab.
 
 // The ONLY fields a partner may propose. Must mirror apply_listing_edit()'s whitelist
 // in migration 0089 (contact + descriptions + their own pitch — never status/featured/rating/coords).
