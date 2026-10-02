@@ -15,6 +15,7 @@ import 'server-only';
 import { LOCALES, DEFAULT_LOCALE } from '@/lib/locales';
 import { SITE_URL, SITE_NAME, urlFor } from '@/lib/seo';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { isPublishableListing } from '@/lib/queries';
 
 /** Max URLs per child sitemap. Kept well under the 50k / 50MB hard limits — with
  *  seven hreflang alternates per URL a file of this size is ~10MB. */
@@ -106,11 +107,14 @@ export async function chunkCount(table: PublishedTable): Promise<number> {
 // PAGE-sized requests to defeat Supabase's per-request row cap. Best-effort: on
 // any error it returns whatever it has gathered so far, so the sitemap route
 // never throws (a partial/empty child is still valid XML).
+// `toEntry` may return null to SKIP a row (e.g. a hollow stub listing that should
+// not be indexed). Pagination still advances by rows FETCHED, not entries emitted,
+// so skipping never breaks the keyset walk — a chunk simply yields fewer URLs.
 async function fetchChunk(
   table: PublishedTable,
   select: string,
   chunk: number,
-  toEntry: (r: Record<string, unknown>) => UrlEntry,
+  toEntry: (r: Record<string, unknown>) => UrlEntry | null,
 ): Promise<UrlEntry[]> {
   const start = chunk * CHUNK;
   const end = start + CHUNK; // exclusive
@@ -128,7 +132,10 @@ async function fetchChunk(
         .range(offset, to);
       if (error) break;
       const rows = (data || []) as unknown as Record<string, unknown>[];
-      for (const r of rows) out.push(toEntry(r));
+      for (const r of rows) {
+        const e = toEntry(r);
+        if (e) out.push(e);
+      }
       offset += rows.length;
       if (rows.length < want) break; // reached the end of the table
     }
@@ -138,13 +145,27 @@ async function fetchChunk(
   return out;
 }
 
-/** Published directory listings for child sitemap `listings-<chunk>`. */
+/**
+ * Published directory listings for child sitemap `listings-<chunk>`.
+ *
+ * SEO GATE: hollow "stub" listings (empty / too-short / placeholder / boilerplate
+ * summary) are EXCLUDED so Google does not index thin pages before the enrichment
+ * job (scripts/enrich-stubs.ts) fills them. The gate reads the live summary text
+ * via isPublishableListing, so a listing re-enters the sitemap automatically on the
+ * next revalidation once a real description exists — no flag or backfill required.
+ * Owner-verified (first-party) listings are always included.
+ */
 export function listingChunkEntries(chunk: number): Promise<UrlEntry[]> {
-  return fetchChunk('directory_listings', 'slug, type, updated_at, image', chunk, (r) => ({
-    path: `/directory/${String(r.type)}/${String(r.slug)}`,
-    lastmod: (r.updated_at as string) ?? null,
-    image: (r.image as string) ?? null,
-  }));
+  return fetchChunk(
+    'directory_listings',
+    'slug, type, updated_at, image, name_en, summary_en, provenance',
+    chunk,
+    (r) => (isPublishableListing(r) ? {
+      path: `/directory/${String(r.type)}/${String(r.slug)}`,
+      lastmod: (r.updated_at as string) ?? null,
+      image: (r.image as string) ?? null,
+    } : null),
+  );
 }
 
 /** Published articles for child sitemap `articles-<chunk>`. */

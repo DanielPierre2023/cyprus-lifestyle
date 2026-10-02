@@ -1,6 +1,7 @@
 // Centralised SEO helpers: canonical + hreflang alternates and JSON-LD builders.
 // Routing is next-intl `as-needed` — the default locale (en) has no path prefix.
 import { LOCALES, DEFAULT_LOCALE, LOCALE_NAME, type Locale } from '@/lib/locales';
+import { isOwnedImage } from '@/lib/images';
 
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.eu').replace(/\/+$/, '');
 export const SITE_NAME = 'Cyprus Lifestyle';
@@ -33,8 +34,29 @@ export function ogImageUrl(o: { title: string; kicker?: string; locale: Locale; 
   p.set('t', o.title.slice(0, 200));
   if (o.kicker) p.set('k', o.kicker.slice(0, 60));
   p.set('l', o.locale);
-  if (o.cover) p.set('c', o.cover);
+  // Only pass a cover we OWN — never hot-link a scraped third-party image into our OG
+  // card. A non-owned cover is dropped and the card renders text-only (branded).
+  if (o.cover && isOwnedImage(o.cover)) p.set('c', o.cover);
   return `${SITE_URL}/api/og?${p.toString()}`;
+}
+
+/** Robots directive for a page the crawler should NOT index yet (but may follow).
+ *  Used by the SEO gate for hollow directory "stub" listings — a PUBLISHED listing
+ *  whose description has not been written/generated yet. */
+export const STUB_ROBOTS = { index: false, follow: true } as const;
+
+/**
+ * Robots directive for a directory listing: noindex while it is a hollow stub, the
+ * page's normal (indexable) default once it has real text. Pure — the caller passes
+ * the already-computed stub boolean (from `isStubText` in lib/queries), so this
+ * helper stays free of any server-only import and safe to use from any page.
+ *
+ * Wire in the listing page's generateMetadata (one line) to complement the sitemap
+ * exclusion with a page-level signal:
+ *   robots: robotsForStub(isStubText(listing.summary, listing.name))
+ */
+export function robotsForStub(isStub: boolean): { index: boolean; follow: boolean } | undefined {
+  return isStub ? { ...STUB_ROBOTS } : undefined;
 }
 
 /** A complete Metadata fragment for a page: title, description, alternates, Open Graph + branded social card. */
@@ -42,13 +64,17 @@ export function pageMetadata(opts: {
   locale: Locale; path: string; title: string; description?: string;
   type?: 'website' | 'article'; absoluteTitle?: boolean;
   ogTitle?: string; kicker?: string; cover?: string | null;
+  robots?: { index: boolean; follow?: boolean };
 }) {
-  const { locale, path, title, description, type = 'website', absoluteTitle, ogTitle, kicker, cover } = opts;
+  const { locale, path, title, description, type = 'website', absoluteTitle, ogTitle, kicker, cover, robots } = opts;
   const images = [ogImageUrl({ title: ogTitle || title, kicker, locale, cover })];
   return {
     title: absoluteTitle ? { absolute: title } : title,
     description,
     alternates: alternatesFor(locale, path),
+    // Omitted unless provided, so existing callers inherit the layout default
+    // (index:true); the listing page passes robotsForStub(...) to noindex a stub.
+    ...(robots ? { robots } : {}),
     openGraph: {
       title, description, type, url: urlFor(locale, path), siteName: SITE_NAME,
       locale: OG_LOCALE[locale], images,

@@ -149,6 +149,17 @@ export async function getReviewSubject(locale: Locale, id: string): Promise<Revi
   };
 }
 
+// ── Stub text / SEO gate ──────────────────────────────────────────────────────
+// One obvious home, on the public read layer, for "is this listing's display text
+// real?" ~2,066 PUBLISHED listings carry hollow "stub" summaries; the sitemap (and,
+// optionally, the listing page's robots meta) gate on these so hollow stubs are not
+// indexed before the enrichment job fills them. The heuristic + generator live in
+// lib/directory/enrich.ts; re-exported here so SEO call sites import from one place.
+//   • isStubText(summary, name?)   — pure: is this display text hollow?
+//   • isStub(row)                  — enrichable stub? (also skips owner-verified / generated)
+//   • isPublishableListing(row)    — SEO gate: has real text (or is owner-verified)?
+export { isStubText, isStub, isPublishableListing, type StubRow } from '@/lib/directory/enrich';
+
 // ── Directory / listings ─────────────────────────────────────────────────────
 export const DIRECTORY_TYPES = ['restaurant', 'winery', 'development', 'hotel', 'beach', 'vendor'] as const;
 export type DirectoryType = typeof DIRECTORY_TYPES[number];
