@@ -160,9 +160,10 @@ export interface Listing {
   tags: string[]; featured: boolean; verified: boolean;
   rating: number | null; rating_count: number | null;
   luxury: boolean; category_group: string | null; subtype: string | null;
+  provenance: string | null;
 }
 const LISTING_COLS = (l: Locale) =>
-  `id, slug, type, district, address, lat, lng, price_band, url, phone, image, tags, featured, verified, rating, rating_count, luxury, category_group, subtype, name_${l}, name_en, summary_${l}, summary_en`;
+  `id, slug, type, district, address, lat, lng, price_band, url, phone, image, tags, featured, verified, rating, rating_count, luxury, category_group, subtype, provenance, name_${l}, name_en, summary_${l}, summary_en`;
 function toListing(r: Record<string, unknown>, l: Locale): Listing {
   return {
     id: String(r.id), slug: String(r.slug), type: String(r.type), district: (r.district as string) ?? null,
@@ -174,6 +175,7 @@ function toListing(r: Record<string, unknown>, l: Locale): Listing {
     tags: (r.tags as string[]) ?? [], featured: Boolean(r.featured), verified: Boolean(r.verified),
     rating: (r.rating as number) ?? null, rating_count: (r.rating_count as number) ?? null,
     luxury: Boolean(r.luxury), category_group: (r.category_group as string) ?? null, subtype: (r.subtype as string) ?? null,
+    provenance: (r.provenance as string) ?? null,
   };
 }
 // haversine distance in km between two lat/lng points

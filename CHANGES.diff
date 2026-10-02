@@ -1,440 +1,1065 @@
-diff --git a/app/api/advertise/webhook/route.ts b/app/api/advertise/webhook/route.ts
-index 1dd0b86..55f3f11 100644
---- a/app/api/advertise/webhook/route.ts
-+++ b/app/api/advertise/webhook/route.ts
-@@ -1,15 +1,37 @@
- // POST /api/advertise/webhook — Stripe events. Verifies the signature against
--// STRIPE_WEBHOOK_SECRET, then reconciles the matching ad_orders row. Register the
--// endpoint URL in the Stripe dashboard and paste its signing secret into Vercel.
-+// STRIPE_WEBHOOK_SECRET, then reconciles the matching ad_orders row / concierge member.
-+// Register the endpoint URL in the Stripe dashboard and paste its signing secret into Vercel.
+diff --git a/.env.example b/.env.example
+index 0f5cc4d..ae84b25 100644
+--- a/.env.example
++++ b/.env.example
+@@ -41,6 +41,20 @@ LINKEDIN_ORG_URN=
+ # On-demand ISR revalidation (Supabase webhook -> /api/revalidate)
+ REVALIDATE_SECRET=
+ 
++# Directory desk inbox — where claim/lead notifications are sent (falls back to
++# ADVERTISE_INBOX, then EMAIL_FROM, if unset).
++DIRECTORY_INBOX=
++
++# Claim-to-own PHONE channel (optional). Leave blank to SKIP the phone-OTP channel
++# cleanly — claims simply fall through to on-file-email / domain / manual. Setting a
++# provider (SMS_PROVIDER present, or TWILIO_ACCOUNT_SID) turns the channel ON; a full
++# Twilio send also needs the auth token and a From number (or a Messaging Service SID).
++SMS_PROVIDER=
++TWILIO_ACCOUNT_SID=
++TWILIO_AUTH_TOKEN=
++TWILIO_FROM=
++TWILIO_MESSAGING_SERVICE_SID=
++
+ # Rate limiting (optional — falls back to in-memory if unset)
+ UPSTASH_REDIS_REST_URL=
+ UPSTASH_REDIS_REST_TOKEN=
+diff --git a/app/[locale]/(site)/directory/[type]/[slug]/page.tsx b/app/[locale]/(site)/directory/[type]/[slug]/page.tsx
+index 1e48a7d..0e5f2d1 100644
+--- a/app/[locale]/(site)/directory/[type]/[slug]/page.tsx
++++ b/app/[locale]/(site)/directory/[type]/[slug]/page.tsx
+@@ -10,6 +10,7 @@ import { JsonLd, localBusiness, breadcrumb } from '@/lib/seo/jsonld';
+ import DirectoryMap from '@/components/DirectoryMap';
+ import CoverImage from '@/components/CoverImage';
+ import DirectoryReviews from '@/components/DirectoryReviews';
++import ClaimListing from '@/components/ClaimListing';
+ import TrackView from '@/components/TrackView';
+ import TrackedCTA from '@/components/TrackedCTA';
+ import EnquiryForm, { type EnquiryLabels } from '@/components/EnquiryForm';
+@@ -205,6 +206,8 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
+           </div>
+           {points.length ? <div className="lh-map"><DirectoryMap points={points} height={300} locale={l} typeLabels={typeLabels} viewLabel={t('directory.view')} placesLabel={t('directory.places')} ariaLabel={t('directory.mapAria')} /></div> : null}
+           <EnquiryForm listingSlug={x.slug} listingType={x.type} listingName={x.name} locale={l} labels={enqLabels} />
++          {/* Claim-to-own: lets the business verify ownership and flip the listing to owned data. */}
++          <ClaimListing slug={x.slug} verified={x.provenance === 'owner-verified'} />
+           <p className="lh-trust">◆ {t('trust.independent')} <Link href="/standards">{t('trust.link')} →</Link></p>
+         </aside>
+       </div>
+diff --git a/app/api/directory/claim/route.ts b/app/api/directory/claim/route.ts
+new file mode 100644
+index 0000000..96a89d9
+--- /dev/null
++++ b/app/api/directory/claim/route.ts
+@@ -0,0 +1,46 @@
++// POST /api/directory/claim  { slug, name, email, phone?, [HONEYPOT_FIELD] }
++//   Start a CLAIM-TO-OWN for a directory listing. Honest verification: the channel is
++//   chosen server-side by priority (on-file email → website-domain email → phone OTP →
++//   manual) in lib/directory/claims.ts, and a link/OTP is sent only to an address/phone
++//   that proves control of the BUSINESS. The response is ANTI-ENUMERATING: for every
++//   email/manual outcome it is byte-identical, so a caller cannot tell whether a listing
++//   has an on-file email, a matching domain, or nothing. Rate-limited + honeypot, mirroring
++//   /api/directory/lead and /api/directory/reviews.
 +//
-+// Delivery semantics (Stripe redelivers any non-2xx for up to ~3 days with back-off):
-+//   • MEMBERSHIP writes are strict — a paid membership, a cancellation, a failed payment.
-+//     If the write does not land we answer 500 so Stripe retries, and answer 2xx only once
-+//     it is durably recorded. These writes are idempotent (keyed on the Stripe
-+//     subscription / session id), so a redelivery never duplicates or double-applies.
-+//   • Event types we don't handle are acknowledged with 2xx on purpose.
-+//   • The advertising-order checkout branch keeps its historical best-effort behaviour:
-+//     its CRM / fulfilment side effects are not idempotent, so a blanket retry there could
-+//     duplicate deals and emails.
- import { NextRequest, NextResponse } from 'next/server';
- import { supabaseAdmin } from '@/lib/supabase/admin';
- import { verifyWebhook } from '@/lib/stripe';
- import { onboardingEmail, type OrderLike } from '@/lib/fulfilment';
- import { sendEmail } from '@/lib/email';
-+import { recordMembershipCheckout } from '@/lib/concierge/membership';
-+import { logServerError } from '@/lib/monitor.server';
- 
- export const runtime = 'nodejs';
- export const dynamic = 'force-dynamic';
- 
-+// Answer 500 so Stripe redelivers — what we want whenever a write that matters did not
-+// land. Logs the event id/type, the step and the DB error text only: never the payload
-+// (customer PII) and never a secret.
-+async function retryLater(event: Record<string, unknown>, step: string, detail: string) {
-+  await logServerError('stripe-webhook', new Error(`${step} failed: ${detail}`.slice(0, 300)), {
-+    eventId: String(event.id || ''), type: String(event.type || ''), step,
++// Reads/writes go through lib/directory/claims.ts (service role). directory_claims has RLS
++// on with no public policies, so this route is the public surface.
++import { NextRequest, NextResponse } from 'next/server';
++import { rateLimit, isHoneypot } from '@/lib/ratelimit';
++import { startClaim } from '@/lib/directory/claims';
++
++export const runtime = 'nodejs';
++
++const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
++
++export async function POST(req: NextRequest) {
++  const body = await req.json().catch(() => ({} as Record<string, unknown>));
++  // Honeypot: accept silently so bots don't learn they were caught (matches lead/review routes).
++  if (isHoneypot(body)) return NextResponse.json({ ok: true });
++  if (!(await rateLimit(req, 'directory-claim', 5, 60))) {
++    return NextResponse.json({ ok: false, error: 'Too many requests — please wait a moment.' }, { status: 429 });
++  }
++
++  const slug = String(body.slug || '').trim().slice(0, 200);
++  const name = String(body.name || '').trim().slice(0, 160);
++  const email = String(body.email || '').trim().toLowerCase().slice(0, 160);
++  const phone = String(body.phone || '').trim().slice(0, 40) || null;
++
++  if (!slug) return NextResponse.json({ ok: false, error: 'Missing listing.' }, { status: 400 });
++  if (!name || !EMAIL_RE.test(email)) {
++    return NextResponse.json({ ok: false, error: 'A name and a valid email are required.' }, { status: 400 });
++  }
++
++  const res = await startClaim({ slug, name, email, phone });
++
++  // Phone-OTP is the only channel that must expose more (the claimant enters a code).
++  // Everything else returns an identical body so nothing about the listing is leaked.
++  if (res.requiresCode && res.claimId) {
++    return NextResponse.json({ ok: true, requiresCode: true, claimId: res.claimId, message: res.message });
++  }
++  return NextResponse.json({ ok: true, message: res.message });
++}
+diff --git a/app/api/directory/claim/verify/route.ts b/app/api/directory/claim/verify/route.ts
+new file mode 100644
+index 0000000..02a9794
+--- /dev/null
++++ b/app/api/directory/claim/verify/route.ts
+@@ -0,0 +1,93 @@
++// /api/directory/claim/verify
++//   GET  ?token=…         — the email-verification link. Verifies the single-use token,
++//                           flips the listing to owner-verified, and redirects to the
++//                           listing with ?claimed=1 (or renders a branded success/failure
++//                           page when the listing type is unknown or the token is bad).
++//   POST { claimId, code } — the phone-OTP step (JSON in, JSON out) for the client widget.
++//
++// All logic lives in lib/directory/claims.ts (service role). Never throws to the caller.
++import { NextRequest, NextResponse } from 'next/server';
++import { verifyClaimToken, verifyClaimOtp } from '@/lib/directory/claims';
++
++export const runtime = 'nodejs';
++
++// A minimal, self-contained, on-brand result page (obsidian/gold/ivory) — no deps.
++function resultPage(opts: { ok: boolean; title: string; heading: string; body: string; ctaUrl?: string; ctaLabel?: string }): string {
++  const O = '#0B0E11', G = '#C9A24C', INK = '#16181C', IVORY = '#FBF8F1';
++  const serif = "Georgia,'Times New Roman',serif";
++  const cta = opts.ctaUrl && opts.ctaLabel
++    ? `<a href="${opts.ctaUrl}" style="display:inline-block;margin-top:22px;background:${G};color:${O};text-decoration:none;font-family:${serif};font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:14px 30px;border-radius:2px">${opts.ctaLabel}</a>`
++    : '';
++  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${opts.title}</title></head>
++<body style="margin:0;padding:0;background:#F6F1E7;font-family:${serif};color:${INK}">
++<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:48px 12px"><tr><td align="center">
++<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:${IVORY};border:1px solid #e7ddc6;border-top:3px solid ${G}">
++  <tr><td style="background:${O};padding:30px 32px;text-align:center">
++    <div style="color:#E4D2AC;font-size:20px;letter-spacing:6px;text-transform:uppercase">Cyprus&nbsp;Lifestyle</div>
++    <div style="color:${G};font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-top:10px">The Island, At Its Best</div>
++  </td></tr>
++  <tr><td style="padding:40px 40px 44px;text-align:center">
++    <h1 style="margin:0 0 8px;font-weight:400;font-size:26px;color:${INK}">${opts.heading}</h1>
++    <div style="width:54px;height:2px;background:${G};margin:16px auto"></div>
++    <p style="font-size:17px;line-height:1.7;color:${INK};margin:0">${opts.body}</p>
++    ${cta}
++  </td></tr>
++</table>
++</td></tr></table></body></html>`;
++}
++
++function html(markup: string, status = 200): NextResponse {
++  return new NextResponse(markup, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
++}
++
++export async function GET(req: NextRequest) {
++  const token = (new URL(req.url).searchParams.get('token') || '').trim();
++  if (!token) {
++    return html(resultPage({
++      ok: false, title: 'Claim link invalid', heading: 'This link is not valid',
++      body: 'The verification link is missing its token. Please use the most recent link we emailed you.',
++      ctaUrl: '/directory', ctaLabel: 'Browse the directory',
++    }), 400);
++  }
++
++  const res = await verifyClaimToken(token);
++
++  if (res.ok && res.slug && res.type) {
++    // Flip succeeded and we know where to send them — straight to the (now owned) listing.
++    const to = new URL(`/directory/${res.type}/${res.slug}?claimed=1`, new URL(req.url).origin);
++    return NextResponse.redirect(to, 303);
++  }
++  if (res.ok && res.slug) {
++    // Verified, but type unknown — show a branded success page with a directory link.
++    return html(resultPage({
++      ok: true, title: 'Listing verified', heading: 'Your listing is verified',
++      body: 'Thank you — ownership is confirmed and your listing is now a verified first-party profile. Our team will be in touch to help you complete it.',
++      ctaUrl: '/directory', ctaLabel: 'Browse the directory',
++    }));
++  }
++
++  const body = res.error === 'expired'
++    ? 'This verification link has expired. Links are valid for 72 hours — please start the claim again to receive a fresh one.'
++    : 'This verification link is no longer valid. It may have already been used, or it has been superseded by a newer link. Please start the claim again if you still need to verify.';
++  return html(resultPage({
++    ok: false, title: 'Claim link expired', heading: 'This link can’t be used',
++    body, ctaUrl: '/directory', ctaLabel: 'Browse the directory',
++  }), 410);
++}
++
++export async function POST(req: NextRequest) {
++  const body = await req.json().catch(() => ({} as Record<string, unknown>));
++  const claimId = String(body.claimId || '').trim();
++  const code = String(body.code || '').trim();
++  if (!claimId || !code) {
++    return NextResponse.json({ ok: false, error: 'A claim id and code are required.' }, { status: 400 });
++  }
++  const res = await verifyClaimOtp({ claimId, code });
++  if (res.ok) return NextResponse.json({ ok: true, slug: res.slug ?? null });
++
++  const msg = res.error === 'expired' ? 'That code has expired. Please start the claim again.'
++    : res.error === 'locked' ? 'Too many incorrect attempts — this claim is locked. Please start again.'
++    : typeof res.remaining === 'number' ? `That code is not correct. ${res.remaining} attempt${res.remaining === 1 ? '' : 's'} left.`
++    : 'That code is not correct.';
++  return NextResponse.json({ ok: false, error: msg }, { status: 400 });
++}
+diff --git a/components/ClaimListing.tsx b/components/ClaimListing.tsx
+new file mode 100644
+index 0000000..bd5b87b
+--- /dev/null
++++ b/components/ClaimListing.tsx
+@@ -0,0 +1,170 @@
++'use client';
++// "Own this business?" — the CLAIM-TO-OWN entry point on a listing detail page.
++// Posts to /api/directory/claim, which picks an honest-verification channel server-side
++// (on-file email → website-domain email → phone OTP → manual) and sends a link/OTP only
++// to a recipient that proves control of the business. The claimant only ever sees a
++// generic next-step message (no on-file address is revealed). The hidden HoneypotField is
++// the shared spam trap the server checks (field name in lib/honeypot.ts).
++//
++// If the listing is ALREADY owner-verified, this renders a small "Verified owner" state
++// instead of the form. The self-serve profile editor is the NEXT increment — for now a
++// verified claim flips provenance, records the contact, and notifies the desk to follow up.
++import { useState } from 'react';
++import HoneypotField from '@/components/HoneypotField';
++import { HONEYPOT_FIELD } from '@/lib/honeypot';
++
++export interface ClaimLabels {
++  prompt: string;      // "Own this business?"
++  intro: string;       // one-line pitch
++  name: string;
++  email: string;
++  phone: string;       // optional-field placeholder
++  submit: string;
++  sending: string;
++  codePrompt: string;  // label above the OTP input
++  code: string;        // OTP input placeholder
++  verify: string;      // OTP submit
++  verifying: string;
++  verifiedTitle: string; // "Verified owner"
++  verifiedBody: string;
++  error: string;
++}
++
++const DEFAULTS: ClaimLabels = {
++  prompt: 'Own this business?',
++  intro: 'Claim your free verified profile — confirm ownership and take control of this listing.',
++  name: 'Your name',
++  email: 'Your email',
++  phone: 'Business phone (optional)',
++  submit: 'Claim this listing',
++  sending: 'Starting…',
++  codePrompt: 'Enter the 6-digit code we sent to the phone on file',
++  code: '6-digit code',
++  verify: 'Verify',
++  verifying: 'Verifying…',
++  verifiedTitle: 'Verified owner',
++  verifiedBody: 'This profile has been claimed and verified by its owner.',
++  error: 'Something went wrong — please try again.',
++};
++
++export default function ClaimListing({
++  slug,
++  verified = false,
++  labels,
++}: {
++  slug: string;
++  verified?: boolean;
++  labels?: Partial<ClaimLabels>;
++}) {
++  const t = { ...DEFAULTS, ...(labels || {}) };
++  const [f, setF] = useState({ name: '', email: '', phone: '' });
++  const [hp, setHp] = useState(''); // honeypot — must stay empty for a real person
++  const [view, setView] = useState<'form' | 'otp' | 'done'>('form');
++  const [busy, setBusy] = useState(false);
++  const [msg, setMsg] = useState('');
++  const [err, setErr] = useState('');
++  const [claimId, setClaimId] = useState('');
++  const [code, setCode] = useState('');
++
++  // Already an owned, verified profile → show the badge, not the form.
++  if (verified) {
++    return (
++      <div className="clm clm-verified">
++        <span className="clm-badge">✓ {t.verifiedTitle}</span>
++        <p className="clm-vbody">{t.verifiedBody}</p>
++        <style>{CLM_CSS}</style>
++      </div>
++    );
++  }
++
++  async function start(e: React.FormEvent) {
++    e.preventDefault();
++    if (busy) return;
++    setBusy(true); setErr('');
++    try {
++      const res = await fetch('/api/directory/claim', {
++        method: 'POST', headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({ slug, name: f.name, email: f.email, phone: f.phone, [HONEYPOT_FIELD]: hp }),
++      });
++      const d = await res.json().catch(() => ({}));
++      if (!res.ok || !d.ok) { setErr(d.error || t.error); return; }
++      setMsg(d.message || '');
++      if (d.requiresCode && d.claimId) { setClaimId(String(d.claimId)); setView('otp'); return; }
++      setView('done');
++    } catch { setErr(t.error); } finally { setBusy(false); }
++  }
++
++  async function verifyCode(e: React.FormEvent) {
++    e.preventDefault();
++    if (busy) return;
++    setBusy(true); setErr('');
++    try {
++      const res = await fetch('/api/directory/claim/verify', {
++        method: 'POST', headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({ claimId, code }),
++      });
++      const d = await res.json().catch(() => ({}));
++      if (!res.ok || !d.ok) { setErr(d.error || t.error); return; }
++      setMsg('Verified — thank you. Your listing is now an owner-verified profile.'); setView('done');
++    } catch { setErr(t.error); } finally { setBusy(false); }
++  }
++
++  if (view === 'done') {
++    return (
++      <div className="clm clm-done">
++        <span className="clm-badge">✓ {t.verifiedTitle}</span>
++        <p className="clm-vbody">{msg}</p>
++        <style>{CLM_CSS}</style>
++      </div>
++    );
++  }
++
++  if (view === 'otp') {
++    return (
++      <form className="clm" onSubmit={verifyCode}>
++        <h3 className="clm-t">{t.prompt}</h3>
++        <p className="clm-i">{msg || t.codePrompt}</p>
++        <input
++          className="clm-in" required inputMode="numeric" autoComplete="one-time-code"
++          pattern="[0-9]*" maxLength={6} placeholder={t.code}
++          value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
++        />
++        <button className="btn clm-btn" type="submit" disabled={busy}>
++          {busy ? t.verifying : t.verify}
++        </button>
++        {err ? <p className="clm-err">{err}</p> : null}
++        <style>{CLM_CSS}</style>
++      </form>
++    );
++  }
++
++  return (
++    <form className="clm" onSubmit={start}>
++      <h3 className="clm-t">{t.prompt}</h3>
++      <p className="clm-i">{t.intro}</p>
++      <input className="clm-in" required placeholder={t.name} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
++      <input className="clm-in" required type="email" placeholder={t.email} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
++      <input className="clm-in" type="tel" placeholder={t.phone} value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
++      {/* honeypot — hidden spam trap shared with every public form */}
++      <HoneypotField value={hp} onChange={setHp} />
++      <button className="btn clm-btn" type="submit" disabled={busy}>
++        {busy ? t.sending : t.submit}
++      </button>
++      {err ? <p className="clm-err">{err}</p> : null}
++      <style>{CLM_CSS}</style>
++    </form>
++  );
++}
++
++const CLM_CSS = `
++  .clm{background:#fff;border:1px solid var(--line,#e0d6c1);border-radius:6px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
++  .clm-t{font-family:var(--disp);font-weight:600;font-size:20px;margin:0}
++  .clm-i{font-family:var(--body);font-size:14px;line-height:1.5;color:var(--ink-soft,#5b5346);margin:0}
++  .clm-in{font-family:var(--sans);font-size:15px;padding:10px 12px;border:1px solid var(--line,#e0d6c1);border-radius:5px;background:var(--paper,#fbf8f1);color:var(--ink,#171310)}
++  .clm-in:focus{outline:none;border-color:#C9A24C}
++  .clm-btn{text-align:center;margin-top:2px}
++  .clm-err{font-family:var(--sans);font-size:13px;color:#9b2d1f;margin:0}
++  .clm-verified,.clm-done{align-items:flex-start}
++  .clm-badge{display:inline-flex;align-items:center;gap:6px;font-family:var(--sans);font-size:12px;font-weight:700;color:#0B0E11;background:#F1D592;border-radius:999px;padding:3px 12px}
++  .clm-vbody{font-family:var(--body);font-size:14px;line-height:1.5;color:var(--ink-soft,#5b5346);margin:0}
++`;
+diff --git a/lib/directory/claims.ts b/lib/directory/claims.ts
+new file mode 100644
+index 0000000..3a9c786
+--- /dev/null
++++ b/lib/directory/claims.ts
+@@ -0,0 +1,481 @@
++// Cyprus Lifestyle — CLAIM-TO-OWN engine (server-only).
++// ---------------------------------------------------------------------------
++// Turns a borrowed, scraped REFERENCE listing into an OWNED, first-party record.
++// A business claims its listing and PROVES it controls the BUSINESS (not merely
++// its own inbox). On a verified claim the listing is flipped:
++//   directory_listings.provenance = 'owner-verified', claimed_at = now,
++//   verified_at = now, claim_contact = <claimant email or phone>
++// and the desk is notified to complete the profile / upsell.
++//
++// HONEST-VERIFICATION CHANNEL PRIORITY (strongest proof first):
++//   1. onfile_email — the listing has an email on file → send the verify LINK to
++//      THAT address (only the real owner receives it). The claimant is never told
++//      the address.
++//   2. domain_email — else if the claimant's email domain matches the listing's
++//      website host (url, minus www) → send the link to the claimant (reasonable
++//      proof of affiliation). Generic free-mail / social hosts are excluded.
++//   3. phone_otp — else if an SMS provider is configured AND the listing has a
++//      phone on file → send a 6-digit OTP to the ON-FILE phone.
++//   4. manual — else create a pending claim for manual review; the desk follows up.
++//      We NEVER fall back to "send a link to whatever the claimant typed".
++//
++// SECURITY: tokens/OTPs are crypto-random, stored HASHED (sha256 hex) at rest,
++// SINGLE-USE (cleared on success), with an EXPIRY (link ~72h, OTP ~10min) and an
++// OTP ATTEMPT LIMIT (then the claim is locked). No token/PII is ever logged. All
++// reads/writes go through supabaseAdmin() (directory_claims is RLS-on, no policies).
++// Every function degrades cleanly and never throws to the caller.
++import 'server-only';
++import { createHash, randomBytes, randomInt } from 'node:crypto';
++import { supabaseAdmin } from '@/lib/supabase/admin';
++import { sendEmail, brandedEmail } from '@/lib/email';
++
++export type ClaimMethod = 'onfile_email' | 'domain_email' | 'phone_otp' | 'manual';
++
++export interface StartClaimInput {
++  slug: string;
++  name?: string | null;
++  email?: string | null;
++  phone?: string | null;
++}
++
++export interface StartClaimResult {
++  ok: boolean;
++  /** Internal channel marker. The API route does NOT expose this for the email/
++   *  manual channels (that would leak whether an on-file email exists). */
++  method: ClaimMethod | 'already' | 'none';
++  message: string;
++  /** Present only for the phone-OTP channel (the claimant must enter the code). */
++  requiresCode?: boolean;
++  claimId?: string;
++}
++
++export interface VerifyResult {
++  ok: boolean;
++  slug?: string;
++  type?: string | null;
++  error?: 'expired' | 'invalid' | 'locked' | 'not_found';
++  /** Attempts still allowed before the OTP claim locks (phone channel only). */
++  remaining?: number;
++}
++
++const EMAIL_LINK_TTL_MS = 72 * 60 * 60 * 1000; // 72 hours
++const OTP_TTL_MS = 10 * 60 * 1000;             // 10 minutes
++const OTP_MAX_ATTEMPTS = 5;
++
++// One generic, non-enumerating message for EVERY email/manual outcome — including an
++// unknown slug — so a caller can never tell from the response whether a listing has an
++// on-file email, a matching domain, or nothing at all.
++const GENERIC_MESSAGE =
++  "Thanks — we've started verifying your claim. If ownership can be confirmed, a verification link will be sent to the business's contact address on file (or to your email if it matches the business's own website). Otherwise our team will review your request and follow up with you by email.";
++
++const ALREADY_MESSAGE =
++  'This business already has a verified owner profile. If you need access, please contact our team and we will help.';
++
++const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
++const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
++
++// Hosts that must NEVER satisfy a website-domain match — a listing whose `url` is a
++// free-mail inbox, a social/profile page or a listings aggregator does not prove that
++// an address at that domain controls the business.
++const GENERIC_HOSTS = new Set([
++  'gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.gr', 'hotmail.com', 'hotmail.co.uk',
++  'outlook.com', 'live.com', 'icloud.com', 'me.com', 'aol.com', 'gmx.com', 'gmx.net',
++  'mail.com', 'proton.me', 'protonmail.com', 'yandex.com', 'zoho.com',
++  'facebook.com', 'm.facebook.com', 'fb.com', 'instagram.com', 'linkedin.com',
++  'x.com', 'twitter.com', 't.me', 'telegram.me', 'wa.me', 'whatsapp.com',
++  'api.whatsapp.com', 'linktr.ee', 'youtube.com', 'tiktok.com',
++  'google.com', 'maps.google.com', 'goo.gl', 'business.site', 'sites.google.com',
++  'tripadvisor.com', 'booking.com', 'airbnb.com', 'wixsite.com', 'blogspot.com',
++  'wordpress.com', 'weebly.com', 'squarespace.com',
++]);
++
++// ── small pure helpers ──────────────────────────────────────────────────────
++/** sha256 hex of a string — used to hash secrets before they are stored. */
++export function sha256(s: string): string {
++  return createHash('sha256').update(String(s)).digest('hex');
++}
++
++/** A URL-safe, crypto-random, single-use email-verification token (~43 chars). */
++export function newToken(): string {
++  return randomBytes(32).toString('base64url');
++}
++
++/** A crypto-random 6-digit numeric OTP, zero-padded. */
++export function newOtp(): string {
++  return String(randomInt(0, 1_000_000)).padStart(6, '0');
++}
++
++const normEmail = (v: unknown): string => {
++  const e = String(v ?? '').trim().toLowerCase();
++  return EMAIL_RE.test(e) ? e : '';
++};
++const domainOf = (email: string): string => (email.split('@')[1] || '').trim();
++const hostOf = (url: unknown): string =>
++  String(url ?? '')
++    .toLowerCase()
++    .replace(/^https?:\/\//, '')
++    .replace(/^www\./, '')
++    .split(/[/?#]/)[0]
++    .trim();
++const normPhone = (v: unknown): string => String(v ?? '').replace(/[^\d+]/g, '').trim();
++
++/** The claimant's email domain proves website affiliation: equal to, or a sub/parent
++ *  domain of, the listing's website host. The host must not be a generic/social host. */
++export function domainMatchesWebsite(claimantEmail: string, listingUrl: unknown): boolean {
++  const host = hostOf(listingUrl);
++  if (!host || GENERIC_HOSTS.has(host)) return false;
++  const cd = domainOf(normEmail(claimantEmail));
++  if (!cd || GENERIC_HOSTS.has(cd)) return false;
++  return cd === host || cd.endsWith('.' + host) || host.endsWith('.' + cd);
++}
++
++export interface ChannelInputs {
++  onfileEmail: string;    // the listing's on-file email, normalized ('' if none/invalid)
++  listingUrl: string | null; // the listing's website (url column)
++  onfilePhone: string;    // the listing's on-file phone, digits only ('' if none)
++  claimantEmail: string;  // the claimant's email, normalized ('' if none/invalid)
++  smsReady: boolean;      // whether an SMS provider is configured
++}
++
++/**
++ * The honest-verification channel decision, as a pure function (unit-testable).
++ * Priority: on-file email → website-domain match → phone OTP → manual. It NEVER
++ * returns a channel that would send a secret to an address the claimant merely typed
++ * (that is the whole point of 'manual' being the floor).
++ */
++export function chooseClaimMethod(i: ChannelInputs): ClaimMethod {
++  if (i.onfileEmail) return 'onfile_email';
++  if (i.claimantEmail && domainMatchesWebsite(i.claimantEmail, i.listingUrl)) return 'domain_email';
++  if (i.smsReady && i.onfilePhone) return 'phone_otp';
++  return 'manual';
++}
++
++/** True when an SMS provider is configured. Until then the phone channel is skipped. */
++export function smsConfigured(): boolean {
++  return Boolean(process.env.SMS_PROVIDER || process.env.TWILIO_ACCOUNT_SID);
++}
++
++function siteUrl(): string {
++  return (process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.eu').replace(/\/$/, '');
++}
++
++const esc = (s: string): string =>
++  String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
++
++// ── delivery (all best-effort; failures never surface to the claimant) ───────
++async function sendVerifyLink(to: string, bizName: string, token: string): Promise<void> {
++  const url = `${siteUrl()}/api/directory/claim/verify?token=${encodeURIComponent(token)}`;
++  const html = brandedEmail({
++    locale: 'en',
++    heading: `Confirm your claim of ${bizName}`,
++    bodyHtml:
++      `<p>Someone asked to claim and verify the Cyprus Lifestyle listing for <strong>${esc(bizName)}</strong>.</p>` +
++      `<p>If this was you (or your business), confirm below to take ownership of the listing. The link is valid for 72 hours and can be used once.</p>` +
++      `<p>If you did not request this, you can safely ignore this email — nothing will change.</p>`,
++    ctaLabel: 'Confirm & verify',
++    ctaUrl: url,
++    preheader: `Verify your claim of ${bizName} on Cyprus Lifestyle`,
 +  });
-+  return NextResponse.json({ ok: false, error: 'processing failed — Stripe will retry' }, { status: 500 });
++  await sendEmail({ to, subject: `Verify your claim — ${bizName}`, html }).catch(() => {});
 +}
 +
- export async function POST(req: NextRequest) {
-   const secret = process.env.STRIPE_WEBHOOK_SECRET;
-   if (!secret) return NextResponse.json({ ok: false, error: 'not configured' }, { status: 400 });
-@@ -23,21 +45,24 @@ export async function POST(req: NextRequest) {
-   const sb = supabaseAdmin();
-   const now = new Date().toISOString();
- 
-+  // Flipped on as soon as we enter a membership-affecting branch, so the catch below knows
-+  // whether an unexpected error may be swallowed (ad-order branch) or must trigger a retry.
-+  let strict = false;
-   try {
-     const meta = (obj.metadata as Record<string, string>) || {};
-     // Concierge membership — handled here so one Stripe endpoint covers both flows.
-     if (type === 'checkout.session.completed' && meta.kind === 'membership') {
-+      strict = true;
-       const md = (obj.customer_details as Record<string, unknown>) || {};
--      await sb.from('concierge_members').upsert({
-+      const rec = await recordMembershipCheckout(sb, {
-         cid: meta.cid || (obj.client_reference_id as string) || null,
-         email: (md.email as string) || (obj.customer_email as string) || null,
-         tier: meta.tier || 'concierge',
--        status: 'active',
--        stripe_customer_id: (obj.customer as string) || null,
--        stripe_subscription_id: (obj.subscription as string) || null,
--        stripe_session_id: (obj.id as string) || null,
--        updated_at: now,
--      }, { onConflict: 'stripe_subscription_id' });
-+        customerId: (obj.customer as string) || null,
-+        subscriptionId: (obj.subscription as string) || null,
-+        sessionId: (obj.id as string) || null,
-+      }, now);
-+      if (!rec.ok) return await retryLater(event, 'membership checkout write', rec.error);
-       return NextResponse.json({ received: true });
-     }
-     if (type === 'checkout.session.completed') {
-@@ -86,17 +111,31 @@ export async function POST(req: NextRequest) {
-       }
-     } else if (type === 'customer.subscription.deleted') {
-       if (obj.id) {
--        await sb.from('ad_orders').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
--        await sb.from('concierge_members').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
-+        strict = true;
-+        // Both are plain, idempotent status writes, so a retry is always safe. Run both even
-+        // if the first fails, then report either failure (a member whose cancellation is not
-+        // recorded would keep premium access).
-+        const ad = await sb.from('ad_orders').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
-+        const mem = await sb.from('concierge_members').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
-+        const err = ad.error || mem.error;
-+        if (err) return await retryLater(event, 'subscription cancel write', err.message);
-       }
-     } else if (type === 'invoice.payment_failed') {
-       if (obj.subscription) {
--        await sb.from('ad_orders').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
--        await sb.from('concierge_members').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
-+        strict = true;
-+        const ad = await sb.from('ad_orders').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
-+        const mem = await sb.from('concierge_members').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
-+        const err = ad.error || mem.error;
-+        if (err) return await retryLater(event, 'payment-failed write', err.message);
-       }
-     }
--  } catch {
--    // Never fail the webhook on our own logic error — Stripe would retry endlessly.
-+  } catch (e) {
-+    // Membership branches: an unexpected error must not look like success → retry.
-+    if (strict) return retryLater(event, 'unexpected error', (e as Error).message);
-+    // Advertising-order branch: unchanged — never fail the webhook on our own logic error
-+    // (its side effects aren't idempotent, so retrying could duplicate them). Now logged,
-+    // so a swallowed failure is at least visible in the admin error log.
-+    await logServerError('stripe-webhook:ad-order', e, { eventId: String(event.id || ''), type });
-   }
-   return NextResponse.json({ received: true });
- }
-diff --git a/components/AdvertiseFunnel.tsx b/components/AdvertiseFunnel.tsx
-index dedca91..2e290f6 100644
---- a/components/AdvertiseFunnel.tsx
-+++ b/components/AdvertiseFunnel.tsx
-@@ -1,5 +1,7 @@
- 'use client';
- import { useEffect, useState } from 'react';
-+import HoneypotField from '@/components/HoneypotField';
-+import { HONEYPOT_FIELD } from '@/lib/honeypot';
- 
- export interface RateItem {
-   slot: string;
-@@ -234,7 +236,10 @@ export default function AdvertiseFunnel({ items, locale = 'en', status }: { item
- 
- function QuoteModal({ item, locale, d, onClose }: { item: RateItem; locale: string; d: Dict; onClose: () => void }) {
-   const [state, setState] = useState<'idle' | 'sending' | 'ok' | 'err'>('idle');
--  const [f, setF] = useState({ name: '', email: '', company: '', message: '', website: '' }); // website = honeypot
-+  // `company` is a REAL, visible field (stored on the lead) — it must never double as the
-+  // spam trap. The trap is the separate hidden `hp` value below (see lib/honeypot.ts).
-+  const [f, setF] = useState({ name: '', email: '', company: '', message: '' });
-+  const [hp, setHp] = useState('');
- 
-   useEffect(() => {
-     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-@@ -248,7 +253,7 @@ function QuoteModal({ item, locale, d, onClose }: { item: RateItem; locale: stri
-     try {
-       const res = await fetch('/api/advertise/lead', {
-         method: 'POST', headers: { 'Content-Type': 'application/json' },
--        body: JSON.stringify({ ...f, slot: item.slot, label: item.label, locale }),
-+        body: JSON.stringify({ ...f, [HONEYPOT_FIELD]: hp, slot: item.slot, label: item.label, locale }),
-       });
-       const j = await res.json().catch(() => ({}));
-       setState(j.ok ? 'ok' : 'err');
-@@ -274,8 +279,8 @@ function QuoteModal({ item, locale, d, onClose }: { item: RateItem; locale: stri
-             <input style={input} type="email" placeholder={d.fEmail} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
-             <input style={input} placeholder={d.fCompany} value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} />
-             <textarea style={{ ...input, minHeight: 84, resize: 'vertical' }} placeholder={d.fMessage} value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} />
--            {/* honeypot */}
--            <input tabIndex={-1} autoComplete="off" value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} style={{ position: 'absolute', left: '-9999px', width: 1, height: 1 }} aria-hidden="true" />
-+            {/* honeypot — hidden spam trap the server checks (lib/ratelimit.ts isHoneypot) */}
-+            <HoneypotField value={hp} onChange={setHp} />
-             {state === 'err' ? <p style={{ color: '#C0492E', fontSize: 13, margin: '10px 0 0' }}>{d.err}</p> : null}
-             <button onClick={submit} disabled={state === 'sending'} className="btn"
-               style={{ marginTop: 14, width: '100%', background: GOLD, color: '#0B0E11', border: 'none', padding: '12px 16px', cursor: 'pointer', fontWeight: 600 }}>
-diff --git a/components/CommentSection.tsx b/components/CommentSection.tsx
-index a2ef98e..28def58 100644
---- a/components/CommentSection.tsx
-+++ b/components/CommentSection.tsx
-@@ -1,6 +1,8 @@
- 'use client';
- import { useEffect, useState } from 'react';
- import { useTranslations } from 'next-intl';
-+import HoneypotField from '@/components/HoneypotField';
-+import { HONEYPOT_FIELD } from '@/lib/honeypot';
- 
- interface C { id: string; author_name: string; content: string; created_at: string }
- 
-@@ -9,7 +11,7 @@ export default function CommentSection({ postId }: { postId: string }) {
-   const [list, setList] = useState<C[]>([]);
-   const [name, setName] = useState('');
-   const [content, setContent] = useState('');
--  const [company, setCompany] = useState('');
-+  const [hp, setHp] = useState(''); // honeypot — must stay empty for a real person
-   const [state, setState] = useState<'idle' | 'sending' | 'done'>('idle');
- 
-   useEffect(() => {
-@@ -21,7 +23,7 @@ export default function CommentSection({ postId }: { postId: string }) {
-     setState('sending');
-     const res = await fetch('/api/comments', {
-       method: 'POST', headers: { 'Content-Type': 'application/json' },
--      body: JSON.stringify({ post_id: postId, author_name: name, content, company }),
-+      body: JSON.stringify({ post_id: postId, author_name: name, content, [HONEYPOT_FIELD]: hp }),
-     });
-     if (res.ok) { setState('done'); setContent(''); }
-     else setState('idle');
-@@ -40,9 +42,7 @@ export default function CommentSection({ postId }: { postId: string }) {
-         <p className="gold" style={{ marginTop: 16 }}>{t('pending')}</p>
-       ) : (
-         <form onSubmit={submit} style={{ marginTop: 20 }}>
--          <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}>
--            <label>Company<input type="text" tabIndex={-1} autoComplete="off" value={company} onChange={(e) => setCompany(e.target.value)} /></label>
--          </div>
-+          <HoneypotField value={hp} onChange={setHp} />
-           <input placeholder={t('name')} required value={name} onChange={(e) => setName(e.target.value)} />
-           <textarea placeholder={t('placeholder')} required rows={4} value={content} onChange={(e) => setContent(e.target.value)} />
-           <button className="btn" type="submit" disabled={state === 'sending'}>{t('submit')}</button>
-diff --git a/components/ContactForm.tsx b/components/ContactForm.tsx
-index 1e4612f..4e42795 100644
---- a/components/ContactForm.tsx
-+++ b/components/ContactForm.tsx
-@@ -1,6 +1,8 @@
- 'use client';
- import { useState } from 'react';
- import { useTranslations, useLocale } from 'next-intl';
-+import HoneypotField from '@/components/HoneypotField';
-+import { HONEYPOT_FIELD } from '@/lib/honeypot';
- 
- // The enquiry classes the form offers. Values are stable enums; labels are localized
- // below. Kept in-component (a bounded set) so this feature ships without editing the
-@@ -23,19 +25,18 @@ export default function ContactForm() {
-   const t = useTranslations('contactForm');
-   const locale = useLocale();
-   const lx = L[(locale as Loc)] || L.en;
--  const [f, setF] = useState({ name: '', email: '', subject: '', message: '', company: '', requestClass: '', phone: '', district: '' });
-+  const [f, setF] = useState({ name: '', email: '', subject: '', message: '', requestClass: '', phone: '', district: '' });
-+  const [hp, setHp] = useState(''); // honeypot — must stay empty for a real person
-   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
-   async function submit(e: React.FormEvent) {
-     e.preventDefault(); setState('sending');
--    const res = await fetch('/api/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...f, locale }) });
-+    const res = await fetch('/api/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...f, [HONEYPOT_FIELD]: hp, locale }) });
-     setState(res.ok ? 'done' : 'error');
-   }
-   if (state === 'done') return <p className="gold cform" style={{ textAlign: 'center' }}>{t('success')}</p>;
-   return (
-     <form className="cform" onSubmit={submit}>
--      <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}>
--        <label>Company<input type="text" tabIndex={-1} autoComplete="off" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} /></label>
--      </div>
-+      <HoneypotField value={hp} onChange={setHp} />
-       <input placeholder={t('name')} required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
-       <input type="email" placeholder={t('email')} required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
-       <select required aria-label={lx.topic} value={f.requestClass} onChange={(e) => setF({ ...f, requestClass: e.target.value })}>
-diff --git a/components/EnquiryForm.tsx b/components/EnquiryForm.tsx
-index e182c77..664f793 100644
---- a/components/EnquiryForm.tsx
-+++ b/components/EnquiryForm.tsx
-@@ -1,10 +1,12 @@
- 'use client';
- // "Request info" — an enquiry form on a listing hub. Posts to /api/directory/lead,
- // which records the lead and emails the desk. The lead-gen layer of the directory:
--// featured/verified businesses receive real enquiries. Hidden `company` field is
--// the honeypot the server checks.
-+// featured/verified businesses receive real enquiries. The hidden HoneypotField is
-+// the spam trap the server checks (field name in lib/honeypot.ts).
- import { useState } from 'react';
- import type { Locale } from '@/lib/locales';
-+import HoneypotField from '@/components/HoneypotField';
-+import { HONEYPOT_FIELD } from '@/lib/honeypot';
- 
- export interface EnquiryLabels {
-   title: string; intro: string; name: string; email: string; message: string;
-@@ -13,7 +15,8 @@ export interface EnquiryLabels {
- 
- export default function EnquiryForm({ listingSlug, listingType, listingName, locale, labels }:
- { listingSlug: string; listingType: string; listingName: string; locale: Locale; labels: EnquiryLabels }) {
--  const [f, setF] = useState({ name: '', email: '', message: '', company: '' }); // company = honeypot
-+  const [f, setF] = useState({ name: '', email: '', message: '' });
-+  const [hp, setHp] = useState(''); // honeypot — must stay empty for a real person
-   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
-   const [err, setErr] = useState('');
- 
-@@ -24,7 +27,7 @@ export default function EnquiryForm({ listingSlug, listingType, listingName, loc
-     try {
-       const res = await fetch('/api/directory/lead', {
-         method: 'POST', headers: { 'Content-Type': 'application/json' },
--        body: JSON.stringify({ ...f, listingSlug, listingType, listingName, locale }),
-+        body: JSON.stringify({ ...f, [HONEYPOT_FIELD]: hp, listingSlug, listingType, listingName, locale }),
-       });
-       const d = await res.json();
-       if (d.ok) setState('done');
-@@ -44,7 +47,7 @@ export default function EnquiryForm({ listingSlug, listingType, listingName, loc
-       <input className="enq-in" required type="email" placeholder={labels.email} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
-       <textarea className="enq-in enq-ta" rows={3} placeholder={labels.message} value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} />
-       {/* honeypot */}
--      <input tabIndex={-1} autoComplete="off" aria-hidden="true" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} style={{ position: 'absolute', left: '-9999px', width: 1, height: 1 }} />
-+      <HoneypotField value={hp} onChange={setHp} />
-       <button className="btn enq-btn" type="submit" disabled={state === 'sending'}>{state === 'sending' ? labels.sending : labels.send}</button>
-       {state === 'error' ? <p className="enq-err">{err}</p> : null}
-       <style>{ENQ_CSS}</style>
-diff --git a/components/NewsletterSignup.tsx b/components/NewsletterSignup.tsx
-index 412196b..51dee4c 100644
---- a/components/NewsletterSignup.tsx
-+++ b/components/NewsletterSignup.tsx
-@@ -1,13 +1,15 @@
- 'use client';
- import { useState } from 'react';
- import { useTranslations, useLocale } from 'next-intl';
-+import HoneypotField from '@/components/HoneypotField';
-+import { HONEYPOT_FIELD } from '@/lib/honeypot';
- 
- export default function NewsletterSignup() {
-   const tn = useTranslations('newsletter');
-   const th = useTranslations('home');
-   const locale = useLocale();
-   const [email, setEmail] = useState('');
--  const [company, setCompany] = useState('');
-+  const [hp, setHp] = useState(''); // honeypot — must stay empty for a real person
-   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
- 
-   async function submit(e: React.FormEvent) {
-@@ -16,7 +18,7 @@ export default function NewsletterSignup() {
-     try {
-       const res = await fetch('/api/newsletter/subscribe', {
-         method: 'POST', headers: { 'Content-Type': 'application/json' },
--        body: JSON.stringify({ email, language: locale, company }),
-+        body: JSON.stringify({ email, language: locale, [HONEYPOT_FIELD]: hp }),
-       });
-       setState(res.ok ? 'done' : 'error');
-     } catch { setState('error'); }
-@@ -33,9 +35,7 @@ export default function NewsletterSignup() {
-             <p className="gold">{tn('success')}</p>
-           ) : (
-             <form className="field" onSubmit={submit}>
--              <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}>
--                <label>Company<input type="text" tabIndex={-1} autoComplete="off" value={company} onChange={(e) => setCompany(e.target.value)} /></label>
--              </div>
-+              <HoneypotField value={hp} onChange={setHp} />
-               <input type="email" required placeholder={tn('placeholder')} value={email}
-                 onChange={(e) => setEmail(e.target.value)} aria-label={tn('placeholder')} />
-               <button className="btn" type="submit" disabled={state === 'sending'}>{tn('cta')}</button>
-diff --git a/lib/concierge/membership.ts b/lib/concierge/membership.ts
-index e6d79e0..c9ef964 100644
---- a/lib/concierge/membership.ts
-+++ b/lib/concierge/membership.ts
-@@ -4,6 +4,7 @@
- // checkout, or linked by email across devices. All best-effort: any failure means
- // "not a member", so the concierge simply serves the free tier.
- import 'server-only';
-+import type { SupabaseClient } from '@supabase/supabase-js';
- import { supabaseAdmin } from '@/lib/supabase/admin';
- import { isValidCid } from '@/lib/concierge/memory';
- 
-@@ -43,6 +44,74 @@ export async function linkEmailToCid(cid: string, email: string): Promise<boolea
-   } catch { return false; }
- }
- 
-+// ── Recording a paid membership (called by the Stripe webhook) ───────────────────────
-+// Unlike the entitlement reads above, this write is deliberately NOT best-effort: the
-+// webhook must know whether the member was durably recorded so it can answer 5xx (Stripe
-+// then redelivers) instead of 200 (Stripe gives up — the member paid and is never
-+// recorded).
-+//
-+// Why not supabase `.upsert(row, { onConflict: 'stripe_subscription_id' })`, as before?
-+// The only unique index on that column (migration 0050, concierge_members_sub_idx) is
-+// PARTIAL — `where stripe_subscription_id is not null`. PostgREST emits a bare
-+// `ON CONFLICT (stripe_subscription_id)`; Postgres can only match a partial index when the
-+// statement repeats its predicate, so every call failed with error 42P10 and no member
-+// row was ever written (the result was never read, so it looked like success).
-+// Instead: update the row for this subscription if it exists, else insert. That needs no
-+// schema change, is idempotent (a redelivered event refreshes the same row), and if two
-+// deliveries race, the partial index still rejects the duplicate insert (23505), which we
-+// resolve by updating the row that won.
-+export interface MembershipCheckout {
-+  sessionId: string | null;       // Stripe Checkout Session id (cs_…)
-+  subscriptionId: string | null;  // Stripe Subscription id (sub_…) — the membership's identity
-+  customerId: string | null;      // Stripe Customer id (cus_…)
-+  cid: string | null;             // anonymous browser id the member checked out from
-+  email: string | null;
-+  tier: string;
-+}
-+export type RecordMembershipResult =
-+  | { ok: true; action: 'inserted' | 'updated' }
-+  | { ok: false; error: string };
-+
-+export async function recordMembershipCheckout(
-+  sb: SupabaseClient, m: MembershipCheckout, nowIso: string = new Date().toISOString(),
-+): Promise<RecordMembershipResult> {
-+  // The stable identity of this membership across Stripe redeliveries: a retry of the
-+  // same event carries the same ids, so it always finds the row the first attempt wrote.
-+  const key: [string, string] | null = m.subscriptionId ? ['stripe_subscription_id', m.subscriptionId]
-+    : m.sessionId ? ['stripe_session_id', m.sessionId]
-+    : null;
-+  if (!key) return { ok: false, error: 'membership event carries no subscription or session id' };
-+
-+  const row = {
-+    cid: m.cid, email: m.email, tier: m.tier, status: 'active',
-+    stripe_customer_id: m.customerId, stripe_subscription_id: m.subscriptionId, stripe_session_id: m.sessionId,
-+    updated_at: nowIso,
-+  };
-+  const refresh = () => sb.from('concierge_members').update(row).eq(key[0], key[1]).select('id');
-+
++// Minimal Twilio REST send, used only when the phone channel is reached (i.e. a provider
++// is configured). Returns false (never throws) if creds are incomplete or the call fails.
++async function sendOtpSms(toPhone: string, code: string): Promise<boolean> {
++  const sid = process.env.TWILIO_ACCOUNT_SID;
++  const token = process.env.TWILIO_AUTH_TOKEN;
++  const from = process.env.TWILIO_FROM || process.env.TWILIO_MESSAGING_SERVICE_SID;
++  if (!sid || !token || !from) return false; // provider named but not fully wired → skip
 +  try {
-+    // 1) Already recorded (a Stripe retry or duplicate delivery) → refresh that row.
-+    let r = await refresh();
-+    if (r.error) return { ok: false, error: r.error.message };
-+    if (r.data && r.data.length > 0) return { ok: true, action: 'updated' };
-+
-+    // 2) First delivery → insert.
-+    const ins = await sb.from('concierge_members').insert(row);
-+    if (!ins.error) return { ok: true, action: 'inserted' };
-+
-+    // 3) A concurrent delivery inserted the same subscription between steps 1 and 2 and
-+    //    the unique index rejected ours (23505) → the row exists now, so refresh it.
-+    if (ins.error.code === '23505') {
-+      r = await refresh();
-+      if (r.error) return { ok: false, error: r.error.message };
-+      if (r.data && r.data.length > 0) return { ok: true, action: 'updated' };
++    const params = new URLSearchParams();
++    if (process.env.TWILIO_MESSAGING_SERVICE_SID && !process.env.TWILIO_FROM) {
++      params.set('MessagingServiceSid', process.env.TWILIO_MESSAGING_SERVICE_SID);
++    } else {
++      params.set('From', from);
 +    }
-+    return { ok: false, error: ins.error.message };
-+  } catch (e) {
-+    return { ok: false, error: (e as Error).message || 'unexpected error' };
++    params.set('To', toPhone);
++    params.set('Body', `Your Cyprus Lifestyle verification code is ${code}. It expires in 10 minutes.`);
++    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
++      method: 'POST',
++      headers: {
++        Authorization: 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64'),
++        'Content-Type': 'application/x-www-form-urlencoded',
++      },
++      body: params.toString(),
++      signal: AbortSignal.timeout(15000),
++    });
++    return res.ok;
++  } catch {
++    return false; // never leak the code or the error
 +  }
 +}
 +
- // The system-prompt note that upgrades the concierge for a member.
- export const MEMBER_BLOCK =
-   '\n\nThis guest is a Cyprus Lifestyle MEMBER. Give them your very best: be especially thorough, anticipatory and generous with detail and time; go a step beyond what was asked. For anything bespoke or high-stakes, warmly offer to hand them to their dedicated human concierge.';
-diff --git a/lib/ratelimit.ts b/lib/ratelimit.ts
-index 1fc16dc..a9a3403 100644
---- a/lib/ratelimit.ts
-+++ b/lib/ratelimit.ts
-@@ -1,6 +1,7 @@
- import 'server-only';
- import { Ratelimit, type Duration } from '@upstash/ratelimit';
- import { Redis } from '@upstash/redis';
-+import { HONEYPOT_FIELD } from '@/lib/honeypot';
- 
- // Graceful rate limiter. If Upstash is configured (UPSTASH_REDIS_REST_URL/TOKEN)
- // it uses a distributed sliding window that holds across serverless instances;
-@@ -60,7 +61,13 @@ export async function rateLimit(req: Request, bucket: string, limit = 5, windowS
-   return memoryAllow(key, limit, windowSec * 1000);
- }
- 
--/** Honeypot: a hidden field bots fill in. Returns true if the submission looks like spam. */
++async function notifyDesk(subject: string, heading: string, bodyHtml: string, preheader: string): Promise<void> {
++  const to = process.env.DIRECTORY_INBOX || process.env.ADVERTISE_INBOX || process.env.EMAIL_FROM;
++  if (!to) return;
++  try {
++    const html = brandedEmail({ locale: 'en', heading, bodyHtml, preheader });
++    await sendEmail({ to, subject, html }).catch(() => {});
++  } catch { /* desk notification is best-effort */ }
++}
++
++// ── the flip: promote a listing to owner-verified ───────────────────────────
++async function flipListing(sb: ReturnType<typeof supabaseAdmin>, slug: string, contact: string | null, nowIso: string):
++  Promise<{ type: string | null; name: string }> {
++  try {
++    const { data } = await sb.from('directory_listings')
++      .update({ provenance: 'owner-verified', claimed_at: nowIso, verified_at: nowIso, claim_contact: contact, updated_at: nowIso })
++      .eq('slug', slug)
++      .select('slug, type, name_en')
++      .maybeSingle();
++    const r = (data || {}) as Record<string, unknown>;
++    return { type: (r.type as string) ?? null, name: String(r.name_en || slug) };
++  } catch {
++    return { type: null, name: slug };
++  }
++}
++
++// ── public API ──────────────────────────────────────────────────────────────
 +/**
-+ * Honeypot: a hidden field (HONEYPOT_FIELD, rendered by components/HoneypotField.tsx)
-+ * that humans never see and naive bots fill in. Returns true if the submission looks
-+ * like spam. It must NOT look at any real form field — in particular not `company`,
-+ * which the advertise quote form genuinely collects (see lib/honeypot.ts).
++ * Start a claim. Picks the honest-verification channel by priority, creates a
++ * directory_claims row with the HASHED secret, triggers delivery, and notifies the
++ * desk. Always returns a non-enumerating result. Never throws.
 + */
- export function isHoneypot(body: Record<string, unknown>): boolean {
--  return typeof body.company === 'string' && body.company.trim().length > 0;
-+  const v = body[HONEYPOT_FIELD];
-+  return typeof v === 'string' && v.trim().length > 0;
++export async function startClaim(input: StartClaimInput): Promise<StartClaimResult> {
++  const generic: StartClaimResult = { ok: true, method: 'none', message: GENERIC_MESSAGE };
++  const slug = String(input.slug ?? '').trim().slice(0, 200);
++  if (!slug) return generic;
++
++  const name = String(input.name ?? '').trim().slice(0, 160) || null;
++  const claimantEmail = normEmail(input.email);
++  const claimantPhone = normPhone(input.phone) || null;
++
++  try {
++    const sb = supabaseAdmin();
++    const { data: L } = await sb.from('directory_listings')
++      .select('slug, email, url, phone, provenance, name_en')
++      .eq('slug', slug)
++      .maybeSingle();
++
++    // Unknown slug → look identical to a started claim (no probing which slugs exist).
++    if (!L) return generic;
++    const listing = L as Record<string, unknown>;
++
++    // Already owned → nothing to do. (Verified state is already visible on the page.)
++    if (String(listing.provenance || '') === 'owner-verified') {
++      return { ok: true, method: 'already', message: ALREADY_MESSAGE };
++    }
++
++    const bizName = String(listing.name_en || slug);
++    const onfileEmail = normEmail(listing.email);
++    const onfilePhone = normPhone(listing.phone);
++
++    // ── choose the channel (strongest proof first) ──
++    const method = chooseClaimMethod({
++      onfileEmail,
++      listingUrl: (listing.url as string) ?? null,
++      onfilePhone,
++      claimantEmail,
++      smsReady: smsConfigured(),
++    });
++
++    const nowIso = new Date().toISOString();
++
++    // Build the row with the hashed secret for the chosen channel.
++    const row: Record<string, unknown> = {
++      listing_slug: slug,
++      claimant_name: name,
++      claimant_email: claimantEmail || null,
++      claimant_phone: claimantPhone,
++      method,
++      status: 'pending',
++      created_at: nowIso,
++      updated_at: nowIso,
++    };
++
++    let rawToken = '';
++    let rawOtp = '';
++    if (method === 'onfile_email' || method === 'domain_email') {
++      rawToken = newToken();
++      row.token_hash = sha256(rawToken);
++      row.expires_at = new Date(Date.now() + EMAIL_LINK_TTL_MS).toISOString();
++    } else if (method === 'phone_otp') {
++      rawOtp = newOtp();
++      row.code_hash = sha256(rawOtp);
++      row.expires_at = new Date(Date.now() + OTP_TTL_MS).toISOString();
++    }
++
++    // Persist FIRST — only deliver a secret that points at a real, stored claim.
++    const { data: ins, error } = await sb.from('directory_claims').insert(row).select('id').single();
++    if (error || !ins) return generic; // degrade silently (no enumeration, no secret sent)
++    const claimId = String((ins as Record<string, unknown>).id);
++
++    // Deliver + tell the desk a claim has started (all best-effort).
++    if (method === 'onfile_email') {
++      await sendVerifyLink(onfileEmail, bizName, rawToken);
++      await notifyDesk(
++        `Claim started — ${bizName}`,
++        'A listing claim has started',
++        `<p><strong>${esc(bizName)}</strong> (<code>${esc(slug)}</code>)</p>` +
++        `<p>Channel: <strong>on-file email</strong> — a verification link was sent to the address on file for the business.</p>` +
++        `<p>Claimant: ${esc(name || '—')}${claimantEmail ? ` &lt;${esc(claimantEmail)}&gt;` : ''}${claimantPhone ? ` · ${esc(claimantPhone)}` : ''}</p>`,
++        `Claim started for ${bizName}`,
++      );
++      return { ok: true, method, message: GENERIC_MESSAGE };
++    }
++
++    if (method === 'domain_email') {
++      await sendVerifyLink(claimantEmail, bizName, rawToken);
++      await notifyDesk(
++        `Claim started — ${bizName}`,
++        'A listing claim has started',
++        `<p><strong>${esc(bizName)}</strong> (<code>${esc(slug)}</code>)</p>` +
++        `<p>Channel: <strong>website-domain match</strong> — a verification link was sent to the claimant's matching address.</p>` +
++        `<p>Claimant: ${esc(name || '—')} &lt;${esc(claimantEmail)}&gt;${claimantPhone ? ` · ${esc(claimantPhone)}` : ''}</p>`,
++        `Claim started for ${bizName}`,
++      );
++      return { ok: true, method, message: GENERIC_MESSAGE };
++    }
++
++    if (method === 'phone_otp') {
++      const sent = await sendOtpSms(onfilePhone, rawOtp);
++      await notifyDesk(
++        `Claim started — ${bizName}`,
++        'A listing claim has started',
++        `<p><strong>${esc(bizName)}</strong> (<code>${esc(slug)}</code>)</p>` +
++        `<p>Channel: <strong>phone OTP</strong> — a code was ${sent ? 'sent' : 'attempted'} to the phone on file.</p>` +
++        `<p>Claimant: ${esc(name || '—')}${claimantEmail ? ` &lt;${esc(claimantEmail)}&gt;` : ''}</p>`,
++        `Claim started for ${bizName}`,
++      );
++      return {
++        ok: true,
++        method,
++        requiresCode: true,
++        claimId,
++        message: 'We’ve sent a 6-digit code by SMS to the phone number on file for this business. Enter it below to finish verifying your claim.',
++      };
++    }
++
++    // manual
++    await notifyDesk(
++      `Manual claim to review — ${bizName}`,
++      'A listing claim needs manual verification',
++      `<p><strong>${esc(bizName)}</strong> (<code>${esc(slug)}</code>)</p>` +
++      `<p>Channel: <strong>manual</strong> — no on-file email, no website-domain match, no usable phone/SMS. Verify ownership out-of-band before promoting.</p>` +
++      `<p>Claimant: ${esc(name || '—')}${claimantEmail ? ` &lt;${esc(claimantEmail)}&gt;` : ''}${claimantPhone ? ` · ${esc(claimantPhone)}` : ''}</p>`,
++      `Manual claim for ${bizName}`,
++    );
++    return { ok: true, method, message: GENERIC_MESSAGE };
++  } catch {
++    // Any unexpected failure still looks like a normal started claim.
++    return generic;
++  }
++}
++
++/**
++ * Verify an email-link claim. Looks the claim up by token_hash, checks it is pending
++ * and unexpired, marks it verified (clearing the single-use token), and FLIPS the
++ * listing to owner-verified. Returns the slug (+type) on success. Never throws.
++ */
++export async function verifyClaimToken(token: string): Promise<VerifyResult> {
++  const t = String(token ?? '').trim();
++  if (!t) return { ok: false, error: 'not_found' };
++  try {
++    const sb = supabaseAdmin();
++    const nowIso = new Date().toISOString();
++    const { data } = await sb.from('directory_claims')
++      .select('id, listing_slug, claimant_email, claimant_phone, status, expires_at, method')
++      .eq('token_hash', sha256(t))
++      .maybeSingle();
++    const claim = data as Record<string, unknown> | null;
++    if (!claim) return { ok: false, error: 'not_found' };
++    // Single-use: a token on an already-settled claim is dead.
++    if (String(claim.status) !== 'pending') return { ok: false, error: 'not_found' };
++    if (claim.expires_at && String(claim.expires_at) < nowIso) {
++      await sb.from('directory_claims').update({ status: 'expired', updated_at: nowIso }).eq('id', claim.id as string);
++      return { ok: false, error: 'expired' };
++    }
++
++    // Mark verified and CLEAR the token so the link cannot be replayed.
++    await sb.from('directory_claims')
++      .update({ status: 'verified', verified_at: nowIso, token_hash: null, updated_at: nowIso })
++      .eq('id', claim.id as string);
++
++    const slug = String(claim.listing_slug);
++    const contact = (claim.claimant_email as string) || (claim.claimant_phone as string) || null;
++    const { type, name } = await flipListing(sb, slug, contact, nowIso);
++
++    await notifyDesk(
++      `Owner-verified — ${name}`,
++      'A listing is now owner-verified',
++      `<p><strong>${esc(name)}</strong> (<code>${esc(slug)}</code>) is now <strong>owner-verified</strong>.</p>` +
++      `<p>Verified contact: ${esc(contact || '—')}</p>` +
++      `<p>Next: complete the first-party profile (description, hours, photos) and discuss an upgraded placement.</p>`,
++      `${name} is now owner-verified`,
++    );
++    return { ok: true, slug, type };
++  } catch {
++    return { ok: false, error: 'not_found' };
++  }
++}
++
++/**
++ * Verify a phone-OTP claim. Enforces expiry and an attempt limit (locks the claim
++ * after OTP_MAX_ATTEMPTS). On success, flips the listing. Never throws.
++ */
++export async function verifyClaimOtp(input: { claimId: string; code: string }): Promise<VerifyResult> {
++  const claimId = String(input.claimId ?? '').trim();
++  const code = String(input.code ?? '').trim();
++  if (!UUID_RE.test(claimId) || !/^\d{4,8}$/.test(code)) return { ok: false, error: 'invalid' };
++  try {
++    const sb = supabaseAdmin();
++    const nowIso = new Date().toISOString();
++    const { data } = await sb.from('directory_claims')
++      .select('id, listing_slug, claimant_email, claimant_phone, status, expires_at, attempts, code_hash, method')
++      .eq('id', claimId)
++      .maybeSingle();
++    const claim = data as Record<string, unknown> | null;
++    if (!claim || String(claim.method) !== 'phone_otp') return { ok: false, error: 'not_found' };
++    if (String(claim.status) !== 'pending') return { ok: false, error: 'not_found' };
++    if (claim.expires_at && String(claim.expires_at) < nowIso) {
++      await sb.from('directory_claims').update({ status: 'expired', updated_at: nowIso }).eq('id', claimId);
++      return { ok: false, error: 'expired' };
++    }
++    const attempts = Number(claim.attempts || 0);
++    if (attempts >= OTP_MAX_ATTEMPTS) {
++      await sb.from('directory_claims').update({ status: 'rejected', updated_at: nowIso }).eq('id', claimId);
++      return { ok: false, error: 'locked' };
++    }
++
++    const match = Boolean(claim.code_hash) && sha256(code) === String(claim.code_hash);
++    if (!match) {
++      const next = attempts + 1;
++      const locked = next >= OTP_MAX_ATTEMPTS;
++      await sb.from('directory_claims')
++        .update({ attempts: next, ...(locked ? { status: 'rejected' } : {}), updated_at: nowIso })
++        .eq('id', claimId);
++      return locked ? { ok: false, error: 'locked' } : { ok: false, error: 'invalid', remaining: OTP_MAX_ATTEMPTS - next };
++    }
++
++    // Success — settle the claim, clear the single-use code, flip the listing.
++    await sb.from('directory_claims')
++      .update({ status: 'verified', verified_at: nowIso, code_hash: null, updated_at: nowIso })
++      .eq('id', claimId);
++
++    const slug = String(claim.listing_slug);
++    const contact = (claim.claimant_phone as string) || (claim.claimant_email as string) || null;
++    const { type, name } = await flipListing(sb, slug, contact, nowIso);
++
++    await notifyDesk(
++      `Owner-verified — ${name}`,
++      'A listing is now owner-verified',
++      `<p><strong>${esc(name)}</strong> (<code>${esc(slug)}</code>) is now <strong>owner-verified</strong> (phone OTP).</p>` +
++      `<p>Verified contact: ${esc(contact || '—')}</p>` +
++      `<p>Next: complete the first-party profile and discuss an upgraded placement.</p>`,
++      `${name} is now owner-verified`,
++    );
++    return { ok: true, slug, type };
++  } catch {
++    return { ok: false, error: 'not_found' };
++  }
++}
+diff --git a/lib/queries.ts b/lib/queries.ts
+index 3866387..bb5410e 100644
+--- a/lib/queries.ts
++++ b/lib/queries.ts
+@@ -160,9 +160,10 @@ export interface Listing {
+   tags: string[]; featured: boolean; verified: boolean;
+   rating: number | null; rating_count: number | null;
+   luxury: boolean; category_group: string | null; subtype: string | null;
++  provenance: string | null;
  }
+ const LISTING_COLS = (l: Locale) =>
+-  `id, slug, type, district, address, lat, lng, price_band, url, phone, image, tags, featured, verified, rating, rating_count, luxury, category_group, subtype, name_${l}, name_en, summary_${l}, summary_en`;
++  `id, slug, type, district, address, lat, lng, price_band, url, phone, image, tags, featured, verified, rating, rating_count, luxury, category_group, subtype, provenance, name_${l}, name_en, summary_${l}, summary_en`;
+ function toListing(r: Record<string, unknown>, l: Locale): Listing {
+   return {
+     id: String(r.id), slug: String(r.slug), type: String(r.type), district: (r.district as string) ?? null,
+@@ -174,6 +175,7 @@ function toListing(r: Record<string, unknown>, l: Locale): Listing {
+     tags: (r.tags as string[]) ?? [], featured: Boolean(r.featured), verified: Boolean(r.verified),
+     rating: (r.rating as number) ?? null, rating_count: (r.rating_count as number) ?? null,
+     luxury: Boolean(r.luxury), category_group: (r.category_group as string) ?? null, subtype: (r.subtype as string) ?? null,
++    provenance: (r.provenance as string) ?? null,
+   };
+ }
+ // haversine distance in km between two lat/lng points
+diff --git a/scripts/tests/claims.test.ts b/scripts/tests/claims.test.ts
+new file mode 100644
+index 0000000..77ecc44
+--- /dev/null
++++ b/scripts/tests/claims.test.ts
+@@ -0,0 +1,77 @@
++// Claim-to-own — pure-logic suite for lib/directory/claims.ts.
++// Covers the security-critical bits that must not regress: the honest-verification
++// CHANNEL DECISION (never send a secret to an address the claimant merely typed),
++// website-domain matching (incl. generic-host exclusion), and the secret helpers
++// (sha256 hashing, crypto-random token/OTP). DB-touching functions are integration
++// concerns and are exercised in the smoke tests, not here.
++import { sha256, newToken, newOtp, chooseClaimMethod, domainMatchesWebsite } from '@/lib/directory/claims';
++import { ok, eq, report } from './_harness';
++
++// ── sha256 (secrets are stored hashed) ───────────────────────────────────────
++eq('sha256 is the known hex of "abc"', sha256('abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
++ok('sha256 is 64 hex chars', /^[0-9a-f]{64}$/.test(sha256('whatever')));
++ok('sha256 is deterministic', sha256('x') === sha256('x'));
++ok('sha256 differs for different inputs', sha256('a') !== sha256('b'));
++
++// ── token / OTP generators (must be unguessable + correctly shaped) ───────────
++const tkA = newToken(), tkB = newToken();
++ok('token is URL-safe base64url', /^[A-Za-z0-9_-]+$/.test(tkA));
++ok('token is long (>=40 chars)', tkA.length >= 40);
++ok('two tokens differ (random)', tkA !== tkB);
++ok('otp is exactly 6 digits', /^[0-9]{6}$/.test(newOtp()));
++ok('otp preserves leading zeros (padded)', newOtp().length === 6);
++
++// ── channel decision: priority order (strongest proof first) ──────────────────
++// 1) On-file email ALWAYS wins — even when a domain match AND phone+SMS also exist.
++eq('on-file email wins over everything',
++  chooseClaimMethod({ onfileEmail: 'owner@acme.com', listingUrl: 'https://acme.com', onfilePhone: '+35799000000', claimantEmail: 'me@acme.com', smsReady: true }),
++  'onfile_email');
++
++// 2) No on-file email, claimant domain matches the website host → domain_email.
++eq('domain match when no on-file email',
++  chooseClaimMethod({ onfileEmail: '', listingUrl: 'https://www.acme.com', onfilePhone: '', claimantEmail: 'me@acme.com', smsReady: false }),
++  'domain_email');
++
++// 3) Domain would "match" a GENERIC/social host → rejected → falls through (manual here).
++eq('generic host (facebook) never satisfies a domain match',
++  chooseClaimMethod({ onfileEmail: '', listingUrl: 'https://facebook.com/acme', onfilePhone: '', claimantEmail: 'me@facebook.com', smsReady: false }),
++  'manual');
++
++// 4) No on-file email, no domain match, SMS ready AND phone on file → phone_otp.
++eq('phone OTP when SMS configured + phone on file',
++  chooseClaimMethod({ onfileEmail: '', listingUrl: null, onfilePhone: '+35799123456', claimantEmail: 'me@gmail.com', smsReady: true }),
++  'phone_otp');
++
++// 5) Phone channel is SKIPPED cleanly when SMS is not configured.
++eq('no SMS provider → phone channel skipped → manual',
++  chooseClaimMethod({ onfileEmail: '', listingUrl: null, onfilePhone: '+35799123456', claimantEmail: 'me@gmail.com', smsReady: false }),
++  'manual');
++
++// 6) SMS ready but NO phone on file → manual (nothing to text).
++eq('SMS ready but no phone on file → manual',
++  chooseClaimMethod({ onfileEmail: '', listingUrl: null, onfilePhone: '', claimantEmail: 'me@gmail.com', smsReady: true }),
++  'manual');
++
++// 7) THE anti-abuse floor: no proof at all → manual (never "send to typed email").
++eq('no on-file email, no domain match, no phone/SMS → manual (never domain_email to a typed address)',
++  chooseClaimMethod({ onfileEmail: '', listingUrl: 'https://acme.com', onfilePhone: '', claimantEmail: 'stranger@evil.com', smsReady: false }),
++  'manual');
++
++// 8) Empty claimant email can never produce an email channel.
++eq('empty claimant email → manual',
++  chooseClaimMethod({ onfileEmail: '', listingUrl: 'https://acme.com', onfilePhone: '', claimantEmail: '', smsReady: false }),
++  'manual');
++
++// ── domainMatchesWebsite (the heart of channel 2) ─────────────────────────────
++ok('exact host match (with www + path)', domainMatchesWebsite('a@acme.com', 'https://www.acme.com/contact'));
++ok('http scheme host match', domainMatchesWebsite('a@acme.com', 'http://acme.com'));
++ok('subdomain email matches apex site', domainMatchesWebsite('a@mail.acme.com', 'https://acme.com'));
++ok('email apex matches subdomain site', domainMatchesWebsite('a@acme.com', 'https://shop.acme.com'));
++ok('different domain does NOT match', !domainMatchesWebsite('a@other.com', 'https://acme.com'));
++ok('free-mail claimant does NOT match a real site', !domainMatchesWebsite('a@gmail.com', 'https://acme.com'));
++ok('generic site host is excluded', !domainMatchesWebsite('a@facebook.com', 'https://facebook.com'));
++ok('no website → no match', !domainMatchesWebsite('a@acme.com', null));
++ok('invalid claimant email → no match', !domainMatchesWebsite('not-an-email', 'https://acme.com'));
++ok('lookalike domain (acme.com vs acme.com.cy) does NOT match', !domainMatchesWebsite('a@acme.com', 'https://acme.com.cy'));
++
++report('directory.claims');
+diff --git a/scripts/tests/honeypot.test.ts b/scripts/tests/honeypot.test.ts
+index 804bc9e..0e181c7 100644
+--- a/scripts/tests/honeypot.test.ts
++++ b/scripts/tests/honeypot.test.ts
+@@ -38,6 +38,7 @@ const FORMS = [
+   'components/ContactForm.tsx',
+   'components/NewsletterSignup.tsx',
+   'components/CommentSection.tsx',
++  'components/ClaimListing.tsx',
+ ];
+ for (const f of FORMS) {
+   const s = src(f);
+diff --git a/supabase/migrations/20261001130000_claim_to_own.sql b/supabase/migrations/20261001130000_claim_to_own.sql
+new file mode 100644
+index 0000000..570e0bb
+--- /dev/null
++++ b/supabase/migrations/20261001130000_claim_to_own.sql
+@@ -0,0 +1,80 @@
++-- ============================================================================
++-- Cyprus Lifestyle — "Own the Data" · Phase 2  ·  CLAIM-TO-OWN  (additive, idempotent)
++-- ----------------------------------------------------------------------------
++-- Run in the Supabase Dashboard → SQL Editor (no CLI needed). Fully IDEMPOTENT
++-- and safe to re-run: CREATE TABLE/INDEX IF NOT EXISTS + CREATE OR REPLACE only.
++-- It never drops or destructively alters anything.
++--
++-- WHAT THIS ENABLES
++--   A business can CLAIM its directory listing and prove it controls the BUSINESS
++--   (not merely some inbox). On a verified claim the app flips the listing from
++--   borrowed REFERENCE data to OWNED data: directory_listings.provenance →
++--   'owner-verified', records claimed_at / verified_at / claim_contact, and the
++--   desk is notified to complete the profile / upsell. (Those listing columns are
++--   already live from Phase 1 — 20261001120000_own_the_data_phase1.sql.)
++--
++--   This migration adds ONLY the claims ledger. The self-serve owner profile
++--   editor, the SMS provider wiring, and the claims admin/moderation view are the
++--   NEXT increment (see the note at the foot of this file).
++--
++-- SECURITY MODEL (enforced in lib/directory/claims.ts, not in SQL)
++--   • token_hash / code_hash store the SHA-256 of a crypto-random secret — the raw
++--     token/OTP is NEVER stored or logged, only ever sent to the on-file owner (or,
++--     for a website-domain match, to the matching claimant).
++--   • Verification secrets are SINGLE-USE (cleared on success) and EXPIRE
++--     (email link ~72h, phone OTP ~10min); the OTP has an attempt limit.
++--   • RLS is ON with NO policies — exactly like public.directory_reviews (Phase 1)
++--     and the concierge tables. The app reads/writes ONLY via supabaseAdmin()
++--     (service role), which bypasses RLS; there is no anon/public access path.
++-- ============================================================================
++
++create extension if not exists pgcrypto;  -- gen_random_uuid()
++
++-- ----------------------------------------------------------------------------
++-- The claims ledger. One row per claim attempt. method records which honest-
++-- verification channel was chosen for the claim (priority: on-file email →
++-- website-domain email → phone OTP → manual review).
++-- ----------------------------------------------------------------------------
++create table if not exists public.directory_claims (
++  id             uuid primary key default gen_random_uuid(),
++  listing_slug   text not null,
++  claimant_name  text,
++  claimant_email text,
++  claimant_phone text,
++  method         text not null,                     -- 'onfile_email' | 'domain_email' | 'phone_otp' | 'manual'
++  token_hash     text,                              -- sha256(email-verification token); single-use, cleared on verify
++  code_hash      text,                              -- sha256(phone OTP); single-use, cleared on verify
++  status         text not null default 'pending',   -- pending | verified | rejected | expired
++  attempts       int  not null default 0,
++  expires_at     timestamptz,
++  verified_at    timestamptz,
++  created_at     timestamptz not null default now(),
++  updated_at     timestamptz not null default now()
++);
++
++create index if not exists directory_claims_slug_idx       on public.directory_claims (listing_slug);
++create index if not exists directory_claims_token_hash_idx on public.directory_claims (token_hash);
++create index if not exists directory_claims_status_idx     on public.directory_claims (status);
++
++alter table public.directory_claims enable row level security;
++-- No policies: only the service role (API routes + lib/directory/claims.ts) touches this table.
++
++-- ----------------------------------------------------------------------------
++-- Verification (safe to run) — counts by status; all zeros on a fresh install.
++-- ----------------------------------------------------------------------------
++select
++  (select count(*) from public.directory_claims)                          as claim_rows,
++  (select count(*) from public.directory_claims where status = 'pending')  as pending,
++  (select count(*) from public.directory_claims where status = 'verified') as verified,
++  (select count(*) from public.directory_claims where status = 'rejected') as rejected,
++  (select count(*) from public.directory_claims where status = 'expired')  as expired;
++
++-- ----------------------------------------------------------------------------
++-- NEXT INCREMENT (deliberately NOT in this migration):
++--   • Self-serve OWNER PROFILE EDITOR for a verified owner (rewrite description,
++--     upload owned_photos, set hours/socials/amenities) — for now verification
++--     only flips provenance + records the contact + notifies the desk.
++--   • SMS provider wiring (e.g. TWILIO_ACCOUNT_SID / SMS_PROVIDER) lights up the
++--     phone-OTP channel; until then that channel is skipped cleanly.
++--   • Moderation of the resulting owned content + a claims admin view.
++-- ----------------------------------------------------------------------------

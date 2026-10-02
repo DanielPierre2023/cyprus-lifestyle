@@ -10,6 +10,7 @@ import { JsonLd, localBusiness, breadcrumb } from '@/lib/seo/jsonld';
 import DirectoryMap from '@/components/DirectoryMap';
 import CoverImage from '@/components/CoverImage';
 import DirectoryReviews from '@/components/DirectoryReviews';
+import ClaimListing from '@/components/ClaimListing';
 import TrackView from '@/components/TrackView';
 import TrackedCTA from '@/components/TrackedCTA';
 import EnquiryForm, { type EnquiryLabels } from '@/components/EnquiryForm';
@@ -205,6 +206,8 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
           </div>
           {points.length ? <div className="lh-map"><DirectoryMap points={points} height={300} locale={l} typeLabels={typeLabels} viewLabel={t('directory.view')} placesLabel={t('directory.places')} ariaLabel={t('directory.mapAria')} /></div> : null}
           <EnquiryForm listingSlug={x.slug} listingType={x.type} listingName={x.name} locale={l} labels={enqLabels} />
+          {/* Claim-to-own: lets the business verify ownership and flip the listing to owned data. */}
+          <ClaimListing slug={x.slug} verified={x.provenance === 'owner-verified'} />
           <p className="lh-trust">◆ {t('trust.independent')} <Link href="/standards">{t('trust.link')} →</Link></p>
         </aside>
       </div>

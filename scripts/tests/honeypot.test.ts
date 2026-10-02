@@ -38,6 +38,7 @@ const FORMS = [
   'components/ContactForm.tsx',
   'components/NewsletterSignup.tsx',
   'components/CommentSection.tsx',
+  'components/ClaimListing.tsx',
 ];
 for (const f of FORMS) {
   const s = src(f);
