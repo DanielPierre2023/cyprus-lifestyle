@@ -1,22 +1,23 @@
 // supabase/functions/kb-ingest/index.ts
 // ============================================================================
 // CYPRUS LIFESTYLE — Plan 2 knowledge ingestion + embedding (Deno edge function)
+// v2 (2026-10-03): faster activation. Two changes vs v1, nothing else touched:
+//   • ingest accepts a `sources` ARRAY  -> load all six sites in ONE call
+//   • embed BATCHES the OpenAI calls (up to 128 inputs/request) and batch-upserts
+//     -> embeds the whole backlog in one or two calls instead of ~10
+// Behaviour, auth, schema and output shape are otherwise identical to v1.
 // ----------------------------------------------------------------------------
-// Two modes, both gated by the service-role key (?key= or body.secret):
+// Modes, all gated by the service-role key (?key= or body.secret):
 //
-//   mode=ingest  — fetches a CSV export (from Ultimate Web Scraper) and upserts
-//                  one kb_docs row per page. Alias-based column mapping, so it
-//                  works across all six source tables without per-site config.
-//                  Rows land published=false for review. Empty rows are skipped.
-//     body: { csv_url, source }           (source = mycypruslife | cyprusbucketlist | imin | cyprusfashion | cyprusdevelopers | mycyprustravel)
+//   mode=ingest  — fetch CSV export(s) and upsert kb_docs (published=false).
+//     single:  { csv_url, source }
+//     batch:   { sources: [ { source, csv_url }, ... ] }
 //
-//   mode=embed   — drains kb_docs that still need an embedding (new or edited)
-//                  and writes kb_embeddings via OPENAI_API_KEY + text-embedding-3-small.
-//                  Time-budgeted + drain-forward: call repeatedly until remaining=0.
-//     body: { limit? }                    (default 50 per call)
+//   mode=embed   — drain kb_docs needing an embedding, batched to OpenAI.
+//     body: { limit? }   (default 1000; processes within a ~40s budget)
 //
-//   mode=publish — flips published=true for a source after you've reviewed it.
-//     body: { source }  (or { source: "all" })
+//   mode=publish — flip published=true for a source (or "all").
+//     body: { source }
 //
 // Secrets reused: NEXT_PUBLIC_SUPABASE_URL/SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
 // OPENAI_API_KEY. Optional: EMBEDDING_MODEL (default text-embedding-3-small).
@@ -36,6 +37,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 const EMBED_MODEL = Deno.env.get("EMBEDDING_MODEL") || "text-embedding-3-small";
 const EMBED_DIM = 1536;
+const EMBED_CHUNK = 128; // inputs per OpenAI request (well under the array + token caps)
 
 const j = (o: unknown, s = 200) => new Response(JSON.stringify(o, null, 2), { status: s, headers: CORS });
 const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : String(v));
@@ -109,9 +111,9 @@ async function sha256Hex(s: string): Promise<string> {
 async function ingest(csvUrl: string, source: string): Promise<Record<string, unknown>> {
   if (!csvUrl || !source) return { ok: false, error: "csv_url and source are required" };
   const res = await fetch(csvUrl, { signal: AbortSignal.timeout(30000) });
-  if (!res.ok) return { ok: false, error: `fetch CSV ${res.status}` };
+  if (!res.ok) return { ok: false, source, error: `fetch CSV ${res.status}` };
   const rows = parseCSV(await res.text());
-  if (rows.length < 2) return { ok: false, error: "empty CSV" };
+  if (rows.length < 2) return { ok: false, source, error: "empty CSV" };
 
   const header = rows[0].map((h) => h.trim().toLowerCase());
   const headerIdx: Record<string, number> = {};
@@ -139,7 +141,6 @@ async function ingest(csvUrl: string, source: string): Promise<Record<string, un
   }
   if (!docs.length) return { ok: true, source, ingested: 0, skipped, note: "no usable rows" };
 
-  // Upsert in chunks on the url unique key (merge duplicates). updated_at bumps so embed re-runs on change.
   let upserted = 0;
   for (let i = 0; i < docs.length; i += 200) {
     const chunk = docs.slice(i, i + 200);
@@ -153,42 +154,57 @@ async function ingest(csvUrl: string, source: string): Promise<Record<string, un
   return { ok: true, source, ingested: upserted, skipped, total_rows: rows.length - 1 };
 }
 
-// ── embed: kb_docs -> kb_embeddings ─────────────────────────────────────────
-async function embedOne(text: string): Promise<number[] | null> {
-  if (!OPENAI_KEY || !text) return null;
+// ── embed: kb_docs -> kb_embeddings (BATCHED) ───────────────────────────────
+// Returns one embedding per input text, aligned by index; null where it failed.
+async function embedBatch(texts: string[]): Promise<(number[] | null)[]> {
+  if (!OPENAI_KEY || !texts.length) return texts.map(() => null);
   try {
     const res = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
       headers: { Authorization: `Bearer ${OPENAI_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: EMBED_MODEL, input: text.slice(0, 2000) }),
-      signal: AbortSignal.timeout(15000),
+      body: JSON.stringify({ model: EMBED_MODEL, input: texts.map((t) => (t || " ").slice(0, 2000)) }),
+      signal: AbortSignal.timeout(30000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return texts.map(() => null);
     const d = await res.json();
-    const v = d?.data?.[0]?.embedding;
-    return Array.isArray(v) && v.length === EMBED_DIM ? (v as number[]) : null;
-  } catch { return null; }
+    const out: (number[] | null)[] = texts.map(() => null);
+    for (const item of (d?.data || [])) {
+      const i = item?.index;
+      const v = item?.embedding;
+      if (typeof i === "number" && Array.isArray(v) && v.length === EMBED_DIM) out[i] = v as number[];
+    }
+    return out;
+  } catch { return texts.map(() => null); }
 }
+
 async function embed(limit: number): Promise<Record<string, unknown>> {
   if (!OPENAI_KEY) return { ok: false, error: "OPENAI_API_KEY not set" };
-  const batch = await rpc("kb_docs_needing_embedding", { match_count: Math.min(Math.max(limit, 1), 100) });
+  const want = Math.min(Math.max(limit, 1), 1000);
+  const batch = await rpc("kb_docs_needing_embedding", { match_count: want });
   const deadline = Date.now() + 40000;
   let done = 0, failed = 0;
-  for (const row of batch) {
-    if (Date.now() > deadline) break;
-    const id = str(row.id), text = str(row.text);
-    const vec = await embedOne(text);
-    if (!vec) { failed++; continue; }
-    const up = await rest(`kb_embeddings?on_conflict=id`, {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify({ id, embedding: JSON.stringify(vec), updated_at: new Date().toISOString() }),
-    });
-    if (up.ok) done++; else failed++;
+
+  for (let i = 0; i < batch.length && Date.now() < deadline; i += EMBED_CHUNK) {
+    const slice = batch.slice(i, i + EMBED_CHUNK);
+    const vecs = await embedBatch(slice.map((r) => str(r.text)));
+    const rows: Record<string, unknown>[] = [];
+    for (let k = 0; k < slice.length; k++) {
+      const v = vecs[k];
+      if (!v) { failed++; continue; }
+      rows.push({ id: str(slice[k].id), embedding: JSON.stringify(v), updated_at: new Date().toISOString() });
+    }
+    if (rows.length) {
+      const up = await rest(`kb_embeddings?on_conflict=id`, {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify(rows),
+      });
+      if (up.ok) done += rows.length; else failed += rows.length;
+    }
   }
-  // How many still need embedding after this pass?
-  const remainingRows = await rpc("kb_docs_needing_embedding", { match_count: 100 });
-  return { ok: true, embedded: done, failed, remaining_estimate: remainingRows.length, model: EMBED_MODEL };
+
+  const remaining = (await rpc("kb_docs_needing_embedding", { match_count: 1000 })).length;
+  return { ok: true, embedded: done, failed, remaining_estimate: remaining, model: EMBED_MODEL };
 }
 
 serve(async (req) => {
@@ -200,8 +216,23 @@ serve(async (req) => {
     if (!SERVICE_KEY || key !== SERVICE_KEY) return j({ ok: false, error: "unauthorized" }, 401);
 
     const mode = (u.searchParams.get("mode") || str(body.mode) || "").toLowerCase();
-    if (mode === "ingest") return j(await ingest(str(body.csv_url), str(body.source)));
-    if (mode === "embed") return j(await embed(Number(body.limit) || 50));
+
+    if (mode === "ingest") {
+      // batch: { sources: [ { source, csv_url }, ... ] }
+      if (Array.isArray(body.sources)) {
+        const results: Record<string, unknown>[] = [];
+        for (const s of (body.sources as Record<string, unknown>[])) {
+          results.push(await ingest(str(s.csv_url), str(s.source)));
+        }
+        const ingested = results.reduce((n, r) => n + (Number(r.ingested) || 0), 0);
+        return j({ ok: true, sources: results.length, ingested_total: ingested, results });
+      }
+      // single: { source, csv_url }
+      return j(await ingest(str(body.csv_url), str(body.source)));
+    }
+
+    if (mode === "embed") return j(await embed(Number(body.limit) || 1000));
+
     if (mode === "publish") {
       const source = str(body.source);
       if (!source) return j({ ok: false, error: "source required (or 'all')" }, 400);
@@ -209,6 +240,7 @@ serve(async (req) => {
       const up = await rest(`kb_docs?${filter}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ published: true }) });
       return j({ ok: up.ok, published_source: source });
     }
+
     return j({ ok: false, error: "mode must be ingest | embed | publish" }, 400);
   } catch (e) {
     return j({ ok: false, error: (e as Error).message }, 500);
