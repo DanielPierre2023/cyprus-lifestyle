@@ -12,21 +12,26 @@
 //   • /api/map/webcams.geojson — existing live-webcam layer.
 // UI:
 //   LEFT  search with suggestions (all 89 categories, districts, businesses,
-//         addresses) · chip row (Filters + What's on + every category with places)
-//         · Filters dialog (start time, when, places, all categories grouped,
-//         interests, price, features, star rating) · cards that follow the map.
-//   MAP   district bubbles → clusters → category-icon pins (+ rating) with
-//         canvas dots for the rest · floating card with Call / Website /
-//         Directions / View profile · full screen · locate · zoom · webcams.
+//         addresses) · TABS: one category at a time — All · Agenda · Experiences ·
+//         every category by size (tap the active tab again → All) · FILTERS: combine
+//         as many categories as you like (17 groups + experiences + agenda with dates),
+//         places, interests, price, features, star rating → a "N categories ×" tab ·
+//         cards that follow the map.
+//   MAP   district bubbles (big selections) → clusters → category-icon pins (+ rating;
+//         dashed = approximate area) with canvas dots for the rest · popup with
+//         everything we hold: photos, rating ★ 4.7 (1,234), address, opening hours
+//         (open now), phone, email, website, socials, amenities, description, and
+//         View profile / Call / Email / Website / Directions · full screen · locate.
 // Ranking: paid tier (Partner > Featured > Listed) → featured → rating × volume.
 // ============================================================================
 import './MapExplorer.css';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   loadMaplibre, cartoGlStyle,
   type MlMap, type MlPopup, type MlMarker, type MaplibreGL, type GeoFeature, type GeoJSON, type LngLat,
 } from '@/lib/map/maplibre';
-import { decodeIndex, rankScore, F, type ExplorerIndex, type ExplorerPoint, type ExplorerDetail } from '@/lib/map/explorer-index';
+import { decodeIndex, rankScore, F, DISTRICT_CENTRE, SOCIAL_ORDER, type ExplorerIndex, type ExplorerPoint, type ExplorerDetail } from '@/lib/map/explorer-index';
+import { openState } from '@/lib/map/hours';
 import { EVENT_CAT, EVENT_GROUP, isActivityCat, type ExplorerCategory, type ExplorerGroup } from '@/lib/map/explorer-taxonomy';
 import type { ExplorerUi } from '@/lib/map/explorer-i18n';
 
@@ -60,6 +65,18 @@ const P = {
   phone: 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2',
   globe: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3',
   route: 'M21 3L3 10.5l7.5 3 3 7.5z', ext: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
+  mail: 'M4 6h16v12H4zM4 7l8 6 8-6', clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
+  cal: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4', euro: 'M17 6.5A6 6 0 0 0 7.5 9.5M17 17.5a6 6 0 0 1-9.5-3M5 10.5h8M5 13.5h7',
+};
+// Generic outline glyphs for social links (not brand logos).
+const SOCIAL_ICON: Record<string, string> = {
+  instagram: 'M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM17.5 6.5h0',
+  facebook: 'M14 8h3V4h-3a4 4 0 0 0-4 4v3H7v4h3v6h4v-6h3l1-4h-4V9a1 1 0 0 1 1-1z',
+  tiktok: 'M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5M14 3c.5 2.8 2.4 4.6 5 5',
+  youtube: 'M3 8.5A3.5 3.5 0 0 1 6.5 5h11A3.5 3.5 0 0 1 21 8.5v7a3.5 3.5 0 0 1-3.5 3.5h-11A3.5 3.5 0 0 1 3 15.5zM10 9v6l5-3z',
+  linkedin: 'M4 9h4v11H4zM6 4.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zM11 9h3.8v1.6c.6-1 1.8-1.9 3.6-1.9 3 0 3.6 2 3.6 4.6V20h-4v-5.8c0-1.4-.3-2.4-1.6-2.4-1.4 0-1.8 1-1.8 2.4V20H11z',
+  x: 'M4 4l16 16M20 4L4 20',
+  whatsapp: 'M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3zM9 8.5c0 3.5 3 6.5 6.5 6.5l1-1.6-2-1-1 .8a5 5 0 0 1-2.2-2.2l.8-1-1-2z',
 };
 const STAR = 'M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z';
 
@@ -95,17 +112,46 @@ function readSaved(): Set<string> {
 }
 const isEvent = (p: ExplorerPoint) => (p.flags & F.EVENT) !== 0;
 const isAct = (p: ExplorerPoint) => (p.flags & F.ACTIVITY) !== 0;
+const isApprox = (p: ExplorerPoint) => (p.flags & F.APPROX) !== 0;
+const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const isOngoing = (p: ExplorerPoint) => !!p.date && Date.parse(p.date) < startOfToday() && (!p.end || Date.parse(p.end) >= startOfToday());
+const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
+
+/** GetYourGuide-style rating: five stars (partly filled), the average, (number of reviews). */
+function Stars({ value, count, locale, size = 14 }: { value: number; count: number; locale: string; size?: number }) {
+  const pct = Math.max(0, Math.min(100, (value / 5) * 100));
+  const row = (cls: string) => (
+    <span className={cls}>{[0, 1, 2, 3, 4].map((i) => <svg key={i} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true"><path d={STAR} /></svg>)}</span>
+  );
+  return (
+    <span className="clm-stars" aria-label={`${fmtRating(value)} / 5${count ? ` (${count})` : ''}`}>
+      <span className="clm-stars__row">{row('clm-stars__bg')}<span className="clm-stars__fg" style={{ width: `${pct}%` }}>{row('clm-stars__on')}</span></span>
+      <b>{fmtRating(value)}</b>
+      {count ? <span className="clm-stars__n">({count.toLocaleString(locale)})</span> : null}
+    </span>
+  );
+}
 const timeBucket = (iso: string) => { const h = new Date(iso).getHours(); return h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'; };
 
 // ---- Filters -----------------------------------------------------------------------
 type When = 'today' | 'weekend' | 'week' | 'month';
 interface Filters {
   cats: string[]; districts: string[]; subtypes: string[]; prices: string[]; features: string[]; times: string[];
-  minRating: number | null; when: When | null;
+  minRating: number | null; when: When | null; dateFrom: string | null; dateTo: string | null;
 }
-const EMPTY: Filters = { cats: [], districts: [], subtypes: [], prices: [], features: [], times: [], minRating: null, when: null };
+const EMPTY: Filters = { cats: [], districts: [], subtypes: [], prices: [], features: [], times: [], minRating: null, when: null, dateFrom: null, dateTo: null };
 const activeCount = (f: Filters) => f.cats.length + f.districts.length + f.subtypes.length + f.prices.length + f.features.length
-  + f.times.length + (f.minRating ? 1 : 0) + (f.when ? 1 : 0);
+  + f.times.length + (f.minRating ? 1 : 0) + (f.when || f.dateFrom || f.dateTo ? 1 : 0);
+
+/** The date window events must overlap: custom dates win over the quick choices. */
+function dateWindow(f: Filters): [number, number] | null {
+  if (f.dateFrom || f.dateTo) {
+    const a = f.dateFrom ? new Date(`${f.dateFrom}T00:00:00`).getTime() : startOfToday();
+    const b = f.dateTo ? new Date(`${f.dateTo}T00:00:00`).getTime() + 864e5 : Infinity;
+    return [a, b];
+  }
+  return f.when ? whenRange(f.when) : null;
+}
 
 function whenRange(w: When): [number, number] {
   const now = new Date();
@@ -130,11 +176,14 @@ function matches(p: ExplorerPoint, f: Filters, saved: Set<string>): boolean {
   if (f.subtypes.length && !f.subtypes.includes(p.subtype || '')) return false;
   if (f.prices.length && !f.prices.includes(p.price || '')) return false;
   if (f.minRating && !(p.rating && p.rating >= f.minRating)) return false;
-  if (f.times.length && !(p.date && f.times.includes(timeBucket(p.date)))) return false;
-  if (f.when) {
-    if (!p.date) return false;
-    const t = Date.parse(p.date); const [a, b] = whenRange(f.when);
-    if (!(t >= a && t < b)) return false;
+  // Date and start-time choices narrow the EVENTS; businesses and experiences stay.
+  if (isEvent(p) && p.date) {
+    if (f.times.length && !f.times.includes(timeBucket(p.date))) return false;
+    const win = dateWindow(f);
+    if (win) {
+      const a = Date.parse(p.date); const b = p.end ? Date.parse(p.end) : a;
+      if (!(a < win[1] && b >= win[0])) return false; // overlaps the window (running events count)
+    }
   }
   for (const ft of f.features) {
     if (ft === 'partner' && !(p.rank > 0 && !isAct(p))) return false;
@@ -223,7 +272,7 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
 
   const detailsRef = useRef(new Map<string, ExplorerDetail | null>());
   const pendingRef = useRef(new Set<string>());
-  const [, setDetailsVer] = useState(0);
+  const [detailsVer, setDetailsVer] = useState(0);
   const requestDetails = useCallback((ids: string[]) => {
     const need = ids.filter((id) => !detailsRef.current.has(id) && !pendingRef.current.has(id));
     for (let i = 0; i < need.length; i += 60) {
@@ -259,6 +308,8 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
   const [hotId, setHotId] = useState<string | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
   const [popPos, setPopPos] = useState<{ x: number; y: number; w: number } | null>(null);
+  const [photoIdx, setPhotoIdx] = useState(0);
+  useEffect(() => { setPhotoIdx(0); }, [selId]);
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [chipScroll, setChipScroll] = useState({ left: false, right: false });
   const [canLocate, setCanLocate] = useState(false);
@@ -279,10 +330,24 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
     if (!points) return new Map(categories.map((c) => [c.k, c.count]));
     return countBy(points, (p) => p.cat);
   }, [points, categories]);
+  // Tabs: one business category each, biggest first (experiences share one tab, events another).
   const chipCats = useMemo(() => categories
-    .filter((c) => c.k !== EVENT_CAT && (catCounts.get(c.k) || 0) > 0)
-    .sort((a, b) => Number(isActivityCat(b.k)) - Number(isActivityCat(a.k)) || (catCounts.get(b.k) || 0) - (catCounts.get(a.k) || 0)), [categories, catCounts]);
+    .filter((c) => c.k !== EVENT_CAT && !isActivityCat(c.k) && (catCounts.get(c.k) || 0) > 0)
+    .sort((a, b) => (catCounts.get(b.k) || 0) - (catCounts.get(a.k) || 0) || a.label.localeCompare(b.label, locale)), [categories, catCounts, locale]);
   const hasEvents = (catCounts.get(EVENT_CAT) || 0) > 0;
+  const actKeys = useMemo(() => categories.filter((c) => isActivityCat(c.k) && (catCounts.get(c.k) || 0) > 0).map((c) => c.k), [categories, catCounts]);
+  const actTotal = actKeys.reduce((a, k) => a + (catCounts.get(k) || 0), 0);
+
+  // Which tab is on: All (no category), Agenda, Experiences, one category — or a custom
+  // combination made in Filters ("N categories ×").
+  const activeTab = useMemo(() => {
+    const c = filters.cats;
+    if (!c.length) return 'all';
+    if (c.length === 1 && c[0] === EVENT_CAT) return 'event';
+    if (c.every(isActivityCat) && actKeys.length > 0 && actKeys.every((k) => c.includes(k))) return 'exp';
+    if (c.length === 1) return c[0];
+    return 'custom';
+  }, [filters.cats, actKeys]);
 
   const shown = useMemo(() => all.filter((p) => matches(p, filters, saved)), [all, filters, saved]);
   const shownRef = useRef(shown); shownRef.current = shown;
@@ -290,8 +355,10 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
 
   const inView = useMemo(() => {
     const list = bounds ? shown.filter((p) => p.lng >= bounds.w && p.lng <= bounds.e && p.lat >= bounds.s && p.lat <= bounds.n) : shown;
+    // The Agenda tab lists by date (running events first); everything else by rank.
+    if (activeTab === 'event') return list.slice().sort((a, b) => Date.parse(a.date || '') - Date.parse(b.date || ''));
     return list.map((p) => [p, rankScore(p)] as const).sort((a, b) => b[1] - a[1]).map(([p]) => p);
-  }, [shown, bounds]);
+  }, [shown, bounds, activeTab]);
   const visible = inView.slice(0, limit);
   useEffect(() => { setLimit(PAGE); listEl.current?.scrollTo({ top: 0 }); }, [filters, bounds]);
 
@@ -336,11 +403,15 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
     if ((p.rank >= 2 || p.flags & F.FEATURED) && d?.image) {
       return { cls: `clm-pin clm-pin--photo${tier}`, html: `<img src="${esc(d.image)}" alt="" loading="lazy"/><span>${esc(d.name)}</span>`, w: 170 };
     }
-    if (isEvent(p) && p.date) return { cls: `clm-pin${tier}`, html: `${icon}<b>${esc(fmtDate(p.date, locale))}</b>`, w: 72 };
-    if (p.rating) return { cls: `clm-pin${tier}`, html: `${icon}<b>${fmtRating(p.rating)}</b>`, w: 64 };
-    return { cls: `clm-pin clm-pin--icon${tier}`, html: icon, w: 34 };
+    const approx = isApprox(p) ? ' clm-pin--approx' : '';
+    if (isEvent(p) && p.date) {
+      const label = isOngoing(p) ? U.onNow : fmtDate(p.date, locale);
+      return { cls: `clm-pin clm-pin--event${tier}${approx}`, html: `${icon}<b>${esc(label)}</b>`, w: 86 };
+    }
+    if (p.rating) return { cls: `clm-pin${tier}${approx}`, html: `${icon}<b>${fmtRating(p.rating)}</b>`, w: 64 };
+    return { cls: `clm-pin clm-pin--icon${tier}${approx}`, html: icon, w: 34 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catIconOf, locale]);
+  }, [catIconOf, locale, U.onNow]);
 
   const updateMarkers = useCallback(() => {
     const map = mapRef.current; const ml = mlRef.current;
@@ -351,14 +422,21 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
       el.type = 'button'; el.className = cls; el.innerHTML = html;
       return el;
     };
-    const regionMode = map.getZoom() < REGION_ZOOM;
+    // Island zoom + a big selection → one bubble per district; a small selection
+    // (one category, a few events) shows its pins straight away.
+    const regionMode = map.getZoom() < REGION_ZOOM && shownRef.current.length > 300;
     try { map.setLayoutProperty('pts-dot', 'visibility', regionMode ? 'none' : 'visible'); } catch { /* not ready */ }
 
     if (regionMode) {
+      const nearest = (p: ExplorerPoint) => {
+        let best = ''; let bd = Infinity;
+        for (const [k, c] of Object.entries(DISTRICT_CENTRE)) { const d = (c.lat - p.lat) ** 2 + (c.lng - p.lng) ** 2; if (d < bd) { bd = d; best = k; } }
+        return best;
+      };
       const groupsBy = new Map<string, ExplorerPoint[]>();
       for (const p of shownRef.current) {
-        if (!p.district) continue;
-        const g = groupsBy.get(p.district); if (g) g.push(p); else groupsBy.set(p.district, [p]);
+        const k = p.district && DISTRICT_CENTRE[p.district] ? p.district : nearest(p);
+        const g = groupsBy.get(k); if (g) g.push(p); else groupsBy.set(k, [p]);
       }
       for (const [d, list] of groupsBy) {
         if (list.length < 1) continue;
@@ -456,6 +534,27 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
   }, [byId]);
   const placeRef = useRef(placePopup); placeRef.current = placePopup;
   useEffect(() => { placePopup(); }, [selId, placePopup, full]);
+
+  // Put the popup above its pin; below it when there is no room; else as high as fits.
+  // Above its pin; else below; else beside it (a tall popup on a short map) — never on top of the pin.
+  const popRef = useRef<HTMLDivElement>(null);
+  const [popXY, setPopXY] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = popRef.current; const box = mapEl.current;
+    if (!el || !popPos || !box) { setPopXY(null); return; }
+    const h = el.offsetHeight; const w = el.offsetWidth; const H = box.clientHeight; const W = popPos.w;
+    const minTop = H > 520 ? 64 : 8; // keep the Full screen button free on a big map
+    const centred = Math.max(8, Math.min(popPos.x - w / 2, W - w - 8));
+    let left = centred; let top = popPos.y - h - 46;
+    if (top < minTop) {
+      if (popPos.y + 14 + h <= H - 8) top = popPos.y + 14;
+      else {
+        top = Math.max(minTop, Math.min(popPos.y - h / 2, H - h - 8));
+        left = popPos.x + 28 + w <= W - 8 ? popPos.x + 28 : popPos.x - 28 - w >= 8 ? popPos.x - 28 - w : centred;
+      }
+    }
+    setPopXY({ left, top });
+  }, [popPos, selId, detailsVer, photoIdx]);
 
   // ---- Map init -------------------------------------------------------------------------
   useEffect(() => {
@@ -568,7 +667,14 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
     const map = mapRef.current; const ml = mlRef.current;
     if (!map || !ml || !list.length) return;
     const b = new ml.LngLatBounds();
-    list.forEach((p) => b.extend([p.lng, p.lat]));
+    if (list.length < 25) list.forEach((p) => b.extend([p.lng, p.lat]));
+    else {
+      // Ignore the outer 4% on each side, so a few far-flung places don't zoom the map
+      // out to the whole island.
+      const q = (arr: number[], f: number) => arr[Math.min(arr.length - 1, Math.floor(arr.length * f))];
+      const lats = list.map((p) => p.lat).sort((x, y) => x - y); const lngs = list.map((p) => p.lng).sort((x, y) => x - y);
+      b.extend([q(lngs, 0.04), q(lats, 0.04)]); b.extend([q(lngs, 0.96), q(lats, 0.96)]);
+    }
     const narrow = (mapEl.current?.clientWidth || 800) < 520;
     if (!b.isEmpty()) map.fitBounds(b, { padding: narrow ? { top: 56, bottom: 16, left: 42, right: 42 } : 50, maxZoom: 13, duration: animate ? 600 : 0 });
   }
@@ -588,7 +694,10 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
 
   function focusPoint(p: { id: string; lat: number; lng: number }) {
     setSelId(p.id);
-    mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom: Math.max(mapRef.current.getZoom(), 15), duration: 800 });
+    // On a phone the popup is a sheet over the lower map: keep the pin in the upper part.
+    const box = mapEl.current; const narrow = typeof window !== 'undefined' && window.innerWidth <= 860;
+    const offset: [number, number] = narrow && box ? [0, -Math.round(box.clientHeight * 0.3)] : [0, 0];
+    mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom: Math.max(mapRef.current.getZoom(), 15), duration: 800, offset });
   }
 
   function toggleSave(id: string) {
@@ -613,7 +722,15 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
   }
 
   const toggleIn = (arr: string[], v: string) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
-  const toggleCat = (k: string) => setFilters((f) => ({ ...f, cats: toggleIn(f.cats, k) }));
+
+  /** Tabs are single-choice: tapping one shows only that category; tapping it again → All. */
+  function selectTab(k: string) {
+    const cats = k === 'all' || k === activeTab ? [] : k === 'event' ? [EVENT_CAT] : k === 'exp' ? actKeys : [k];
+    const nf = { ...filters, cats };
+    setFilters(nf); setSelId(null);
+    const next = all.filter((p) => matches(p, nf, saved));
+    if (cats.length || nf.districts.length) fitPoints(next); else fitPoints(all);
+  }
 
   function applyFilters() {
     if (!draft) return;
@@ -726,6 +843,12 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
     window.addEventListener('resize', syncChips);
     return () => window.removeEventListener('resize', syncChips);
   }, [syncChips, chipCats.length]);
+  useEffect(() => {
+    const el = chipsEl.current?.querySelector<HTMLElement>('.clm-chip.is-on');
+    if (!el || !chipsEl.current) return;
+    const box = chipsEl.current; const l = el.offsetLeft - box.offsetLeft; const r = l + el.offsetWidth;
+    if (l < box.scrollLeft + 48 || r > box.scrollLeft + box.clientWidth - 48) box.scrollTo({ left: Math.max(0, l - 120), behavior: 'smooth' });
+  }, [activeTab]);
   const scrollChips = (dir: 1 | -1) => {
     const el = chipsEl.current; if (!el) return;
     const rtl = getComputedStyle(el).direction === 'rtl' ? -1 : 1;
@@ -744,7 +867,13 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
   useEffect(() => { const t = setTimeout(() => { mapRef.current?.resize(); syncChips(); }, 40); return () => clearTimeout(t); }, [full, syncChips]);
 
   const sel = selId ? byId.get(selId) : null;
-  const nActive = activeCount(filters) - filters.cats.length;
+  // The Filters badge counts what the tabs don't show: everything but a single-tab category choice.
+  const nActive = activeCount(filters) - (activeTab === 'custom' ? 0 : filters.cats.length);
+  const tab = (k: string, label: string, icon: string | null, n: number | null) => (
+    <button key={k} type="button" className={`clm-chip${activeTab === k ? ' is-on' : ''}`} aria-pressed={activeTab === k} onClick={() => selectTab(k)}>
+      {icon ? <CatIcon icon={icon} size={15} /> : null}{label}{n != null ? <span className="clm-chip__n">{n.toLocaleString(locale)}</span> : null}
+    </button>
+  );
 
   // ---- Render helpers --------------------------------------------------------------------------
   // Our catalogue tags → short, translated labels on experience cards.
@@ -752,18 +881,33 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
     pickup: U.pickup, meal: U.meal, 'small-group': U.smallGroup, private: U.privateGroup,
     family: U.family, 'adults-only': U.adults, sunset: U.sunset, beginners: U.beginners,
   };
+  const timeOf = (iso: string) => {
+    const t = new Date(iso);
+    if (t.getHours() === 0 && t.getMinutes() === 0) return '';
+    try { return `, ${t.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`; } catch { return ''; }
+  };
+  /** "12 Oct, 19:00" · "12 Oct – 3 Nov" · "On now · until 30 Nov". */
+  const eventWhen = (p: ExplorerPoint) => {
+    if (!p.date) return '';
+    if (isOngoing(p)) return p.end ? `${U.onNow} · ${U.until.replace('{d}', fmtDate(p.end, locale))}` : U.onNow;
+    const multi = !!p.end && Date.parse(p.end) - Date.parse(p.date) > 20 * 3600e3;
+    return multi ? `${fmtDate(p.date, locale)} – ${fmtDate(p.end, locale)}` : `${fmtDate(p.date, locale)}${timeOf(p.date)}`;
+  };
   const metaLine = (p: ExplorerPoint, d: ExplorerDetail | null = null) => isAct(p) ? [
     catLabelOf(p.cat),
     d?.duration || null,
     ...(d?.tags || []).map((t) => TAG[t]).filter(Boolean).slice(0, 2),
-  ].filter(Boolean).join(' • ') : [
+  ].filter(Boolean).join(' • ') : isEvent(p) ? [eventWhen(p), d?.venue || null].filter(Boolean).join(' • ') : [
     catLabelOf(p.cat),
     p.subtype ? titleCase(p.subtype) : null,
-    isEvent(p) ? fmtDate(p.date, locale) : null,
     p.rank > 0 ? U.partner : null,
     p.flags & F.VERIFIED ? U.verified : null,
     p.flags & F.LUXURY ? U.luxury : null,
   ].filter(Boolean).join(' • ');
+
+  /** The listing's rating, else our own guests' reviews. Never a rating for experiences. */
+  const ratingOf = (p: ExplorerPoint, d: ExplorerDetail | null): { v: number; n: number } | null =>
+    isAct(p) ? null : p.rating ? { v: p.rating, n: p.ratingCount } : d?.own?.count ? { v: d.own.avg, n: d.own.count } : null;
 
   const priceOf = (p: ExplorerPoint, d: ExplorerDetail | null) =>
     p.priceFrom ? `${U.from} €${p.priceFrom.toLocaleString(locale)}` : (d?.eventPrice || p.price || null);
@@ -778,65 +922,175 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
     );
   };
 
-  const actions = (p: ExplorerPoint, d: ExplorerDetail | null) => isAct(p) ? (
-    <>
-      <div className="clm-acts">
-        {d?.book ? <a className="clm-act clm-act--main" href={d.book} target="_blank" rel="sponsored noopener">{U.book}<Icon d={P.ext} size={13} sw={2.2} /></a> : null}
+  const dateTile = (p: ExplorerPoint, big = false) => {
+    const iso = isOngoing(p) && p.end ? p.end : p.date;
+    if (!iso) return null;
+    const t = new Date(iso);
+    return (
+      <div className={`clm-date${isOngoing(p) ? ' is-now' : ''}${big ? ' clm-date--big' : ''}`}>
+        <b>{t.getDate()}</b>
+        <span>{isOngoing(p) ? `${U.until.replace('{d}', '').trim()} ` : ''}{(() => { try { return t.toLocaleDateString(locale, { month: 'short' }); } catch { return ''; } })()}</span>
       </div>
-      <p className="clm-approx"><Icon d={P.pin} size={12} />{U.approx}</p>
-      <p className="clm-approx clm-approx--note">{U.partnerNote}</p>
-    </>
-  ) : (
-    <div className="clm-acts">
-      {d?.href ? <a className="clm-act clm-act--main" href={d.href}>{U.viewProfile}<Icon d={P.chevR} size={13} sw={2.4} /></a> : null}
-      {d?.phone ? <a className="clm-act" href={`tel:${d.phone.replace(/\s+/g, '')}`}><Icon d={P.phone} size={13} />{U.call}</a> : null}
-      {d?.url ? <a className="clm-act" href={d.url} target="_blank" rel="noopener nofollow"><Icon d={P.globe} size={13} />{U.website}</a> : null}
-      <a className="clm-act" href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`} target="_blank" rel="noopener noreferrer"><Icon d={P.route} size={13} />{U.directions}</a>
-    </div>
-  );
+    );
+  };
 
-  const renderCard = (p: ExplorerPoint, variant: 'list' | 'pop') => {
+  const badgesOf = (p: ExplorerPoint, d: ExplorerDetail | null) => {
+    const out: [string, string][] = [];
+    if (isEvent(p)) {
+      if (isOngoing(p)) out.push(['now', U.onNow]);
+      if (isApprox(p)) out.push(['approx', U.approx.split(' — ')[0]]);
+      return out;
+    }
+    if (isAct(p)) return out;
+    if (p.rank > 0) out.push(['partner', U.partner]);
+    if (p.flags & F.FEATURED) out.push(['featured', U.featured]);
+    if (p.flags & F.VERIFIED || d?.claimed) out.push(['verified', U.verified]);
+    if (p.flags & F.LUXURY) out.push(['lux', U.luxury]);
+    return out;
+  };
+
+  const renderCard = (p: ExplorerPoint) => {
     const d = detailOf(p.id);
     const g = groupMeta.get(catMeta.get(p.cat)?.group || '') || groupMeta.get(EVENT_GROUP);
     const color = g?.color || GOLD;
     const isSaved = saved.has(p.id);
     const loading = !d && !detailsRef.current.has(p.id);
-    const act = isAct(p);
+    const act = isAct(p); const ev = isEvent(p);
     const link = d?.href || (act ? d?.book : null) || null;
     const ext = act ? { target: '_blank', rel: 'sponsored noopener' } : {};
-    const linkable = variant === 'list' && !!link;
+    const r = ratingOf(p, d);
+    const badges = badgesOf(p, d).filter(([k]) => k === 'now' || k === 'approx');
     return (
-      <article key={`${variant}-${p.id}`}
-        className={`clm-card clm-card--${variant}${linkable ? ' is-link' : ''}${hotId === p.id && variant === 'list' ? ' is-hot' : ''}${p.rank > 0 ? ' is-tier' : ''}`}
-        onClick={variant === 'list' && !linkable ? (e) => { if (!(e.target as HTMLElement).closest('a,button')) focusPoint(p); } : undefined}
-        onMouseEnter={variant === 'list' ? () => setHotId(p.id) : undefined}
-        onMouseLeave={variant === 'list' ? () => setHotId((h) => (h === p.id ? null : h)) : undefined}>
+      <article key={`list-${p.id}`}
+        className={`clm-card clm-card--list${link ? ' is-link' : ''}${hotId === p.id ? ' is-hot' : ''}${p.rank > 0 ? ' is-tier' : ''}`}
+        onClick={!link ? (e) => { if (!(e.target as HTMLElement).closest('a,button')) focusPoint(p); } : undefined}
+        onMouseEnter={() => setHotId(p.id)}
+        onMouseLeave={() => setHotId((h) => (h === p.id ? null : h))}>
         <div className="clm-card__media">
           {d?.image
             ? <img src={d.image} alt="" loading="lazy" />
-            : <div className="clm-card__ph" style={{ color, background: `${color}1f` }}><CatIcon icon={catIconOf(p.cat)} size={30} /></div>}
+            : ev ? <div className="clm-card__ph" style={{ color, background: `${color}1f` }}>{dateTile(p)}</div>
+              : <div className="clm-card__ph" style={{ color, background: `${color}1f` }}><CatIcon icon={catIconOf(p.cat)} size={30} /></div>}
           <button type="button" className={`clm-heart${isSaved ? ' is-on' : ''}`} aria-pressed={isSaved} aria-label={U.save}
             onClick={(e) => { e.stopPropagation(); toggleSave(p.id); }}>
             <Icon d={P.heart} size={18} fill={isSaved ? 'currentColor' : 'none'} sw={2} />
           </button>
         </div>
         <div className="clm-card__body">
-          {p.district ? <span className="clm-card__kicker">{titleCase(p.district)}</span> : null}
+          {p.district ? <span className="clm-card__kicker">{titleCase(p.district)}{ev ? ` · ${U.events}` : ''}</span> : null}
           {loading
             ? <span className="clm-skel" aria-hidden="true" />
             : link
               ? <a className="clm-card__title" href={link} {...ext}>{d?.name}</a>
               : <span className="clm-card__title">{d?.name || catLabelOf(p.cat)}</span>}
           <span className="clm-card__meta">{metaLine(p, d)}</span>
-          {variant === 'pop' && d?.address ? <span className="clm-card__addr">{d.address}</span> : null}
-          {variant === 'pop' && act && d?.summary ? <span className="clm-card__sum">{d.summary}</span> : null}
           <div className="clm-card__foot">
-            {p.rating
-              ? <span className="clm-rating"><Icon d={STAR} size={14} fill="#E8710A" /><b>{fmtRating(p.rating)}</b>{p.ratingCount ? <span>({p.ratingCount.toLocaleString(locale)})</span> : null}</span>
-              : <span />}
+            {r ? <Stars value={r.v} count={r.n} locale={locale} size={13} />
+              : badges.length ? <span className="clm-badges">{badges.map(([k, l]) => <span key={k} className={`clm-badge clm-badge--${k}`}>{l}</span>)}</span>
+                : <span />}
             {priceNode(p, d)}
           </div>
-          {variant === 'pop' ? actions(p, d) : null}
+        </div>
+      </article>
+    );
+  };
+
+  // ---- Popup: everything we hold for the tapped item -------------------------------------------
+
+  const row = (key: string, icon: string, body: React.ReactNode) => (
+    <li key={key} className="clm-row"><Icon d={icon} size={16} className="clm-row__ic" /><span className="clm-row__t">{body}</span></li>
+  );
+
+  const renderPopup = (p: ExplorerPoint) => {
+    const d = detailOf(p.id);
+    const loading = !d && !detailsRef.current.has(p.id);
+    const act = isAct(p); const ev = isEvent(p); const biz = !act && !ev;
+    const g = groupMeta.get(catMeta.get(p.cat)?.group || '') || groupMeta.get(EVENT_GROUP);
+    const color = g?.color || GOLD;
+    const isSaved = saved.has(p.id);
+    const photos = d?.photos?.length ? d.photos : d?.image ? [d.image] : [];
+    const pi = Math.min(photoIdx, Math.max(0, photos.length - 1));
+    const r = ratingOf(p, d);
+    const hours = biz ? openState(d?.hours) : null;
+    const socials = d?.socials ? SOCIAL_ORDER.filter((k) => d.socials![k]) : [];
+    const badges = badgesOf(p, d);
+    const listed = biz && !(p.flags & F.PUBLISHED);
+    const link = d?.href || (act ? d?.book : null) || null;
+    const kicker = biz ? [catLabelOf(p.cat), p.subtype ? titleCase(p.subtype) : null].filter(Boolean).join(' · ')
+      : ev ? [p.district ? titleCase(p.district) : null, U.events].filter(Boolean).join(' · ') : catLabelOf(p.cat);
+    const dirUrl = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
+    return (
+      <article className="clm-pc">
+        <div className="clm-pc__media" style={photos.length ? undefined : { color, background: `${color}1f` }}>
+          {photos.length
+            ? <img key={photos[pi]} src={photos[pi]} alt="" />
+            : ev ? dateTile(p, true) : <CatIcon icon={catIconOf(p.cat)} size={46} />}
+          {photos.length > 1 ? (
+            <>
+              <button type="button" className="clm-pc__nav clm-pc__nav--l" aria-label="‹" onClick={() => setPhotoIdx((i) => (i - 1 + photos.length) % photos.length)}><Icon d={P.chevL} size={16} sw={2.6} /></button>
+              <button type="button" className="clm-pc__nav clm-pc__nav--r" aria-label="›" onClick={() => setPhotoIdx((i) => (i + 1) % photos.length)}><Icon d={P.chevR} size={16} sw={2.6} /></button>
+              <span className="clm-pc__count">{pi + 1} / {photos.length}</span>
+            </>
+          ) : null}
+          <button type="button" className={`clm-heart${isSaved ? ' is-on' : ''}`} aria-pressed={isSaved} aria-label={U.save} onClick={() => toggleSave(p.id)}>
+            <Icon d={P.heart} size={18} fill={isSaved ? 'currentColor' : 'none'} sw={2} />
+          </button>
+        </div>
+        <div className="clm-pc__body">
+          {badges.length ? <div className="clm-badges">{badges.map(([k, l]) => <span key={k} className={`clm-badge clm-badge--${k}`}>{l}</span>)}</div> : null}
+          <span className="clm-card__kicker">{kicker}</span>
+          {loading
+            ? <span className="clm-skel" aria-hidden="true" />
+            : link
+              ? <a className="clm-card__title" href={link} {...(act ? { target: '_blank', rel: 'sponsored noopener' } : {})}>{d?.name}</a>
+              : <span className="clm-card__title">{d?.name || catLabelOf(p.cat)}</span>}
+          {act ? <span className="clm-card__meta">{metaLine(p, d)}</span> : null}
+          {!ev && (r || priceOf(p, d)) ? (
+            <div className="clm-pc__rate">
+              {r ? <Stars value={r.v} count={r.n} locale={locale} size={15} /> : <span />}
+              {priceNode(p, d)}
+            </div>
+          ) : null}
+          <ul className="clm-rows">
+            {ev && p.date ? row('when', P.cal, eventWhen(p)) : null}
+            {ev && d?.eventPrice ? row('price', P.euro, d.eventPrice) : null}
+            {d?.address ? row('addr', P.pin, d.address) : (biz && p.district ? row('addr', P.pin, titleCase(p.district)) : null)}
+            {hours ? row('hours', P.clock, <>
+              {hours.state !== 'unknown' ? <b className={hours.state === 'open' ? 'clm-open' : 'clm-closed'}>{hours.state === 'open' ? U.openNow : U.closedNow}</b> : null}
+              {hours.today && !(hours.state === 'closed' && !/\d/.test(hours.today)) ? <>{hours.state !== 'unknown' ? ' · ' : ''}{U.todayHours} {hours.today}</> : null}
+            </>) : null}
+            {d?.phone ? row('phone', P.phone, <a dir="ltr" href={`tel:${d.phone.replace(/[^\d+]/g, '')}`}>{d.phone}</a>) : null}
+            {d?.email ? row('email', P.mail, <a dir="ltr" href={`mailto:${d.email}`}>{d.email}</a>) : null}
+            {d?.url && !act ? row('web', P.globe, <a dir="ltr" href={d.url} target="_blank" rel="noopener nofollow">{hostOf(d.url)}</a>) : null}
+          </ul>
+          {d?.summary ? <p className="clm-pc__sum">{d.summary}</p> : null}
+          {d?.amenities?.length ? <div className="clm-amen">{d.amenities.slice(0, 8).map((a) => <span key={a}>{a}</span>)}</div> : null}
+          {socials.length ? (
+            <div className="clm-socials">
+              {socials.map((k) => <a key={k} href={d!.socials![k]} target="_blank" rel="noopener nofollow" aria-label={titleCase(k)} title={titleCase(k)}><Icon d={SOCIAL_ICON[k]} size={16} sw={1.8} /></a>)}
+            </div>
+          ) : null}
+          {act ? (
+            <>
+              <div className="clm-acts">
+                {d?.book ? <a className="clm-act clm-act--main" href={d.book} target="_blank" rel="sponsored noopener">{U.book}<Icon d={P.ext} size={13} sw={2.2} /></a> : null}
+              </div>
+              <p className="clm-approx"><Icon d={P.pin} size={12} />{U.approx}</p>
+              <p className="clm-approx clm-approx--note">{U.partnerNote}</p>
+            </>
+          ) : (
+            <div className="clm-acts">
+              {d?.href ? <a className="clm-act clm-act--main" href={d.href}>{ev ? U.eventDetails : U.viewProfile}<Icon d={P.chevR} size={13} sw={2.4} /></a> : null}
+              {d?.phone ? <a className="clm-act" href={`tel:${d.phone.replace(/[^\d+]/g, '')}`}><Icon d={P.phone} size={13} />{U.call}</a> : null}
+              {d?.email ? <a className="clm-act" href={`mailto:${d.email}`}><Icon d={P.mail} size={13} />{U.email}</a> : null}
+              {d?.url ? <a className="clm-act" href={d.url} target="_blank" rel="noopener nofollow"><Icon d={P.globe} size={13} />{U.website}</a> : null}
+              {!(ev && isApprox(p)) ? <a className="clm-act" href={dirUrl} target="_blank" rel="noopener noreferrer"><Icon d={P.route} size={13} />{U.directions}</a> : null}
+            </div>
+          )}
+          {ev && isApprox(p) ? <p className="clm-approx"><Icon d={P.pin} size={12} />{U.approxArea}</p> : null}
+          {biz && d && !d.claimed && d.claimHref ? (
+            <p className="clm-approx clm-claim">{listed ? <>{U.listedNote} </> : null}<a href={d.claimHref}>{U.claim} →</a></p>
+          ) : null}
         </div>
       </article>
     );
@@ -898,9 +1152,9 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
     .map((g) => ({ g, cats: categories.filter((c) => c.group === g.k).sort((a, b) => (catCounts.get(b.k) || 0) - (catCounts.get(a.k) || 0) || a.label.localeCompare(b.label, locale)) }))
     .filter((x) => x.cats.length), [groups, categories, catCounts, locale]);
 
-  const categoryTree = () => {
+  const categoryTree = (which: (groupKey: string) => boolean) => {
     if (!draft) return null;
-    return categoriesByGroup.map(({ g, cats }) => {
+    return categoriesByGroup.filter(({ g }) => which(g.k)).map(({ g, cats }) => {
       const keys = cats.map((c) => c.k);
       const nOn = keys.filter((k) => draft.cats.includes(k)).length;
       const total = keys.reduce((a, k) => a + (catCounts.get(k) || 0), 0);
@@ -932,8 +1186,7 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
   };
 
   // ---- Markup ------------------------------------------------------------------------------------
-  const popW = popPos ? Math.min(400, popPos.w - 16) : 0;
-  const popBelow = popPos ? popPos.y < 230 : false;
+  const popW = popPos ? Math.min(360, popPos.w - 16) : 0;
   const featureLabels: Record<string, string> = {
     partner: U.partner, featured: U.featured, verified: U.verified, luxury: U.luxury, profile: U.profile, photo: U.withPhoto, saved: U.saved,
   };
@@ -990,19 +1243,18 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
         <div className="clm-chips-wrap">
           {chipScroll.left ? <button type="button" className="clm-chips__arrow clm-chips__arrow--l" onClick={() => scrollChips(-1)} aria-label="‹"><Icon d={P.chevL} size={16} sw={2.4} /></button> : null}
           <div className="clm-chips" ref={chipsEl} onScroll={syncChips}>
-            <button type="button" className={`clm-chip${nActive ? ' is-on' : ''}`} onClick={() => setDraft({ ...filters })} aria-haspopup="dialog">
+            <button type="button" className={`clm-chip clm-chip--filters${nActive ? ' is-set' : ''}`} onClick={() => setDraft({ ...filters })} aria-haspopup="dialog">
               <Icon d={P.sliders} size={16} sw={2} />{U.filters}{nActive ? <span className="clm-chip__badge">{nActive}</span> : null}
             </button>
-            {hasEvents ? (
-              <button type="button" className={`clm-chip${filters.cats.includes(EVENT_CAT) ? ' is-on' : ''}`} aria-pressed={filters.cats.includes(EVENT_CAT)} onClick={() => toggleCat(EVENT_CAT)}>
-                <CatIcon icon={catIconOf(EVENT_CAT)} size={15} />{U.events}
+            {activeTab === 'custom' ? (
+              <button type="button" className="clm-chip is-on clm-chip--custom" onClick={() => selectTab('all')} aria-pressed="true">
+                {U.nCategories.replace('{n}', String(filters.cats.length))}<Icon d={P.close} size={13} sw={2.6} />
               </button>
             ) : null}
-            {chipCats.map((c) => (
-              <button key={c.k} type="button" className={`clm-chip${filters.cats.includes(c.k) ? ' is-on' : ''}`} aria-pressed={filters.cats.includes(c.k)} onClick={() => toggleCat(c.k)}>
-                <CatIcon icon={c.icon} size={15} />{c.label}<span className="clm-chip__n">{(catCounts.get(c.k) || 0).toLocaleString(locale)}</span>
-              </button>
-            ))}
+            {tab('all', U.all, null, all.length || null)}
+            {hasEvents ? tab('event', U.events, catIconOf(EVENT_CAT), catCounts.get(EVENT_CAT) || 0) : null}
+            {actTotal ? tab('exp', U.experiences, groupMeta.get('activities')?.icon || null, actTotal) : null}
+            {chipCats.map((c) => tab(c.k, c.label, c.icon, catCounts.get(c.k) || 0))}
             <button type="button" className={`clm-chip${showCams ? ' is-on' : ''}`} aria-pressed={showCams} onClick={() => setShowCams((v) => !v)}>
               <Icon d={P.cam} size={15} />{U.live}
             </button>
@@ -1011,13 +1263,13 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
         </div>
 
         <div className="clm-count">
-          <span>{points ? `${inView.length.toLocaleString(locale)} ${U.inView}` : loadFailed ? U.noMatches : U.loading}</span>
+          <span>{points ? `${inView.length.toLocaleString(locale)} ${U.inView} · ${shown.length.toLocaleString(locale)} ${U.total}` : loadFailed ? U.noMatches : U.loading}</span>
           {activeCount(filters) ? <button type="button" className="clm-linkbtn" onClick={() => setFilters(EMPTY)}>{U.resetAll}</button> : null}
         </div>
 
         <div className="clm-list" ref={listEl}>
           {!points && !loadFailed ? Array.from({ length: 4 }, (_, i) => <div key={i} className="clm-card clm-card--ghost"><div className="clm-card__media" /><div className="clm-card__body"><span className="clm-skel" /><span className="clm-skel clm-skel--s" /></div></div>) : null}
-          {visible.map((p) => renderCard(p, 'list'))}
+          {visible.map((p) => renderCard(p))}
           {inView.length > limit
             ? <button type="button" className="clm-more" onClick={() => setLimit((n) => n + PAGE)}>{U.showMore} ({(inView.length - limit).toLocaleString(locale)})</button>
             : null}
@@ -1040,9 +1292,9 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
           </div>
         </div>
         {sel && popPos ? (
-          <div className={`clm-pop${popBelow ? ' is-below' : ''}`}
-            style={{ width: popW, left: Math.max(8, Math.min(popPos.x - popW / 2, popPos.w - popW - 8)), top: popBelow ? popPos.y + 10 : popPos.y - 46 }}>
-            {renderCard(sel, 'pop')}
+          <div ref={popRef} className="clm-pop"
+            style={{ width: popW, left: popXY?.left ?? -9999, top: popXY?.top ?? -9999 }}>
+            {renderPopup(sel)}
             <button type="button" className="clm-pop__close" onClick={() => setSelId(null)} aria-label={U.close}><Icon d={P.close} size={14} sw={2.4} /></button>
           </div>
         ) : null}
@@ -1057,13 +1309,25 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
               <h2>{U.filters}</h2>
             </header>
             <div className="clm-dialog__body">
-              {hasEvents ? section('start', U.startTime, <>{checks('start', [['morning', U.morning], ['afternoon', U.afternoon], ['evening', U.evening]], 'times')}</>) : null}
-              {hasEvents ? section('when', U.when, <>{radios<When>('when', [['today', U.today], ['weekend', U.weekend], ['week', U.week], ['month', U.month]], draft.when, (v) => setDraft((d) => (d ? { ...d, when: v } : d)))}</>) : null}
+              {hasEvents ? section('agenda', U.events, <>
+                {checkRow('cats', EVENT_CAT, <><span className="clm-grp__cic"><CatIcon icon={catIconOf(EVENT_CAT)} size={14} /></span>{U.events}</>, catCounts.get(EVENT_CAT) || 0)}
+                <div className="clm-pills">
+                  {([[null, U.anyDate], ['today', U.today], ['weekend', U.weekend], ['week', U.week], ['month', U.month]] as [When | null, string][]).map(([w, label]) => {
+                    const on = !draft.dateFrom && !draft.dateTo && draft.when === w;
+                    return <button key={w || 'any'} type="button" className={`clm-pill${on ? ' is-on' : ''}`} aria-pressed={on}
+                      onClick={() => setDraft((d) => (d ? { ...d, when: w, dateFrom: null, dateTo: null } : d))}>{label}</button>;
+                  })}
+                </div>
+                <div className="clm-dates">
+                  <label><span>{U.from}</span><input type="date" value={draft.dateFrom || ''} onChange={(e) => setDraft((d) => (d ? { ...d, dateFrom: e.target.value || null, when: null } : d))} /></label>
+                  <label><span>{U.to}</span><input type="date" value={draft.dateTo || ''} min={draft.dateFrom || undefined} onChange={(e) => setDraft((d) => (d ? { ...d, dateTo: e.target.value || null, when: null } : d))} /></label>
+                </div>
+                <h4 className="clm-fsub">{U.startTime}</h4>
+                {checks('start', [['morning', U.morning], ['afternoon', U.afternoon], ['evening', U.evening]], 'times')}
+              </>, catCounts.get(EVENT_CAT) || 0) : null}
+              {actTotal ? section('experiences', U.experiences, <>{categoryTree((g) => g === 'activities')}</>, actTotal) : null}
+              {section('categories', U.categories, <>{categoryTree((g) => g !== 'activities')}</>, categories.filter((c) => c.k !== EVENT_CAT && !isActivityCat(c.k)).length)}
               {facets.districts.length ? section('places', U.places, <>{checks('places', facets.districts.map(([d, n]) => [d, titleCase(d), n]), 'districts')}</>) : null}
-              {section('categories', U.categories, <>
-                {hasEvents ? checkRow('cats', EVENT_CAT, <><span className="clm-grp__cic"><CatIcon icon={catIconOf(EVENT_CAT)} size={14} /></span>{U.events}</>, catCounts.get(EVENT_CAT) || 0) : null}
-                {categoryTree()}
-              </>, categories.filter((c) => c.k !== EVENT_CAT).length)}
               {facets.subtypes.length ? section('interests', U.interests, <>{checks('interests', facets.subtypes.map(([s, n]) => [s, titleCase(s), n]), 'subtypes')}</>) : null}
               {facets.prices.length ? section('price', U.price, <>
                 <div className="clm-pricegrid">
@@ -1080,7 +1344,7 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
             <footer className="clm-dialog__foot">
               <button type="button" className="clm-linkbtn clm-linkbtn--strong" onClick={() => setDraft({ ...EMPTY })}>{U.resetAll}</button>
               <button type="button" className="clm-primary" onClick={applyFilters} disabled={draftCount === 0}>
-                {U.showResults.replace('{n}', draftCount > 500 ? '500+' : draftCount.toLocaleString(locale))}
+                {U.showResults.replace('{n}', draftCount.toLocaleString(locale))}
               </button>
             </footer>
           </div>

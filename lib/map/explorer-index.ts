@@ -9,16 +9,24 @@
 //      geocoded business + upcoming event: id, coordinates, category, district,
 //      sub-type, price band, rating, paid tier and a few flags. Enough to cluster,
 //      count, filter and rank everything client-side. NO names, NO contact data.
-//   2. DETAILS (/api/map/details) — names, photos, address, website (and phone for
-//      PUBLISHED listings only) for just the handful of places on screen.
+//   2. DETAILS (/api/map/details) — everything we hold for just the handful of places
+//      on screen or the one that was tapped: name, photos, address, phone, email,
+//      website, socials, opening hours, amenities, description and reviews.
 //
-// Privacy rules carried over from lib/directory/map-data.ts: phone only for
-// 'published' rows, email never, and the bulk 'listed' set never as a contact dump.
+// Contact data is public business contact data, served per item (at most 60 ids per
+// request, never in the bulk index). Imported ('listed') businesses carry a "claim /
+// update / remove" link so the business stays in control of its entry.
+//
+// Events: every published event that is upcoming OR still running is on the map. One
+// without coordinates is placed at its venue (when the venue is a directory business),
+// else at the town/landmark named in the venue or title (our gazetteer), else at its
+// district centre — and flagged APPROX so the pin is drawn dashed ("approximate area").
 // ============================================================================
 import { canonicalOf, EVENT_CAT, ACTIVITY_PREFIX } from './explorer-taxonomy';
 import { affiliateUrl, priceBasisLabel } from '@/lib/activities/classify';
+import { findTown, findLandmarks, foldText } from '@/lib/activities/places';
 
-export const INDEX_VERSION = 1;
+export const INDEX_VERSION = 2;
 
 /** Bit flags packed per row in the index. */
 export const F = {
@@ -29,6 +37,7 @@ export const F = {
   IMAGE: 16,
   EVENT: 32,
   ACTIVITY: 64,   // bookable experience (our catalogue) — links out to book with the booking partner
+  APPROX: 128,    // location is approximate (event placed at its town / district) — dashed pin
 } as const;
 
 /** A directory_listings row as selected by the index query. */
@@ -45,6 +54,60 @@ export interface IndexListingRow {
 export interface IndexEventRow {
   slug: string; district: string | null; lat: number | string | null; lng: number | string | null;
   starts_at: string | null; image: string | null;
+  ends_at?: string | null; venue?: string | null; title_en?: string | null; coords_precision?: string | null;
+}
+
+/** Centre of each district (its main town; Famagusta = the free area around Paralimni). */
+export const DISTRICT_CENTRE: Readonly<Record<string, { lat: number; lng: number }>> = {
+  nicosia: { lat: 35.1725, lng: 33.3650 }, limassol: { lat: 34.6800, lng: 33.0400 }, larnaca: { lat: 34.9180, lng: 33.6230 },
+  paphos: { lat: 34.7754, lng: 32.4218 }, famagusta: { lat: 35.0375, lng: 33.9824 },
+};
+
+/** Directory businesses by folded name → a point, for placing events at their venue. */
+export type VenueLookup = Map<string, { lat: number; lng: number } | null>;
+
+const venueKey = (s: string) => foldText(s).replace(/^the\s+/, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+/** Build the venue lookup from listing names. Names shared by two far-apart places are ambiguous → null. */
+export function venueLookup(rows: { name_en?: string | null; lat: unknown; lng: unknown }[]): VenueLookup {
+  const m: VenueLookup = new Map();
+  for (const r of rows) {
+    const k = venueKey(String(r.name_en || ''));
+    const pt = cyprusPoint(r.lat, r.lng);
+    if (k.length < 5 || !pt) continue;
+    if (!m.has(k)) { m.set(k, pt); continue; }
+    const prev = m.get(k);
+    if (prev && (Math.abs(prev.lat - pt.lat) > 0.01 || Math.abs(prev.lng - pt.lng) > 0.01)) m.set(k, null);
+  }
+  return m;
+}
+
+/**
+ * Where to pin an event: its own coordinates; else its venue (a directory business);
+ * else the town / landmark named in the venue or title; else its district centre.
+ * Everything but an exact own / venue point is flagged approximate.
+ */
+export function placeEvent(ev: IndexEventRow, venues?: VenueLookup): { lat: number; lng: number; approx: boolean } | null {
+  const own = cyprusPoint(ev.lat, ev.lng);
+  if (own) return { ...own, approx: ev.coords_precision === 'town' };
+  const venue = String(ev.venue || '').trim();
+  if (venue && venues) {
+    for (const cand of [venue, venue.split(/[,–—(|]/)[0]]) {
+      const hit = venues.get(venueKey(cand));
+      if (hit) return { ...hit, approx: false };
+    }
+  }
+  const district = String(ev.district || '').toLowerCase();
+  const inDistrict = (p: { district: string } | null | undefined) => !!p && (!district || p.district === district);
+  for (const text of [venue, String(ev.title_en || '')]) {
+    if (!text) continue;
+    const lm = findLandmarks(text, null)[0];
+    if (inDistrict(lm)) return { lat: lm.lat, lng: lm.lng, approx: true };
+    const town = findTown(text);
+    if (inDistrict(town)) return { lat: town!.lat, lng: town!.lng, approx: true };
+  }
+  const c = DISTRICT_CENTRE[district];
+  return c ? { ...c, approx: true } : null;
 }
 
 /** A public.activities (experiences catalogue) row as selected by the index query. */
@@ -70,13 +133,14 @@ export interface ExplorerIndex {
   k: number[];        // commercial rank 0..3 (Partner 3 > Featured 2 > Listed 1); experiences: editorial priority 0..3
   pf: number[];       // price_from in EUR (0 = none)
   t: number[];        // event start, epoch minutes (0 = not an event)
+  te: number[];       // event end, epoch minutes (0 = none / not an event)
 }
 
 /** One decoded point, as the client works with it. */
 export interface ExplorerPoint {
   id: string; slug: string; type: string; cat: string; district: string | null; subtype: string | null;
   price: string | null; lat: number; lng: number; flags: number; rating: number | null; ratingCount: number;
-  rank: number; priceFrom: number | null; date: string | null;
+  rank: number; priceFrom: number | null; date: string | null; end: string | null;
 }
 
 const num = (v: unknown): number | null => {
@@ -110,12 +174,14 @@ class Dict {
 }
 
 /** Build the compact index from raw rows. Rows without valid Cyprus coordinates are skipped. */
-export function buildIndex(listings: IndexListingRow[], events: IndexEventRow[], builtIso: string, activities: IndexActivityRow[] = []): ExplorerIndex {
+export function buildIndex(
+  listings: IndexListingRow[], events: IndexEventRow[], builtIso: string, activities: IndexActivityRow[] = [], venues?: VenueLookup,
+): ExplorerIndex {
   const cats = new Dict(), districts = new Dict(), subtypes = new Dict(), prices = new Dict(), types = new Dict();
   const ix: ExplorerIndex = {
     v: INDEX_VERSION, built: builtIso, n: 0, cats: cats.list, districts: districts.list, subtypes: subtypes.list,
     prices: prices.list, types: types.list,
-    id: [], ty: [], lat: [], lng: [], c: [], d: [], s: [], p: [], f: [], r: [], rc: [], k: [], pf: [], t: [],
+    id: [], ty: [], lat: [], lng: [], c: [], d: [], s: [], p: [], f: [], r: [], rc: [], k: [], pf: [], t: [], te: [],
   };
   const seen = new Set<string>();
   for (const row of listings) {
@@ -141,12 +207,21 @@ export function buildIndex(listings: IndexListingRow[], events: IndexEventRow[],
     ix.rc.push(Math.max(0, Math.round(num(row.rating_count) || 0)));
     ix.k.push(Math.max(0, Math.min(3, Math.round(num(row.commercial_rank) || 0))));
     ix.pf.push(Math.max(0, Math.round(num(row.price_from) || 0)));
-    ix.t.push(0);
+    ix.t.push(0); ix.te.push(0);
   }
+  const stacked = new Map<string, number>(); // events sharing one spot
   for (const ev of events) {
-    const pt = cyprusPoint(ev.lat, ev.lng);
     const start = ev.starts_at ? Date.parse(ev.starts_at) : NaN;
-    if (!pt || !ev.slug || !Number.isFinite(start)) continue;
+    if (!ev.slug || !Number.isFinite(start)) continue;
+    const pt = placeEvent(ev, venues);
+    if (!pt) continue;
+    // Several events at one spot (a theatre's season; events placed at the same town /
+    // district centre) fan out on a small spiral so each keeps its own pin: ≈40 m steps
+    // at a real venue, ≈150 m in an approximate area.
+    const key = `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`;
+    const n = stacked.get(key) || 0; stacked.set(key, n + 1);
+    if (n > 0) { const r = (pt.approx ? 0.0016 : 0.0004) * Math.sqrt(n); const a = n * 2.39996; pt.lat += r * Math.sin(a); pt.lng += r * Math.cos(a) * 1.2; }
+    const end = ev.ends_at ? Date.parse(ev.ends_at) : NaN;
     const id = `e:${ev.slug}`;
     if (seen.has(id)) continue;
     seen.add(id);
@@ -156,9 +231,10 @@ export function buildIndex(listings: IndexListingRow[], events: IndexEventRow[],
     ix.c.push(cats.idx(EVENT_CAT));
     ix.d.push(districts.idx(ev.district ? ev.district.toLowerCase() : null));
     ix.s.push(-1); ix.p.push(-1);
-    ix.f.push(F.PUBLISHED | F.EVENT | (ev.image ? F.IMAGE : 0));
+    ix.f.push(F.PUBLISHED | F.EVENT | (ev.image ? F.IMAGE : 0) | (pt.approx ? F.APPROX : 0));
     ix.r.push(0); ix.rc.push(0); ix.k.push(0); ix.pf.push(0);
     ix.t.push(Math.round(start / 60000));
+    ix.te.push(Number.isFinite(end) && end >= start ? Math.round(end / 60000) : 0);
   }
   for (const a of activities) {
     const pt = cyprusPoint(a.lat, a.lng);
@@ -177,7 +253,7 @@ export function buildIndex(listings: IndexListingRow[], events: IndexEventRow[],
     ix.r.push(0); ix.rc.push(0);                                          // no third-party ratings
     ix.k.push(Math.max(0, Math.min(3, Math.round(num(a.priority) || 0))));
     ix.pf.push(0);
-    ix.t.push(0);
+    ix.t.push(0); ix.te.push(0);
   }
   ix.n = ix.id.length;
   return ix;
@@ -195,6 +271,7 @@ export function decodeIndex(ix: ExplorerIndex): ExplorerPoint[] {
       price: ix.p[i] >= 0 ? ix.prices[ix.p[i]] : null, lat: ix.lat[i], lng: ix.lng[i], flags: ix.f[i],
       rating: ix.r[i] ? ix.r[i] / 10 : null, ratingCount: ix.rc[i], rank: ix.k[i], priceFrom: ix.pf[i] || null,
       date: ix.t[i] ? new Date(ix.t[i] * 60000).toISOString() : null,
+      end: ix.te && ix.te[i] ? new Date(ix.te[i] * 60000).toISOString() : null,
     };
   }
   return out;
@@ -213,31 +290,93 @@ export function rankScore(p: Pick<ExplorerPoint, 'rank' | 'flags' | 'rating' | '
     + ((p.flags & F.PUBLISHED) ? 0.3 : 0);
 }
 
-// ---- Details (the on-screen cards) ---------------------------------------------------
+// ---- Details (the on-screen cards and the popup) ------------------------------------
 export interface ExplorerDetail {
   id: string; name: string; image: string | null; address: string | null;
   phone: string | null; url: string | null; href: string | null; summary: string | null;
   priceTo: number | null; venue: string | null; endDate: string | null; eventPrice: string | null;
+  // Everything else we hold for a business (popup)
+  photos?: string[]; email?: string | null; socials?: Record<string, string>; hours?: Record<string, string> | null;
+  amenities?: string[]; claimed?: boolean; claimHref?: string | null; own?: { avg: number; count: number } | null;
+  startDate?: string | null;
   // Bookable experiences (our catalogue; link-out booking with the partner)
   book?: string | null; duration?: string | null; basis?: string | null; tags?: string[];
   provider?: string | null; approx?: boolean;
 }
 
-/** directory_listings row → public card details. Enforces the contact-data rules. */
+export const SOCIAL_ORDER = ['instagram', 'facebook', 'tiktok', 'youtube', 'linkedin', 'x', 'whatsapp'] as const;
+export const HOUR_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+const EMAIL_OK = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
+/** A phone number as dialled: digits, +, spaces, dashes, dots, brackets; 6–30 chars. */
+export function cleanPhone(v: unknown): string | null {
+  const s = String(v ?? '').split(/[;,/|]|\s{2,}/)[0].trim();
+  if (!/^[+()\d][\d\s().-]{5,29}$/.test(s) || (s.match(/\d/g) || []).length < 6) return null;
+  return s;
+}
+export function cleanEmail(v: unknown): string | null {
+  const s = String(v ?? '').trim().replace(/^mailto:/i, '').split(/[\s,;]+/)[0].toLowerCase();
+  return EMAIL_OK.test(s) && s.length <= 120 ? s : null;
+}
+/** Photo URLs from image / owned_photos / gallery (strings or {url|src}), de-duplicated, http(s) only. */
+export function photoList(...sources: unknown[]): string[] {
+  const out: string[] = [];
+  const add = (v: unknown) => {
+    const u = safeUrl(typeof v === 'string' ? v : (v && typeof v === 'object' ? ((v as Record<string, unknown>).url ?? (v as Record<string, unknown>).src) : null));
+    if (u && !out.includes(u)) out.push(u);
+  };
+  for (const src of sources) {
+    let v = src;
+    if (typeof v === 'string' && v.trim().startsWith('[')) { try { v = JSON.parse(v); } catch { /* plain string */ } }
+    if (Array.isArray(v)) v.forEach(add); else add(v);
+  }
+  return out.slice(0, 8);
+}
+function socialsOf(v: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
+  const src = v as Record<string, unknown>;
+  for (const k of SOCIAL_ORDER) {
+    const raw = src[k] ?? (k === 'x' ? src.twitter : undefined);
+    const u = safeUrl(raw);
+    if (u) out[k] = u;
+  }
+  return out;
+}
+function hoursOf(v: unknown): Record<string, string> | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const src = v as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const d of HOUR_DAYS) { const t = String(src[d] ?? '').trim().slice(0, 40); if (t) out[d] = t; }
+  return Object.keys(out).length ? out : null;
+}
+
+/** directory_listings row → everything we show about a business on the map. */
 export function listingDetail(r: Record<string, unknown>, locale: string, prefix: string): ExplorerDetail {
   const published = String(r.status) === 'published';
   const slug = String(r.slug || '');
   const type = String(r.type || 'vendor');
+  const photos = photoList(r.image, r.owned_photos, r.gallery);
+  const claimed = String(r.provenance || '') === 'owner-verified' || !!r.claimed_at;
+  const amenities = Array.isArray(r.amenities) ? (r.amenities as unknown[]).map((a) => String(a ?? '').trim()).filter(Boolean).slice(0, 12) : [];
   return {
     id: slug,
     name: String(r[`name_${locale}`] || r.name_en || slug),
-    image: (r.image as string) || null,
+    image: photos[0] || null,
+    photos,
     address: (r.address as string) || null,
-    phone: published ? ((r.phone as string) || null) : null, // never for the bulk 'listed' set
+    phone: cleanPhone(r.phone),
+    email: cleanEmail(r.email),
     url: safeUrl(r.url),
+    socials: socialsOf(r.socials),
+    hours: hoursOf(r.hours),
+    amenities,
     href: published ? `${prefix}/directory/${type}/${slug}` : null, // 'listed' rows have no profile page
-    summary: published ? (String(r[`summary_${locale}`] || r.summary_en || '') || null) : null,
+    summary: String(r[`summary_${locale}`] || r.summary_en || '').trim() || null,
     priceTo: num(r.price_to),
+    claimed,
+    claimHref: claimed ? null : `${prefix}/partner?listing=${encodeURIComponent(slug)}`,
+    own: null,
     venue: null, endDate: null, eventPrice: null,
   };
 }
@@ -245,10 +384,12 @@ export function listingDetail(r: Record<string, unknown>, locale: string, prefix
 /** events row → public card details. */
 export function eventDetail(r: Record<string, unknown>, locale: string, prefix: string): ExplorerDetail {
   const slug = String(r.slug || '');
+  const own = cyprusPoint(r.lat, r.lng);
   return {
     id: `e:${slug}`,
     name: String(r[`title_${locale}`] || r.title_en || slug),
-    image: (r.image as string) || null,
+    image: safeUrl(r.image),
+    photos: photoList(r.image),
     address: (r.venue as string) || null,
     phone: null,
     url: safeUrl(r.url),
@@ -256,9 +397,22 @@ export function eventDetail(r: Record<string, unknown>, locale: string, prefix: 
     summary: String(r[`summary_${locale}`] || r.summary_en || '') || null,
     priceTo: null,
     venue: (r.venue as string) || null,
+    startDate: (r.starts_at as string) || null,
     endDate: (r.ends_at as string) || null,
     eventPrice: (r.price as string) || null,
+    approx: !own || r.coords_precision === 'town',
   };
+}
+
+/** Raw mean of approved first-party reviews per listing (what a guest expects to read). */
+export function ownRatings(rows: { listing_slug: unknown; rating: unknown }[]): Map<string, { avg: number; count: number }> {
+  const acc = new Map<string, { s: number; n: number }>();
+  for (const r of rows) {
+    const k = String(r.listing_slug || ''); const v = Number(r.rating);
+    if (!k || !(v >= 1 && v <= 5)) continue;
+    const a = acc.get(k) || { s: 0, n: 0 }; a.s += v; a.n++; acc.set(k, a);
+  }
+  return new Map([...acc].map(([k, a]) => [k, { avg: Math.round((a.s / a.n) * 10) / 10, count: a.n }]));
 }
 
 /** Only http(s) links are ever rendered. */

@@ -28,7 +28,7 @@ function Portal() {
   const params = useSearchParams();
   const token = params.get('token') || '';
   const [mode, setMode] = useState<'claim' | 'verifying' | 'edit' | 'invalid' | 'otp' | 'done'>(token ? 'verifying' : 'claim');
-  const [slug, setSlug] = useState('');
+  const [slug, setSlug] = useState(() => params.get('listing') || ''); // prefilled from the map's "Is this your business?" link
   const [email, setEmail] = useState('');
   const [claimantName, setClaimantName] = useState('');
   const [phone, setPhone] = useState('');

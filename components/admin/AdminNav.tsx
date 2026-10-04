@@ -19,6 +19,7 @@ const TABS = [
   { href: '/admin/comments', label: 'Comments (Comentarii)' },
   { grp: 'Listings' },
   { href: '/admin/directory', label: 'Directory' },
+  { href: '/admin/directory/complete', label: 'Complete listings' },
   { href: '/admin/coverage', label: 'Coverage' },
   { href: '/admin/moderation', label: 'Moderation' },
   { href: '/admin/partners', label: 'Partners' },

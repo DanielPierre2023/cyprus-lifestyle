@@ -1,7 +1,7 @@
 // GET /api/map/details?ids=<slug>,<slug>,e:<event-slug>&locale=<loc>
-// Card details for the places currently on screen (max 60 per request): name,
-// photo, address, website, profile link — and phone for PUBLISHED listings only.
-// Never email. Cached 10 min at the CDN.
+// Card + popup details for the places currently on screen (max 60 per request):
+// name, photos, address, phone, email, website, socials, opening hours, amenities,
+// description, reviews and the profile / claim link. Cached 10 min at the CDN.
 import { NextRequest, NextResponse } from 'next/server';
 import { getExplorerDetails } from '@/lib/map/explorer-data';
 import { isLocale, DEFAULT_LOCALE, type Locale } from '@/lib/locales';
