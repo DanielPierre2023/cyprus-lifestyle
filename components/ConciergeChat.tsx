@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from '@/lib/i18n/routing';
 import CoverImage from '@/components/CoverImage';
+import ActivityCards, { type ActivityCardItem } from '@/components/ActivityCards';
 import type { Locale } from '@/lib/locales';
 
 export interface ConciergeChatLabels {
@@ -24,7 +25,7 @@ interface MemoryProfile { name?: string; language?: string; interests?: string[]
 interface Pick { slug: string; type: string; name: string; district: string | null; rating: number | null; rating_count: number | null; price_band: string | null; image: string | null; verified?: boolean; }
 interface GuideLink { label: string; path: string; }
 interface ArticleLink { slug: string; title: string; category: string | null; }
-interface Msg { role: 'user' | 'assistant'; content: string; picks?: Pick[]; guides?: GuideLink[]; articles?: ArticleLink[]; canRoute?: boolean; streaming?: boolean; }
+interface Msg { role: 'user' | 'assistant'; content: string; picks?: Pick[]; guides?: GuideLink[]; articles?: ArticleLink[]; activities?: ActivityCardItem[]; canRoute?: boolean; streaming?: boolean; }
 
 // "On Cyprus Lifestyle" heading for the related-articles block, per edition.
 const ARTICLES_TITLE: Record<string, string> = {
@@ -293,7 +294,7 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
           let evt: Record<string, unknown>; try { evt = JSON.parse(raw); } catch { continue; }
           if (evt.type === 'status') setStatus(evt.label === 'composing' ? labels.composing : labels.searching);
           else if (evt.type === 'delta') { acc += String(evt.text || ''); setStatus(''); setLast({ content: acc, streaming: true }); }
-          else if (evt.type === 'meta') setLast({ picks: (evt.picks as Pick[]) || [], guides: (evt.guides as GuideLink[]) || [], articles: (evt.articles as ArticleLink[]) || [], canRoute: Boolean(evt.canRoute) });
+          else if (evt.type === 'meta') setLast({ picks: (evt.picks as Pick[]) || [], guides: (evt.guides as GuideLink[]) || [], articles: (evt.articles as ArticleLink[]) || [], activities: (evt.activities as ActivityCardItem[]) || [], canRoute: Boolean(evt.canRoute) });
           else if (evt.type === 'error') { if (!acc) setLast({ content: labels.error }); }
           else if (evt.type === 'done') setLast({ streaming: false });
         }
@@ -455,6 +456,10 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
                           ))}
                         </div>
                       </>
+                    )}
+
+                    {m.role === 'assistant' && !m.streaming && m.activities && m.activities.length > 0 && (
+                      <ActivityCards items={m.activities} locale={locale} onOpen={(id: string) => { try { fetch('/api/track/rec-click', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug: `gyg:${id}`, source: 'concierge', label: 'book', locale }) }); } catch { /* best-effort attribution */ } }} />
                     )}
 
                     {m.role === 'assistant' && !m.streaming && m.canRoute && i === msgs.length - 1 && (

@@ -124,17 +124,21 @@ async function handleTextMessage(token: string, chatId: string, raw: string, uiL
 }
 
 // Append the single most relevant on-site link (the connector), tastefully.
-function appendLink(reply: string, ctx: { guides: { label: string; path: string }[]; picks: { type: string; slug: string; name: string }[] }, locale: string): string {
+function appendLink(reply: string, ctx: { guides: { label: string; path: string }[]; picks: { type: string; slug: string; name: string }[]; activities?: { title: string; url: string | null }[] }, locale: string): string {
   const prefix = locale && locale !== 'en' ? `/${locale}` : '';
+  const lines: string[] = [];
   if (ctx.guides && ctx.guides.length) {
     const g = ctx.guides[0];
-    return `${reply}\n\n${g.label}: ${SITE}${prefix}${g.path}`;
-  }
-  if (ctx.picks && ctx.picks.length) {
+    lines.push(`${g.label}: ${SITE}${prefix}${g.path}`);
+  } else if (ctx.picks && ctx.picks.length) {
     const p = ctx.picks[0];
-    return `${reply}\n\n${p.name}: ${SITE}${prefix}/directory/${p.type}/${p.slug}`;
+    lines.push(`${p.name}: ${SITE}${prefix}/directory/${p.type}/${p.slug}`);
   }
-  return reply;
+  // Up to two bookable experiences from our catalogue (GetYourGuide booking link, partner id
+  // applied, disclosed as a partner link) when the guest asked for things to do.
+  const PARTNER: Record<string, string> = { en: 'partner link', el: 'σύνδεσμος συνεργάτη', ro: 'link de partener', ar: 'رابط شريك', de: 'Partnerlink', pl: 'link partnerski', ru: 'партнёрская ссылка' };
+  for (const a of (ctx.activities || []).slice(0, 2)) if (a.url) lines.push(`${a.title} (GetYourGuide, ${PARTNER[locale] || PARTNER.en}): ${a.url}`);
+  return lines.length ? `${reply}\n\n${lines.join('\n')}` : reply;
 }
 
 function fallbackNote(locale: string): string {

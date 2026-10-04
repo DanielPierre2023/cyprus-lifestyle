@@ -66,7 +66,9 @@ export async function POST(req: NextRequest) {
       // show — surface the error path cleanly (the widget renders its own message).
       return NextResponse.json({ ok: false, error: 'The concierge is taking a moment — please try again.' }, { status: 502 });
     }
-    return NextResponse.json({ ok: true, answer: text, picks, guides });
+    // Bookable experiences (GetYourGuide) that fit this question — rendered as booking cards.
+    const activities = ctx.activities || [];
+    return NextResponse.json({ ok: true, answer: text, picks, guides, activities });
   } catch (e) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
   }

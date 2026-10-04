@@ -1,11 +1,13 @@
 'use client';
 // Privacy-first consent gate. Nothing loads until the reader chooses. On "Accept"
-// we mount Vercel's cookieless analytics; on "Decline" nothing is loaded.
+// we mount Vercel's cookieless analytics and the GetYourGuide partner script (needed
+// for the booking widgets); on "Decline" nothing is loaded.
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Link } from '@/lib/i18n/routing';
+import { GygAnalytics } from '@/components/GygWidget';
 
 const KEY = 'cl-consent';
 type Choice = 'granted' | 'denied' | null | undefined;
@@ -24,11 +26,12 @@ export default function ConsentAnalytics() {
   function decide(v: 'granted' | 'denied') {
     try { localStorage.setItem(KEY, v); } catch { /* private mode */ }
     setChoice(v);
+    try { window.dispatchEvent(new CustomEvent('cl-consent', { detail: v })); } catch { /* old browsers */ }
   }
 
   return (
     <>
-      {choice === 'granted' ? (<><Analytics /><SpeedInsights /></>) : null}
+      {choice === 'granted' ? (<><Analytics /><SpeedInsights /><GygAnalytics /></>) : null}
       {choice === null ? (
         <div className="consent" role="dialog" aria-label={t('title')}>
           <div className="consent-inner">

@@ -10,6 +10,11 @@ import { getMapCategories } from '@/lib/directory/map-data';
 import { categoryIcon, bizLabels, type BizCategory } from '@/lib/directory/map-meta';
 import { breadcrumbJsonLd, itemListJsonLd, ld, pageMetadata } from '@/lib/seo';
 import BusinessMap from '@/components/BusinessMap';
+import MapExplorer from '@/components/MapExplorer';
+import { explorerOnDirectory } from '@/lib/map/flags';
+import { getExplorerCounts } from '@/lib/map/explorer-data';
+import { explorerCategories, explorerGroups } from '@/lib/map/explorer-taxonomy';
+import { explorerUi } from '@/lib/map/explorer-i18n';
 import CoverImage from '@/components/CoverImage';
 import Concierge, { type ConciergeLabels } from '@/components/Concierge';
 import RecentlyViewed from '@/components/RecentlyViewed';
@@ -34,8 +39,11 @@ export default async function DirectoryIndex({ params }: { params: Promise<{ loc
   // Map = the interactive business map (categories + on-demand pins, paralieslive-style).
   // Chips = true head counts. Sections = a small preview per category (the full list
   // lives on /directory/[type]).
+  // MAP_EXPLORER=all → the new explorer replaces the BusinessMap section (everything else
+  // on this page is unchanged). Otherwise the original BusinessMap + its categories.
+  const useExplorer = explorerOnDirectory();
   const [mapCats, counts, groupCounts, previews] = await Promise.all([
-    getMapCategories(),
+    useExplorer ? Promise.resolve({ categories: [], total: 0 }) : getMapCategories(),
     getDirectoryCounts(),
     getGroupCounts(),
     Promise.all(DIRECTORY_TYPES.map(async (ty) => ({ ty, items: await getListings(l, ty, PREVIEW) }))),
@@ -136,7 +144,16 @@ export default async function DirectoryIndex({ params }: { params: Promise<{ loc
         `}</style>
       </div>
 
-      {bizCategories.length ? (
+      {useExplorer ? await (async () => {
+        const ec = await getExplorerCounts().catch(() => ({ cats: {} as Record<string, number>, districts: {}, total: 0 }));
+        const ui = explorerUi(l, (k) => t(k));
+        return (
+          <div className="wrap section">
+            <MapExplorer locale={l} mode="embed" ui={ui}
+              categories={explorerCategories(l, ec.cats, ui.events)} groups={explorerGroups(l, ui.events)} />
+          </div>
+        );
+      })() : bizCategories.length ? (
         <div className="wrap section"><BusinessMap locale={l} categories={bizCategories} labels={mapLabels} /></div>
       ) : null}
 

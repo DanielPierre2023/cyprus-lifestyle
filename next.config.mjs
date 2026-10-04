@@ -15,6 +15,9 @@ const withNextIntl = createNextIntlPlugin('./lib/i18n/request.ts');
 //   • api.open-meteo.com / marine-api.open-meteo.com — free weather + sea-temperature
 //     nowcast for the map/webcams (no API key).
 //   • worker-src blob: — MapLibre GL runs its tile worker from a blob: URL.
+// GetYourGuide Partner Programme (booking widgets, consent-gated — components/GygWidget.tsx):
+//   • widget.getyourguide.com — the partner Analytics script + the widget iframes;
+//   • *.getyourguide.com — the widget's own requests / beacons.
 const csp = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -24,15 +27,15 @@ const csp = [
   "img-src 'self' data: blob: https:",
   // Live-webcam embeds: YouTube Live (privacy-enhanced host) + Windy. Venue cams
   // that aren't on these hosts are linked out (opened on the source), not framed.
-  "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://*.windy.com",
+  "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://*.windy.com https://widget.getyourguide.com https://*.getyourguide.com",
   // The concierge plays its neural-voice reply from a blob: URL, so media-src must
   // allow blob: (without this, default-src 'self' blocks the audio entirely).
   "media-src 'self' blob: data:",
   "font-src 'self' data:",
   "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-  "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com https://cdn.jsdelivr.net",
+  "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com https://cdn.jsdelivr.net https://widget.getyourguide.com",
   "worker-src 'self' blob:",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://va.vercel-scripts.com https://vitals.vercel-insights.com https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://api.open-meteo.com https://marine-api.open-meteo.com",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://va.vercel-scripts.com https://vitals.vercel-insights.com https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://api.open-meteo.com https://marine-api.open-meteo.com https://*.getyourguide.com",
   "manifest-src 'self'",
   'upgrade-insecure-requests',
 ].join('; ');

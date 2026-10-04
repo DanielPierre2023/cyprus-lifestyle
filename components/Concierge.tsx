@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { Link } from '@/lib/i18n/routing';
 import CoverImage from '@/components/CoverImage';
+import ActivityCards, { type ActivityCardItem } from '@/components/ActivityCards';
 import type { Locale } from '@/lib/locales';
 
 export interface ConciergeReqLabels {
@@ -36,6 +37,7 @@ export default function Concierge({ locale, labels, autofocus = false }: { local
   const [loading, setLoading] = useState(false);
   const [answer, setAnswer] = useState('');
   const [picks, setPicks] = useState<ConciergePick[]>([]);
+  const [activities, setActivities] = useState<ActivityCardItem[]>([]);
   const [guides, setGuides] = useState<ConciergeGuide[]>([]);
   const [error, setError] = useState('');
   const [asked, setAsked] = useState(false);
@@ -66,9 +68,9 @@ export default function Concierge({ locale, labels, autofocus = false }: { local
         body: JSON.stringify({ q: query, locale }),
       });
       const d = await res.json();
-      if (!d.ok) { setError(d.error || labels.error); setAnswer(''); setPicks([]); setGuides([]); }
-      else { setAnswer(d.answer || ''); setPicks(Array.isArray(d.picks) ? d.picks : []); setGuides(Array.isArray(d.guides) ? d.guides : []); }
-    } catch { setError(labels.error); setAnswer(''); setPicks([]); setGuides([]); }
+      if (!d.ok) { setError(d.error || labels.error); setAnswer(''); setPicks([]); setGuides([]); setActivities([]); }
+      else { setAnswer(d.answer || ''); setPicks(Array.isArray(d.picks) ? d.picks : []); setGuides(Array.isArray(d.guides) ? d.guides : []); setActivities(Array.isArray(d.activities) ? d.activities : []); }
+    } catch { setError(labels.error); setAnswer(''); setPicks([]); setGuides([]); setActivities([]); }
     finally { setLoading(false); }
   }
 
@@ -134,6 +136,10 @@ export default function Concierge({ locale, labels, autofocus = false }: { local
             ))}
           </div>
         </>
+      ) : null}
+
+      {!loading && activities.length ? (
+        <ActivityCards items={activities} locale={locale} dark onOpen={(id: string) => { try { fetch('/api/track/rec-click', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug: `gyg:${id}`, source: 'concierge', label: 'book', locale }) }); } catch { /* best-effort attribution */ } }} />
       ) : null}
 
       {!loading && (picks.length || guides.length) ? (

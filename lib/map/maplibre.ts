@@ -44,6 +44,20 @@ export interface MlPopup {
 export interface MlBounds {
   extend(c: LngLat): MlBounds;
   isEmpty(): boolean;
+  contains?(c: LngLat): boolean;
+}
+
+export interface MlMarker {
+  setLngLat(c: LngLat): MlMarker;
+  addTo(map: MlMap): MlMarker;
+  remove(): void;
+  getElement(): HTMLElement;
+}
+
+export interface MlQueriedFeature {
+  id?: number | string;
+  properties: Record<string, unknown>;
+  geometry: { type: string; coordinates: LngLat };
 }
 
 export interface MlMapEvent {
@@ -63,6 +77,13 @@ export interface MlMap {
   addControl(control: unknown, position?: string): void;
   getCanvas(): HTMLCanvasElement;
   getZoom(): number;
+  getBounds(): MlBounds & { contains(c: LngLat): boolean };
+  project(c: LngLat): { x: number; y: number };
+  querySourceFeatures(source: string, opts?: Record<string, unknown>): MlQueriedFeature[];
+  isSourceLoaded(id: string): boolean;
+  off(type: string, layerOrListener: string | ((e: MlMapEvent) => void), listener?: (e: MlMapEvent) => void): void;
+  zoomIn(opts?: Record<string, unknown>): void;
+  zoomOut(opts?: Record<string, unknown>): void;
   flyTo(opts: Record<string, unknown>): void;
   easeTo(opts: Record<string, unknown>): void;
   fitBounds(bounds: MlBounds, opts?: Record<string, unknown>): void;
@@ -76,6 +97,7 @@ export interface MaplibreGL {
   NavigationControl: new (opts?: Record<string, unknown>) => unknown;
   AttributionControl: new (opts?: Record<string, unknown>) => unknown;
   LngLatBounds: new () => MlBounds;
+  Marker: new (opts?: Record<string, unknown>) => MlMarker;
 }
 
 declare global {
