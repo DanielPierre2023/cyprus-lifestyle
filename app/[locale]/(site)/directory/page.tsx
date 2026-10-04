@@ -39,8 +39,8 @@ export default async function DirectoryIndex({ params }: { params: Promise<{ loc
   // Map = the interactive business map (categories + on-demand pins, paralieslive-style).
   // Chips = true head counts. Sections = a small preview per category (the full list
   // lives on /directory/[type]).
-  // MAP_EXPLORER=all → the new explorer replaces the BusinessMap section (everything else
-  // on this page is unchanged). Otherwise the original BusinessMap + its categories.
+  // The new explorer replaces the BusinessMap section (MAP_EXPLORER=all, the default;
+  // everything else on this page is unchanged). MAP_EXPLORER=map|off → the original BusinessMap.
   const useExplorer = explorerOnDirectory();
   const [mapCats, counts, groupCounts, previews] = await Promise.all([
     useExplorer ? Promise.resolve({ categories: [], total: 0 }) : getMapCategories(),

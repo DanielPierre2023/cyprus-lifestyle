@@ -100,7 +100,7 @@ export function cleanExport(rows: Record<string, string>[]): { active: CatalogRo
     if (g.length < 2 || OVERRIDES[g[0].gyg_id]?.title) continue;
     const durs = new Set(g.map((r) => r.duration_label));
     if (durs.size < 2) continue;
-    for (const r of g) if (r.duration_label) { r.title = `${r.title} (${r.duration_label})`; r.slug = `${slugify(r.title).slice(0, 64).replace(/-[^-]*$/, '')}-${r.gyg_id}`; }
+    for (const r of g) if (r.duration_label) { r.title = /\)$/.test(r.title) ? r.title.replace(/\)$/, `, ${r.duration_label})`) : `${r.title} (${r.duration_label})`; r.slug = `${slugify(r.title).slice(0, 64).replace(/-[^-]*$/, '')}-${r.gyg_id}`; }
   }
   active.sort((a, b) => (a.district || 'zz').localeCompare(b.district || 'zz') || a.kind.localeCompare(b.kind) || a.title.localeCompare(b.title));
   return { active, dropped };

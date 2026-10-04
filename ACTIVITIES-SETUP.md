@@ -6,7 +6,7 @@ diving, jeep safaris, Troodos & wine tours, culture, classes …):
 tags, price level and map area, and links out to book with our booking partner
 (GetYourGuide, partner id `YEP5D0C`, commission on every booking). It is used in:
 
-1. **The map explorer** (`/map`, and `/directory` with `MAP_EXPLORER=all`) — 12 experience
+1. **The map explorer** (`/map` and the `/directory` map) — 12 experience
    kinds as chips, a Filters group ("Activities & tours"), the Price filter (€ … €€€€),
    search suggestions; each experience is a pin + card with our summary and **Book on
    GetYourGuide** (partner link, disclosed).

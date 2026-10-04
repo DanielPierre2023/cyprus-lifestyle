@@ -15,7 +15,7 @@ Nothing existing is removed or changed in behaviour:
 | Existing piece | Status |
 |---|---|
 | `components/LiveMap.tsx` (old `/map`) | untouched — still used when `MAP_EXPLORER=off` |
-| `components/BusinessMap.tsx` (`/directory` map) | untouched — still used unless `MAP_EXPLORER=all` |
+| `components/BusinessMap.tsx` (old `/directory` map) | untouched — still used when `MAP_EXPLORER=map` or `off` |
 | `/api/directory/businesses`, `lib/directory/map-data.ts`, `getMapItems()` | untouched |
 | Database | **no migration** — read-only use of existing columns |
 | `lib/directory/taxonomy.ts`, `lib/directory/map-meta.ts` | reused as the single source of categories, icons and labels |
@@ -26,11 +26,11 @@ Set in Vercel → Project → Settings → Environment Variables, then redeploy:
 
 | `MAP_EXPLORER` | `/map` | `/directory` map section |
 |---|---|---|
+| `all` *(default when unset)* | **new explorer** | **new explorer** (replaces the old Business map) |
+| `map` | **new explorer** | old BusinessMap |
 | `off` | old LiveMap | old BusinessMap |
-| `map` *(default when unset)* | **new explorer** | old BusinessMap |
-| `all` | **new explorer** | **new explorer** (embedded) |
 
-Rollback = set `MAP_EXPLORER=off` (or `map`) and redeploy. No code revert.
+Rollback = set `MAP_EXPLORER=map` (keep the new `/map` only) or `off`, and redeploy. No code revert.
 
 ## What was added
 
@@ -74,7 +74,7 @@ popup offers Call / Website / Directions — exactly like the old directory map.
 3. Type a category ("dentist") → suggestion with count → pins on the map, URL `?cat=dentist`.
 4. Open **Filters** → all 89 categories in 17 groups with counts.
 5. Click a `listed` business → popup with Website / Directions, no phone.
-6. Optional: set `MAP_EXPLORER=all` and check `/directory`.
+6. `https://<domain>/directory` → the same explorer replaces the old "Business map" section.
 
 ## Optional follow-ups (not done — your call)
 
