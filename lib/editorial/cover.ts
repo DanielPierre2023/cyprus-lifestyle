@@ -126,6 +126,11 @@ async function edgePost(body: Record<string, unknown>, timeoutMs: number): Promi
   }
 }
 
+// Resolve to `null` after `ms` (or on error) - never rejects, never hangs the request.
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([p.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), ms))]);
+}
+
 // ── STOCK ────────────────────────────────────────────────────────────────────
 
 export async function stockCover(input: CoverInput): Promise<CoverResult | null> {
@@ -198,6 +203,12 @@ export async function aiCover(input: CoverInput): Promise<CoverResult | null> {
     const path = `ai-covers/${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
     const { error } = await sb.storage.from('blog-images').upload(path, bytes, { contentType: 'image/png', upsert: false });
     if (error) return null;
+    // Pre-resized 480/960/1440 WebP copies, so this cover never needs the backfill (lib/imageVariants.node.ts).
+    // Best-effort and time-boxed: a failure or timeout only means the original is served (CoverImage falls back).
+    await withTimeout(
+      import('@/lib/imageVariants.node').then((m) => m.ensureVariants(sb, 'blog-images', path, bytes!)),
+      20000,
+    );
     const { data } = sb.storage.from('blog-images').getPublicUrl(path);
     if (!data?.publicUrl) return null;
     return { url: data.publicUrl, credit: 'Illustration: Cyprus Lifestyle (AI)', alt, source: 'ai' };

@@ -55,7 +55,11 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      // Greek fonts (public/fonts/el, lib/fontsGreek.ts): file names change when the file changes, so cache them for good.
+      { source: '/fonts/:path*', headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }] },
+    ];
   },
   images: {
     // IMAGE STRATEGY (Phase 6.1, Vercel HOBBY + Supabase FREE; owner: no paid plans).

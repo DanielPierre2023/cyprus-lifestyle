@@ -25,7 +25,7 @@ import { geocode, haversineMeters, bbox } from '@/lib/geo';
 import { getActivities, gygPartnerId } from '@/lib/activities/data';
 import { rankActivities } from '@/lib/activities/match';
 import { kindLabel, affiliateUrl, priceBasisLabel } from '@/lib/activities/classify';
-import { markLinkable, renderSourcesBlock, toCard, type SourceHit, type SourceNotes, type SourceCard, type TrustLabel } from '@/lib/concierge/sources';
+import { markLinkable, renderSourcesBlock, toCard, sourceHints, type SourceHit, type SourceNotes, type SourceCard, type TrustLabel } from '@/lib/concierge/sources';
 import { retrieveSources, publishedSet } from '@/lib/concierge/sourcesRetrieve';
 import { supabaseSourceDeps } from '@/lib/concierge/sourcesDeps';
 
@@ -548,12 +548,23 @@ async function searchByName(locale: string, q: string, limit = 12): Promise<Pick
 // ── Semantic recall (pgvector) — one query embedding feeds both the KB and the
 // whole directory. Returns [] whenever embeddings aren't configured, so the
 // concierge always degrades cleanly to keyword search. ────────────────────────
+export const KB_VECTOR_DEPTH = 40;
+/** Keep only ids that are static intents (never kb_docs uuids), in rank order, at most `max`. */
+export function staticKbIds(ids: string[], isStatic: (id: string) => boolean, max = 6): string[] {
+  const out: string[] = [];
+  for (const id of ids) { if (id && isStatic(id) && !out.includes(id)) out.push(id); if (out.length >= max) break; }
+  return out;
+}
 async function vectorKbIds(vec: number[] | null): Promise<string[]> {
   if (!vec) return [];
   try {
-    const { data, error } = await supabaseAdmin().rpc('match_kb', { query_embedding: vec, match_count: 6 });
+    // kb_embeddings also holds ~816 kb_docs vectors (uuid ids). match_kb used to return the top 6 of BOTH
+    // populations, so scraped pages could fill all six slots and the 94 static intents were silently dropped
+    // (their ids are not in QA_INDEX). Ask for a deeper list and keep only static intent ids; migration
+    // 20261007110000 makes the SQL side exact too, but this works with or without it.
+    const { data, error } = await supabaseAdmin().rpc('match_kb', { query_embedding: vec, match_count: KB_VECTOR_DEPTH });
     if (error || !Array.isArray(data)) return [];
-    return (data as { id: string }[]).map((r) => String(r.id)).filter(Boolean);
+    return staticKbIds((data as { id: string }[]).map((r) => String(r.id)), (id) => !!QA_INDEX[id], 6);
   } catch { return []; }
 }
 
@@ -694,18 +705,22 @@ export async function assembleContext(locale: string, latestUser: string): Promi
 
   // Increment 2.1 — retrieval over every other source + the "link only published listings" gate.
   // Kill switch: CONCIERGE_ALL_SOURCES=0 restores the previous behaviour exactly.
-  if (process.env.CONCIERGE_ALL_SOURCES === '0') return { candidates, picks, guides, articles, kb, canRoute, luxury, near, activities };
+  // The kill switch only turns off the extra SOURCES; the link gate below always runs, because a 'listed'
+  // business has no public page and must never be linked.
+  const sourcesOn = process.env.CONCIERGE_ALL_SOURCES !== '0';
   const deps = supabaseSourceDeps();
   const [bundle, published] = await Promise.all([
-    retrieveSources(deps, { q: latestUser, locale, qvec, district: intentDistrict }, process.env as Record<string, string | undefined>)
-      .catch(() => null),
+    sourcesOn
+      ? retrieveSources(deps, { q: latestUser, locale, qvec, district: intentDistrict }, process.env as Record<string, string | undefined>).catch(() => null)
+      : Promise.resolve(null),
     publishedSet(deps, [...candidates.map((c) => c.slug), ...picks.map((c) => c.slug)]),
   ]);
   const flag = <T extends Pick>(list: T[]): T[] => markLinkable(list, published) as unknown as T[];
   const seenAct = new Set((activities || []).map((a) => a.id));
-  const seenArt = new Set(articles.map((a) => a.slug));
-  const sources = (bundle?.hits || []).filter((h) => !(h.kind === 'activity' && seenAct.has(h.id)) && !(h.kind === 'article' && seenArt.has(h.id)));
-  return { candidates: flag(candidates), picks: flag(picks), guides, articles, kb, canRoute, luxury, near, activities, sources, sourceNotes: bundle?.notes };
+  const sources = (bundle?.hits || []).filter((h) => !(h.kind === 'activity' && seenAct.has(h.id)));
+  // An article found by meaning keeps its card (and its sponsored / editorial label); drop the plain duplicate link.
+  const srcArt = new Set(sources.filter((h) => h.kind === 'article').map((h) => h.id));
+  return { candidates: flag(candidates), picks: flag(picks), guides, articles: articles.filter((a) => !srcArt.has(a.slug)), kb, canRoute, luxury, near, activities, sources, sourceNotes: bundle?.notes };
 }
 
 function toActivityPick(a: Awaited<ReturnType<typeof getActivities>>[number], locale: string): ActivityPick {
@@ -933,7 +948,7 @@ async function directAnswer(system: string, history: ChatMessage[]): Promise<str
 export type StreamEvent =
   | { type: 'status'; label: string }
   | { type: 'delta'; text: string }
-  | { type: 'meta'; picks: Pick[]; guides: GuideLink[]; articles: ArticleLink[]; canRoute: boolean; kb: number; near: boolean; activities: ActivityPick[]; sourceCards?: SourceCard[] }
+  | { type: 'meta'; picks: Pick[]; guides: GuideLink[]; articles: ArticleLink[]; canRoute: boolean; kb: number; near: boolean; activities: ActivityPick[]; sourceCards?: SourceCard[]; sourceHints?: { agenda: boolean; live: boolean } }
   | { type: 'error'; error: string }
   | { type: 'done' };
 
@@ -997,6 +1012,6 @@ export async function* streamConcierge(messages: ChatMessage[], locale: string, 
   }
 
   if (!gotText) yield { type: 'error', error: errDetail || 'unavailable' };
-  yield { type: 'meta', picks: ctx.picks, guides: ctx.guides, articles: ctx.articles, canRoute: ctx.canRoute, kb: ctx.kb.length, near: !!ctx.near, activities: ctx.activities || [], sourceCards: (ctx.sources || []).map((h) => toCard(h, loc)) };
+  yield { type: 'meta', picks: ctx.picks, guides: ctx.guides, articles: ctx.articles, canRoute: ctx.canRoute, kb: ctx.kb.length, near: !!ctx.near, activities: ctx.activities || [], sourceCards: (ctx.sources || []).map((h) => toCard(h, loc)), sourceHints: sourceHints(ctx.sources, ctx.sourceNotes) };
   yield { type: 'done' };
 }

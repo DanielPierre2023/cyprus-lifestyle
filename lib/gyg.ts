@@ -54,7 +54,9 @@ export function gygLocationFor(districtOrTown: string | null | undefined) {
 
 /** Site locale → GetYourGuide widget locale code (languages GYG doesn't serve fall back to English). */
 export function gygLocaleCode(locale: string): string {
-  const M: Record<string, string> = { en: 'en-US', de: 'de-DE', pl: 'pl-PL', ru: 'ru-RU', el: 'en-US', ro: 'en-US', ar: 'en-US' };
+  // el/ro were mapped to en-US (their own editions showed an English widget); GYG serves el-GR and ro-RO. Arabic stays
+  // en-US: GYG's Arabic support could not be verified offline (unsupported codes fall back to English anyway).
+  const M: Record<string, string> = { en: 'en-US', de: 'de-DE', pl: 'pl-PL', ru: 'ru-RU', el: 'el-GR', ro: 'ro-RO', ar: 'en-US' };
   return M[locale] || 'en-US';
 }
 

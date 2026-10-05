@@ -1,0 +1,70 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Visit Cyprus - ECPv6.15.20//NONSGML v1.0//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Visit Cyprus
+X-ORIGINAL-URL:https://www.visitcyprus.com
+X-WR-CALDESC:Events for Visit Cyprus
+REFRESH-INTERVAL;VALUE=DURATION:PT1H
+X-Robots-Tag:noindex
+X-PUBLISHED-TTL:PT1H
+BEGIN:VTIMEZONE
+TZID:Asia/Nicosia
+END:VTIMEZONE
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20260401
+DTEND;VALUE=DATE:20270101
+DTSTAMP:20261005T204338
+CREATED:20260331T060559Z
+LAST-MODIFIED:20260331T060559Z
+UID:785312-1775001600-1798761599@www.visitcyprus.com
+SUMMARY:Larnaka Spring & Easter 2026 Events
+DESCRIPTION:Spring & Easter 2026 events in Larnaka Region. \nFOR THE EVENT CALENDAR AND PROGRAMME CLICK HERE
+URL:https://www.visitcyprus.com/event/larnaka-spring-easter-2026-events/
+LOCATION:Larnaka Region\, Larnaka\, Cyprus
+CATEGORIES:Cultural
+ATTACH;FMTTYPE=image/jpeg:https://www.visitcyprus.com/wp-content/uploads/2026/03/tourism-board-events.jpg
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=Asia/Nicosia:20261009T090000
+DTEND;TZID=Asia/Nicosia:20261015T220000
+DTSTAMP:20261005T204339
+CREATED:20260813T053000Z
+LAST-MODIFIED:20260813T053104Z
+UID:790789-1791536400-1792101600@www.visitcyprus.com
+SUMMARY:IDO World Championship - 9-15.10.2026
+DESCRIPTION:IDO WORLD CHAMPIONSHIP OF LATIN STYLE\nIDO WORLD CHAMPIONSHIP OF DISCOFOX\nIDO WORLD CHAMPIONSHIP OF CARIBBEAN DANCES\nIDO EUROPEAN CHAMPIONSHIP OF LATIN SHOW\nIDO EUROPEAN CHAMPIONSHIP OF CARIBBEAN SHOW\nDIAMOND GRAND PRIX\n\nThe competition will bring together dancers\, dance teams\, coaches\, choreographers\, judges and official representatives from different countries. Participants will compete across different age groups and dance disciplines\, presenting a high level of technical\, artistic and choreographic performance. \nThe programme will include Solo\, Duo\, Group and Formation categories and will cover Latin\, Caribbean\, Discofox and Show Dance disciplines. The event will combine high-level competitive sport with professional stage performances and an international dance festival atmosphere. \nA special part of the programme will be the DIAMOND GRAND PRIX\, providing an additional prestigious competitive platform for dancers and presenting the highest level of dance sport in an engaging show format. \nThe event will be professionally organised with an international judging panel\, competition management\, sound and lighting production\, stage design\, athlete and official areas\, spectator facilities\, photography and video production\, and dedicated information and media coverage. \nThe championship is designed to welcome participants of different ages\, including children\, juniors\, youth and adults. It will provide athletes with the opportunity to represent their countries and dance schools\, gain international competitive experience and interact with dancers and professionals from other countries. \nThe event will also create an international platform for professional exchange between dancers\, coaches\, choreographers and judges\, contributing to the development and promotion of dance sport and dance culture in Cyprus.
+URL:https://www.visitcyprus.com/event/ido-world-championship-9-15-10-2026/
+LOCATION:Multi-functional Center  for Social Activities and Welfare of Larnaka Municipality\, 63 Faneromenis Str.\, Larnaka\, 6025\, Cyprus
+CATEGORIES:Cultural,Dance
+ATTACH;FMTTYPE=image/jpeg:https://www.visitcyprus.com/wp-content/uploads/2026/08/dance.jpg
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=Asia/Nicosia:20261009T200000
+DTEND;TZID=Asia/Nicosia:20261010T223000
+DTSTAMP:20261005T204339
+CREATED:20260622T113928Z
+LAST-MODIFIED:20260622T113928Z
+UID:787838-1791576000-1791671400@www.visitcyprus.com
+SUMMARY:Aida Garifullina | Cyprus Symphony Orchestra - 9-10.10.2026
+DESCRIPTION:World-renowned soprano Aida Garifullina comes to Cyprus for two extraordinary evenings of classical music\, together with the Cyprus Symphony Orchestra. \nAida Garifullina is considered one of the most celebrated voices of today’s opera world. She is a soloist of the Vienna State Opera and has performed on the world’s most prestigious stages\, including the Metropolitan Opera in New York\, La Scala in Milan\, the Royal Opera House in London\, Paris Opera\, Arena di Verona\, and the Salzburg Festival. \nHer international career rose to prominence after winning the Operalia competition founded by Plácido Domingo\, and she has collaborated with leading artists and musicians worldwide. \nIn 2018\, Aida Garifullina performed at the opening ceremony of the FIFA World Cup in Moscow alongside Robbie Williams\, in one of the most widely viewed musical events worldwide. \nThe concert will take place at the iconic Ancient Kourion Amphitheatre\, under the Cypriot night sky\, featuring masterpieces of opera and classical music. \nA rare cultural experience with one of the greatest sopranos of our time\, accompanied by the Cyprus Symphony Orchestra.
+URL:https://www.visitcyprus.com/event/aida-garifullina-cyprus-symphony-orchestra-9-10-10-2026/
+LOCATION:Curium Ancient Theatre
+CATEGORIES:Cultural,Music
+ATTACH;FMTTYPE=image/jpeg:https://www.visitcyprus.com/wp-content/uploads/2026/06/soprano.jpg
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=Asia/Nicosia:20261010T100000
+DTEND;TZID=Asia/Nicosia:20261011T200000
+DTSTAMP:20261005T204339
+CREATED:20260914T084736Z
+LAST-MODIFIED:20260914T084736Z
+UID:791777-1791626400-1791748800@www.visitcyprus.com
+SUMMARY:22nd Kyperounta Apple Festival - 10-11.10.2026
+DESCRIPTION:The Apple Festival was established in 2002 as a simple social and dance gathering\, with the aim of bringing together and entertaining the local community. Over the years\, the event gradually evolved and gained increasing recognition and popularity. \nIn 2012\, the event was relocated to the central square of Kyperounta and transformed into a one-day festival\, opening its doors to a wider audience and attracting visitors from across Cyprus. Its great success and the growing participation of the public led\, in 2014\, to its establishment as a two-day festival. \nSince then\, the Apple Festival has evolved into a well-established annual institution\, attracting a large number of visitors each year and serving as a point of reference for Kyperounta and the wider mountainous region. From a small local event\, it has developed into one of the largest and most beloved festivals in Cyprus\, while maintaining its authentic character and strong connection to the local community\, traditions and agricultural production. \nThe Apple Festival is one of Kyperounta’s most significant annual cultural and gastronomic events\, with the apple\, local production and the rich traditions of the area at its heart. Through a diverse and multifaceted programme\, the Festival highlights the unique identity of Kyperounta while showcasing the natural\, cultural\, agricultural and gastronomic wealth of the wider region. \nA central element of the Festival is its thematic exhibition and market stalls\, which are directly associated with apples and apple-based products\, as well as with local products from Kyperounta and the surrounding communities. Visitors have the opportunity to discover and taste a wide range of products made from apples\, alongside a variety of traditional and contemporary local products\, creating a comprehensive culinary experience and an opportunity to discover the area’s local production. \nParticular emphasis is placed on the participation and promotion of local producers\, artisans and businesses. The Festival provides an important platform for established businesses in Kyperounta to showcase their products and services\, while also creating opportunities for emerging businesses\, new entrepreneurial initiatives and innovative products to gain visibility. Through their participation in the Festival\, small local businesses and emerging producers have the opportunity to present their work to a broad audience\, engage directly with consumers and visitors\, and explore new opportunities for growth and development. \nThe Festival goes beyond the presentation and sale of products\, seeking to offer visitors an immersive experience of the traditions and cultural heritage of the area. To this end\, a variety of workshops are organised\, allowing members of the public to participate actively. The workshops are primarily traditional in character and give both children and adults the opportunity to discover traditional techniques\, recipes\, crafts and methods of production\, transforming a visit to the Festival from a passive experience into an engaging and interactive one. \nAn important part of the Festival is also its artistic and music-and-dance programme. Traditional Cypriot dances and music are presented throughout the Festival\, highlighting the island’s cultural heritage and creating an authentic Cypriot atmosphere. The participation of traditional dance groups\, musicians and other artists enriches the programme and provides entertainment for visitors of all ages.\nParticular importance is also placed on the active involvement of the local community. The Festival is the result of a collective effort involving residents\, volunteers\, producers\, businesses\, cultural organisations and professionals from the area. In this way\, the Festival strengthens the sense of community and cooperation\, while fostering an institution that is deeply rooted in Kyperounta and its people. \nThe Apple Festival also serves as an important platform for promoting Kyperounta as a tourist destination. The event provides visitors from across Cyprus with the opportunity to discover the village\, explore the surrounding area\, experience local production and engage with the traditional way of life and cultural heritage of the mountainous regions of Cyprus. The significant number of visitors attracted by the Festival contributes to strengthening the local economy and increasing activity for businesses in accommodation\, food and beverage\, retail and other tourism-related sectors in the area. \nThrough the combination of gastronomy\, agricultural production\, tradition\, culture\, entertainment and active public participation\, the Apple Festival has developed a distinctive identity of its own. The aim of the organisers is for the Festival to continue to grow and evolve each year\, while preserving its authentic and traditional character\, so that it remains both a complete and memorable visitor experience and an important means of supporting and promoting the local community and its production. \nFinally\, the Festival seeks to bridge tradition with contemporary entrepreneurship by providing space for new ideas\, emerging producers and new businesses to showcase their work. In this way\, the Festival is not merely a celebration of the apple\, but an institution that actively contributes to the preservation of cultural heritage\, the promotion of local products\, the strengthening of the local economy and the tourism promotion of Kyperounta and the wider mountainous region of Cyprus.
+URL:https://www.visitcyprus.com/event/22nd-kyperounta-apple-festival-10-11-10-2026/
+LOCATION:Kyperounta’s Square\, 1st April 18\, Kyperounta\, 4876\, Cyprus
+ATTACH;FMTTYPE=image/jpeg:https://www.visitcyprus.com/wp-content/uploads/2026/09/apple-festival.jpg
+END:VEVENT
+END:VCALENDAR

@@ -24,14 +24,28 @@ export interface Snapshot {
   billing: { stripeKeySet: boolean; liveKey: boolean; vatOff: boolean; webhookUnprocessed: number; vatAlerts: number };
   errors24h: number;
   mailConfigured: boolean;
+  events: EventsSnapshot;
 }
+
+/** The automated agenda (increment 7.1): is the pipeline alive, and is there always something coming up? */
+export interface EventsSnapshot {
+  pipelineOn: boolean;                          // automation_settings.events_pipeline_enabled (default on)
+  tablesReady: boolean;                         // migration 20261007120000 applied
+  enabledSources: number;
+  lastSuccessAt: string | null;                 // newest successful source run
+  failingSources: number;                       // enabled sources with 3+ failed runs in a row
+  upcoming30: number;                           // published, real events (public holidays not counted) starting in the next 30 days or running now
+  draftsWaiting: number;                        // future drafts awaiting approval
+}
+export const EVENTS_MIN_UPCOMING_30D = 5;       // fewer than this: warn; none at all: red
+export const EVENTS_MAX_SILENCE_H = 36;         // no successful pipeline run for this long: red
 
 const MIN = 60_000, HOUR = 3_600_000;
 const age = (iso: string | null, now: Date) => (iso ? now.getTime() - Date.parse(iso) : Infinity);
 const human = (ms: number) => (!Number.isFinite(ms) ? 'never' : ms < HOUR ? `${Math.round(ms / MIN)} min ago` : ms < 48 * HOUR ? `${Math.round(ms / HOUR)} h ago` : `${Math.round(ms / (24 * HOUR))} days ago`);
 
 /** Longest acceptable silence per scheduled job. */
-export const JOB_MAX_SILENCE: Record<string, number> = { 'cl-worker': 15 * MIN, 'cl-process': 60 * MIN, 'cyprus-scrape-rss': 8 * HOUR, 'enrich-slow-all': 36 * HOUR };
+export const JOB_MAX_SILENCE: Record<string, number> = { 'cl-worker': 15 * MIN, 'cl-process': 60 * MIN, 'cyprus-scrape-rss': 8 * HOUR, 'enrich-slow-all': 36 * HOUR, 'cl-events-ingest': 8 * HOUR, 'cl-booking-sla': 45 * MIN, 'cl-embed-sources': 36 * HOUR };
 
 export const SCHEDULER_FIX = 'Supabase → SQL Editor: add the Vault secrets named at the top of supabase/pg_cron/install-jobs.sql, then run that file (docs/OPERATIONS.md).';
 
@@ -50,6 +64,9 @@ export function evaluate(s: Snapshot): Check[] {
       ['cl-process', !!t.processor_enabled, 'AI desk (the “AI processor” switch is ON, so this job is required)'],
       ['cyprus-scrape-rss', !!t.scraper_enabled, 'RSS scraper (the “RSS scraper” switch is ON, so this job is required)'],
       ['enrich-slow-all', false, 'slow directory enrichment'],
+      ['cl-booking-sla', true, 'booking first-reply breach alerts and partner reminders'],
+      ['cl-embed-sources', false, 'nightly indexing of new articles, events and activities for the concierge'],
+      ['cl-events-ingest', false, 'refreshes the Agenda from the event sources every 3 hours (without it the daily Vercel job still does it once a day)'],
     ];
     for (const [name, required, why] of need) {
       const j = by.get(name);
@@ -100,6 +117,27 @@ export function evaluate(s: Snapshot): Check[] {
   add({ key: 'errors', area: 'Errors', label: 'Errors in the last 24 h', level: s.errors24h >= 100 ? 'red' : s.errors24h >= 20 ? 'warn' : 'ok', detail: `${s.errors24h} logged error(s).`, fix: s.errors24h >= 20 ? 'Admin → Analytics → recent errors.' : undefined });
   add({ key: 'mail', area: 'E-mail', label: 'Outgoing e-mail', level: s.mailConfigured ? 'ok' : 'warn', detail: s.mailConfigured ? 'Resend is configured.' : 'RESEND_API_KEY is not set: no e-mail can be sent.', fix: s.mailConfigured ? undefined : 'Add RESEND_API_KEY and EMAIL_FROM in Vercel.' });
 
+  // ── automated agenda: pipeline alive + freshness ──
+  const ev = s.events;
+  if (!ev.tablesReady) add({ key: 'events-pipeline', area: 'Agenda', label: 'Events pipeline', level: 'warn', detail: 'The events pipeline tables are missing — migration 20261007120000_events_pipeline.sql has not been run.', fix: 'Run that migration in the SQL Editor.' });
+  else if (!ev.pipelineOn) add({ key: 'events-pipeline', area: 'Agenda', label: 'Events pipeline', level: 'info', detail: 'Switched off (automation_settings.events_pipeline_enabled = false): the Agenda is not refreshed automatically.', fix: 'Turn it back on in Admin → Events sources.' });
+  else if (ev.enabledSources === 0) add({ key: 'events-pipeline', area: 'Agenda', label: 'Events pipeline', level: 'warn', detail: 'No event source is enabled, so nothing new can arrive.', fix: 'Admin → Events sources → enable at least one source.' });
+  else {
+    const silent = age(ev.lastSuccessAt, s.now);
+    if (!ev.lastSuccessAt) add({ key: 'events-pipeline', area: 'Agenda', label: 'Events pipeline', level: 'warn', detail: 'The events pipeline has not completed a run yet.', fix: 'Admin → Events sources → “Run now”; check that the cl-worker job is running.' });
+    else if (silent > EVENTS_MAX_SILENCE_H * HOUR) add({ key: 'events-pipeline', area: 'Agenda', label: 'Events pipeline', level: 'red', detail: `No successful events run for ${human(silent)} (limit ${EVENTS_MAX_SILENCE_H} h) — the Agenda is going stale.`, fix: 'Admin → Events sources: read the last error per source; check the cl-worker job and the daily Vercel job.' });
+    else if (ev.failingSources > 0) add({ key: 'events-pipeline', area: 'Agenda', label: 'Events pipeline', level: 'warn', detail: `Last success ${human(silent)}, but ${ev.failingSources} source(s) failed 3+ times in a row.`, fix: 'Admin → Events sources: see the error of the failing source(s).' });
+    else add({ key: 'events-pipeline', area: 'Agenda', label: 'Events pipeline', level: 'ok', detail: `Last successful run ${human(silent)}; ${ev.enabledSources} source(s) enabled.` });
+  }
+  if (ev.tablesReady) {
+    const lowFix = 'Admin → Events sources: enable more sources or approve the drafts waiting in Admin → Agenda' + (ev.draftsWaiting ? ` (${ev.draftsWaiting} future draft(s) are waiting).` : '.');
+    add(ev.upcoming30 === 0
+      ? { key: 'events-fresh', area: 'Agenda', label: 'Upcoming events', level: 'red', detail: 'No event is scheduled in the next 30 days — the public Agenda looks empty.', fix: lowFix }
+      : ev.upcoming30 < EVENTS_MIN_UPCOMING_30D
+        ? { key: 'events-fresh', area: 'Agenda', label: 'Upcoming events', level: 'warn', detail: `Only ${ev.upcoming30} event(s) in the next 30 days (public holidays not counted; target ${EVENTS_MIN_UPCOMING_30D}+).`, fix: lowFix }
+        : { key: 'events-fresh', area: 'Agenda', label: 'Upcoming events', level: 'ok', detail: `${ev.upcoming30} events in the next 30 days.` });
+  }
+
   // ── switches that promise a job ──
   for (const row of toggleRows(s)) {
     if (row.on && row.state === 'broken') add({ key: `toggle:${row.key}`, area: 'Switches', label: row.label, level: 'red', detail: `Switched ON, but nothing is running it: ${row.how}.`, fix: row.fix });
@@ -118,6 +156,7 @@ export const TOGGLES: ToggleDef[] = [
   { key: 'developments_autopublish', label: 'Publish scraped projects live', via: 'tick', needs: 'developments_enabled', note: 'Only acts through the developer-projects scraper.' },
   { key: 'regulation_watch_enabled', label: 'Regulation watch', via: 'tick', note: 'Queued daily by the Vercel job, worked by the worker.' },
   { key: 'events_watch_enabled', label: 'Agenda actualiser', via: 'tick', note: 'Queued daily by the Vercel job, worked by the worker.' },
+  { key: 'events_pipeline_enabled', label: 'Events pipeline (automatic Agenda)', via: 'tick', note: 'Queued daily by the Vercel job and every 3 h by the Supabase job cl-events-ingest; worked by the worker.' },
   { key: 'mail_autoack_enabled', label: 'Auto-acknowledge e-mail', via: 'event', note: 'Runs when an e-mail arrives; no schedule needed.' },
 ];
 

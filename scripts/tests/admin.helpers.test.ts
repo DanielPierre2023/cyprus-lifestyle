@@ -1,7 +1,7 @@
 // Small pure helpers behind Admin → Members / Audit log / revalidate.
 import { auditRow } from '@/lib/audit';
 import { checkGrant, isComp, memberStats, membersCsv, type MemberRow } from '@/lib/membersAdmin';
-import { pathsFor } from '@/lib/revalidatePaths';
+import { pathsFor, tagsFor } from '@/lib/revalidatePaths';
 import { eq, ok, report } from './_harness';
 
 const NOW = new Date('2026-10-05T12:00:00Z');
@@ -40,6 +40,8 @@ const m = (o: Partial<MemberRow>): MemberRow => ({ id: 'x', email: 'a@b.co', tie
   ok('default edition has no prefix, others do', p.includes('/') && p.includes('/article/my-article-1') && p.includes('/de/property') && p.includes('/ar'));
   eq('unsafe values are ignored (no path traversal)', pathsFor({ slug: '../../admin', category: 'a/b' }).length, 7);
   eq('nothing given → just the home pages', pathsFor({}).length, 7);
+  eq('publish also refreshes by tag: article + home + category', tagsFor({ slug: 'my-article-1', category: 'property' }), ['article:my-article-1', 'home', 'cat:property']);
+  eq('no slug / unsafe slug → no tags', [tagsFor({}), tagsFor({ slug: '../x' })], [[], []]);
 }
 
 report('admin.helpers');

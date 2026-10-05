@@ -21,6 +21,8 @@ export interface BookingCopy {
   queueMember: string; queueStandard: string; replyTarget: string; replyDone: string;
   optionsTitle: string; optionsIntro: string; partnerLabel: string; priceLabel: string; noOptions: string; disclosure: string;
   invalidLink: string; keepPrivate: string; hoursNote: string;
+  // /account — the member's own requests
+  acctTitle: string; acctIntro: string; acctNone: string; acctOpen: string; acctShared: string; acctSent: string;
   st_new: string; st_in_progress: string; st_awaiting_partner: string; st_quote_ready: string; st_confirmed: string; st_completed: string; st_cancelled: string; st_closed: string;
   // partner e-mail
   pSubject: string; pReminderSubject: string; pHeading: string; pGreeting: string; pGreetingAnon: string; pIntro: string; pRequestLabel: string;
@@ -43,7 +45,8 @@ const en: BookingCopy = {
   optionsTitle: 'Options from our partners', optionsIntro: 'Our desk has reviewed these replies for you. Prices are the partner’s own quote.',
   partnerLabel: 'Partner', priceLabel: 'Quoted price', noOptions: 'There are no options to show yet. We will e-mail you when there is news.',
   disclosure: 'Cyprus Lifestyle may receive a commission from partners on confirmed bookings.',
-  invalidLink: 'This link is not valid.', keepPrivate: 'Keep this link private: anyone who has it can see this page.', hoursNote: 'Working hours: Monday–Friday, 09:00–18:00 Cyprus time.',
+  invalidLink: 'This link is not valid.', keepPrivate: 'Keep this link private: anyone who has it can see this page.', hoursNote: 'Working hours: Monday–Friday, 09:00–18:00 Cyprus time, except Cyprus public holidays.',
+  acctTitle: 'Your requests', acctIntro: 'Concierge requests you sent with your e-mail address or while signed in. Open one to follow it and to see the partner answers our desk has shared with you.', acctNone: 'You have not sent a request yet.', acctOpen: 'Open request', acctShared: 'Partner answers shared with you: {n}', acctSent: 'Sent',
   st_new: 'Received', st_in_progress: 'Being handled', st_awaiting_partner: 'Waiting for a partner’s reply', st_quote_ready: 'Options ready', st_confirmed: 'Confirmed', st_completed: 'Completed', st_cancelled: 'Cancelled', st_closed: 'Closed',
   pSubject: 'Guest request {ref} — can you help? — Cyprus Lifestyle', pReminderSubject: 'Reminder: guest request {ref} — Cyprus Lifestyle', pHeading: 'A guest request for your business',
   pGreeting: 'Hello {name},', pGreetingAnon: 'Hello,',
@@ -71,7 +74,8 @@ const el: BookingCopy = {
   optionsTitle: 'Επιλογές από τους συνεργάτες μας', optionsIntro: 'Το γραφείο μας έλεγξε αυτές τις απαντήσεις για εσάς. Οι τιμές είναι η προσφορά του ίδιου του συνεργάτη.',
   partnerLabel: 'Συνεργάτης', priceLabel: 'Προσφερόμενη τιμή', noOptions: 'Δεν υπάρχουν ακόμη επιλογές. Θα σας στείλουμε email όταν υπάρξουν νέα.',
   disclosure: 'Το Cyprus Lifestyle ενδέχεται να λαμβάνει προμήθεια από συνεργάτες για επιβεβαιωμένες κρατήσεις.',
-  invalidLink: 'Αυτός ο σύνδεσμος δεν είναι έγκυρος.', keepPrivate: 'Κρατήστε αυτόν τον σύνδεσμο ιδιωτικό: όποιος τον έχει μπορεί να δει τη σελίδα.', hoursNote: 'Ώρες εργασίας: Δευτέρα–Παρασκευή, 09:00–18:00 ώρα Κύπρου.',
+  invalidLink: 'Αυτός ο σύνδεσμος δεν είναι έγκυρος.', keepPrivate: 'Κρατήστε αυτόν τον σύνδεσμο ιδιωτικό: όποιος τον έχει μπορεί να δει τη σελίδα.', hoursNote: 'Ώρες εργασίας: Δευτέρα–Παρασκευή, 09:00–18:00 ώρα Κύπρου, εκτός από τις επίσημες αργίες της Κύπρου.',
+  acctTitle: 'Τα αιτήματά σας', acctIntro: 'Αιτήματα concierge που στείλατε με τη διεύθυνση email σας ή ενώ ήσασταν συνδεδεμένοι. Ανοίξτε ένα για να το παρακολουθήσετε και να δείτε τις απαντήσεις συνεργατών που σας έχει κοινοποιήσει το γραφείο μας.', acctNone: 'Δεν έχετε στείλει ακόμη αίτημα.', acctOpen: 'Άνοιγμα αιτήματος', acctShared: 'Απαντήσεις συνεργατών που κοινοποιήθηκαν σε εσάς: {n}', acctSent: 'Στάλθηκε',
   st_new: 'Παραλήφθηκε', st_in_progress: 'Σε επεξεργασία', st_awaiting_partner: 'Αναμονή απάντησης συνεργάτη', st_quote_ready: 'Οι επιλογές είναι έτοιμες', st_confirmed: 'Επιβεβαιώθηκε', st_completed: 'Ολοκληρώθηκε', st_cancelled: 'Ακυρώθηκε', st_closed: 'Έκλεισε',
   pSubject: 'Αίτημα επισκέπτη {ref} — μπορείτε να βοηθήσετε; — Cyprus Lifestyle', pReminderSubject: 'Υπενθύμιση: αίτημα επισκέπτη {ref} — Cyprus Lifestyle', pHeading: 'Ένα αίτημα επισκέπτη για την επιχείρησή σας',
   pGreeting: 'Γεια σας {name},', pGreetingAnon: 'Γεια σας,',
@@ -99,7 +103,8 @@ const ro: BookingCopy = {
   optionsTitle: 'Opțiuni de la partenerii noștri', optionsIntro: 'Biroul nostru a verificat aceste răspunsuri pentru dumneavoastră. Prețurile sunt oferta proprie a partenerului.',
   partnerLabel: 'Partener', priceLabel: 'Preț oferit', noOptions: 'Încă nu există opțiuni de afișat. Vă vom scrie prin e-mail când avem noutăți.',
   disclosure: 'Cyprus Lifestyle poate primi un comision de la parteneri pentru rezervările confirmate.',
-  invalidLink: 'Acest link nu este valid.', keepPrivate: 'Păstrați acest link privat: oricine îl are poate vedea această pagină.', hoursNote: 'Program de lucru: luni–vineri, 09:00–18:00, ora Ciprului.',
+  invalidLink: 'Acest link nu este valid.', keepPrivate: 'Păstrați acest link privat: oricine îl are poate vedea această pagină.', hoursNote: 'Program de lucru: luni–vineri, 09:00–18:00, ora Ciprului, cu excepția sărbătorilor legale din Cipru.',
+  acctTitle: 'Cererile dumneavoastră', acctIntro: 'Cererile către concierge trimise cu adresa dumneavoastră de email sau cât timp erați autentificat. Deschideți una pentru a o urmări și pentru a vedea răspunsurile partenerilor pe care biroul nostru le-a împărtășit cu dumneavoastră.', acctNone: 'Nu ați trimis încă nicio cerere.', acctOpen: 'Deschide cererea', acctShared: 'Răspunsuri ale partenerilor împărtășite cu dumneavoastră: {n}', acctSent: 'Trimisă',
   st_new: 'Primită', st_in_progress: 'În lucru', st_awaiting_partner: 'Se așteaptă răspunsul unui partener', st_quote_ready: 'Opțiuni pregătite', st_confirmed: 'Confirmată', st_completed: 'Finalizată', st_cancelled: 'Anulată', st_closed: 'Închisă',
   pSubject: 'Solicitare de oaspete {ref} — puteți ajuta? — Cyprus Lifestyle', pReminderSubject: 'Memento: solicitare de oaspete {ref} — Cyprus Lifestyle', pHeading: 'O solicitare de oaspete pentru afacerea dumneavoastră',
   pGreeting: 'Bună ziua, {name},', pGreetingAnon: 'Bună ziua,',
@@ -127,7 +132,8 @@ const ar: BookingCopy = {
   optionsTitle: 'خيارات من شركائنا', optionsIntro: 'راجع مكتبنا هذه الردود من أجلك. الأسعار هي عرض الشريك نفسه.',
   partnerLabel: 'الشريك', priceLabel: 'السعر المعروض', noOptions: 'لا توجد خيارات لعرضها بعد. سنراسلك بالبريد الإلكتروني عند وجود جديد.',
   disclosure: 'قد تتلقى Cyprus Lifestyle عمولة من الشركاء على الحجوزات المؤكدة.',
-  invalidLink: 'هذا الرابط غير صالح.', keepPrivate: 'أبقِ هذا الرابط خاصاً: يستطيع كل من يملكه رؤية هذه الصفحة.', hoursNote: 'ساعات العمل: من الاثنين إلى الجمعة، 09:00–18:00 بتوقيت قبرص.',
+  invalidLink: 'هذا الرابط غير صالح.', keepPrivate: 'أبقِ هذا الرابط خاصاً: يستطيع كل من يملكه رؤية هذه الصفحة.', hoursNote: 'ساعات العمل: من الاثنين إلى الجمعة، 09:00–18:00 بتوقيت قبرص، باستثناء العطل الرسمية في قبرص.',
+  acctTitle: 'طلباتك', acctIntro: 'طلبات الكونسيرج التي أرسلتها بعنوان بريدك الإلكتروني أو أثناء تسجيل دخولك. افتح أحدها لمتابعته ولرؤية ردود الشركاء التي شاركها مكتبنا معك.', acctNone: 'لم ترسل أي طلب بعد.', acctOpen: 'فتح الطلب', acctShared: 'ردود الشركاء المشاركة معك: {n}', acctSent: 'أُرسل',
   st_new: 'تم الاستلام', st_in_progress: 'قيد المعالجة', st_awaiting_partner: 'بانتظار ردّ الشريك', st_quote_ready: 'الخيارات جاهزة', st_confirmed: 'مؤكد', st_completed: 'مكتمل', st_cancelled: 'ملغى', st_closed: 'مغلق',
   pSubject: 'طلب ضيف {ref} — هل يمكنكم المساعدة؟ — Cyprus Lifestyle', pReminderSubject: 'تذكير: طلب ضيف {ref} — Cyprus Lifestyle', pHeading: 'طلب ضيف لعملكم',
   pGreeting: 'مرحباً {name}،', pGreetingAnon: 'مرحباً،',
@@ -155,7 +161,8 @@ const de: BookingCopy = {
   optionsTitle: 'Optionen unserer Partner', optionsIntro: 'Unser Desk hat diese Antworten für Sie geprüft. Die Preise sind das eigene Angebot des Partners.',
   partnerLabel: 'Partner', priceLabel: 'Angebotspreis', noOptions: 'Es gibt noch keine Optionen. Wir schreiben Ihnen per E-Mail, sobald es Neuigkeiten gibt.',
   disclosure: 'Cyprus Lifestyle erhält von Partnern möglicherweise eine Provision für bestätigte Buchungen.',
-  invalidLink: 'Dieser Link ist nicht gültig.', keepPrivate: 'Behandeln Sie diesen Link vertraulich: Jeder, der ihn hat, kann diese Seite sehen.', hoursNote: 'Arbeitszeiten: Montag–Freitag, 09:00–18:00 Uhr Zypern-Zeit.',
+  invalidLink: 'Dieser Link ist nicht gültig.', keepPrivate: 'Behandeln Sie diesen Link vertraulich: Jeder, der ihn hat, kann diese Seite sehen.', hoursNote: 'Arbeitszeiten: Montag–Freitag, 09:00–18:00 Uhr Zypern-Zeit, außer an gesetzlichen Feiertagen in Zypern.',
+  acctTitle: 'Ihre Anfragen', acctIntro: 'Concierge-Anfragen, die Sie mit Ihrer E-Mail-Adresse oder im angemeldeten Zustand gesendet haben. Öffnen Sie eine, um sie zu verfolgen und die Antworten von Partnern zu sehen, die unser Desk für Sie freigegeben hat.', acctNone: 'Sie haben noch keine Anfrage gesendet.', acctOpen: 'Anfrage öffnen', acctShared: 'Mit Ihnen geteilte Partnerantworten: {n}', acctSent: 'Gesendet',
   st_new: 'Eingegangen', st_in_progress: 'In Bearbeitung', st_awaiting_partner: 'Warten auf Antwort eines Partners', st_quote_ready: 'Optionen bereit', st_confirmed: 'Bestätigt', st_completed: 'Abgeschlossen', st_cancelled: 'Storniert', st_closed: 'Geschlossen',
   pSubject: 'Gästeanfrage {ref} — können Sie helfen? — Cyprus Lifestyle', pReminderSubject: 'Erinnerung: Gästeanfrage {ref} — Cyprus Lifestyle', pHeading: 'Eine Gästeanfrage für Ihr Unternehmen',
   pGreeting: 'Guten Tag {name},', pGreetingAnon: 'Guten Tag,',
@@ -183,7 +190,8 @@ const pl: BookingCopy = {
   optionsTitle: 'Propozycje od naszych partnerów', optionsIntro: 'Nasze biuro sprawdziło te odpowiedzi dla Ciebie. Ceny to własna oferta partnera.',
   partnerLabel: 'Partner', priceLabel: 'Oferowana cena', noOptions: 'Nie ma jeszcze propozycji do pokazania. Napiszemy do Ciebie e-mailem, gdy pojawią się nowości.',
   disclosure: 'Cyprus Lifestyle może otrzymywać od partnerów prowizję za potwierdzone rezerwacje.',
-  invalidLink: 'Ten link jest nieprawidłowy.', keepPrivate: 'Zachowaj ten link dla siebie: każdy, kto go ma, może zobaczyć tę stronę.', hoursNote: 'Godziny pracy: poniedziałek–piątek, 09:00–18:00 czasu cypryjskiego.',
+  invalidLink: 'Ten link jest nieprawidłowy.', keepPrivate: 'Zachowaj ten link dla siebie: każdy, kto go ma, może zobaczyć tę stronę.', hoursNote: 'Godziny pracy: poniedziałek–piątek, 09:00–18:00 czasu cypryjskiego, z wyjątkiem cypryjskich świąt państwowych.',
+  acctTitle: 'Twoje zapytania', acctIntro: 'Zapytania do concierge wysłane z Twojego adresu e-mail lub po zalogowaniu. Otwórz wybrane, aby śledzić jego przebieg i zobaczyć odpowiedzi partnerów udostępnione Ci przez nasze biuro.', acctNone: 'Nie wysłano jeszcze żadnego zapytania.', acctOpen: 'Otwórz zapytanie', acctShared: 'Odpowiedzi partnerów udostępnione Tobie: {n}', acctSent: 'Wysłano',
   st_new: 'Otrzymano', st_in_progress: 'W trakcie obsługi', st_awaiting_partner: 'Czekamy na odpowiedź partnera', st_quote_ready: 'Propozycje gotowe', st_confirmed: 'Potwierdzone', st_completed: 'Zrealizowane', st_cancelled: 'Anulowane', st_closed: 'Zamknięte',
   pSubject: 'Zapytanie gościa {ref} — czy możecie pomóc? — Cyprus Lifestyle', pReminderSubject: 'Przypomnienie: zapytanie gościa {ref} — Cyprus Lifestyle', pHeading: 'Zapytanie gościa dla Waszej firmy',
   pGreeting: 'Dzień dobry, {name},', pGreetingAnon: 'Dzień dobry,',
@@ -211,7 +219,8 @@ const ru: BookingCopy = {
   optionsTitle: 'Варианты от наших партнёров', optionsIntro: 'Наш деск проверил эти ответы для вас. Цены — собственное предложение партнёра.',
   partnerLabel: 'Партнёр', priceLabel: 'Предложенная цена', noOptions: 'Пока нет вариантов для показа. Мы напишем вам по e-mail, когда появятся новости.',
   disclosure: 'Cyprus Lifestyle может получать комиссию от партнёров за подтверждённые бронирования.',
-  invalidLink: 'Эта ссылка недействительна.', keepPrivate: 'Не передавайте эту ссылку: любой, у кого она есть, может открыть эту страницу.', hoursNote: 'Рабочие часы: понедельник–пятница, 09:00–18:00 по времени Кипра.',
+  invalidLink: 'Эта ссылка недействительна.', keepPrivate: 'Не передавайте эту ссылку: любой, у кого она есть, может открыть эту страницу.', hoursNote: 'Рабочие часы: понедельник–пятница, 09:00–18:00 по времени Кипра, кроме официальных праздничных дней на Кипре.',
+  acctTitle: 'Ваши запросы', acctIntro: 'Запросы консьержу, отправленные с вашего адреса e-mail или после входа в аккаунт. Откройте запрос, чтобы следить за ним и увидеть ответы партнёров, которыми с вами поделился наш деск.', acctNone: 'Вы ещё не отправляли запросов.', acctOpen: 'Открыть запрос', acctShared: 'Ответы партнёров, доступные вам: {n}', acctSent: 'Отправлен',
   st_new: 'Получен', st_in_progress: 'В работе', st_awaiting_partner: 'Ожидаем ответ партнёра', st_quote_ready: 'Варианты готовы', st_confirmed: 'Подтверждён', st_completed: 'Выполнен', st_cancelled: 'Отменён', st_closed: 'Закрыт',
   pSubject: 'Запрос гостя {ref} — сможете помочь? — Cyprus Lifestyle', pReminderSubject: 'Напоминание: запрос гостя {ref} — Cyprus Lifestyle', pHeading: 'Запрос гостя для вашего бизнеса',
   pGreeting: 'Здравствуйте, {name}!', pGreetingAnon: 'Здравствуйте!',

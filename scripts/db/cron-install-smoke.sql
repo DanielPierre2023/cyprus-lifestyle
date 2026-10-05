@@ -16,22 +16,22 @@ create table net.calls (id bigserial primary key, url text, headers jsonb, body 
 create function net.http_post(url text, body jsonb default '{}', params jsonb default '{}', headers jsonb default '{}', timeout_milliseconds int default 5000)
   returns bigint language sql as $$ insert into net.calls (url, headers, body) values (url, headers, body) returning id $$;
 
--- 1. no secrets at all → nothing scheduled, nothing broken
+-- 1. no secrets at all → only the job that needs none (cl-events-ingest, which just enqueues) is scheduled; nothing broken
 \i supabase/pg_cron/install-jobs.sql
 do $$ begin
-  if (select count(*) from cron.job) <> 0 then raise exception 'CRON FAIL: jobs were scheduled without their secrets'; end if;
+  if (select string_agg(jobname, ',' order by jobname) from cron.job) is distinct from 'cl-events-ingest' then raise exception 'CRON FAIL: jobs were scheduled without their secrets'; end if;
 end $$;
 
--- 2. site secrets only → exactly the two site jobs
+-- 2. site secrets only → the site jobs (plus the secret-free enqueue job)
 insert into vault.decrypted_secrets values ('cl_site_url', 'https://example.test/'), ('cl_cron_secret', 'cron-s3cret');
 \i supabase/pg_cron/install-jobs.sql
 do $$ begin
-  if (select string_agg(jobname, ',' order by jobname) from cron.job) <> 'cl-process,cl-worker' then
-    raise exception 'CRON FAIL: expected cl-process,cl-worker, got %', (select string_agg(jobname, ',' order by jobname) from cron.job);
+  if (select string_agg(jobname, ',' order by jobname) from cron.job) <> 'cl-booking-sla,cl-embed-sources,cl-events-ingest,cl-process,cl-worker' then
+    raise exception 'CRON FAIL: expected the five site/enqueue jobs, got %', (select string_agg(jobname, ',' order by jobname) from cron.job);
   end if;
 end $$;
 
--- 3. everything present → four jobs; running the installer again changes nothing (no duplicates)
+-- 3. everything present → seven jobs; running the installer again changes nothing (no duplicates)
 insert into vault.decrypted_secrets values ('cl_service_role', 'service-key'), ('cl_enrich_secret', 'enrich-s3cret');
 \i supabase/pg_cron/install-jobs.sql
 \i supabase/pg_cron/install-jobs.sql
@@ -39,7 +39,7 @@ do $$
 declare worker text; r record; n int;
 begin
   select count(*) into n from cron.job;
-  if n <> 4 then raise exception 'CRON FAIL: expected 4 jobs after two runs, got %', n; end if;
+  if n <> 7 then raise exception 'CRON FAIL: expected 7 jobs after two runs, got %', n; end if;
   select schedule into worker from cron.job where jobname = 'cl-worker';
   if worker <> '*/3 * * * *' then raise exception 'CRON FAIL: cl-worker schedule is %', worker; end if;
   if exists (select 1 from cron.job where command ~ '<<|<PROJECT|<SERVICE|PASTE_') then raise exception 'CRON FAIL: a job still carries a placeholder'; end if;
@@ -100,7 +100,7 @@ begin
   if w.last_status <> 'failed' or w.failed_24h <> 1 or w.runs_24h <> 2 or w.last_success is null then
     raise exception 'CRON FAIL: ops_cron_health wrong: %', w;
   end if;
-  if (select count(*) from public.ops_cron_health()) <> 4 then raise exception 'CRON FAIL: ops_cron_health should list 4 jobs'; end if;
+  if (select count(*) from public.ops_cron_health()) <> 7 then raise exception 'CRON FAIL: ops_cron_health should list 7 jobs'; end if;
 end $$;
 reset role;
 

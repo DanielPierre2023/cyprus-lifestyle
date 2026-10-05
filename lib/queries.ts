@@ -6,6 +6,7 @@ import type { Locale } from '@/lib/locales';
 import { MIN_COLLECTION_SIZE, collectionSlug, slugifyDistrict, type CollectionFacet } from '@/lib/collections';
 import { GROUP_KEYS } from '@/lib/taxonomy';
 import { getSection, EDITORIAL_SECTIONS } from '@/lib/editorial/taxonomy';
+import { nicosiaDayStartMs } from '@/lib/events/time';
 
 export interface Card {
   id: string; slug: string; title: string; excerpt: string; category: string | null;
@@ -27,8 +28,20 @@ export interface ReviewSubject {
   district: string | null; address: string | null;
 }
 
-function pick(r: Record<string, unknown>, base: string, locale: Locale): string {
-  return String(r[`${base}_${locale}`] || r[`${base}_en`] || '');
+// English fallback (owner decision, increment 5.2: every page is shown in every edition, a missing translation
+// shows the English text instead of a 404/noindex). A blank/whitespace-only translation counts as missing.
+export function pick(r: Record<string, unknown>, base: string, locale: Locale): string {
+  const own = r[`${base}_${locale}`];
+  if (typeof own === 'string' ? own.trim() : own) return String(own);
+  return String(r[`${base}_en`] || '');
+}
+
+/** Localised string-array column (tags): an EMPTY localised array falls back to the English one (an empty array is truthy). */
+export function pickList(r: Record<string, unknown>, base: string, locale: Locale): string[] {
+  const own = r[`${base}_${locale}`];
+  if (Array.isArray(own) && own.length) return own as string[];
+  const en = r[`${base}_en`];
+  return Array.isArray(en) ? (en as string[]) : [];
 }
 
 const CARD_COLS = (l: Locale) =>
@@ -102,7 +115,7 @@ export async function getArticle(locale: Locale, slug: string): Promise<Article 
     .eq('status', 'published').eq('slug', slug).maybeSingle();
   if (!data) return null;
   const r = data as unknown as Record<string, unknown>;
-  const tags = (r[`tags_${l}`] as string[]) || (r.tags_en as string[]) || [];
+  const tags = pickList(r, 'tags', l);
   const faqRaw = (Array.isArray(r[`faq_${l}`]) && (r[`faq_${l}`] as unknown[]).length ? r[`faq_${l}`] : r.faq_en) as unknown;
   const faq = (Array.isArray(faqRaw) ? faqRaw : [])
     .map((x) => (x && typeof x === 'object' ? x as Record<string, unknown> : {}))
@@ -265,9 +278,9 @@ export async function getPeers(
 // Upcoming events in a district — "what's on nearby".
 export async function getEventsByDistrict(locale: Locale, district: string | null, limit = 3): Promise<EventItem[]> {
   if (!district) return [];
-  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const start = nicosiaToday();
   const { data } = await supabaseAdmin().from('events').select(EVENT_COLS(locale))
-    .eq('status', 'published').eq('district', district).gte('starts_at', start.toISOString())
+    .eq('status', 'published').eq('district', district).or(`starts_at.gte.${start},ends_at.gte.${start}`)
     .order('starts_at', { ascending: true }).limit(limit);
   return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toEvent(r, locale)).filter((e) => e.title);
 }
@@ -403,9 +416,21 @@ export interface EventItem {
   title: string; summary: string; venue: string | null;
   starts_at: string; ends_at: string | null; price: string | null;
   url: string | null; image: string | null; lat: number | null; lng: number | null; tags: string[];
+  /** 'confirmed' | 'approximate' - an approximate date is shown as "date to be confirmed". */
+  date_confidence: string | null;
+  /** 'one-off' | 'annual' */
+  recurrence: string | null;
+  /** The original page this event was taken from (attribution link). */
+  source_url: string | null;
+  /** Pipeline source slug (public.events.source), null for hand-entered events. */
+  source: string | null;
+  /** True when the visitor's language has no translation of the title, so the English (original) text is shown. */
+  untranslated: boolean;
 }
+// Only columns that exist in production today (the pipeline's extra columns are NOT read here, so the public page keeps
+// working even before the 20261007120000 migration is applied).
 const EVENT_COLS = (l: Locale) =>
-  `id, slug, district, venue, starts_at, ends_at, price, url, image, lat, lng, tags, title_${l}, title_en, summary_${l}, summary_en`;
+  `id, slug, district, venue, starts_at, ends_at, price, url, image, lat, lng, tags, date_confidence, recurrence, source_url, source, title_${l}, title_en, summary_${l}, summary_en`;
 function toEvent(r: Record<string, unknown>, l: Locale): EventItem {
   return {
     id: String(r.id), slug: String(r.slug), district: (r.district as string) ?? null,
@@ -413,15 +438,42 @@ function toEvent(r: Record<string, unknown>, l: Locale): EventItem {
     starts_at: String(r.starts_at), ends_at: (r.ends_at as string) ?? null, price: (r.price as string) ?? null,
     url: (r.url as string) ?? null, image: (r.image as string) ?? null,
     lat: (r.lat as number) ?? null, lng: (r.lng as number) ?? null, tags: (r.tags as string[]) ?? [],
+    date_confidence: (r.date_confidence as string) ?? null, recurrence: (r.recurrence as string) ?? null,
+    source_url: (r.source_url as string) ?? null, source: (r.source as string) ?? null,
+    untranslated: l !== 'en' && !r[`title_${l}`] && !!r.title_en,
   };
 }
+/** Start of "today" in Cyprus (not the server's time zone, which is UTC on Vercel). */
+function nicosiaToday(): string { return new Date(nicosiaDayStartMs(Date.now())).toISOString(); }
+/** Upcoming AND still-running events: an event that started earlier but has not ended yet is "on now", not gone. */
 export async function getUpcomingEvents(locale: Locale, limit = 60): Promise<EventItem[]> {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
+  const start = nicosiaToday();
   const { data } = await supabaseAdmin().from('events').select(EVENT_COLS(locale))
-    .eq('status', 'published').gte('starts_at', start.toISOString())
+    .eq('status', 'published').or(`starts_at.gte.${start},ends_at.gte.${start}`)
     .order('featured', { ascending: false }).order('starts_at', { ascending: true }).limit(limit);
   return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toEvent(r, locale)).filter((e) => e.title);
+}
+
+/**
+ * The "never empty" fallback for the Agenda: events our editors marked as yearly (recurrence = annual) whose latest date has
+ * passed. They are shown as "returns every year - date to be announced", with the month they were last held. Nothing is
+ * invented: every row is a real, published event with its own page and source link.
+ */
+export async function getRecurringEvents(locale: Locale, limit = 12): Promise<EventItem[]> {
+  const start = nicosiaToday();
+  const { data } = await supabaseAdmin().from('events').select(EVENT_COLS(locale))
+    .eq('status', 'published').eq('recurrence', 'annual').lt('starts_at', start)
+    .order('starts_at', { ascending: false }).limit(limit * 3);
+  const seen = new Set<string>(); const out: EventItem[] = [];
+  for (const r of (data || []) as unknown as Record<string, unknown>[]) {
+    const e = toEvent(r, locale);
+    if (!e.title || (e.ends_at && e.ends_at >= start)) continue;       // still running = already in the upcoming list
+    const key = e.title.toLowerCase().replace(/^\d+(st|nd|rd|th)\s+/, '');
+    if (seen.has(key)) continue;
+    seen.add(key); out.push(e);
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 export async function getEventBySlug(locale: Locale, slug: string): Promise<EventItem | null> {

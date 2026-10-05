@@ -93,3 +93,34 @@ export function plural(locale: string | null | undefined, n: number, forms: Plur
 export function formatList(locale: string | null | undefined, items: string[], type: 'conjunction' | 'disjunction' = 'conjunction'): string {
   try { return new Intl.ListFormat(intlTag(locale), { style: 'long', type }).format(items); } catch { return items.join(', '); }
 }
+
+// ── Adapters for call sites that build their own Intl options (increment 5.2) ─────────────────────
+// The pre-5.2 pages passed the bare site locale ('en', 'el', …) to Intl. For every locale except English that
+// is identical to intlTag(); for English a bare 'en' means US month-day order ("Oct 5") whereas intlTag('en')
+// is en-GB ("5 Oct"). To keep English output byte-identical for the migrated pages they use siteIntlTag();
+// set LEGACY_EN_TAG to 'en-GB' (one line) to move English onto the Cyprus day-month convention everywhere.
+export const LEGACY_EN_TAG = 'en';
+
+export function siteIntlTag(locale?: string | null): string {
+  const l: Locale = locale && isLocale(locale) ? locale : 'en';
+  return l === 'en' ? LEGACY_EN_TAG : intlTag(l);
+}
+
+/** `new Intl.DateTimeFormat(...)` with the site tag. No time zone unless given (same as the call sites it replaces). */
+export function dateFormatter(locale: string | null | undefined, options: Intl.DateTimeFormatOptions, timeZone?: string): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat(siteIntlTag(locale), timeZone ? { ...options, timeZone } : options);
+}
+
+/** Format a date/ISO string/timestamp with explicit Intl options. Invalid input returns '' (never throws). */
+export function formatDateWith(
+  locale: string | null | undefined, value: Date | string | number, options: Intl.DateTimeFormatOptions, timeZone?: string,
+): string {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  try { return dateFormatter(locale, options, timeZone).format(d); } catch { return ''; }
+}
+
+/** `new Intl.NumberFormat(...)` with the site tag (Latin digits for Arabic). */
+export function numberFormatter(locale: string | null | undefined, options: Intl.NumberFormatOptions = {}): Intl.NumberFormat {
+  return new Intl.NumberFormat(intlTag(locale), options);
+}

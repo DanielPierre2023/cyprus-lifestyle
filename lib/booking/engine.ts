@@ -15,7 +15,8 @@ import {
   linkExpiry, linkState, needsReminder, parsePartnerResponse, shareable, statusAfterAnswer,
 } from '@/lib/booking/partnerFlow';
 import { deskMail, guestStatusUrl, guestUpdateMail, partnerReplyUrl, partnerRequestMail } from '@/lib/booking/mail';
-import type { BookingRow, Deps, LedgerEntryRow, PartnerRequestRow } from '@/lib/booking/types';
+import { outboundRecord, recordToDetail, type MailKind, type MailParty } from '@/lib/booking/correspondence';
+import type { BookingRow, Deps, LedgerEntryRow, Mail, PartnerRequestRow } from '@/lib/booking/types';
 
 export interface RequestInput {
   id: string; query: string; note: string | null; name: string | null; email: string | null; phone: string | null;
@@ -31,6 +32,14 @@ export function makeRef(rand: () => number = Math.random): string {
 }
 
 const iso = (d: Date) => d.toISOString();
+
+/** Send an e-mail AND keep it in the booking history (booking_events 'mail_out': recipient, subject, plain-text body, delivered or not).
+ *  A failed send is logged too. Logging never throws and never changes the outcome of the send. */
+async function sendLogged(d: Deps, bookingId: string, kind: MailKind, party: MailParty, mail: Mail, partner: string | null = null): Promise<{ ok: boolean; error?: string }> {
+  const r = await d.send(mail).catch((e: unknown) => ({ ok: false, error: e instanceof Error ? e.message : 'send failed' }));
+  try { await d.store.addEvent(bookingId, 'system', 'mail_out', recordToDetail(outboundRecord(kind, party, mail, r, null, partner))); } catch { /* history is best-effort */ }
+  return r;
+}
 const adminUrl = (d: Deps) => `${d.siteUrl.replace(/\/$/, '')}/admin/bookings`;
 const requestText = (b: { query: string; note: string | null; category?: string | null; district?: string | null }) =>
   [b.query, b.note, [b.category, b.district].filter(Boolean).join(' · ')].filter(Boolean).join('\n');
@@ -64,7 +73,7 @@ export async function createBooking(d: Deps, req: RequestInput, member: (MemberL
       await d.store.addEvent(row.id, 'system', 'created', { lane, due: row.first_response_due_at, target_working_minutes: row.sla_target_minutes });
       if (lane === 'member' && d.deskEmail) {
         const m = deskMail('member_request', { ref: row.ref, text: row.query, adminUrl: adminUrl(d), lane });
-        await d.send({ to: d.deskEmail, subject: m.subject, html: m.html, replyTo: row.guest_email || undefined }).catch(() => undefined);
+        await sendLogged(d, row.id, 'desk_member_request', 'desk', { to: d.deskEmail, subject: m.subject, html: m.html, replyTo: row.guest_email || undefined });
       }
       return { created: true, booking: row, statusUrl: guestStatusUrl(d.siteUrl, row.locale, token), lane };
     }
@@ -101,7 +110,7 @@ export async function sendPartnerRequest(d: Deps, actor: Actor, bookingId: strin
   let emailed = false;
   if (email) {
     const m = partnerRequestMail(plocale, { ref: b.ref, partnerName: name, requestText: requestText(b), expiresAt: partner.expires_at, replyUrl, reminder: false });
-    const r = await d.send({ to: email, subject: m.subject, html: m.html }).catch(() => ({ ok: false }));
+    const r = await sendLogged(d, b.id, 'partner_request', 'partner', { to: email, subject: m.subject, html: m.html }, name);
     emailed = r.ok; partner.email_status = r.ok ? 'sent' : 'failed';
   }
   partner.sent_at = iso(now);                                                // the link exists from now on (copied by hand if e-mail did not go)
@@ -150,7 +159,7 @@ export async function recordPartnerResponse(d: Deps, token: string, raw: Record<
   }
   if (d.deskEmail) {
     const m = deskMail('partner_answer', { ref: booking.ref, text: `${partner.partner_name}: ${parsed.status}`, adminUrl: adminUrl(d), lane: booking.lane, extra: parsed.note || undefined });
-    await d.send({ to: d.deskEmail, subject: m.subject, html: m.html }).catch(() => undefined);
+    await sendLogged(d, booking.id, 'desk_partner_answer', 'desk', { to: d.deskEmail, subject: m.subject, html: m.html });
   }
   return { ok: true, status: parsed.status };
 }
@@ -183,8 +192,8 @@ export async function messageGuest(d: Deps, actor: Actor, bookingId: string, mes
   if (text.length < 2) return { ok: false, error: 'Write a message first.' };
   if (!b.guest_email) return { ok: false, error: 'This guest left no e-mail address. Reply on the phone/WhatsApp number and press “Mark first reply done”.' };
   const m = guestUpdateMail(b.locale, { ref: b.ref, message: text, statusUrl: guestLink(d, b) });
-  const r = await d.send({ to: b.guest_email, subject: m.subject, html: m.html }).catch(() => ({ ok: false, error: 'send failed' }));
-  if (!r.ok) return { ok: false, error: 'The e-mail could not be sent (is RESEND_API_KEY configured?). Nothing was recorded.' };
+  const r = await sendLogged(d, b.id, 'guest_message', 'guest', { to: b.guest_email, subject: m.subject, html: m.html });
+  if (!r.ok) return { ok: false, error: 'The e-mail could not be sent (is RESEND_API_KEY configured?). The failed attempt is in the history; no first reply was recorded.' };
   await d.store.addEvent(b.id, actor, 'guest_message', { text });
   await firstReply(d, actor, b, 'email');
   return { ok: true, emailed: true };
@@ -276,26 +285,40 @@ export async function voidCommission(d: Deps, actor: Actor, ledgerId: string, re
 }
 
 // ── 6. the sweep: SLA breach alerts + one partner reminder ───────────────────────────────────────────────────
-export interface SweepResult { checked: number; breachAlerts: number; noInbox: number; reminders: number }
-export async function sweep(d: Deps): Promise<SweepResult> {
+// Safe to call every 15 minutes, from several callers at once, and to retry after a crash:
+//   • each alert / reminder is CLAIMED atomically first (the stamp is written only if it was still empty), so two overlapping
+//     runs cannot both send it; if the send then fails the claim is released and the next run retries;
+//   • a run stops starting new sends after `deadlineMs` (wall clock) and reports `truncated`; the rest is picked up next time;
+//   • nothing is sent when there is no desk inbox (the booking stays un-stamped and alerts as soon as an inbox exists).
+export interface SweepResult { checked: number; breachAlerts: number; noInbox: number; reminders: number; failed: number; truncated: boolean }
+export async function sweep(d: Deps, opts: { deadlineMs?: number; clock?: () => number } = {}): Promise<SweepResult> {
   const now = d.now();
-  const out: SweepResult = { checked: 0, breachAlerts: 0, noInbox: 0, reminders: 0 };
+  const clock = opts.clock || Date.now;
+  const startedAt = clock();
+  const outOfTime = () => opts.deadlineMs !== undefined && clock() - startedAt > opts.deadlineMs;
+  const out: SweepResult = { checked: 0, breachAlerts: 0, noInbox: 0, reminders: 0, failed: 0, truncated: false };
   const queue = await d.store.listQueueBookings();
   out.checked = queue.length;
   for (const b of queue) {
     if (!needsBreachAlert(b, now)) continue;
     if (!d.deskEmail) { out.noInbox++; continue; }                                         // stays un-stamped: alerts the moment an inbox exists
+    if (outOfTime()) { out.truncated = true; break; }
+    if (!(await d.store.claimSlaAlert(b.id, iso(now)))) continue;                          // another run has it
     const m = deskMail('breach', { ref: b.ref, text: b.query, adminUrl: adminUrl(d), lane: b.lane });
-    const r = await d.send({ to: d.deskEmail, subject: m.subject, html: m.html }).catch(() => ({ ok: false }));
-    if (r.ok) { await d.store.updateBooking(b.id, { sla_alerted_at: iso(now) }); await d.store.addEvent(b.id, 'system', 'sla_breach_alert', { lane: b.lane }); out.breachAlerts++; }
+    const r = await sendLogged(d, b.id, 'desk_breach', 'desk', { to: d.deskEmail, subject: m.subject, html: m.html });
+    if (r.ok) { await d.store.addEvent(b.id, 'system', 'sla_breach_alert', { lane: b.lane }); out.breachAlerts++; }
+    else { await d.store.releaseSlaAlert(b.id).catch(() => undefined); out.failed++; }
   }
   const byId = new Map(queue.map((b) => [b.id, b] as const));
   for (const p of await d.store.listUnansweredPartners()) {
     const b = byId.get(p.booking_id) || (await d.store.getBooking(p.booking_id));
     if (!b || !p.partner_email || !needsReminder(p, b.status, now)) continue;
+    if (outOfTime()) { out.truncated = true; break; }
+    if (!(await d.store.claimPartnerReminder(p.id, iso(now)))) continue;
     const m = partnerRequestMail(p.partner_locale, { ref: b.ref, partnerName: p.partner_name, requestText: requestText(b), expiresAt: p.expires_at, replyUrl: partnerLink(d, p), reminder: true });
-    const r = await d.send({ to: p.partner_email, subject: m.subject, html: m.html }).catch(() => ({ ok: false }));
-    if (r.ok) { await d.store.updatePartner(p.id, { reminded_at: iso(now) }); await d.store.addEvent(b.id, 'system', 'partner_reminder', { partner: p.partner_name }); out.reminders++; }
+    const r = await sendLogged(d, b.id, 'partner_reminder', 'partner', { to: p.partner_email, subject: m.subject, html: m.html }, p.partner_name);
+    if (r.ok) { await d.store.addEvent(b.id, 'system', 'partner_reminder', { partner: p.partner_name }); out.reminders++; }
+    else { await d.store.releasePartnerReminder(p.id).catch(() => undefined); out.failed++; }
   }
   return out;
 }

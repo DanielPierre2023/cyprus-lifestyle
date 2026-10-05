@@ -25,7 +25,8 @@ for (const loc of ['en', 'ar', 'ru', 'pl', 'el']) {
   const html = readFileSync(f, 'utf8');
   let fontBytes = 0;
   for (const href of preloadedFontHrefs(html)) {
-    const p = join(NEXT, href.replace(/^\/_next\//, ''));
+    // /_next/static/media/... lives in .next; self-hosted /fonts/... (Greek, /el only) lives in public/.
+    const p = href.startsWith('/fonts/') ? join(root, 'public', href) : join(NEXT, href.replace(/^\/_next\//, ''));
     try { fontBytes += statSync(p).size; } catch { /* missing file */ }
   }
   const r = evaluatePage(`/${loc}`, { fontKB: kb(fontBytes), htmlKB: kb(Buffer.byteLength(html)) }, cfg);

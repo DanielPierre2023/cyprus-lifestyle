@@ -13,6 +13,7 @@ import { scrapeAllActive } from '@/lib/scraper';
 import { runDevelopmentsScrape } from '@/lib/scrape/developments';
 import { runRegulationWatch } from '@/lib/scrape/regulations';
 import { runEventsActualiser } from '@/lib/scrape/events';
+import { geocodeEventJob, runEventsIngest } from '@/lib/events/run';
 import { runOutreach } from '@/lib/outreach';
 import { EVAL_SET, runEvalBatch, newRunId } from '@/lib/concierge/eval';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -58,6 +59,19 @@ registerJob('events_mine', async () => {
   const { data } = await sb.from('automation_settings').select('events_watch_enabled').eq('id', 1).maybeSingle();
   if (!(data as { events_watch_enabled?: boolean } | null)?.events_watch_enabled) return;
   await runEventsActualiser(sb, { refresh: false, mine: true, mineLimit: 6, deadlineMs: 20_000 });
+});
+// Automated agenda (increment 7.1): fetch -> parse -> normalise -> dedupe -> store from the free event-source registry
+// (lib/events/sources.ts). Time-boxed to 30 s (the worker window is 50 s) and resumable. Master switch: automation_settings.events_pipeline_enabled
+// (default ON). Enqueued every 3 h by pg_cron (see docs/EVENTS-PIPELINE.md) and once a day by the Vercel tick as a fallback.
+registerJob('events_ingest', async (payload) => {
+  const sb = supabaseAdmin();
+  const { data } = await sb.from('automation_settings').select('events_pipeline_enabled').eq('id', 1).maybeSingle();
+  if ((data as { events_pipeline_enabled?: boolean } | null)?.events_pipeline_enabled === false) return;
+  await runEventsIngest(sb, { deadlineMs: 30_000, trigger: String(payload.trigger || 'queue') });
+});
+registerJob('geocode_event', async (payload) => {
+  const slug = String(payload.slug || '');
+  if (slug) await geocodeEventJob(supabaseAdmin(), slug);
 });
 registerJob('outreach', async () => {
   const sb = supabaseAdmin();
@@ -112,11 +126,15 @@ export async function enqueueDailySubsystems(sb: SupabaseClient): Promise<number
     ]);
     const s = (a as Record<string, boolean> | null) || {};
     const sending = (c as { sending_enabled?: boolean } | null)?.sending_enabled;
+    // Events pipeline: its own query so a not-yet-applied migration (column missing) can never stop the other subsystems from queueing.
+    const { data: ep, error: epErr } = await sb.from('automation_settings').select('events_pipeline_enabled').eq('id', 1).maybeSingle();
+    const eventsOn = epErr ? true : (ep as { events_pipeline_enabled?: boolean } | null)?.events_pipeline_enabled !== false;
     const plan: Array<[string, string]> = [];
     if (s.scraper_enabled) plan.push(['scrape', `scrape:${day}`]);
     if (s.developments_enabled) plan.push(['developments', `dev:${day}`]);
     if (s.regulation_watch_enabled) plan.push(['regulations', `reg:${day}`]);
     if (s.events_watch_enabled) plan.push(['events_mine', `evt:${day}`]);
+    if (eventsOn) plan.push(['events_ingest', `events:${day}`]);
     if (sending) plan.push(['outreach', `outreach:${day}`]);
     let n = 0;
     for (const [kind, dedupeKey] of plan) { await enqueue(kind, {}, { dedupeKey, priority: 1, maxAttempts: 3 }); n++; }

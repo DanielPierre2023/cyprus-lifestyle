@@ -1,0 +1,60 @@
+#U _____ u__     __ U _____ u _   _     _____     ____     ____                 _____  U _____ u
+#\| ___"|/\ \   /"/u\| ___"|/| \ |"|   |_ " _| U | __")uU |  _"\ u     ___     |_ " _| \| ___"|/
+# |  _|"   \ \ / //  |  _|" <|  \| |>    | |    \|  _ \/ \| |_) |/    |_"_|      | |    |  _|"
+# | |___   /\ V /_,-.| |___ U| |\  |u   /| |\    | |_) |  |  _ <       | |      /| |\   | |___
+# |_____| U  \_/-(_/ |_____| |_| \_|   u |_|U    |____/   |_| \_\    U/| |\u   u |_|U   |_____|
+# <<   >>   //       <<   >> ||   \\,-._// \\_  _|| \\_   //   \\_.-,_|___|_,-._// \\_  <<   >>
+#(__) (__) (__)     (__) (__)(_")  (_/(__) (__)(__) (__) (__)  (__)\_)-' '-(_/(__) (__)(__) (__)
+
+
+User-agent: *
+Disallow: /esi_cache/
+Disallow: /atom/
+Disallow: /tickets-external?*
+Disallow: /rss/
+Disallow: /events/rss/
+Disallow: /events/atom/
+Disallow: /upload/
+Disallow: *&calendar*
+Disallow: *?calendar*
+Disallow: *&x*
+Disallow: *?x*
+Disallow: *?orderid*
+Disallow: *&i*
+Disallow: *?i*
+Disallow: *&client_token*
+Disallow: *&ebtv*
+Disallow: *&id*
+Disallow: *&spellcheck*
+Allow: /directory/sitemap/
+Disallow: /directory/
+Disallow: /checkout-external*
+Disallow: /api/v3/promoted/events
+Disallow: /api/v3/log_engagement/
+Disallow: /api/v3/destination/search/log_requests/
+Disallow: /api/v3/creator-quality-signal/organizer/*
+Disallow: /api/v3/feedback-service/
+Disallow: /logout/*
+Disallow: /login/*
+Disallow: /signin/*
+Disallow: *ak6767com*
+Disallow: *ak6759.com*
+Disallow: *okxbet.com*
+Disallow: *mh255com*
+Disallow: *wwwhkotc.cc*
+Disallow: /feedback-service/
+Disallow: /land-browse-bff
+Disallow: /valkyrie-playground/*
+Disallow: /api/v3/destination/events/
+
+# Rules for the blog search and filter management
+Disallow: /blog/*?content-format=*
+Disallow: /blog/*&content-format=*
+Disallow: /blog/*?event-format=*
+Disallow: /blog/*&event-format=*
+Disallow: /blog/*?event-type=*
+Disallow: /blog/*&event-type=*
+Disallow: /blog/*?segment=*
+Disallow: /blog/*&segment=*
+Disallow: /blog/*?s=*
+Disallow: /blog/*&s=*

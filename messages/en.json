@@ -379,8 +379,10 @@
       "features": [
         "More thorough, anticipatory answers from your concierge",
         "Your trips and preferences remembered across devices",
-        "Restore your membership on any device with a secure email link"
+        "Restore your membership on any device with a secure email link",
+        "Priority lane for signed-in members: your requests are handled before standard ones"
       ],
+      "priorityHint": "To use the priority lane, sign in to your account before you send a request. Requests sent while signed out go to the standard queue.",
       "cta": "Become a member",
       "sending": "Opening secure checkout…",
       "active": "You're a member — thank you.",

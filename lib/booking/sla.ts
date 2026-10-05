@@ -1,20 +1,22 @@
 // lib/booking/sla.ts
-// Pure SLA rules for the booking queue (no I/O). The SLA clock counts WORKING time in Cyprus
-// (Europe/Nicosia): Monday–Friday, WORK_START–WORK_END. Public holidays are NOT modelled
-// (HOLIDAYS is empty on purpose — fill it in if the desk wants them excluded); until then a request
-// that arrives before a holiday will show as overdue earlier than the desk's real working time.
+// Pure SLA rules for the booking queue (no I/O). The SLA clock counts WORKING time in Cyprus (Europe/Nicosia):
+// Monday–Friday, WORK_START–WORK_END, EXCLUDING Cyprus public holidays (lib/booking/holidays.ts: fixed dates plus the
+// Orthodox-Easter-based movable ones; 'optional' observances such as Christmas Eve do not stop the clock). A holiday
+// that falls on a weekend changes nothing (no substitute day is officially published). HOLIDAYS below is for one-off
+// closures (a decree, an office closure): 'YYYY-MM-DD' local dates that are not working days either.
 //
 // What the SLA is: an internal, measured TARGET for the first personal reply to the guest.
 // It is enforced in code as (a) a deadline stamped on every booking, (b) a live timer in the admin
 // queue, (c) a one-off breach alert to the desk (lib/booking/engine.ts sweep). A person still has to
 // do the replying — nothing here can promise that a reply happens, so public copy only says "target".
 import type { Lane } from '@/lib/booking/queue';
+import { isCyprusHoliday } from '@/lib/booking/holidays';
 
 export const WORK_START_MIN = 9 * 60;          // 09:00 Cyprus time
 export const WORK_END_MIN = 18 * 60;           // 18:00 Cyprus time
 export const WORK_DAY_MIN = WORK_END_MIN - WORK_START_MIN;
 export const TIME_ZONE = 'Europe/Nicosia';
-export const HOLIDAYS: readonly string[] = [];  // 'YYYY-MM-DD' local dates that are not working days
+export const HOLIDAYS: readonly string[] = [];  // EXTRA one-off non-working local dates, 'YYYY-MM-DD' (public holidays come from holidays.ts)
 
 /** First-reply targets in WORKING minutes. Member: 4 working hours. Standard: one working day. */
 export const SLA_TARGET_MIN: Record<Lane, number> = { member: 4 * 60, standard: WORK_DAY_MIN };
@@ -48,7 +50,7 @@ export function localToUtc(y: number, m: number, d: number, hh: number, mm: numb
 }
 
 const iso = (p: LocalParts) => `${p.y}-${String(p.m).padStart(2, '0')}-${String(p.d).padStart(2, '0')}`;
-export const isWorkingDay = (p: LocalParts) => p.dow >= 1 && p.dow <= 5 && !HOLIDAYS.includes(iso(p));
+export const isWorkingDay = (p: LocalParts) => p.dow >= 1 && p.dow <= 5 && !HOLIDAYS.includes(iso(p)) && !isCyprusHoliday(iso(p));
 
 function nextWorkingOpen(ms: number): number {
   let p = localParts(ms);

@@ -379,8 +379,10 @@
       "features": [
         "Dokładniejsze, przewidujące odpowiedzi Twojego concierge",
         "Twoje podróże i preferencje, zapamiętane na wszystkich urządzeniach",
-        "Przywracanie członkostwa na dowolnym urządzeniu przez bezpieczny link e-mail"
+        "Przywracanie członkostwa na dowolnym urządzeniu przez bezpieczny link e-mail",
+        "Priorytetowa ścieżka dla zalogowanych członków: Twoje zapytania są obsługiwane przed standardowymi"
       ],
+      "priorityHint": "Aby skorzystać ze ścieżki priorytetowej, zaloguj się na konto przed wysłaniem zapytania. Zapytania wysłane bez logowania trafiają do kolejki standardowej.",
       "cta": "Zostań członkiem",
       "sending": "Otwieranie bezpiecznej płatności…",
       "active": "Jesteś członkiem — dziękujemy.",

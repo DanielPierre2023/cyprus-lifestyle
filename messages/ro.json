@@ -379,8 +379,10 @@
       "features": [
         "Răspunsuri mai detaliate și anticipative din partea concierge-ului",
         "Călătoriile și preferințele dumneavoastră, reținute pe toate dispozitivele",
-        "Restaurarea abonamentului pe orice dispozitiv, printr-un link securizat trimis pe email"
+        "Restaurarea abonamentului pe orice dispozitiv, printr-un link securizat trimis pe email",
+        "Culoar prioritar pentru membrii autentificați: cererile dumneavoastră sunt tratate înaintea celor standard"
       ],
+      "priorityHint": "Pentru culoarul prioritar, autentificați-vă în cont înainte de a trimite o cerere. Cererile trimise fără autentificare intră în coada standard.",
       "cta": "Devino membru",
       "sending": "Se deschide plata securizată…",
       "active": "Ești membru — îți mulțumim.",

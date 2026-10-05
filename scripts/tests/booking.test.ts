@@ -5,15 +5,15 @@ import { computeCommissionCents, checkLedgerInput, eurosToCents, percentToBps, l
 import { parsePartnerResponse, linkState, needsReminder, statusAfterAnswer, shareable, linkExpiry } from '@/lib/booking/partnerFlow';
 import {
   createBooking, sendPartnerRequest, recordPartnerResponse, shareWithGuest, messageGuest, markFirstReply, assign, setStatus, addNote,
-  recordCommission, confirmCommission, voidCommission, sweep, makeRef, loadPartnerLink, guestLink, partnerLink,
+  recordCommission, confirmCommission, voidCommission, sweep, makeRef, loadPartnerLink, guestLink,
 } from '@/lib/booking/engine';
 import { deriveToken, linkSecret, deskInbox } from '@/lib/booking/runtime';
 import { BOOKING_COPY, bookingCopy, fill } from '@/lib/booking/copy';
 import { guestUpdateMail, partnerRequestMail, guestLaneHtml, guestStatusUrl, partnerReplyUrl } from '@/lib/booking/mail';
 import { hashRestoreToken, isPlausibleRestoreToken } from '@/lib/concierge/restoreToken';
 import { LOCALES } from '@/lib/locales';
-import type { BookingRow, BookingStore, Deps, EventRow, LedgerEntryRow, Mail, PartnerRequestRow } from '@/lib/booking/types';
 import { eq, ok, report } from './_harness';
+import { SECRET, world, REQ } from './_bookingWorld';
 
 const Z = (s: string) => Date.parse(s);
 const local = (ms: number) => { const p = localParts(ms); return `${p.y}-${String(p.m).padStart(2, '0')}-${String(p.d).padStart(2, '0')} ${String(p.hh).padStart(2, '0')}:${String(p.mm).padStart(2, '0')}`; };
@@ -98,58 +98,12 @@ ok('declines are never shareable', shareable('quoted') && shareable('accepted') 
 eq('link ttl 14 days', Math.round((linkExpiry(NOW).getTime() - NOW.getTime()) / 86400000), 14);
 
 // ── tokens ───────────────────────────────────────────────────────────────────────────────────────────────────
-const SECRET = 'unit-test-secret-0123456789';
 const t1 = deriveToken(SECRET, 'guest', 'id-1');
 ok('token shape = every other bearer link', isPlausibleRestoreToken(t1));
 ok('deterministic, per kind, per id, per secret', t1 === deriveToken(SECRET, 'guest', 'id-1') && t1 !== deriveToken(SECRET, 'partner', 'id-1') && t1 !== deriveToken(SECRET, 'guest', 'id-2') && t1 !== deriveToken(SECRET + 'x', 'guest', 'id-1'));
 eq('secret choice', [linkSecret({ BOOKING_LINK_SECRET: 'a'.repeat(20), SUPABASE_SERVICE_ROLE_KEY: 'b'.repeat(20) }), linkSecret({ SUPABASE_SERVICE_ROLE_KEY: 'b'.repeat(20) }), linkSecret({}), linkSecret({ BOOKING_LINK_SECRET: 'short' })], ['a'.repeat(20), 'b'.repeat(20), null, null]);
 eq('desk inbox precedence', [deskInbox({ CONCIERGE_INBOX: 'a@x', DIRECTORY_INBOX: 'b@x' }), deskInbox({}), deskInbox({ CONCIERGE_INBOX_LUXURY: 'l@x', CONCIERGE_INBOX: 'a@x' })], ['a@x', null, 'l@x']);
 ok('ref shape', /^CL-[A-HJ-NP-Z2-9]{6}$/.test(makeRef()) && makeRef(() => 0) === 'CL-AAAAAA');
-
-// ── the engine, against an in-memory store ───────────────────────────────────────────────────────────────────
-function memory() {
-  const bookings = new Map<string, BookingRow>(), partners = new Map<string, PartnerRequestRow>(), ledger = new Map<string, LedgerEntryRow>(), events: (EventRow & { _b: string })[] = [];
-  const requests = new Map<string, { status?: string; handled_by?: string | null }>();
-  const store: BookingStore = {
-    async insertBooking(row) {
-      for (const b of bookings.values()) { if (b.ref === row.ref) return { ok: false, conflict: 'ref' }; if (b.concierge_request_id === row.concierge_request_id) return { ok: false, conflict: 'request' }; }
-      bookings.set(row.id, { ...row }); return { ok: true, row };
-    },
-    async findBookingByRequest(id) { return [...bookings.values()].find((b) => b.concierge_request_id === id) || null; },
-    async getBooking(id) { return bookings.get(id) || null; },
-    async getBookingByTokenHash(h) { return [...bookings.values()].find((b) => b.status_token_hash === h) || null; },
-    async updateBooking(id, patch) { Object.assign(bookings.get(id)!, patch); },
-    async listQueueBookings() { return [...bookings.values()].filter((b) => ['new', 'in_progress', 'awaiting_partner', 'quote_ready'].includes(b.status)); },
-    async addEvent(bid, actor, kind, detail) { events.push({ id: String(events.length), booking_id: bid, _b: bid, at: '', actor, kind, detail: detail ?? null }); },
-    async insertPartner(row) { partners.set(row.id, { ...row }); },
-    async getPartner(id) { return partners.get(id) || null; },
-    async getPartnerByTokenHash(h) { return [...partners.values()].find((p) => p.token_hash === h) || null; },
-    async listPartners(bid) { return [...partners.values()].filter((p) => p.booking_id === bid); },
-    async listUnansweredPartners() { return [...partners.values()].filter((p) => p.status === 'sent' && !p.reminded_at); },
-    async updatePartner(id, patch) { Object.assign(partners.get(id)!, patch); },
-    async insertLedger(row) { if ([...ledger.values()].some((l) => l.partner_request_id === row.partner_request_id && l.status !== 'void')) return { ok: false, error: 'dup' }; ledger.set(row.id, { ...row }); return { ok: true }; },
-    async getLedger(id) { return ledger.get(id) || null; },
-    async listLedger(bid) { return [...ledger.values()].filter((l) => l.booking_id === bid); },
-    async updateLedger(id, patch) { Object.assign(ledger.get(id)!, patch); },
-    async syncRequest(id, patch) { requests.set(id, { ...(requests.get(id) || {}), ...patch }); },
-  };
-  return { store, bookings, partners, ledger, events, requests };
-}
-function world(opts: { desk?: string | null; sendOk?: boolean; start?: string } = {}) {
-  const m = memory();
-  const sent: Mail[] = [];
-  let clock = new Date(opts.start || '2026-10-05T08:00:00Z');
-  let n = 0;
-  const refs = ['CL-AAAAAA', 'CL-AAAAAA', 'CL-BBBBBB', 'CL-CCCCCC', 'CL-DDDDDD', 'CL-EEEEEE', 'CL-FFFFFF'];
-  const d: Deps = {
-    store: m.store, now: () => clock, newId: () => `id-${++n}`, newRef: () => refs.shift() || makeRef(),
-    token: (k, id) => deriveToken(SECRET, k, id), hash: hashRestoreToken,
-    send: async (mail) => { if (opts.sendOk === false) return { ok: false, error: 'down' }; sent.push(mail); return { ok: true }; },
-    siteUrl: 'https://example.test', deskEmail: opts.desk === undefined ? 'desk@example.test' : opts.desk,
-  };
-  return { ...m, d, sent, advance: (min: number) => { clock = new Date(clock.getTime() + min * 60000); }, at: (iso: string) => { clock = new Date(iso); } };
-}
-const REQ = (id: string, over: Record<string, unknown> = {}) => ({ id, query: 'Boat trip to Akamas', note: '4 adults, Saturday', name: 'Anna', email: 'anna@guest.test', phone: null, locale: 'de', category: 'activities', district: 'Paphos', tier: 'standard', ...over });
 
 async function engineTests() {
   // member vs visitor
@@ -244,7 +198,7 @@ async function engineTests() {
   const m1 = await createBooking(s.d, REQ('s1'), { id: 'm', status: 'active' });
   const s1 = await createBooking(s.d, REQ('s2'), null);
   s.sent.length = 0;
-  eq('nothing overdue yet', await sweep(s.d), { checked: 2, breachAlerts: 0, noInbox: 0, reminders: 0 });
+  eq('nothing overdue yet', await sweep(s.d), { checked: 2, breachAlerts: 0, noInbox: 0, reminders: 0, failed: 0, truncated: false });
   s.advance(5 * 60);                                                                                  // 13:00 Cyprus-equivalent → past the 4-working-hour member deadline only
   const sw = await sweep(s.d);
   ok('only the member booking is overdue, alerted once', sw.breachAlerts === 1 && /SLA breached/.test(s.sent[0].subject) && m1.created && s.bookings.get(m1.booking.id)!.sla_alerted_at !== null && s1.created && s.bookings.get(s1.booking.id)!.sla_alerted_at === null);

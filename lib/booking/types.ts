@@ -35,6 +35,9 @@ export interface BookingStore {
   findBookingByRequest(requestId: string): Promise<BookingRow | null>;
   getBooking(id: string): Promise<BookingRow | null>;
   getBookingByTokenHash(hash: string): Promise<BookingRow | null>;
+  findBookingByRef(ref: string): Promise<BookingRow | null>;
+  /** The member's own bookings (opened while signed in, or sent with the member's verified e-mail), newest first. */
+  listBookingsForMember(memberId: string, email: string | null, limit: number): Promise<BookingRow[]>;
   updateBooking(id: string, patch: Partial<BookingRow>): Promise<void>;
   listQueueBookings(): Promise<BookingRow[]>;                    // statuses new / in_progress / awaiting_partner / quote_ready
   addEvent(bookingId: string, actor: string, kind: string, detail?: Record<string, unknown>): Promise<void>;
@@ -48,6 +51,14 @@ export interface BookingStore {
   getLedger(id: string): Promise<LedgerEntryRow | null>;
   listLedger(bookingId: string): Promise<LedgerEntryRow[]>;
   updateLedger(id: string, patch: Partial<LedgerEntryRow>): Promise<void>;
+  /** Atomic claim: true only for the ONE caller that stamped sla_alerted_at (it was empty). Makes overlapping sweeps send one alert. */
+  claimSlaAlert(bookingId: string, at: string): Promise<boolean>;
+  releaseSlaAlert(bookingId: string): Promise<void>;
+  /** Atomic claim of the partner reminder (reminded_at was empty and the partner had not answered). */
+  claimPartnerReminder(partnerId: string, at: string): Promise<boolean>;
+  releasePartnerReminder(partnerId: string): Promise<void>;
+  /** Has this inbound e-mail (inbound_emails.id) already been attached to the booking? */
+  hasInboundMail(bookingId: string, inboundEmailId: string): Promise<boolean>;
   syncRequest(requestId: string, patch: { status?: string; handled_by?: string | null }): Promise<void>;
 }
 

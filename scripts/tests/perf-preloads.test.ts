@@ -20,6 +20,8 @@ ok('under both -> fine', !good.fontOver && !good.htmlOver);
 const bad = evaluatePage('/en', { fontKB: 650, htmlKB: 90 }, cfg);
 ok('fonts over', bad.fontOver);
 ok('html over', bad.htmlOver);
+const cfgEl = { fonts: { preloadKB: 175, perPage: { '/el': 235 } }, html: { maxKB: 45 } };
+ok('per-page ceiling lifts only that page', !evaluatePage('/el', { fontKB: 224, htmlKB: 30 }, cfgEl).fontOver && evaluatePage('/en', { fontKB: 224, htmlKB: 30 }, cfgEl).fontOver);
 ok('no config -> never over', !evaluatePage('/x', { fontKB: 9999, htmlKB: 9999 }, {}).fontOver);
 
 // chainKeys - a page's initial JS = its ancestor layouts + itself (the layout is what budgets missed)
@@ -32,6 +34,7 @@ eq('unrelated layouts excluded', chainKeys('/[locale]/admin/(panel)/x/page', key
 const b = JSON.parse(readFileSync(join(process.cwd(), 'perf-budgets.json'), 'utf8'));
 ok('default is a number', typeof b.default === 'number');
 ok('fonts.preloadKB set and below the pre-6.1 650 KB', typeof b.fonts?.preloadKB === 'number' && b.fonts.preloadKB < 650);
+ok('/el ceiling is explicit and modest', typeof b.fonts?.perPage?.['/el'] === 'number' && b.fonts.perPage['/el'] < 260);
 ok('html.maxKB set', typeof b.html?.maxKB === 'number' && b.html.maxKB > 0);
 ok('public home ceiling below pre-6.1 470 KB', b.routes['/[locale]'] < 470);
 ok('initial-JS gzip budget present', typeof b.initialJsGzKB?.default === 'number');

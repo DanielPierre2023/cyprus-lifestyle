@@ -2,6 +2,7 @@
 // Guest and partner messages exist in all seven editions (lib/booking/copy.ts). Desk alerts are English (admin language).
 import { brandedEmail } from '@/lib/email';
 import { isLocale, type Locale } from '@/lib/locales';
+import { dateFormatter } from '@/lib/i18n/format';
 import { bookingCopy, fill } from '@/lib/booking/copy';
 import { SLA_TARGET_MIN } from '@/lib/booking/sla';
 import type { Lane } from '@/lib/booking/queue';
@@ -12,11 +13,11 @@ const multiline = (s: string) => esc(s).replace(/\r?\n/g, '<br>');
 
 export function formatWhen(iso: string, locale: string): string {
   try {
-    return new Intl.DateTimeFormat(loc(locale) === 'ar' ? 'ar' : loc(locale), { timeZone: 'Europe/Nicosia', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
+    return dateFormatter(loc(locale), { dateStyle: 'medium', timeStyle: 'short' }, 'Europe/Nicosia').format(new Date(iso));
   } catch { return iso; }
 }
 export function formatDay(iso: string, locale: string): string {
-  try { return new Intl.DateTimeFormat(loc(locale) === 'ar' ? 'ar' : loc(locale), { timeZone: 'Europe/Nicosia', dateStyle: 'long' }).format(new Date(iso)); } catch { return iso; }
+  try { return dateFormatter(loc(locale), { dateStyle: 'long' }, 'Europe/Nicosia').format(new Date(iso)); } catch { return iso; }
 }
 
 export const guestStatusUrl = (siteUrl: string, locale: string, token: string) =>

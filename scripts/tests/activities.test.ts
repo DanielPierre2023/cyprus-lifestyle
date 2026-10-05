@@ -244,7 +244,7 @@ eq('Arabic family ask', activityIntent('يوم عائلي مع الأطفال').
   eq('non-GetYourGuide link untouched', g.gygLink('https://example.com/a', { partnerId: 'YEP5D0C' }), 'https://example.com/a');
   eq('district → GYG location', [g.gygLocationFor('famagusta').name, g.gygLocationFor('paphos').id, g.gygLocationFor('nowhere').id], ['Ayia Napa', 426, 169006]);
   ok('never Sydney (200)', Object.values(g.GYG_LOCATIONS).every((l) => l.id !== 200));
-  eq('locale codes', [g.gygLocaleCode('de'), g.gygLocaleCode('el')], ['de-DE', 'en-US']);
+  eq('locale codes', [g.gygLocaleCode('de'), g.gygLocaleCode('el'), g.gygLocaleCode('ro'), g.gygLocaleCode('ar'), g.gygLocaleCode('xx')], ['de-DE', 'el-GR', 'ro-RO', 'en-US', 'en-US']);
   eq('location fallback link', g.gygLocationLink(g.GYG_LOCATIONS.cyprus, 'cl-widget', 'YEP5D0C'),
     'https://www.getyourguide.com/cyprus-l169006/?partner_id=YEP5D0C&utm_medium=online_publisher&cmp=cl-widget');
   ok('activity links default to the account partner id', (affiliateUrl('https://www.getyourguide.com/a-t1/', 'YEP5D0C', 'cl-concierge') || '').endsWith('partner_id=YEP5D0C&utm_medium=online_publisher&cmp=cl-concierge'));

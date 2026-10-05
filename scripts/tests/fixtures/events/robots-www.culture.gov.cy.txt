@@ -1,0 +1,32 @@
+User-agent: AhrefsBot
+disallow: /
+
+User-agent: dotbot
+Disallow: / 
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: PetalBot
+Disallow: /
+
+User-agent: facebookexternalhit/1.1
+Disallow: /
+
+User-Agent: AliyunSecBot/Aliyun (AliyunSecBot@service.alibaba.com)
+Disallow: /
+
+User-agent: Bingbot
+Disallow: /
+
+User-agent: Applebot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: *
+Disallow: /
+
+User-agent: Googlebot
+Disallow:

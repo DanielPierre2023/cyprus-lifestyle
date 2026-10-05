@@ -17,7 +17,9 @@ export function preloadedFontHrefs(html) {
 
 /** Verdict for one page: preloaded font KB and HTML KB against the config. */
 export function evaluatePage(page, { fontKB, htmlKB }, cfg) {
-  const fontMax = cfg && cfg.fonts && typeof cfg.fonts.preloadKB === 'number' ? cfg.fonts.preloadKB : Infinity;
+  // fonts.perPage lets one edition carry a higher ceiling (the /el edition preloads three extra Greek faces).
+  const perPage = cfg && cfg.fonts && cfg.fonts.perPage && typeof cfg.fonts.perPage[page] === 'number' ? cfg.fonts.perPage[page] : null;
+  const fontMax = perPage !== null ? perPage : cfg && cfg.fonts && typeof cfg.fonts.preloadKB === 'number' ? cfg.fonts.preloadKB : Infinity;
   const htmlMax = cfg && cfg.html && typeof cfg.html.maxKB === 'number' ? cfg.html.maxKB : Infinity;
   const r = (n) => Math.round(n * 10) / 10;
   return {

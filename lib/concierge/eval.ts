@@ -18,6 +18,7 @@ import {
   assembleContext, conciergeSystem, groundingBlock, CONCIERGE_MODEL, isConciergeLocale,
 } from '@/lib/concierge/brain';
 import { callClaude, parseAiJson, CLAUDE_HAIKU } from '@/lib/ai';
+import { EVAL_SOURCE_ITEMS } from '@/lib/concierge/evalSources';
 
 export interface EvalItem { id: string; locale: string; intent: string; question: string; }
 
@@ -26,7 +27,7 @@ export interface EvalItem { id: string; locale: string; intent: string; question
 // fidelity together. English (the base) gets the widest spread; each other language
 // gets a rotating mix so every locale is scored on grounding and on writing in its
 // own tongue. Keep questions realistic — how a guest actually asks.
-export const EVAL_SET: EvalItem[] = [
+const CORE_EVAL_SET: EvalItem[] = [
   // English — widest spread.
   { id: 'en-restaurant', locale: 'en', intent: 'restaurant', question: 'Can you recommend a good seafood restaurant in Limassol for a special dinner?' },
   { id: 'en-realestate', locale: 'en', intent: 'realestate', question: 'I want to buy a two-bedroom apartment near the sea in Paphos — where should I start?' },
@@ -76,6 +77,15 @@ export const EVAL_SET: EvalItem[] = [
   { id: 'de-invest', locale: 'de', intent: 'practical', question: 'Ist Zypern ein guter Ort zum Investieren, und wie fange ich an?' },
   { id: 'pl-beach', locale: 'pl', intent: 'beach', question: 'Które plaże w pobliżu Ayia Napa są najlepsze?' },
   { id: 'ru-state', locale: 'ru', intent: 'practical', question: 'Как сейчас общая обстановка на Кипре? Стоит ли приезжать?' },
+];
+
+// Increment 2.1b: the 13 live-eval questions for the non-directory sources (events, own articles, bookable
+// experiences, regulation notes, webcams, scraped knowledge pages, and the "listed business: no link" rule)
+// join the paid set. They only ever run when the owner triggers the paid eval (admin sample or the job queue);
+// nothing here calls a model on import.
+export const EVAL_SET: EvalItem[] = [
+  ...CORE_EVAL_SET,
+  ...EVAL_SOURCE_ITEMS.map((x) => ({ id: x.id, locale: x.locale, intent: x.intent, question: x.question })),
 ];
 
 const LANG_NAME: Record<string, string> = {

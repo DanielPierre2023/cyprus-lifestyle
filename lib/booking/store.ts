@@ -22,6 +22,14 @@ export function supabaseStore(sb: SupabaseClient): BookingStore {
     },
     findBookingByRequest: (id) => one<BookingRow>(sb.from('bookings').select(BOOKING_COLS).eq('concierge_request_id', id).maybeSingle()),
     getBooking: (id) => one<BookingRow>(sb.from('bookings').select(BOOKING_COLS).eq('id', id).maybeSingle()),
+    findBookingByRef: (ref) => one<BookingRow>(sb.from('bookings').select(BOOKING_COLS).eq('ref', ref).maybeSingle()),
+    async listBookingsForMember(memberId, email, limit) {
+      const lim = Math.max(1, Math.min(50, limit));
+      const byMember = await many<BookingRow>(sb.from('bookings').select(BOOKING_COLS).eq('member_id', memberId).order('created_at', { ascending: false }).limit(lim));
+      const byEmail = email ? await many<BookingRow>(sb.from('bookings').select(BOOKING_COLS).eq('guest_email', email.trim().toLowerCase()).order('created_at', { ascending: false }).limit(lim)) : [];
+      const seen = new Set<string>();
+      return [...byMember, ...byEmail].filter((b) => !seen.has(b.id) && !!seen.add(b.id)).sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).slice(0, lim);
+    },
     getBookingByTokenHash: (h) => one<BookingRow>(sb.from('bookings').select(BOOKING_COLS).eq('status_token_hash', h).maybeSingle()),
     updateBooking: (id, patch) => must(sb.from('bookings').update(patch).eq('id', id)),
     listQueueBookings: () => many<BookingRow>(sb.from('bookings').select(BOOKING_COLS).in('status', QUEUE).limit(1000)),
@@ -36,6 +44,20 @@ export function supabaseStore(sb: SupabaseClient): BookingStore {
     getLedger: (id) => one<LedgerEntryRow>(sb.from('commission_ledger').select(LEDGER_COLS).eq('id', id).maybeSingle()),
     listLedger: (bid) => many<LedgerEntryRow>(sb.from('commission_ledger').select(LEDGER_COLS).eq('booking_id', bid).order('created_at')),
     updateLedger: (id, patch) => must(sb.from('commission_ledger').update(patch).eq('id', id)),
+    async claimSlaAlert(id, at) {
+      const { data } = await sb.from('bookings').update({ sla_alerted_at: at }).eq('id', id).is('sla_alerted_at', null).select('id');
+      return Array.isArray(data) && data.length === 1;
+    },
+    releaseSlaAlert: (id) => must(sb.from('bookings').update({ sla_alerted_at: null }).eq('id', id)),
+    async claimPartnerReminder(id, at) {
+      const { data } = await sb.from('booking_partner_requests').update({ reminded_at: at }).eq('id', id).is('reminded_at', null).eq('status', 'sent').select('id');
+      return Array.isArray(data) && data.length === 1;
+    },
+    releasePartnerReminder: (id) => must(sb.from('booking_partner_requests').update({ reminded_at: null }).eq('id', id)),
+    async hasInboundMail(bookingId, inboundEmailId) {
+      const { data } = await sb.from('booking_events').select('id').eq('booking_id', bookingId).eq('kind', 'mail_in').eq('detail->>inbound_email_id', inboundEmailId).limit(1);
+      return Array.isArray(data) && data.length > 0;
+    },
     async syncRequest(requestId, patch) {
       const p: Record<string, unknown> = {};
       if (patch.status) { p.status = patch.status; p.handled_at = new Date().toISOString(); }

@@ -1,5 +1,5 @@
 // lib/i18n/format.ts, resolveLocale.ts, apiErrors.ts — pure locale helpers.
-import { intlTag, formatNumber, formatCurrency, formatDate, formatPercent, pluralCategory, plural, formatList, ARABIC_NUMERALS } from '../../lib/i18n/format';
+import { siteIntlTag, dateFormatter, formatDateWith, numberFormatter, intlTag, formatNumber, formatCurrency, formatDate, formatPercent, pluralCategory, plural, formatList, ARABIC_NUMERALS } from '../../lib/i18n/format';
 import { resolveLocale, localeFromPath, localeFromAcceptLanguage, localeOf } from '../../lib/i18n/resolveLocale';
 import { errorBody, errorMessage, API_ERROR_CODES, isApiErrorCode } from '../../lib/i18n/apiErrors';
 import { LOCALES } from '../../lib/locales';
@@ -81,4 +81,25 @@ eq('error body shape (en = previous text)', errorBody('rate_limited'), { ok: fal
 eq('previous English texts preserved', [errorMessage('missing_listing', 'en'), errorMessage('name_email_required', 'en')], ['Missing listing.', 'A name and a valid email are required.']);
 eq('unknown locale -> en', errorMessage('forbidden', 'xx'), 'Forbidden');
 ok('isApiErrorCode', isApiErrorCode('rate_limited') && !isApiErrorCode('nope') && !isApiErrorCode(3));
+
+// ── 5.2 adapters: migrated call sites keep English output identical, other editions use the shared tags ──
+const SAMPLE = new Date('2026-10-05T10:00:00Z');
+const OPTS: Intl.DateTimeFormatOptions[] = [
+  { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }, { day: 'numeric', month: 'short' },
+  { month: 'long', year: 'numeric' }, { day: '2-digit' }, { hour: '2-digit', minute: '2-digit' },
+];
+for (const o of OPTS) {
+  eq('en identical to the previous bare-en Intl call ' + JSON.stringify(o), formatDateWith('en', SAMPLE, o), new Intl.DateTimeFormat('en', o).format(SAMPLE));
+  for (const l of ['el', 'ro', 'de', 'pl', 'ru'] as const)
+    eq(`${l} identical to the previous bare-locale Intl call`, formatDateWith(l, SAMPLE, o), new Intl.DateTimeFormat(l, o).format(SAMPLE));
+}
+ok('ar digits are Latin and Gregorian', !/[٠-٩]/.test(formatDateWith('ar', SAMPLE, OPTS[0])) && /2026/.test(formatDateWith('ar', SAMPLE, OPTS[0])));
+eq('siteIntlTag en = legacy', [siteIntlTag('en'), siteIntlTag('xx'), siteIntlTag(null)], ['en', 'en', 'en']);
+eq('siteIntlTag el = el-GR', siteIntlTag('el'), 'el-GR');
+eq('formatDateWith invalid -> empty', formatDateWith('el', 'nope', OPTS[1]), '');
+ok('time zone is applied when given', dateFormatter('en', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, 'Asia/Nicosia').format(new Date('2026-10-05T21:30:00Z')) === '00:30');
+eq('numberFormatter en max 0 digits', numberFormatter('en', { maximumFractionDigits: 0 }).format(1234.6), '1,235');
+ok('numberFormatter ar uses latin digits', numberFormatter('ar').format(1234) === '1,234');
+eq('formatNumber matches the old toLocaleString for el/ro/de', ['el', 'ro', 'de'].map((l) => formatNumber(l, 12345.678)), ['el', 'ro', 'de'].map((l) => (12345.678).toLocaleString(l)));
+
 report('i18n-format');

@@ -4,8 +4,8 @@
 //  • OFFLINE_GOLD: question → which sources/legs the pure intent layer must switch on. Free; run by
 //    scripts/tests/concierge-sources.test.ts on every push.
 //  • EVAL_SOURCE_ITEMS: live-model eval questions in the same shape as lib/concierge/eval.ts EVAL_SET,
-//    one per new source and language. They cost model calls, so they are NOT added to EVAL_SET and NOT
-//    run here — appending them to EVAL_SET (proposed in the report) is the owner's call.
+//    one per new source and language. Since increment 2.1b they ARE part of EVAL_SET (lib/concierge/eval.ts),
+//    so they run only when the owner triggers the paid eval; this file itself never calls a model.
 // ============================================================================
 export interface SourceGold { id: string; locale: string; q: string; events?: boolean; regulation?: boolean; conditions?: boolean; window?: string | null; }
 

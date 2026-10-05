@@ -32,7 +32,7 @@ export async function embedText(text: string): Promise<number[] | null> {
 }
 
 /** Embed many strings in one call. Returns a same-length array (null per miss). */
-export async function embedBatch(texts: string[]): Promise<(number[] | null)[]> {
+export async function embedBatch(texts: string[], timeoutMs = 60_000): Promise<(number[] | null)[]> {
   const key = process.env.OPENAI_API_KEY;
   if (!key || !texts.length) return texts.map(() => null);
   try {
@@ -40,7 +40,7 @@ export async function embedBatch(texts: string[]): Promise<(number[] | null)[]> 
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({ model: EMBED_MODEL, input: texts.map((t) => (t || '').slice(0, 8000)) }),
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) return texts.map(() => null);
     const d = await res.json();

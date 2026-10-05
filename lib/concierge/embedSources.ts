@@ -47,3 +47,26 @@ export function planEmbeds(docs: EmbedDoc[], existing: ReadonlyMap<string, strin
 }
 export const chunk = <T>(a: T[], n: number): T[][] => { const o: T[][] = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
 export const tokensOf = (docs: EmbedDoc[]) => docs.reduce((n, d) => n + approxTokens(d.text), 0);
+
+// ── nightly / resumable run helpers (increment 2.1b) ─────────────────────────
+/** Stop STARTING new embedding calls after this; Vercel Hobby kills a function at 60 s. */
+export const EMBED_BUDGET_MS = 45_000;
+export const EMBED_BATCH_SIZE = 64;
+/** Cap for a single OpenAI call so one slow response cannot run past the budget. */
+export const EMBED_CALL_TIMEOUT_MS = 20_000;
+const PRIORITY: Record<EmbedSource, number> = { event: 0, article: 1, activity: 2 };
+
+/** Deterministic order (so a resumed run continues where the last stopped): events first (they expire), then articles, then experiences. */
+export function orderPending(docs: EmbedDoc[]): EmbedDoc[] {
+  return [...docs].sort((a, b) => (PRIORITY[a.source] - PRIORITY[b.source]) || a.ref.localeCompare(b.ref));
+}
+/** May another embedding call start? Needs room for one call (`callMs`) inside the budget. */
+export const canStartBatch = (elapsedMs: number, budgetMs = EMBED_BUDGET_MS, callMs = EMBED_CALL_TIMEOUT_MS) => elapsedMs + callMs <= budgetMs + 1000;
+/** Per-call timeout: never longer than what is left of the budget (minimum 3 s). */
+export const callTimeout = (elapsedMs: number, budgetMs = EMBED_BUDGET_MS) => Math.max(3000, Math.min(EMBED_CALL_TIMEOUT_MS, budgetMs - elapsedMs + 5000));
+
+export interface EmbedParams { force: boolean; dry: boolean; batch: boolean; limit: number | null; }
+export function parseEmbedParams(sp: URLSearchParams): EmbedParams {
+  const n = Number(sp.get('limit'));
+  return { force: sp.get('force') === '1', dry: sp.get('dry') === '1', batch: sp.get('batch') === '1', limit: Number.isFinite(n) && n > 0 ? Math.floor(n) : null };
+}

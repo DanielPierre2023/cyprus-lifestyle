@@ -379,8 +379,10 @@
       "features": [
         "Gründlichere, vorausschauende Antworten Ihres Concierge",
         "Ihre Reisen und Vorlieben, geräteübergreifend gemerkt",
-        "Mitgliedschaft auf jedem Gerät per sicherem E-Mail-Link wiederherstellen"
+        "Mitgliedschaft auf jedem Gerät per sicherem E-Mail-Link wiederherstellen",
+        "Prioritätsspur für angemeldete Mitglieder: Ihre Anfragen werden vor Standardanfragen bearbeitet"
       ],
+      "priorityHint": "Für die Prioritätsspur melden Sie sich an, bevor Sie eine Anfrage senden. Ohne Anmeldung gesendete Anfragen kommen in die Standardwarteschlange.",
       "cta": "Mitglied werden",
       "sending": "Sichere Bezahlung wird geöffnet…",
       "active": "Sie sind Mitglied — vielen Dank.",

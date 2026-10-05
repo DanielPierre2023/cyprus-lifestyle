@@ -17,8 +17,8 @@ import { base, withLocale } from '@/lib/cache/tags';
 
 export * from '@/lib/queries';
 
-/** Time-based safety net, identical to the pages' own `revalidate = 300`. */
-const TTL = 300;
+/** Time-based safety net, identical to the pages' own `revalidate = 3600` (1 h): DB webhooks refresh by tag on every edit. */
+const TTL = 3600;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function cached<F extends (...a: any[]) => Promise<any>>(
@@ -43,6 +43,7 @@ export const getListings = cached('getListings', q.getListings, (l, t) => [...wi
 
 // Events -----------------------------------------------------------------------
 export const getUpcomingEvents = cached('getUpcomingEvents', q.getUpcomingEvents, (l) => withLocale(base.events(), l));
+export const getRecurringEvents = cached('getRecurringEvents', q.getRecurringEvents, (l) => withLocale(base.events(), l));
 export const getEventBySlug = cached('getEventBySlug', q.getEventBySlug, (l, s) => [...withLocale(base.event(s), l), ...withLocale(base.events(), l)]);
 
 /**
