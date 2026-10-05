@@ -20,6 +20,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { countStubs, enrichStubs } from '@/lib/directory/enrich';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap; raise to 300 on Vercel Pro for bigger batches
@@ -66,6 +67,7 @@ export async function GET(req: NextRequest) {
 // POST — generate + write up to `limit` stubs, then report what is left.
 export async function POST(req: NextRequest) {
   if (!(await authed(req))) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'enrich-stubs');
   const body = await req.json().catch(() => ({}));
   const dryRun = body.dryRun === true;
   // Bound per-call work so it never trips the serverless timeout. Translation is ~6x

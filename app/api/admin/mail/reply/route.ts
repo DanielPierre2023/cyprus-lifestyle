@@ -6,6 +6,7 @@ import { isAdmin } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { sendEmail, brandedEmail } from '@/lib/email';
 import { signatureFor } from '@/lib/signatures';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 
@@ -13,6 +14,7 @@ const isEmail = (s: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'mail.reply');
   const body = await req.json().catch(() => ({}));
   const id = String(body.id || '');
   const to = String(body.to || '').trim().toLowerCase();

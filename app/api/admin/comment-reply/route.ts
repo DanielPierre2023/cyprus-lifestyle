@@ -6,11 +6,13 @@ import { isAdmin } from '@/lib/supabase/server';
 import { callClaude, CLAUDE_HAIKU } from '@/lib/ai';
 import { humanizeText, type Lang } from '@/lib/antiAi';
 import { LOCALE_NAME } from '@/lib/locales';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'comment-reply');
   const body = await req.json().catch(() => ({}));
   const content = String(body.content || '').trim();
   const lang: Lang = (['en', 'el', 'ro', 'ar'] as string[]).includes(body.lang) ? body.lang : 'en';

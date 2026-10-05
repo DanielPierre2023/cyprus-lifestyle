@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { listReviewListings, applyReviewDecision, normalizeReviewAction } from '@/lib/directory/moderation';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 
@@ -25,6 +26,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'moderation.review');
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   const slug = typeof body.slug === 'string' ? body.slug : '';
   const action = normalizeReviewAction(body.action);

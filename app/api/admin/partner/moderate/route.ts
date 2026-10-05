@@ -4,11 +4,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'partner.moderate');
   const body = await req.json().catch(() => ({}));
   const kind = String(body.kind || '');
   const id = String(body.id || '');

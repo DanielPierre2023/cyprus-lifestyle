@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { retrievalTrace, isConciergeLocale, type RetrievalTrace } from '@/lib/concierge/brain';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -80,6 +81,7 @@ async function runMany(items: { q: string; locale: string }[], concurrency = 5) 
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'concierge.retrieval-trace');
   const body = await req.json().catch(() => ({}));
 
   if (body.sweep) {

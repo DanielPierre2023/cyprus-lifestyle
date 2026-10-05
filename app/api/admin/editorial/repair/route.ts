@@ -21,6 +21,7 @@ import { polishPiece, transcreatePiece } from '@/lib/editorial/generate';
 import { isPieceKind, isFranchise, type PieceKind } from '@/lib/editorial/pipeline';
 import { stripHtml } from '@/lib/editorial/qualityScan';
 import { wordCount } from '@/lib/util';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -29,6 +30,7 @@ const LANGS = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'];
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'editorial.repair');
   const b = await req.json().catch(() => ({} as Record<string, unknown>));
   const id = typeof b.id === 'string' ? b.id : '';
   const locale = typeof b.locale === 'string' ? b.locale : '';

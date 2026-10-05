@@ -13,6 +13,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { uniqueSlug } from '@/lib/util';
 import { suggestCommission, isFranchise, getFranchise } from '@/lib/editorial/pipeline';
 import { getEditorialSettings } from '@/lib/editorial/settings';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -85,6 +86,7 @@ async function approve(idea: Idea): Promise<Record<string, unknown>> {
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'editorial.idea');
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   const id = typeof body.id === 'string' ? body.id : '';
   const action = typeof body.action === 'string' ? body.action : '';

@@ -15,12 +15,14 @@ import { getEditorialSettings } from '@/lib/editorial/settings';
 import { attachCover, coverInputFromPiece, type CoverResult } from '@/lib/editorial/cover';
 import { packagePiece } from '@/lib/editorial/generate';
 import { packageColumns, pieceToPackageInput, packageIsEmpty } from '@/lib/editorial/packageWrite';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'editorial.draft');
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   const id = typeof body.id === 'string' ? body.id : '';
   const extraNotes = typeof body.notes === 'string' ? body.notes.trim() : '';

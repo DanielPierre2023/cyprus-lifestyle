@@ -41,6 +41,7 @@ const TABS = [
   { href: '/admin/attribution', label: 'Attribution & ROI' },
   { href: '/admin/analytics', label: 'Analytics (Observabilitate)' },
   { href: '/admin/privacy', label: 'Privacy · GDPR' },
+  { href: '/admin/health', label: 'System health' },
   { href: '/admin/audit', label: 'Audit log' },
   { href: '/admin/settings', label: 'Settings (Setări)' },
 ];

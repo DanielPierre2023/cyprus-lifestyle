@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { runRegulationWatch, seedRegulationSources } from '@/lib/scrape/regulations';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -26,6 +27,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'scrape.regulations');
   const sb = supabaseAdmin();
   const body = await req.json().catch(() => ({}));
   const action = String(body.action || 'run');

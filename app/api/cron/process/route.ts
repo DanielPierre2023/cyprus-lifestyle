@@ -8,7 +8,7 @@ import { processBatch } from '@/lib/desk/queue';
 import { aiBudgetDeny } from '@/lib/spendGuard';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60; // Hobby cap; raise to 300 on Vercel Pro
+export const maxDuration = 60; // Hobby cap (the batch below stops at 45 s)
 
 export async function GET(req: NextRequest) {
   if (!isCronAuthorized(req)) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
@@ -18,6 +18,6 @@ export async function GET(req: NextRequest) {
   const { data: settings } = await sb.from('automation_settings').select('processor_enabled, auto_publish').eq('id', 1).maybeSingle();
   const s = settings as { processor_enabled: boolean; auto_publish: boolean } | null;
   if (!s?.processor_enabled) return NextResponse.json({ ok: true, skipped: 'processor_disabled' });
-  const result = await processBatch(sb, { autoPublish: !!s.auto_publish, max: 4, deadlineMs: 250_000 });
+  const result = await processBatch(sb, { autoPublish: !!s.auto_publish, max: 4, deadlineMs: 45_000 });
   return NextResponse.json({ ok: true, ...result });
 }

@@ -22,6 +22,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/supabase/server';
 import { translateHtml, translateBundle } from '@/lib/translate';
 import { isLocale, type Locale } from '@/lib/locales';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap; raise to 300 on Vercel Pro for bigger batches
@@ -98,6 +99,7 @@ export async function GET(req: NextRequest) {
 // POST — fill up to `limit` (article × edition) gaps, then report what's left.
 export async function POST(req: NextRequest) {
   if (!(await authed(req))) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'backfill-translations');
   const body = await req.json().catch(() => ({}));
   const limit = Math.min(Math.max(1, Number(body.limit) || 3), 8); // bound per-call work
   const targets = parseTargets(body.targets);

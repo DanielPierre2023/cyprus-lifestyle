@@ -12,12 +12,14 @@ import {
   COVERAGE_PROBES, runCoverageProbe, persistCoverage, newCoverageRunId,
   overallCoverage, rollupByTopic, rollupByLocale, gaps,
 } from '@/lib/concierge/coverage';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'concierge.coverage.run');
   const body = await req.json().catch(() => ({}));
 
   // Optional filters, so the probe can be narrowed (e.g. one language or a few topics)

@@ -5,12 +5,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { translateHtml, translateText } from '@/lib/translate';
 import { isLocale } from '@/lib/locales';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap; raise to 300 on Vercel Pro
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'translate');
   const body = await req.json().catch(() => ({}));
   const source = String(body.source || '');
   const target = String(body.target || '');

@@ -5,12 +5,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { runPlanner } from '@/lib/editorial/plan';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'editorial.plan-run');
   const b = await req.json().catch(() => ({} as Record<string, unknown>));
   const month = Number(b.month);
   const max = Number(b.max);

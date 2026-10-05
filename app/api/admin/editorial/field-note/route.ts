@@ -10,6 +10,7 @@ import { isAdmin } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { uniqueSlug } from '@/lib/util';
 import { suggestCommission, isFranchise, type PieceKind } from '@/lib/editorial/pipeline';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -18,6 +19,7 @@ const KIND_TO_PIECE: Record<string, PieceKind> = { visit: 'feature', interview: 
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'editorial.field-note');
   const b = await req.json().catch(() => ({} as Record<string, unknown>));
   const s = (k: string) => (typeof b[k] === 'string' ? (b[k] as string).trim() : '');
 

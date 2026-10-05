@@ -5,6 +5,7 @@ import { isAdmin } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { brandedEmail, sendEmail } from '@/lib/email';
 import { isLocale, type Locale } from '@/lib/locales';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 
@@ -17,6 +18,7 @@ const HEAD: Record<Locale, string> = {
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'sponsors');
   const body = await req.json().catch(() => ({}));
   const name = String(body.recipient_name || '').trim();
   const email = String(body.recipient_email || '').trim().toLowerCase();

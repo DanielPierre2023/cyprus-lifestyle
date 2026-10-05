@@ -9,6 +9,7 @@ import { isAdmin } from '@/lib/supabase/server';
 import { stripeConfigured, createTaxCalculation } from '@/lib/stripe';
 import { buildScenarios, toCalcInput, resultFrom, resultFromError, summarise } from '@/lib/vat/scenarios';
 import { vatConfigStatus } from '@/lib/vat/status';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,9 +28,10 @@ export async function GET() {
   return NextResponse.json({ ok: true, config: vatConfigStatus() });
 }
 
-export async function POST() {
+export async function POST(req: Request) {
   const d = await deny();
   if (d) return d;
+  auditAdminRequest(req, 'vat-check');
   if (!stripeConfigured()) return NextResponse.json({ ok: false, error: 'STRIPE_SECRET_KEY is not set on the server.' }, { status: 503 });
 
   const now = Date.now();

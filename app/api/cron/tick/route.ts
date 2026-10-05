@@ -12,6 +12,7 @@ import { runWorker } from '@/lib/jobs';
 import { enqueueGeocodeBacklog, enqueueDailySubsystems } from '@/lib/jobs.handlers';
 import { isFridayUtc, notifyApprover, prepareDigest } from '@/lib/newsletterDigest';
 import { reconcileMembers } from '@/lib/member/reconcile';
+import { watchdogIfDue } from '@/lib/ops/watchdog';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap
@@ -44,6 +45,9 @@ export async function GET(req: NextRequest) {
   try {
     out.jobs = await runWorker({ deadlineMs: 45_000 });
   } catch (e) { await logServerError('cron-tick:drain', e); }
+
+  // Health watchdog (also runs from the 3-minute worker; this is the fallback when the scheduler itself is down).
+  try { out.watchdog = await watchdogIfDue(sb, { force: true }); } catch (e) { await logServerError('cron-tick:watchdog', e); }
 
   // Self-maintain the error log (keep 90 days). Best-effort.
   try { await sb.rpc('prune_error_log'); } catch { /* function not migrated yet — ignore */ }
