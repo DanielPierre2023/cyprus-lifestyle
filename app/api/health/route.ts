@@ -14,6 +14,7 @@
 //   HEAD /api/health   → 200, body-less liveness (lightest possible check).
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { automaticTaxEnabled } from '@/lib/stripe';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -110,6 +111,13 @@ export async function GET(req: Request) {
       ready: has(env.STRIPE_WEBHOOK_SECRET),
       needs: ['STRIPE_WEBHOOK_SECRET'],
       unlocks: 'Confirms paid orders and memberships automatically after payment. Set the endpoint to /api/advertise/webhook in Stripe.',
+    },
+    {
+      key: 'payments_vat',
+      label: 'VAT on checkout (Stripe Tax)',
+      ready: automaticTaxEnabled(env),
+      needs: ['STRIPE_AUTOMATIC_TAX'],
+      unlocks: 'Adds VAT to every checkout: EU companies with a VIES-verified VAT number pay none (reverse charge), Cypriot buyers pay Cyprus VAT, the member price stays VAT-inclusive. Complete docs/VAT-SETUP.md and the admin “VAT check” first, then set STRIPE_AUTOMATIC_TAX=1.',
     },
     {
       key: 'site_url',

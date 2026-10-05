@@ -25,6 +25,7 @@ import { onboardingEmail, type OrderLike } from '@/lib/fulfilment';
 import { sendEmail } from '@/lib/email';
 import { recordMembershipCheckout } from '@/lib/concierge/membership';
 import { logServerError } from '@/lib/monitor.server';
+import { recordVatOutcome } from '@/lib/vat/record';
 import {
   PAYABLE_FROM, allowedFrom, invoiceSubscriptionId, isMissingSchema, isMoneyBackEvent, isPaidSession,
   mapSubscriptionStatus, subscriptionPeriod,
@@ -133,6 +134,9 @@ async function processEvent(sb: SupabaseClient, event: Record<string, unknown>, 
           : null;
       if (sel?.error && !ACK.has(sel.error.code || '')) return await retryLater(event, 'ad-order checkout write', sel.error.message);
       order = sel?.data ?? null;
+
+      // VAT: store what Stripe actually charged and compare it with what we expected (best-effort, never fails the webhook).
+      if (order) await recordVatOutcome(sb, order, obj);
 
       // Attach the sale to a CRM account: match/create, link, log the win, open a
       // live/won deal, and move the account to 'live'. Best-effort — a CRM hiccup

@@ -36,6 +36,7 @@ const TABS = [
   { href: '/admin/fulfillment', label: 'Fulfilment' },
   { href: '/admin/sponsors', label: 'Sponsors (Publicitate)' },
   { href: '/admin/advertising', label: 'Advertising' },
+  { href: '/admin/vat-check', label: 'VAT check' },
   { href: '/admin/attribution', label: 'Attribution & ROI' },
   { href: '/admin/analytics', label: 'Analytics (Observabilitate)' },
   { href: '/admin/privacy', label: 'Privacy · GDPR' },

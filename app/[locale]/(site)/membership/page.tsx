@@ -25,7 +25,7 @@ export default async function MembershipPage({ params }: { params: Promise<{ loc
 
   const free = t.raw('membership.free') as { name: string; price: string; cta: string; features: string[] };
   const conc = t.raw('membership.concierge') as {
-    name: string; tagline: string; perMonth: string; perYear: string; features: string[];
+    name: string; tagline: string; perMonth: string; perYear: string; inclVat: string; features: string[];
     cta: string; sending: string; active: string; welcome: string;
     restorePrompt: string; emailPh: string; restore: string; notConfigured: string;
     restoreBusy: string; restoreSent: string; restoreInvalid: string; restoreError: string;
@@ -61,7 +61,7 @@ export default async function MembershipPage({ params }: { params: Promise<{ loc
 
           <div style={{ border: '1px solid #C9A24C', borderRadius: 6, padding: '24px 22px', background: 'linear-gradient(180deg,#1c1710,#2a2114)', color: '#f1e9d8' }}>
             <div className="kicker" style={{ color: '#E9C978' }}>{conc.name}</div>
-            <div className="display" style={{ fontSize: 34, margin: '6px 0 0', color: '#fff' }}>€{priceEur} <span style={{ fontSize: 15, color: '#c9bfa6' }}>{perLabel}</span></div>
+            <div className="display" style={{ fontSize: 34, margin: '6px 0 0', color: '#fff' }}>€{priceEur} <span style={{ fontSize: 15, color: '#c9bfa6' }}>{perLabel} · {conc.inclVat}</span></div>
             <p style={{ fontFamily: 'var(--body)', fontStyle: 'italic', color: '#c9bfa6', margin: '4px 0 0', fontSize: 14.5 }}>{conc.tagline}</p>
             <ul style={{ listStyle: 'none', padding: 0, margin: '16px 0 20px' }}>
               {conc.features.map((f, i) => <li key={i} style={{ padding: '7px 0', borderBottom: '1px solid rgba(201,162,76,.22)', fontSize: 15 }}>◆&nbsp;&nbsp;{f}</li>)}

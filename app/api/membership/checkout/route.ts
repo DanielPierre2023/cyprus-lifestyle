@@ -4,7 +4,9 @@
 // product needed). Card details never touch our servers.
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/ratelimit';
-import { stripeConfigured, createCheckoutSession } from '@/lib/stripe';
+import { stripeConfigured, createCheckoutSession, automaticTaxEnabled, stripeCheckoutLocale } from '@/lib/stripe';
+import { isLocale } from '@/lib/locales';
+import { MEMBERSHIP_TAX } from '@/lib/vat/products';
 import { isValidCid } from '@/lib/concierge/memory';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { escapeLike } from '@/lib/stripe/events';
@@ -21,6 +23,8 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const cid = isValidCid(String(body.cid || '')) ? String(body.cid) : '';
   const email = typeof body.email === 'string' && body.email.includes('@') ? body.email.trim() : undefined;
+  const locale = isLocale(String(body.locale)) ? String(body.locale) : 'en';
+  const prefix = locale === 'en' ? '' : `${locale}/`;
 
   // Block a double subscription: an ACTIVE member (by cid, or by email — case-insensitive
   // exact match, LIKE wildcards escaped) must not get a second Stripe customer/subscription.
@@ -47,11 +51,15 @@ export async function POST(req: NextRequest) {
       unitAmount: Math.round(priceEur * 100),
       productName: 'Cyprus Lifestyle — Concierge Membership',
       interval,
-      successUrl: `${origin}/membership?welcome=1`,
-      cancelUrl: `${origin}/membership`,
+      successUrl: `${origin}/${prefix}membership?welcome=1`,
+      cancelUrl: `${origin}/${prefix}membership`,
       customerEmail: email,
       clientReferenceId: cid || undefined,
       metadata: { kind: 'membership', tier: 'concierge', cid },
+      // VAT: the €19 is the FINAL price — VAT is included, and is the VAT of the member's own country (an online
+      // service to consumers). Stripe Tax works it out from the billing address; no business VAT-number step here.
+      automaticTax: automaticTaxEnabled(), taxBehavior: MEMBERSHIP_TAX.taxBehavior, taxCode: MEMBERSHIP_TAX.taxCode,
+      billingAddressCollection: 'required', locale: stripeCheckoutLocale(locale),
     });
     return NextResponse.json({ ok: true, url: session.url });
   } catch (e) {

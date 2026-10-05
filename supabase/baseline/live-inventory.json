@@ -1,0 +1,1287 @@
+{
+ "project_ref": "htwaivnvabvpqkffllnc",
+ "generated": "2026-10-05",
+ "tables": [
+  {
+   "name": "activities",
+   "rls": true,
+   "columns": 29
+  },
+  {
+   "name": "ad_inquiries",
+   "rls": true,
+   "columns": 6
+  },
+  {
+   "name": "ad_leads",
+   "rls": true,
+   "columns": 11
+  },
+  {
+   "name": "ad_orders",
+   "rls": true,
+   "columns": 20
+  },
+  {
+   "name": "ad_pricing",
+   "rls": true,
+   "columns": 22
+  },
+  {
+   "name": "ai_spend_log",
+   "rls": true,
+   "columns": 11
+  },
+  {
+   "name": "atlas_descriptions",
+   "rls": true,
+   "columns": 3
+  },
+  {
+   "name": "atlas_import",
+   "rls": true,
+   "columns": 11
+  },
+  {
+   "name": "attribution_clicks",
+   "rls": true,
+   "columns": 7
+  },
+  {
+   "name": "authors",
+   "rls": true,
+   "columns": 31
+  },
+  {
+   "name": "automation_settings",
+   "rls": true,
+   "columns": 12
+  },
+  {
+   "name": "blog_comments",
+   "rls": true,
+   "columns": 8
+  },
+  {
+   "name": "blog_posts",
+   "rls": true,
+   "columns": 110
+  },
+  {
+   "name": "column_jobs",
+   "rls": true,
+   "columns": 22
+  },
+  {
+   "name": "comments",
+   "rls": true,
+   "columns": 6
+  },
+  {
+   "name": "concierge_coverage",
+   "rls": true,
+   "columns": 13
+  },
+  {
+   "name": "concierge_evals",
+   "rls": true,
+   "columns": 14
+  },
+  {
+   "name": "concierge_events",
+   "rls": true,
+   "columns": 15
+  },
+  {
+   "name": "concierge_members",
+   "rls": true,
+   "columns": 14
+  },
+  {
+   "name": "concierge_memory",
+   "rls": true,
+   "columns": 5
+  },
+  {
+   "name": "concierge_requests",
+   "rls": true,
+   "columns": 17
+  },
+  {
+   "name": "concierge_tg_threads",
+   "rls": true,
+   "columns": 4
+  },
+  {
+   "name": "concierge_wa_threads",
+   "rls": true,
+   "columns": 7
+  },
+  {
+   "name": "contact_messages",
+   "rls": true,
+   "columns": 13
+  },
+  {
+   "name": "contacts",
+   "rls": true,
+   "columns": 15
+  },
+  {
+   "name": "county_quotas",
+   "rls": true,
+   "columns": 5
+  },
+  {
+   "name": "crm_activities",
+   "rls": true,
+   "columns": 12
+  },
+  {
+   "name": "crm_contacts",
+   "rls": true,
+   "columns": 13
+  },
+  {
+   "name": "crm_deals",
+   "rls": true,
+   "columns": 11
+  },
+  {
+   "name": "crm_enrollments",
+   "rls": true,
+   "columns": 9
+  },
+  {
+   "name": "crm_hooks",
+   "rls": true,
+   "columns": 3
+  },
+  {
+   "name": "crm_orgs",
+   "rls": true,
+   "columns": 15
+  },
+  {
+   "name": "crm_settings",
+   "rls": true,
+   "columns": 8
+  },
+  {
+   "name": "crm_suppression",
+   "rls": true,
+   "columns": 5
+  },
+  {
+   "name": "crm_templates",
+   "rls": true,
+   "columns": 8
+  },
+  {
+   "name": "data_processing_register",
+   "rls": true,
+   "columns": 9
+  },
+  {
+   "name": "directory_claims",
+   "rls": true,
+   "columns": 14
+  },
+  {
+   "name": "directory_embeddings",
+   "rls": true,
+   "columns": 4
+  },
+  {
+   "name": "directory_leads",
+   "rls": true,
+   "columns": 12
+  },
+  {
+   "name": "directory_listing_edits",
+   "rls": true,
+   "columns": 8
+  },
+  {
+   "name": "directory_listings",
+   "rls": true,
+   "columns": 78
+  },
+  {
+   "name": "directory_listings_coords_backup_20260928",
+   "rls": true,
+   "columns": 5
+  },
+  {
+   "name": "directory_owner_tokens",
+   "rls": true,
+   "columns": 7
+  },
+  {
+   "name": "directory_reviews",
+   "rls": true,
+   "columns": 13
+  },
+  {
+   "name": "dsar_erasure_log",
+   "rls": true,
+   "columns": 8
+  },
+  {
+   "name": "dsar_requests",
+   "rls": true,
+   "columns": 11
+  },
+  {
+   "name": "editor_drafts",
+   "rls": true,
+   "columns": 18
+  },
+  {
+   "name": "editor_tokens",
+   "rls": true,
+   "columns": 9
+  },
+  {
+   "name": "editorial_field_notes",
+   "rls": true,
+   "columns": 16
+  },
+  {
+   "name": "editorial_ideas",
+   "rls": true,
+   "columns": 21
+  },
+  {
+   "name": "editorial_pieces",
+   "rls": true,
+   "columns": 11
+  },
+  {
+   "name": "editorial_sections",
+   "rls": true,
+   "columns": 11
+  },
+  {
+   "name": "error_log",
+   "rls": true,
+   "columns": 7
+  },
+  {
+   "name": "events",
+   "rls": true,
+   "columns": 43
+  },
+  {
+   "name": "fulfillment_tasks",
+   "rls": true,
+   "columns": 11
+  },
+  {
+   "name": "generation_logs",
+   "rls": true,
+   "columns": 65
+  },
+  {
+   "name": "geocode_cache",
+   "rls": true,
+   "columns": 6
+  },
+  {
+   "name": "inbound_emails",
+   "rls": true,
+   "columns": 29
+  },
+  {
+   "name": "job_queue",
+   "rls": true,
+   "columns": 14
+  },
+  {
+   "name": "kb_candidates",
+   "rls": true,
+   "columns": 11
+  },
+  {
+   "name": "kb_docs",
+   "rls": true,
+   "columns": 13
+  },
+  {
+   "name": "kb_embeddings",
+   "rls": true,
+   "columns": 3
+  },
+  {
+   "name": "listing_claims",
+   "rls": true,
+   "columns": 10
+  },
+  {
+   "name": "listing_edit_requests",
+   "rls": true,
+   "columns": 9
+  },
+  {
+   "name": "membership_restore_tokens",
+   "rls": true,
+   "columns": 6
+  },
+  {
+   "name": "newsletter_campaigns",
+   "rls": true,
+   "columns": 8
+  },
+  {
+   "name": "newsletter_sponsors",
+   "rls": true,
+   "columns": 13
+  },
+  {
+   "name": "newsletter_subscribers",
+   "rls": true,
+   "columns": 13
+  },
+  {
+   "name": "profiles",
+   "rls": true,
+   "columns": 6
+  },
+  {
+   "name": "regulation_alerts",
+   "rls": true,
+   "columns": 9
+  },
+  {
+   "name": "regulation_snapshots",
+   "rls": true,
+   "columns": 4
+  },
+  {
+   "name": "rewrite_jobs",
+   "rls": true,
+   "columns": 13
+  },
+  {
+   "name": "rss_sources",
+   "rls": true,
+   "columns": 18
+  },
+  {
+   "name": "saved_items",
+   "rls": true,
+   "columns": 6
+  },
+  {
+   "name": "scrape_sources",
+   "rls": true,
+   "columns": 15
+  },
+  {
+   "name": "scraped_articles",
+   "rls": true,
+   "columns": 80
+  },
+  {
+   "name": "section_sponsors",
+   "rls": true,
+   "columns": 9
+  },
+  {
+   "name": "section_views",
+   "rls": true,
+   "columns": 5
+  },
+  {
+   "name": "site_analytics",
+   "rls": true,
+   "columns": 19
+  },
+  {
+   "name": "site_settings",
+   "rls": true,
+   "columns": 4
+  },
+  {
+   "name": "social_posts",
+   "rls": true,
+   "columns": 14
+  },
+  {
+   "name": "sponsor_banners",
+   "rls": true,
+   "columns": 39
+  },
+  {
+   "name": "stripe_events",
+   "rls": true,
+   "columns": 5
+  },
+  {
+   "name": "user_roles",
+   "rls": true,
+   "columns": 3
+  },
+  {
+   "name": "webcams",
+   "rls": true,
+   "columns": 24
+  }
+ ],
+ "views": [
+  {
+   "name": "advertiser_roi",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "ai_spend_by_function_daily",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "ai_spend_by_month",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "ai_spend_daily",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "ai_spend_total",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "blog_comments_public",
+   "security_invoker": false,
+   "anon_select": true
+  },
+  {
+   "name": "concierge_coverage_daily",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "concierge_coverage_summary",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "concierge_coverage_topics",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "concierge_eval_summary",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "crm_prospect_scores",
+   "security_invoker": true,
+   "anon_select": false
+  },
+  {
+   "name": "cta_by_listing",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "directory_coverage_by_district",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "directory_coverage_by_group",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "directory_coverage_cells",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "directory_coverage_overall",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "editorial_coverage",
+   "security_invoker": true,
+   "anon_select": false
+  },
+  {
+   "name": "editorial_plan",
+   "security_invoker": true,
+   "anon_select": false
+  },
+  {
+   "name": "error_log_grouped",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "job_queue_stats",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "listing_recommendations",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "listing_attribution",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "listing_revenue",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "mailroom_stats",
+   "security_invoker": false,
+   "anon_select": false
+  },
+  {
+   "name": "mailroom_tickets",
+   "security_invoker": false,
+   "anon_select": false
+  }
+ ],
+ "functions": [
+  {
+   "name": "ai_spend_month",
+   "args": "p_provider text DEFAULT NULL::text",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "ai_spend_since",
+   "args": "p_since timestamp with time zone",
+   "security_definer": true,
+   "anon_exec": false,
+   "authenticated_exec": false,
+   "public_exec": false,
+   "explicit_revoke_from_anon_authenticated": true,
+   "service_role_exec": true
+  },
+  {
+   "name": "ai_spend_today",
+   "args": "p_provider text DEFAULT NULL::text",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "ai_spend_total_usd",
+   "args": "p_provider text DEFAULT NULL::text",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "apply_listing_edit",
+   "args": "p_request_id uuid, p_reviewer text DEFAULT NULL::text",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "automation_settings_singleton",
+   "args": "",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "commit_scraper_blog_post",
+   "args": "p_blog_payload jsonb, p_scraped_id uuid, p_writeback jsonb",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "crm_sync_directory_account",
+   "args": "",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": true,
+   "service_role_exec": true
+  },
+  {
+   "name": "crm_upsert_account",
+   "args": "p_name text, p_email text, p_website text, p_category text, p_district text",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": true,
+   "service_role_exec": true
+  },
+  {
+   "name": "directory_dedup_key",
+   "args": "p_type text, p_name text, p_lat double precision, p_lng double precision",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "directory_first_party_rating",
+   "args": "slug text",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "enroll_prospects_bulk",
+   "args": "p_category text DEFAULT NULL::text, p_tier text DEFAULT NULL::text, p_stage text DEFAULT NULL::text, p_q text DEFAULT NULL::text, p_locale text DEFAULT NULL::text",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "erase_personal_data",
+   "args": "p_email text, p_actor text DEFAULT 'admin'::text, p_request_id uuid DEFAULT NULL::uuid",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "fulfil_ad_order",
+   "args": "p_order_id uuid",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": true,
+   "service_role_exec": true
+  },
+  {
+   "name": "get_analytics_data",
+   "args": "p_period text DEFAULT '7d'::text",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": true,
+   "service_role_exec": true
+  },
+  {
+   "name": "get_analytics_data_admin",
+   "args": "p_period text DEFAULT '7d'::text",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "handle_new_user",
+   "args": "",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": true,
+   "service_role_exec": true
+  },
+  {
+   "name": "has_role",
+   "args": "_user_id uuid, _role app_role",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "increment_banner_clicks",
+   "args": "banner_id uuid",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "increment_banner_impressions",
+   "args": "banner_id uuid",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "increment_view_count",
+   "args": "post_slug text",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "job_complete",
+   "args": "p_id uuid",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "job_dequeue",
+   "args": "p_worker text, p_limit integer DEFAULT 5",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "job_enqueue",
+   "args": "p_kind text, p_payload jsonb DEFAULT '{}'::jsonb, p_run_after timestamp with time zone DEFAULT now(), p_priority integer DEFAULT 0, p_max_attempts integer DEFAULT 5, p_dedupe_key text DEFAULT NULL::text",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "job_fail",
+   "args": "p_id uuid, p_error text",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "job_prune",
+   "args": "p_keep interval DEFAULT '7 days'::interval",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "job_reap_stuck",
+   "args": "p_timeout interval DEFAULT '00:05:00'::interval",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "kb_docs_needing_embedding",
+   "args": "match_count integer DEFAULT 50",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "mark_scraped_article_processed",
+   "args": "",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "match_directory",
+   "args": "query_embedding vector, match_count integer DEFAULT 8, filter_type text DEFAULT NULL::text, filter_district text DEFAULT NULL::text",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "match_directory_name",
+   "args": "q text, match_count integer DEFAULT 12",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "match_editorial_ideas",
+   "args": "query_embedding vector, match_count integer DEFAULT 8",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "match_kb",
+   "args": "query_embedding vector, match_count integer DEFAULT 6",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "match_kb_docs",
+   "args": "query_embedding vector, match_count integer DEFAULT 6",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "prune_error_log",
+   "args": "",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "search_kb_docs",
+   "args": "q text, match_count integer DEFAULT 6",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "set_reading_time",
+   "args": "",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "sweep_stuck_rewrite_jobs",
+   "args": "",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": true,
+   "service_role_exec": true
+  },
+  {
+   "name": "sync_subscriber_to_contacts",
+   "args": "",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": true,
+   "service_role_exec": true
+  },
+  {
+   "name": "update_updated_at",
+   "args": "",
+   "security_definer": false,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "update_view_geo",
+   "args": "p_slug text, p_country text DEFAULT NULL::text, p_city text DEFAULT NULL::text",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  },
+  {
+   "name": "validate_editor_token",
+   "args": "p_token uuid",
+   "security_definer": true,
+   "anon_exec": true,
+   "authenticated_exec": true,
+   "public_exec": true,
+   "explicit_revoke_from_anon_authenticated": false,
+   "service_role_exec": true
+  }
+ ],
+ "policies_count": 91,
+ "indexes_count": 297,
+ "triggers": [
+  {
+   "name": "set_updated_at",
+   "table": "ad_pricing",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "automation_settings_singleton",
+   "table": "automation_settings",
+   "timing_event": "BEFORE INSERT",
+   "function": "automation_settings_singleton",
+   "enabled": true
+  },
+  {
+   "name": "mark_scraped_article_processed",
+   "table": "blog_posts",
+   "timing_event": "AFTER INSERT",
+   "function": "mark_scraped_article_processed",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at",
+   "table": "blog_posts",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "trg_set_reading_time",
+   "table": "blog_posts",
+   "timing_event": "BEFORE INSERT OR UPDATE OF content_en",
+   "function": "set_reading_time",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at",
+   "table": "column_jobs",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at",
+   "table": "contacts",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at_crm_contacts",
+   "table": "crm_contacts",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at_crm_deals",
+   "table": "crm_deals",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at_crm_enrollments",
+   "table": "crm_enrollments",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at_crm_orgs",
+   "table": "crm_orgs",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at_crm_settings",
+   "table": "crm_settings",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at_crm_templates",
+   "table": "crm_templates",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at_directory",
+   "table": "directory_listings",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "trg_crm_sync_dir",
+   "table": "directory_listings",
+   "timing_event": "AFTER INSERT",
+   "function": "crm_sync_directory_account",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at",
+   "table": "editor_drafts",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at",
+   "table": "editorial_field_notes",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at",
+   "table": "editorial_ideas",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at_editorial",
+   "table": "editorial_pieces",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at",
+   "table": "editorial_sections",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at_events",
+   "table": "events",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at_fulfillment_tasks",
+   "table": "fulfillment_tasks",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at_newsletter_sponsors",
+   "table": "newsletter_sponsors",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "on_subscriber_created",
+   "table": "newsletter_subscribers",
+   "timing_event": "AFTER INSERT",
+   "function": "sync_subscriber_to_contacts",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at",
+   "table": "profiles",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at",
+   "table": "site_settings",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  },
+  {
+   "name": "set_updated_at",
+   "table": "sponsor_banners",
+   "timing_event": "BEFORE UPDATE",
+   "function": "update_updated_at",
+   "enabled": true
+  }
+ ],
+ "extensions": [
+  {
+   "name": "plpgsql",
+   "schema": "pg_catalog",
+   "version": "1.0"
+  },
+  {
+   "name": "pg_stat_statements",
+   "schema": "extensions",
+   "version": "1.11"
+  },
+  {
+   "name": "uuid-ossp",
+   "schema": "extensions",
+   "version": "1.1"
+  },
+  {
+   "name": "pgcrypto",
+   "schema": "extensions",
+   "version": "1.3"
+  },
+  {
+   "name": "supabase_vault",
+   "schema": "vault",
+   "version": "0.3.1"
+  },
+  {
+   "name": "pg_cron",
+   "schema": "pg_catalog",
+   "version": "1.6.4"
+  },
+  {
+   "name": "pg_net",
+   "schema": "public",
+   "version": "0.20.4"
+  },
+  {
+   "name": "pg_trgm",
+   "schema": "public",
+   "version": "1.6"
+  },
+  {
+   "name": "vector",
+   "schema": "public",
+   "version": "0.8.2"
+  }
+ ],
+ "types": [
+  {
+   "name": "app_role",
+   "kind": "enum",
+   "values": [
+    "admin",
+    "moderator",
+    "user"
+   ]
+  }
+ ],
+ "buckets": [
+  {
+   "name": "blog-images",
+   "public": true,
+   "file_size_limit": 10485760,
+   "allowed_mime_types": [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/avif"
+   ]
+  },
+  {
+   "name": "listings",
+   "public": true,
+   "file_size_limit": null,
+   "allowed_mime_types": null
+  }
+ ],
+ "cron_jobs": [
+  {
+   "name": "cyprus-scrape-rss",
+   "schedule": "0 */3 * * *",
+   "active": true
+  },
+  {
+   "name": "cl-worker",
+   "schedule": "*/3 * * * *",
+   "active": true
+  },
+  {
+   "name": "enrich-slow-all",
+   "schedule": "0 3 * * *",
+   "active": true
+  }
+ ],
+ "tables_rls_enabled_without_policies": [
+  "atlas_descriptions",
+  "atlas_import",
+  "concierge_members",
+  "concierge_memory",
+  "concierge_tg_threads",
+  "concierge_wa_threads",
+  "directory_claims",
+  "directory_embeddings",
+  "directory_leads",
+  "directory_listing_edits",
+  "directory_listings_coords_backup_20260928",
+  "directory_owner_tokens",
+  "directory_reviews",
+  "kb_docs",
+  "kb_embeddings",
+  "membership_restore_tokens",
+  "stripe_events"
+ ]
+}

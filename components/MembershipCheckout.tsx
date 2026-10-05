@@ -76,7 +76,7 @@ export default function MembershipCheckout({ labels, locale }: { labels: Members
     if (busy) return;
     setBusy(true); setErr('');
     try {
-      const res = await fetch('/api/membership/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cid, email: email.includes('@') ? email : undefined }) });
+      const res = await fetch('/api/membership/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cid, email: email.includes('@') ? email : undefined, locale: document.documentElement.lang || 'en' }) });
       const d = await res.json();
       if (d.ok && d.url) { window.location.href = d.url; return; }
       setErr(labels.notConfigured);
