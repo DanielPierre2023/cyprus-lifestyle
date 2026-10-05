@@ -3,7 +3,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { getByCategory, getSectionSponsor } from '@/lib/queries';
+import { getByCategory, getSectionSponsor } from '@/lib/queries.cached';
 import { departments as editorialDepartments, getSection } from '@/lib/editorial/taxonomy';
 import { pageMetadata, breadcrumbJsonLd, ld } from '@/lib/seo';
 import ArticleCard from '@/components/ArticleCard';

@@ -3,7 +3,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { getArticle, getByCategory, getLatest, getEventsByDistrict, getUpcomingEvents, getReviewSubject, type Card, type EventItem } from '@/lib/queries';
+import { getArticle, getByCategory, getLatest, getEventsByDistrict, getUpcomingEvents, getReviewSubject, type Card, type EventItem } from '@/lib/queries.cached';
 import { pageMetadata, clampSeoTitle } from '@/lib/seo';
 import { JsonLd, article, breadcrumb, faqPage, review } from '@/lib/seo/jsonld';
 import ArticleCard from '@/components/ArticleCard';

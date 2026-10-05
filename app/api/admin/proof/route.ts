@@ -8,6 +8,7 @@ import { isAdmin } from '@/lib/supabase/server';
 import { scoreAiTells, humanizeText, humanizeHtml, type Lang } from '@/lib/antiAi';
 import { proofread } from '@/lib/desk/proofread';
 import { auditAdminRequest } from '@/lib/auditRequest';
+import { isLocale } from '@/lib/locales';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap; raise to 300 on Vercel Pro
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
   auditAdminRequest(req, 'proof');
   const body = await req.json().catch(() => ({}));
-  const lang: Lang = (['en', 'el', 'ro', 'ar'] as string[]).includes(body.lang) ? body.lang : 'en';
+  const lang: Lang = isLocale(String(body.lang)) ? (body.lang as Lang) : 'en';
   const title = String(body.title || '');
   const content = String(body.content || '');
   const isHtml = body.html === true || /<[a-z][\s\S]*>/i.test(content);

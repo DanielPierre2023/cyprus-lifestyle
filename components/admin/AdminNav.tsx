@@ -23,6 +23,8 @@ const TABS = [
   { href: '/admin/coverage', label: 'Coverage' },
   { href: '/admin/moderation', label: 'Moderation' },
   { href: '/admin/partners', label: 'Partners' },
+  { href: '/admin/business', label: 'Business Hub' },
+  { href: '/admin/bookings', label: 'Bookings (queue)' },
   { href: '/admin/agenda', label: 'Agenda / events' },
   { grp: 'Audience' },
   { href: '/admin/social', label: 'Social' },

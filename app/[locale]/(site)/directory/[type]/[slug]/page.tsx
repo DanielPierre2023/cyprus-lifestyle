@@ -3,7 +3,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { DIRECTORY_TYPES, getListing, getNearby, getPeers, getEventsByDistrict, getCollectionBySlug, isStubText } from '@/lib/queries';
+import { DIRECTORY_TYPES, getListing, getNearby, getPeers, getEventsByDistrict, getCollectionBySlug, isStubText } from '@/lib/queries.cached';
 import { collectionSlug, slugifyDistrict, districtLabel } from '@/lib/collections';
 import { pageMetadata, robotsForStub } from '@/lib/seo';
 import { JsonLd, localBusiness, breadcrumb } from '@/lib/seo/jsonld';

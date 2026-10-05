@@ -14,11 +14,14 @@
 // The guest, if they left an email, gets an instant on-brand acknowledgement in
 // their own language, elevated for premium requests.
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit, isHoneypot } from '@/lib/ratelimit';
 import { sendEmail, brandedEmail } from '@/lib/email';
 import { isLocale, type Locale } from '@/lib/locales';
 import { classifyRequest, matchForRequest } from '@/lib/concierge/brain';
+import { SESSION_COOKIE } from '@/lib/member/session';
+import { openBookingForRequest, type Intake } from '@/lib/booking/intake';
 
 export const runtime = 'nodejs';
 
@@ -84,11 +87,19 @@ export async function POST(req: NextRequest) {
   }
 
   const sb = supabaseAdmin();
-  const { error } = await sb.from('concierge_requests').insert({
+  const { data: saved, error } = await sb.from('concierge_requests').insert({
     query, answer, picks: picks.length ? picks : null,
     name, email, phone, note, locale, category, district, tier, status: 'new',
-  });
+  }).select('id').single();
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+
+  // Booking engine (increment 2.2): open the booking — lane (member priority vs standard) from the member session cookie,
+  // SLA deadline, private status link. Best-effort: never blocks or fails the request.
+  let intake: Intake | null = null;
+  if (saved?.id) {
+    intake = await openBookingForRequest(sb, (await cookies()).get(SESSION_COOKIE)?.value,
+      { id: String(saved.id), query, note, name, email, phone, locale, category, district, tier });
+  }
 
   // Notify the right desk (best-effort — the request is safely recorded either way).
   // Premium requests go to the private-client desk when one is configured; both
@@ -135,13 +146,13 @@ export async function POST(req: NextRequest) {
     const guestHtml = brandedEmail({
       locale,
       heading: t.heading,
-      bodyHtml: `<p>${greeting}</p><p>${t.intro}</p>${premiumLine}<p style="opacity:.7;font-style:italic">&ldquo;${esc(query)}&rdquo;</p>${picksList}<p style="margin-top:18px">${t.closing}</p>`,
-      ctaLabel: t.cta,
-      ctaUrl,
+      bodyHtml: `<p>${greeting}</p><p>${t.intro}</p>${intake ? intake.laneHtml : ''}${premiumLine}<p style="opacity:.7;font-style:italic">&ldquo;${esc(query)}&rdquo;</p>${picksList}<p style="margin-top:18px">${t.closing}</p>`,
+      ctaLabel: intake ? intake.ctaLabel : t.cta,
+      ctaUrl: intake ? intake.statusUrl : ctaUrl,
       preheader: t.heading,
     });
     await sendEmail({ to: email, subject: t.subject, html: guestHtml }).catch(() => {});
   }
 
-  return NextResponse.json({ ok: true, tier });
+  return NextResponse.json({ ok: true, tier, ref: intake?.ref ?? null, lane: intake?.lane ?? null });
 }

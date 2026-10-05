@@ -19,6 +19,7 @@ import { useState } from 'react';
 // The owned-vs-hot-link policy lives in lib/images.ts now (shared with DirectoryMap,
 // lib/seo and server code). Re-exported here so existing importers keep working.
 import { isOwnedImage } from '@/lib/images';
+import { imageMode } from '@/lib/imageVariants';
 export { isOwnedImage };
 
 export default function CoverImage({
@@ -33,6 +34,9 @@ export default function CoverImage({
   const vettedSrc = fallbackKind === 'brand' && !isOwnedImage(src) ? null : src;
   const [imgSrc, setImgSrc] = useState(vettedSrc || (fallbackKind === 'brand' ? '' : stock));
   const [brandFail, setBrandFail] = useState(false);
+  // Pre-resized variants / Unsplash resize params (free, no Vercel optimiser - see lib/imageVariants.ts).
+  // If the variant 404s we retry once with the untouched original before any fallback.
+  const [useVariants, setUseVariants] = useState(true);
 
   if (fallbackKind === 'brand' && (!imgSrc || brandFail)) {
     return (
@@ -45,15 +49,19 @@ export default function CoverImage({
     );
   }
 
+  const finalSrc = imgSrc || stock;
+  const mode = useVariants ? imageMode(finalSrc) : 'plain';
   return (
     <Image
-      src={imgSrc || stock}
+      src={finalSrc}
       alt={alt}
       fill
       sizes={sizes}
       priority={priority}
       className={className}
+      unoptimized={mode === 'plain'}
       onError={() => {
+        if (mode !== 'plain') { setUseVariants(false); return; }
         if (fallbackKind === 'brand') setBrandFail(true);
         else if (imgSrc !== stock) setImgSrc(stock);
       }}

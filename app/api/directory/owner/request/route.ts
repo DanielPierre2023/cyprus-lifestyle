@@ -10,6 +10,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit, isHoneypot } from '@/lib/ratelimit';
 import { requestOwnerLink } from '@/lib/directory/owner';
+import { localeOf } from '@/lib/i18n/resolveLocale';
+import { errorBody } from '@/lib/i18n/apiErrors';
 
 export const runtime = 'nodejs';
 
@@ -21,14 +23,15 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   // Honeypot: accept silently so bots don't learn they were caught (matches claim/review routes).
   if (isHoneypot(body)) return NextResponse.json({ ok: true, message: GENERIC_MESSAGE });
+  const locale = localeOf(req, body.locale);
   if (!(await rateLimit(req, 'owner-request', 5, 60))) {
-    return NextResponse.json({ ok: false, error: 'Too many requests — please wait a moment.' }, { status: 429 });
+    return NextResponse.json(errorBody('rate_limited', locale), { status: 429 });
   }
 
   const slug = String(body.slug || '').trim().slice(0, 200);
-  if (!slug) return NextResponse.json({ ok: false, error: 'Missing listing.' }, { status: 400 });
+  if (!slug) return NextResponse.json(errorBody('missing_listing', locale), { status: 400 });
 
-  await requestOwnerLink(slug);
+  await requestOwnerLink(slug, locale);
   // Always the same generic body — never reveal whether a link was actually sent.
   return NextResponse.json({ ok: true, message: GENERIC_MESSAGE });
 }

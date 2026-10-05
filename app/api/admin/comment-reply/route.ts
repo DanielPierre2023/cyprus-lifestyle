@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { callClaude, CLAUDE_HAIKU } from '@/lib/ai';
 import { humanizeText, type Lang } from '@/lib/antiAi';
-import { LOCALE_NAME } from '@/lib/locales';
+import { LOCALE_NAME, isLocale } from '@/lib/locales';
 import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   auditAdminRequest(req, 'comment-reply');
   const body = await req.json().catch(() => ({}));
   const content = String(body.content || '').trim();
-  const lang: Lang = (['en', 'el', 'ro', 'ar'] as string[]).includes(body.lang) ? body.lang : 'en';
+  const lang: Lang = isLocale(String(body.lang)) ? (body.lang as Lang) : 'en';
   if (!content) return NextResponse.json({ ok: false, error: 'content required' }, { status: 400 });
 
   const system = [
