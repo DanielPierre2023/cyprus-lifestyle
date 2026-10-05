@@ -14,7 +14,7 @@ import { checkGrant, isComp, memberStats, type MemberRow } from '@/lib/membersAd
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const COLS = 'id, email, tier, status, created_at, current_period_end, cancel_at_period_end, stripe_subscription_id, profile';
+const COLS = 'id, email, tier, status, created_at, current_period_end, cancel_at_period_end, stripe_subscription_id, last_login_at, profile';
 const forbidden = () => NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
 
 export async function GET() {

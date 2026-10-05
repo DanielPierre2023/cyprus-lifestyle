@@ -3,7 +3,7 @@
 export interface MemberRow {
   id: string; email: string | null; tier: string; status: string;
   created_at: string; current_period_end: string | null; cancel_at_period_end: boolean | null;
-  stripe_subscription_id: string | null; profile?: { comp?: { by?: string; note?: string; at?: string } } | null;
+  stripe_subscription_id: string | null; last_login_at?: string | null; profile?: { comp?: { by?: string; note?: string; at?: string } } | null;
 }
 
 /** A member we did not charge: granted by an administrator (no Stripe subscription). */

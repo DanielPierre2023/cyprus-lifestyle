@@ -11,6 +11,7 @@ import { logServerError } from '@/lib/monitor.server';
 import { runWorker } from '@/lib/jobs';
 import { enqueueGeocodeBacklog, enqueueDailySubsystems } from '@/lib/jobs.handlers';
 import { isFridayUtc, notifyApprover, prepareDigest } from '@/lib/newsletterDigest';
+import { reconcileMembers } from '@/lib/member/reconcile';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap
@@ -34,6 +35,9 @@ export async function GET(req: NextRequest) {
       out.newsletter = { week: nl.week, created: nl.created, skipped: nl.skipped, notified: await notifyApprover(nl) };
     } catch (e) { await logServerError('cron-tick:newsletter', e); }
   }
+
+  // Members: make sure nobody keeps member benefits after a missed cancellation, and tidy expired sessions/links.
+  try { out.members = await reconcileMembers(sb); } catch (e) { await logServerError('cron-tick:members', e); }
 
   // Drain a time-boxed batch now, so work progresses even without pg_cron. pg_cron
   // (when enabled) drains continuously between ticks.

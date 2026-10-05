@@ -138,6 +138,43 @@ export async function createCustomer(p: {
   return { id: j.id as string };
 }
 
+// ── Customer Portal (members manage card, invoices and cancellation on Stripe's own page) ───────────────────
+// Needs the portal to be configured once in the Stripe Dashboard (Settings → Billing → Customer portal → Save).
+export async function createPortalSession(p: { customerId: string; returnUrl: string; locale?: string }): Promise<{ url: string }> {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('Stripe is not configured');
+  const res = await fetch(`${API}/billing_portal/sessions`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: form({ customer: p.customerId, return_url: p.returnUrl, locale: p.locale && p.locale !== 'auto' ? p.locale : undefined }),
+    signal: AbortSignal.timeout(20000),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j?.error?.message || `Stripe error ${res.status}`);
+  return { url: j.url as string };
+}
+
+// ── Subscription lookup (the daily check that nobody keeps member benefits after a missed cancellation event) ──
+export type SubscriptionLookup =
+  | { found: true; status: string; subscription: Record<string, unknown> }
+  | { found: false; reason: 'missing' }
+  | { found: false; reason: 'error'; message: string };
+
+export async function retrieveSubscription(id: string, fetchImpl: typeof fetch = fetch): Promise<SubscriptionLookup> {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return { found: false, reason: 'error', message: 'Stripe is not configured' };
+  if (!/^sub_[A-Za-z0-9]+$/.test(id)) return { found: false, reason: 'missing' };
+  try {
+    const res = await fetchImpl(`${API}/subscriptions/${id}`, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(20000) });
+    const j = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: { code?: string; message?: string } };
+    if (res.status === 404 || j.error?.code === 'resource_missing') return { found: false, reason: 'missing' };
+    if (!res.ok) return { found: false, reason: 'error', message: j.error?.message || `Stripe error ${res.status}` };
+    return { found: true, status: String(j.status || ''), subscription: j };
+  } catch (e) {
+    return { found: false, reason: 'error', message: (e as Error).message };
+  }
+}
+
 // ── Stripe Tax calculation (read-only simulation: no payment, no customer, nothing is stored) ─────────────────
 export interface TaxCalcInput {
   currency: string;

@@ -1,7 +1,7 @@
 // GET  /api/membership/status?cid=...        → { member, tier }
-// POST /api/membership/status { email, locale } → ALWAYS { ok: true }. If an active member
-//   has that address, a single-use restore link is emailed to it (see lib/concierge/membership
-//   issueRestoreToken). The response never reveals whether the address is a member, and
+// POST /api/membership/status { email, locale } → ALWAYS { ok: true }. If a member (active OR ended)
+//   has that address, a single-use SIGN-IN link to /account is emailed to it (see lib/concierge/membership
+//   issueLoginToken). The response never reveals whether the address is a member, and
 //   no cid is accepted here: the membership is bound to the browser that later CONFIRMS the
 //   link (POST /api/membership/restore), never to whoever merely knew the email.
 import { NextRequest, NextResponse, after } from 'next/server';
@@ -9,9 +9,9 @@ import { rateLimit } from '@/lib/ratelimit';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { brandedEmail, sendEmail } from '@/lib/email';
 import { isLocale, type Locale } from '@/lib/locales';
-import { memberStatus, issueRestoreToken } from '@/lib/concierge/membership';
+import { memberStatus, issueLoginToken } from '@/lib/concierge/membership';
 import { isPlausibleEmail, normalizeEmail } from '@/lib/concierge/restoreToken';
-import { restoreEmailCopy } from '@/lib/concierge/restoreEmail';
+import { loginEmailCopy } from '@/lib/member/loginEmail';
 
 export const runtime = 'nodejs';
 
@@ -42,13 +42,13 @@ export async function POST(req: NextRequest) {
   // Do the lookup + mail after responding so response time doesn't leak membership either.
   after(async () => {
     try {
-      const r = await issueRestoreToken(supabaseAdmin(), email);
+      const r = await issueLoginToken(supabaseAdmin(), email);
       if (!r.ok) {
         if (r.reason === 'error') console.error('[membership/restore] could not issue token (is migration 20261004130100 applied?)');
         return;
       }
-      const c = restoreEmailCopy(locale);
-      const url = `${base}${locale === 'en' ? '' : `/${locale}`}/membership?restore=${r.token}`; // localePrefix: as-needed
+      const c = loginEmailCopy(locale);
+      const url = `${base}${locale === 'en' ? '' : `/${locale}`}/account?restore=${r.token}`; // localePrefix: as-needed
       const sent = await sendEmail({
         to: email, subject: c.subject,
         html: brandedEmail({ locale, heading: c.heading, bodyHtml: `<p>${c.body}</p><p style="font-size:13px;color:#6b6555">${c.footnote}</p>`, ctaLabel: c.cta, ctaUrl: url, preheader: c.subject }),

@@ -11,6 +11,7 @@
 // ============================================================================
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { entitled, type MemberLike } from '@/lib/member/entitlement';
 import { loadMemory, clearMemory, sanitizeProfile, isProfileEmpty, isValidCid, type MemoryProfile } from '@/lib/concierge/memory';
 
 const ARR_KEYS: (keyof MemoryProfile)[] = ['interests', 'districts'];
@@ -33,8 +34,8 @@ export async function getMemberByCid(cid: string): Promise<MemberRow | null> {
   if (!isValidCid(cid)) return null;
   try {
     const { data } = await supabaseAdmin().from('concierge_members')
-      .select('id, email, profile').eq('cid', cid).eq('status', 'active').limit(1).maybeSingle();
-    if (!data) return null;
+      .select('id, email, profile, status, current_period_end, updated_at').eq('cid', cid).in('status', ['active', 'failed']).limit(1).maybeSingle();
+    if (!data || !entitled(data as MemberLike)) return null;
     return { id: String(data.id), email: (data.email as string) ?? null, profile: sanitizeProfile(data.profile) };
   } catch { return null; }
 }

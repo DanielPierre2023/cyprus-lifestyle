@@ -70,6 +70,8 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     locale: locale as Locale, path: `/article/${slug}`,
     title: a.seo_title, description: a.seo_description, type: 'article',
     ogTitle: a.title, kicker, cover: a.cover_image,
+    imageAlt: a.title,
+    article: { publishedTime: a.published_at, modifiedTime: a.updated_at, section: kicker, tags: a.tags, authors: a.author_name ? [a.author_name] : undefined },
   });
   // Force an ABSOLUTE document <title> within Google's ~60-char budget. The root
   // layout (app/[locale]/layout.tsx, not owned here) sets a global

@@ -65,9 +65,21 @@ export function pageMetadata(opts: {
   type?: 'website' | 'article'; absoluteTitle?: boolean;
   ogTitle?: string; kicker?: string; cover?: string | null;
   robots?: { index: boolean; follow?: boolean };
+  /** Article-only Open Graph facts (article:published_time, section, tag, author) — what Facebook and LinkedIn read for a news link. */
+  article?: { publishedTime?: string | null; modifiedTime?: string | null; section?: string; tags?: string[]; authors?: string[] };
+  /** Alt text for the share image (accessibility + image search). */
+  imageAlt?: string;
 }) {
-  const { locale, path, title, description, type = 'website', absoluteTitle, ogTitle, kicker, cover, robots } = opts;
-  const images = [ogImageUrl({ title: ogTitle || title, kicker, locale, cover })];
+  const { locale, path, title, description, type = 'website', absoluteTitle, ogTitle, kicker, cover, robots, article, imageAlt } = opts;
+  const imageUrl = ogImageUrl({ title: ogTitle || title, kicker, locale, cover });
+  const images = imageAlt ? [{ url: imageUrl, width: 1200, height: 630, alt: imageAlt }] : [imageUrl];
+  const articleMeta = type === 'article' && article ? {
+    ...(article.publishedTime ? { publishedTime: article.publishedTime } : {}),
+    ...(article.modifiedTime ? { modifiedTime: article.modifiedTime } : {}),
+    ...(article.section ? { section: article.section } : {}),
+    ...(article.tags && article.tags.length ? { tags: article.tags.slice(0, 8) } : {}),
+    ...(article.authors && article.authors.length ? { authors: article.authors } : {}),
+  } : {};
   return {
     title: absoluteTitle ? { absolute: title } : title,
     description,
@@ -77,7 +89,7 @@ export function pageMetadata(opts: {
     ...(robots ? { robots } : {}),
     openGraph: {
       title, description, type, url: urlFor(locale, path), siteName: SITE_NAME,
-      locale: OG_LOCALE[locale], images,
+      locale: OG_LOCALE[locale], images, ...articleMeta,
     },
     twitter: { card: 'summary_large_image' as const, title, description, images },
   };

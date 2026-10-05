@@ -70,7 +70,7 @@ export default function MembersTab() {
         <button className="abtn ghost" onClick={exportCsv} disabled={!rows.length}>Export CSV</button>
       </div>
       <table className="adm-t">
-        <thead><tr><th>E-mail</th><th>Type</th><th>Status</th><th>Since</th><th>Renews / ends</th><th></th></tr></thead>
+        <thead><tr><th>E-mail</th><th>Type</th><th>Status</th><th>Since</th><th>Renews / ends</th><th>Last sign-in</th><th></th></tr></thead>
         <tbody>
           {shown.map((m) => (
             <tr key={m.id}>
@@ -79,6 +79,7 @@ export default function MembersTab() {
               <td><span className={`pill ${m.status === 'active' ? 'ok' : 'failed'}`}>{m.status}</span>{m.cancel_at_period_end ? <span className="pill warn" style={{ marginInlineStart: 6 }}>cancels</span> : null}</td>
               <td>{d(m.created_at)}</td>
               <td>{d(m.current_period_end)}</td>
+              <td>{d(m.last_login_at ?? null)}</td>
               <td>
                 {isComp(m)
                   ? (m.status === 'active'
@@ -88,7 +89,7 @@ export default function MembersTab() {
               </td>
             </tr>
           ))}
-          {shown.length === 0 ? <tr><td colSpan={6}>No members yet.</td></tr> : null}
+          {shown.length === 0 ? <tr><td colSpan={7}>No members yet.</td></tr> : null}
         </tbody>
       </table>
     </>

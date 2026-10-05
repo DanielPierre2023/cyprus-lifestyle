@@ -77,6 +77,9 @@ export default async function MembershipPage({ params }: { params: Promise<{ loc
         <p style={{ color: '#8a8371', fontSize: 13.5, marginTop: 22 }}>
           {t('membership.note')} <Link href="/contact" style={{ color: '#8a7a4a' }}>{t('footer.contact')}</Link>.
         </p>
+        <p style={{ fontSize: 13.5, marginTop: 6 }}>
+          <Link href="/account" style={{ color: '#8a7a4a' }}>{t('account.signInLink')}</Link>
+        </p>
       </div>
 
       <NewsletterSignup />

@@ -56,7 +56,7 @@ export default function MembershipCheckout({ labels, locale }: { labels: Members
       fetch('/api/membership/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, cid: c }) })
         .then(async (r) => ({ ok: r.ok, d: await r.json().catch(() => ({})) }))
         .then(({ ok, d }) => {
-          if (ok && d && d.ok) { setMember(true); setRestoredNow(true); return; }
+          if (ok && d && d.ok && d.member !== false) { setMember(true); setRestoredNow(true); return; }
           setErr(d && d.error === 'expired' ? labels.confirmExpired : d && d.error === 'unavailable' ? labels.confirmError : labels.confirmInvalid);
         })
         .catch(() => setErr(labels.confirmError))

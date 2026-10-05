@@ -9,6 +9,7 @@ import { isCronAuthorized } from '@/lib/cron';
 import { runWorker } from '@/lib/jobs';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { sendApproved } from '@/lib/newsletterDigest';
+import { processOutbox } from '@/lib/socialAuto';
 // Side-effect import: registers real job handlers for later roadmap items. Safe when
 // empty. Keeping registrations out of lib/jobs.ts avoids pulling heavy engines into
 // the many modules that only need enqueue().
@@ -22,8 +23,11 @@ async function handle(req: NextRequest) {
   // Finish delivering any newsletter edition an administrator has APPROVED (a no-op, one cheap query, when none is).
   // Time-boxed so the job queue below still gets most of the window while a send is in progress.
   const newsletter = await sendApproved(supabaseAdmin(), { deadlineMs: 20_000 }).catch(() => null);
-  const summary = await runWorker({ deadlineMs: newsletter && newsletter.campaigns > 0 ? 28_000 : 50_000 });
-  return NextResponse.json({ ok: true, ...summary, ...(newsletter && newsletter.campaigns > 0 ? { newsletter } : {}) });
+  // Facebook + Instagram posts waiting in the queue (filled by the database the moment an article is published).
+  const social = await processOutbox(supabaseAdmin(), { deadlineMs: 20_000, maxItems: 3 }).catch(() => null);
+  const busy = (newsletter && newsletter.campaigns > 0) || (social && (social.posted + social.failed + social.skipped) > 0);
+  const summary = await runWorker({ deadlineMs: busy ? 26_000 : 50_000 });
+  return NextResponse.json({ ok: true, ...summary, ...(newsletter && newsletter.campaigns > 0 ? { newsletter } : {}), ...(social && busy ? { social } : {}) });
 }
 
 export const GET = handle;

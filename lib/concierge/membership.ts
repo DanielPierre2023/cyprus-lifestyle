@@ -7,6 +7,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isValidCid } from '@/lib/concierge/memory';
+import { entitled, canSignIn, type MemberLike } from '@/lib/member/entitlement';
 import {
   RESTORE_MAX_PER_HOUR, escapeLike, generateRestoreToken, hashRestoreToken, isPlausibleEmail,
   isPlausibleRestoreToken, normalizeEmail, restoreExpiry, type RestoreOutcome,
@@ -17,12 +18,13 @@ export interface MemberStatus { member: boolean; tier: string | null; }
 export async function memberStatus(cid: string): Promise<MemberStatus> {
   if (!isValidCid(cid)) return { member: false, tier: null };
   try {
+    // 'failed' (payment problem) keeps the benefits for a grace period; see lib/member/entitlement.ts.
     const { data } = await supabaseAdmin()
       .from('concierge_members')
-      .select('tier, status')
-      .eq('cid', cid).eq('status', 'active')
+      .select('tier, status, current_period_end, updated_at')
+      .eq('cid', cid).in('status', ['active', 'failed'])
       .limit(1).maybeSingle();
-    return data ? { member: true, tier: String(data.tier || 'concierge') } : { member: false, tier: null };
+    return data && entitled(data as MemberLike) ? { member: true, tier: String(data.tier || 'concierge') } : { member: false, tier: null };
   } catch { return { member: false, tier: null }; }
 }
 
@@ -108,6 +110,83 @@ export async function confirmRestore(
     if (bind.error || !bind.data || bind.data.length === 0) return 'error';
     return 'restored';
   } catch { return 'error'; }
+}
+
+// ── Account sign-in (the same proof of mailbox control, for ANY member row) ───────────────
+// issueRestoreToken/confirmRestore above only serve ACTIVE members (restoring the benefits on a device).
+// Signing in to the account page must also work for a member whose membership has ENDED — they need their invoices
+// and the way back in — so these two accept every member row with a sign-in status. The benefits are unaffected:
+// a browser is only bound to the membership (cid) when it is entitled, and entitlement is checked on every use.
+export async function issueLoginToken(
+  sb: SupabaseClient, rawEmail: string, now: Date = new Date(),
+): Promise<{ ok: true; token: string } | { ok: false; reason: 'no_member' | 'throttled' | 'error' }> {
+  const email = normalizeEmail(rawEmail);
+  if (!isPlausibleEmail(email)) return { ok: false, reason: 'no_member' };
+  try {
+    const { data: m, error: me } = await sb.from('concierge_members')
+      .select('id').ilike('email', escapeLike(email)).in('status', ['active', 'failed', 'canceled'])
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (me) return { ok: false, reason: 'error' };
+    if (!m) return { ok: false, reason: 'no_member' };
+    const memberId = String(m.id);
+
+    const since = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+    const { data: recent, error: re } = await sb.from('membership_restore_tokens')
+      .select('id').eq('member_id', memberId).gte('created_at', since).limit(RESTORE_MAX_PER_HOUR);
+    if (re) return { ok: false, reason: 'error' };
+    if ((recent || []).length >= RESTORE_MAX_PER_HOUR) return { ok: false, reason: 'throttled' };
+
+    const inv = await sb.from('membership_restore_tokens')
+      .update({ used_at: now.toISOString() }).eq('member_id', memberId).is('used_at', null);
+    if (inv.error) return { ok: false, reason: 'error' };
+
+    const token = generateRestoreToken();
+    const ins = await sb.from('membership_restore_tokens').insert({
+      member_id: memberId, token_hash: hashRestoreToken(token), expires_at: restoreExpiry(now).toISOString(),
+    });
+    if (ins.error) return { ok: false, reason: 'error' };
+    return { ok: true, token };
+  } catch { return { ok: false, reason: 'error' }; }
+}
+
+export type LoginOutcome =
+  | { outcome: 'signed_in'; memberId: string; entitled: boolean }
+  | { outcome: 'invalid' | 'expired' | 'error' };
+
+export async function confirmLogin(
+  sb: SupabaseClient, token: unknown, confirmingCid: unknown, now: Date = new Date(),
+): Promise<LoginOutcome> {
+  if (!isPlausibleRestoreToken(token)) return { outcome: 'invalid' };
+  const cid = typeof confirmingCid === 'string' && isValidCid(confirmingCid) ? confirmingCid : '';
+  const hash = hashRestoreToken(token);
+  try {
+    const { data: used, error } = await sb.from('membership_restore_tokens')
+      .update({ used_at: now.toISOString() })
+      .eq('token_hash', hash).is('used_at', null).gt('expires_at', now.toISOString())
+      .select('member_id');
+    if (error) return { outcome: 'error' };
+    if (!used || used.length === 0) {
+      const { data: known, error: ke } = await sb.from('membership_restore_tokens')
+        .select('id').eq('token_hash', hash).limit(1).maybeSingle();
+      if (ke) return { outcome: 'error' };
+      return { outcome: known ? 'expired' : 'invalid' };
+    }
+    const memberId = String(used[0].member_id);
+    const { data: member, error: me } = await sb.from('concierge_members')
+      .select('id, status, current_period_end, updated_at').eq('id', memberId).limit(1).maybeSingle();
+    if (me) return { outcome: 'error' };
+    if (!member || !canSignIn(String(member.status))) return { outcome: 'invalid' };
+
+    const ok = entitled(member as MemberLike, now);
+    if (ok && cid) {
+      // A browser belongs to one membership: release this cid from any other row, then point the member at it.
+      const rel = await sb.from('concierge_members').update({ cid: null, updated_at: now.toISOString() }).eq('cid', cid).neq('id', memberId);
+      if (rel.error) return { outcome: 'error' };
+      const bind = await sb.from('concierge_members').update({ cid, updated_at: now.toISOString() }).eq('id', memberId).select('id');
+      if (bind.error || !bind.data || bind.data.length === 0) return { outcome: 'error' };
+    }
+    return { outcome: 'signed_in', memberId, entitled: ok };
+  } catch { return { outcome: 'error' }; }
 }
 
 // ── Recording a paid membership (called by the Stripe webhook) ───────────────────────
