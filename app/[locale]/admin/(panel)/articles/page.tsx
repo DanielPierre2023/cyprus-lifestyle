@@ -17,7 +17,7 @@ export default function ArticlesTab() {
 
   async function setStatus(id: string, status: string) {
     const row = rows.find((r) => r.id === id);
-    const { error } = await sb.from('blog_posts').update({ status, published_at: status === 'published' ? new Date().toISOString() : null }).eq('id', id);
+    const { error } = await sb.from('blog_posts').update({ status, published_at: status === 'published' ? (row?.published_at || new Date().toISOString()) : null }).eq('id', id);
     // Instant on-demand ISR on both publish and unpublish, so the reader pages
     // reflect the change immediately instead of after the time-based window.
     if (!error && row) {

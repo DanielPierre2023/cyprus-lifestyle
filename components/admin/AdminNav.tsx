@@ -28,6 +28,7 @@ const TABS = [
   { href: '/admin/social', label: 'Social' },
   { href: '/admin/newsletter', label: 'Newsletter' },
   { href: '/admin/subscribers', label: 'Subscribers (Abonați)' },
+  { href: '/admin/members', label: 'Members' },
   { href: '/admin/inbox', label: 'Inbox' },
   { href: '/admin/mail', label: 'Mail (Email)' },
   { grp: 'Revenue & ops' },
@@ -40,6 +41,7 @@ const TABS = [
   { href: '/admin/attribution', label: 'Attribution & ROI' },
   { href: '/admin/analytics', label: 'Analytics (Observabilitate)' },
   { href: '/admin/privacy', label: 'Privacy · GDPR' },
+  { href: '/admin/audit', label: 'Audit log' },
   { href: '/admin/settings', label: 'Settings (Setări)' },
 ];
 

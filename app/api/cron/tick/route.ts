@@ -10,6 +10,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { logServerError } from '@/lib/monitor.server';
 import { runWorker } from '@/lib/jobs';
 import { enqueueGeocodeBacklog, enqueueDailySubsystems } from '@/lib/jobs.handlers';
+import { isFridayUtc, notifyApprover, prepareDigest } from '@/lib/newsletterDigest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap
@@ -24,6 +25,15 @@ export async function GET(req: NextRequest) {
     out.subsystemsEnqueued = await enqueueDailySubsystems(sb);
     out.geocodeEnqueued = await enqueueGeocodeBacklog(sb, 60);
   } catch (e) { await logServerError('cron-tick:enqueue', e); }
+
+  // Fridays: prepare the week's newsletter DRAFTS (all editions) and tell the approver. Nothing is sent until an
+  // administrator approves each edition in Admin → Newsletter.
+  if (isFridayUtc(new Date())) {
+    try {
+      const nl = await prepareDigest(sb);
+      out.newsletter = { week: nl.week, created: nl.created, skipped: nl.skipped, notified: await notifyApprover(nl) };
+    } catch (e) { await logServerError('cron-tick:newsletter', e); }
+  }
 
   // Drain a time-boxed batch now, so work progresses even without pg_cron. pg_cron
   // (when enabled) drains continuously between ticks.
