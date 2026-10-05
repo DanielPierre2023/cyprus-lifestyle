@@ -12,6 +12,7 @@
 // gone.
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/ratelimit';
+import { publicAiCeilingDeny } from '@/lib/spendGuard';
 import { runConcierge, type ChatMessage } from '@/lib/concierge/brain';
 
 export const runtime = 'nodejs';
@@ -22,6 +23,9 @@ export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   if (!(await rateLimit(req, 'concierge', 12, 60))) {
+    return NextResponse.json({ ok: false, error: 'A lot of questions at once — give it a moment and try again.' }, { status: 429 });
+  }
+  if (await publicAiCeilingDeny('chat')) {
     return NextResponse.json({ ok: false, error: 'A lot of questions at once — give it a moment and try again.' }, { status: 429 });
   }
   const body = await req.json().catch(() => ({}));

@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CONCIERGE_MODEL } from '@/lib/concierge/brain';
 import { embedText, EMBED_MODEL } from '@/lib/concierge/embed';
+import { keyGateDeny as denyReason } from '@/lib/auth/keyGate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -40,14 +41,8 @@ async function testOpenAI(): Promise<Record<string, unknown>> {
     : { ok: false, model: EMBED_MODEL, error: 'Embedding call failed — likely an invalid OPENAI_API_KEY, no quota, or a network block.' };
 }
 
-function denyReason(req: NextRequest): string | null {
-  if (!process.env.ENRICH_SECRET) return 'ENRICH_SECRET is not set on the server. Add it in Vercel, redeploy, then call with ?key=<that value>.';
-  if ((req.nextUrl.searchParams.get('key') || '') !== process.env.ENRICH_SECRET) return 'Unauthorized — the ?key= value does not match ENRICH_SECRET.';
-  return null;
-}
-
 export async function GET(req: NextRequest) {
-  const deny = denyReason(req);
+  const deny = await denyReason(req);
   if (deny) return NextResponse.json({ ok: false, error: deny }, { status: 401 });
   const [claude, openai] = await Promise.all([testClaude(), testOpenAI()]);
   const ok = Boolean(claude.ok);

@@ -47,12 +47,12 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
 }
 
 export async function GET(req: NextRequest) {
-  const deny = denyReason(req);
+  const deny = await denyReason(req);
   if (deny) return NextResponse.json({ ok: false, error: deny }, { status: 401 });
   return NextResponse.json(await run(req));
 }
 export async function POST(req: NextRequest) {
-  const deny = denyReason(req);
+  const deny = await denyReason(req);
   if (deny) return NextResponse.json({ ok: false, error: deny }, { status: 401 });
   return NextResponse.json(await run(req));
 }

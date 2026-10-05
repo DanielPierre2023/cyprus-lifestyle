@@ -13,6 +13,11 @@
 //     has run yet. Its downstream CRM / fulfilment / email side-effects stay best-effort
 //     (not idempotent, so a blanket retry could duplicate deals and emails) — swallowed but
 //     logged. A no-match / malformed id is acknowledged, not retried.
+//   • Idempotency: every event id is claimed in stripe_events first; an already-processed id
+//     is acknowledged with no side effects, and processed_at is set only AFTER success.
+//     (No table yet → previous behaviour.)
+//   • Order-safety: status changes are conditional updates (lib/stripe/events.ts allowedFrom),
+//     so a late/duplicate event can never resurrect a 'canceled' row.
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { verifyWebhook } from '@/lib/stripe';
@@ -20,6 +25,12 @@ import { onboardingEmail, type OrderLike } from '@/lib/fulfilment';
 import { sendEmail } from '@/lib/email';
 import { recordMembershipCheckout } from '@/lib/concierge/membership';
 import { logServerError } from '@/lib/monitor.server';
+import {
+  PAYABLE_FROM, allowedFrom, invoiceSubscriptionId, isMissingSchema, isMoneyBackEvent, isPaidSession,
+  mapSubscriptionStatus, subscriptionPeriod,
+} from '@/lib/stripe/events';
+import { claimEvent, markProcessed, releaseClaim } from '@/lib/stripe/ledger';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,26 +45,55 @@ async function retryLater(event: Record<string, unknown>, step: string, detail: 
   return NextResponse.json({ ok: false, error: 'processing failed — Stripe will retry' }, { status: 500 });
 }
 
-export async function POST(req: NextRequest) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!secret) return NextResponse.json({ ok: false, error: 'not configured' }, { status: 400 });
+// Status transition on both subscription-backed tables, guarded by allowedFrom().
+async function transition(sb: SupabaseClient, subId: string, target: 'active' | 'failed' | 'canceled', now: string) {
+  const from = allowedFrom(target);
+  const patch = { status: target, updated_at: now };
+  const ad = await sb.from('ad_orders').update(patch).eq('stripe_subscription_id', subId).in('status', from);
+  const mem = await sb.from('concierge_members').update(patch).eq('stripe_subscription_id', subId).in('status', from);
+  return ad.error || mem.error;
+}
 
-  const raw = await req.text(); // raw body is required for signature verification
-  const event = verifyWebhook(raw, req.headers.get('stripe-signature'), secret);
-  if (!event) return NextResponse.json({ ok: false, error: 'invalid signature' }, { status: 400 });
+let warnedPeriod = false;
+// Persist current_period_end / cancel_at_period_end. Needs the new columns; if they are not
+// there yet (migration not run) it is skipped with a single log line — never an error.
+async function persistPeriod(sb: SupabaseClient, subId: string, sub: Record<string, unknown>, now: string) {
+  const p = subscriptionPeriod(sub);
+  const patch: Record<string, unknown> = { cancel_at_period_end: p.cancel_at_period_end, updated_at: now };
+  if (p.current_period_end) patch.current_period_end = p.current_period_end;
+  for (const table of ['ad_orders', 'concierge_members']) {
+    const r = await sb.from(table).update(patch).eq('stripe_subscription_id', subId).neq('status', 'canceled');
+    if (!r.error) continue;
+    if (isMissingSchema(r.error)) {
+      if (!warnedPeriod) {
+        warnedPeriod = true;
+        await logServerError('stripe-webhook', new Error('current_period_end/cancel_at_period_end columns missing — run migration 20261004130200_stripe_events.sql'), {}, 'warn');
+      }
+      return null;
+    }
+    return r.error;
+  }
+  return null;
+}
 
+async function processEvent(sb: SupabaseClient, event: Record<string, unknown>, now: string): Promise<NextResponse> {
   const type = String(event.type || '');
   const obj = ((event.data as Record<string, unknown>)?.object || {}) as Record<string, unknown>;
-  const sb = supabaseAdmin();
-  const now = new Date().toISOString();
+  const ok = () => NextResponse.json({ received: true });
 
   // Flipped on as soon as we enter a membership-affecting branch, so the catch below knows
   // whether an unexpected error may be swallowed (ad-order branch) or must trigger a retry.
   let strict = false;
   try {
     const meta = (obj.metadata as Record<string, string>) || {};
+    const completed = type === 'checkout.session.completed' || type === 'checkout.session.async_payment_succeeded';
+
+    // Paid only when money moved (or none is due). A delayed-payment session that is still
+    // 'unpaid' is acknowledged and waits for async_payment_succeeded / _failed.
+    if (completed && !isPaidSession(obj.payment_status)) return ok();
+
     // Concierge membership — handled here so one Stripe endpoint covers both flows.
-    if (type === 'checkout.session.completed' && meta.kind === 'membership') {
+    if (completed && meta.kind === 'membership') {
       strict = true;
       const md = (obj.customer_details as Record<string, unknown>) || {};
       const rec = await recordMembershipCheckout(sb, {
@@ -65,9 +105,9 @@ export async function POST(req: NextRequest) {
         sessionId: (obj.id as string) || null,
       }, now);
       if (!rec.ok) return await retryLater(event, 'membership checkout write', rec.error);
-      return NextResponse.json({ received: true });
+      return ok();
     }
-    if (type === 'checkout.session.completed') {
+    if (completed) {
       const orderId = (obj.client_reference_id as string) || ((obj.metadata as Record<string, string>)?.order_id);
       const details = (obj.customer_details as Record<string, unknown>) || {};
       const patch: Record<string, unknown> = {
@@ -83,12 +123,13 @@ export async function POST(req: NextRequest) {
       // (non-idempotent) CRM / fulfilment / email side-effect runs — nothing below has
       // happened yet, so a retry here is safe. A real DB failure → 500 so Stripe retries.
       // "No matching row" (PGRST116) and a malformed id (22P02) are PERMANENT — an order we
-      // don't track, or a foreign event — so acknowledge them instead of retry-storming.
+      // don't track, a foreign event, or one already paid/canceled (order-safety: only
+      // pending/failed/expired orders are moved) — so acknowledge them instead of retry-storming.
       const ACK = new Set(['PGRST116', '22P02']);
       const sel = orderId
-        ? await sb.from('ad_orders').update(patch).eq('id', orderId).select('*').single()
+        ? await sb.from('ad_orders').update(patch).eq('id', orderId).in('status', PAYABLE_FROM).select('*').single()
         : obj.id
-          ? await sb.from('ad_orders').update(patch).eq('stripe_session_id', obj.id as string).select('*').single()
+          ? await sb.from('ad_orders').update(patch).eq('stripe_session_id', obj.id as string).in('status', PAYABLE_FROM).select('*').single()
           : null;
       if (sel?.error && !ACK.has(sel.error.code || '')) return await retryLater(event, 'ad-order checkout write', sel.error.message);
       order = sel?.data ?? null;
@@ -122,33 +163,90 @@ export async function POST(req: NextRequest) {
           await sendEmail({ to: toEmail, subject: mail.subject, html: mail.html }).catch(() => {});
         }
       }
+    } else if (type === 'checkout.session.expired' || type === 'checkout.session.async_payment_failed') {
+      // Pending ad order whose session lapsed / whose delayed payment failed. Only if it is
+      // still pending — a paid or canceled order is never touched.
+      if (obj.id) {
+        const next = type === 'checkout.session.expired' ? 'expired' : 'failed';
+        const r = await sb.from('ad_orders').update({ status: next, updated_at: now }).eq('stripe_session_id', obj.id as string).eq('status', 'pending');
+        if (r.error) return await retryLater(event, `ad-order ${next} write`, r.error.message);
+      }
     } else if (type === 'customer.subscription.deleted') {
       if (obj.id) {
         strict = true;
-        // Both are plain, idempotent status writes, so a retry is always safe. Run both even
-        // if the first fails, then report either failure (a member whose cancellation is not
+        // Plain, idempotent status writes, so a retry is always safe. Both run even if the
+        // first fails, then either failure is reported (a member whose cancellation is not
         // recorded would keep premium access).
-        const ad = await sb.from('ad_orders').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
-        const mem = await sb.from('concierge_members').update({ status: 'canceled', updated_at: now }).eq('stripe_subscription_id', obj.id as string);
-        const err = ad.error || mem.error;
+        const err = await transition(sb, obj.id as string, 'canceled', now);
         if (err) return await retryLater(event, 'subscription cancel write', err.message);
       }
-    } else if (type === 'invoice.payment_failed') {
-      if (obj.subscription) {
+    } else if (type === 'customer.subscription.updated') {
+      if (obj.id) {
         strict = true;
-        const ad = await sb.from('ad_orders').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
-        const mem = await sb.from('concierge_members').update({ status: 'failed', updated_at: now }).eq('stripe_subscription_id', obj.subscription as string);
-        const err = ad.error || mem.error;
+        const target = mapSubscriptionStatus(obj.status);
+        if (target) {
+          const err = await transition(sb, obj.id as string, target, now);
+          if (err) return await retryLater(event, 'subscription status write', err.message);
+        }
+        if (target !== 'canceled') {
+          const perr = await persistPeriod(sb, obj.id as string, obj, now);
+          if (perr) return await retryLater(event, 'subscription period write', perr.message);
+        }
+      }
+    } else if (type === 'invoice.payment_failed') {
+      const sub = invoiceSubscriptionId(obj);
+      if (sub) {
+        strict = true;
+        const err = await transition(sb, sub, 'failed', now);
         if (err) return await retryLater(event, 'payment-failed write', err.message);
       }
+    } else if (type === 'invoice.paid') {
+      // A card recovered by Stripe's retry: failed → active, and only from failed.
+      const sub = invoiceSubscriptionId(obj);
+      if (sub) {
+        strict = true;
+        const err = await transition(sb, sub, 'active', now);
+        if (err) return await retryLater(event, 'invoice-paid write', err.message);
+      }
+    } else if (isMoneyBackEvent(type)) {
+      // Refunds / disputes: full handling is Phase 1 — record it visibly and acknowledge.
+      await logServerError('stripe-webhook:money-back', new Error(`${type} received — manual review`), {
+        eventId: String(event.id || ''), type, objectId: String(obj.id || ''),
+      }, 'warn');
     }
   } catch (e) {
     // Membership branches: an unexpected error must not look like success → retry.
     if (strict) return retryLater(event, 'unexpected error', (e as Error).message);
-    // Advertising-order branch: unchanged — never fail the webhook on our own logic error
-    // (its side effects aren't idempotent, so retrying could duplicate them). Now logged,
-    // so a swallowed failure is at least visible in the admin error log.
-    await logServerError('stripe-webhook:ad-order', e, { eventId: String(event.id || ''), type });
+    // Advertising-order branch: never fail the webhook on our own logic error (its side
+    // effects aren't idempotent, so retrying could duplicate them). Logged, so a swallowed
+    // failure is visible in the admin error log.
+    await logServerError('stripe-webhook:ad-order', e, { eventId: String(event.id || ''), type: String(event.type || '') });
   }
-  return NextResponse.json({ received: true });
+  return ok();
+}
+
+export async function POST(req: NextRequest) {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!secret) return NextResponse.json({ ok: false, error: 'not configured' }, { status: 400 });
+
+  const raw = await req.text(); // raw body is required for signature verification
+  const event = verifyWebhook(raw, req.headers.get('stripe-signature'), secret);
+  if (!event) return NextResponse.json({ ok: false, error: 'invalid signature' }, { status: 400 });
+
+  const sb = supabaseAdmin();
+  const now = new Date().toISOString();
+  const eventId = String(event.id || '');
+
+  // Idempotency: already processed → ack with no side effects; being handled by a concurrent
+  // delivery → 409 so Stripe retries later; ledger unavailable → process as before.
+  const claim = eventId ? await claimEvent(sb, eventId, String(event.type || ''), now) : 'untracked';
+  if (claim === 'skip') return NextResponse.json({ received: true, duplicate: true });
+  if (claim === 'busy') return NextResponse.json({ ok: false, error: 'event in progress — Stripe will retry' }, { status: 409 });
+
+  const res = await processEvent(sb, event, now);
+  if (claim === 'process') {
+    if (res.ok) await markProcessed(sb, eventId, new Date().toISOString());
+    else await releaseClaim(sb, eventId);
+  }
+  return res;
 }

@@ -3,11 +3,15 @@
 //   POST — incoming updates → the concierge brain → reply via the Telegram API.
 // The same grounded brain as the web + WhatsApp concierge; per-chat memory in Postgres.
 //
-// Env (add in Vercel): TELEGRAM_BOT_TOKEN, TELEGRAM_SECRET_TOKEN.
+// Env (add in Vercel): TELEGRAM_BOT_TOKEN, TELEGRAM_SECRET_TOKEN (REQUIRED — pass the same
+// value as `secret_token` when calling setWebhook; without it every POST is refused).
 // Optional: NEXT_PUBLIC_SITE_URL.
 import { NextRequest, after } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { runConcierge, detectLocale, type ChatMessage } from '@/lib/concierge/brain';
+import { safeEqual } from '@/lib/auth/secretMatch';
+import { rateLimitKey } from '@/lib/ratelimit';
+import { publicAiCeilingDeny } from '@/lib/spendGuard';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -50,9 +54,14 @@ export async function GET() {
 
 // ── Incoming updates ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  // Validate Telegram's secret header when configured; reject a mismatch.
-  const secret = process.env.TELEGRAM_SECRET_TOKEN;
-  if (secret && req.headers.get('x-telegram-bot-api-secret-token') !== secret) {
+  // The secret header is mandatory (fail-closed): without it anyone could POST forged
+  // updates and spend model tokens or impersonate a chat. Constant-time comparison.
+  const secret = process.env.TELEGRAM_SECRET_TOKEN || '';
+  if (!secret) {
+    console.error('[telegram] TELEGRAM_SECRET_TOKEN is not set — refusing unsigned webhook traffic');
+    return new Response('not configured', { status: 503 });
+  }
+  if (!safeEqual(req.headers.get('x-telegram-bot-api-secret-token') || '', secret)) {
     return new Response('unauthorized', { status: 401 });
   }
   const body = await req.json().catch(() => null);
@@ -73,6 +82,10 @@ async function handleUpdate(body: TgUpdate) {
   const chatId = msg?.chat?.id;
   const text = typeof msg?.text === 'string' ? msg.text : '';
   if (chatId == null || !text.trim()) return;
+
+  // Per-chat throttle: 12 messages / minute.
+  if (!(await rateLimitKey(String(chatId), 'tg-msg', 12, 60))) return;
+  if (await publicAiCeilingDeny('chat')) return;
 
   await handleTextMessage(token, String(chatId), text, tgLocale(msg?.from?.language_code));
 }

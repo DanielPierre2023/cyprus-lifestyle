@@ -34,7 +34,9 @@ for (const f of files) {
       entryPoints: [join(here, f)],
       bundle: true, platform: 'node', format: 'esm',
       tsconfig: join(root, 'tsconfig.json'),
-      alias, outfile, logLevel: 'silent',
+      // sanitize-html pulls in postcss, which uses CommonJS require() that an ESM bundle can't
+      // inline — load it from node_modules at runtime instead.
+      alias, external: ['sanitize-html'], outfile, logLevel: 'silent',
     });
   } catch (e) {
     console.log(`✗ ${f}: bundle failed`);

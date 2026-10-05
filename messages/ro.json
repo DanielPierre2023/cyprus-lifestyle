@@ -358,7 +358,7 @@
     "kicker": "Membri",
     "title": "Deveniți membru",
     "dek": "Alăturați-vă comunității Cyprus Lifestyle — afacerile, cultura și viața bună a insulei, în șapte limbi.",
-    "intro": "Calitatea de membru începe gratuit și așa va rămâne. Fiecare cititor primește Scrisoarea de sâmbătă, toate cele șapte ediții și întreaga colecție a revistei și a ghidului său. Un nivel cu plată — cu seri pentru membri, ediția tipărită și privilegii de la parteneri — este pe cale să apară.",
+    "intro": "Lectura Cyprus Lifestyle este gratuită: Scrisoarea de sâmbătă, toate cele șapte ediții, întreaga revistă și ghidul insulei. Abonamentul Concierge este nivelul opțional cu plată — un concierge mai atent, care vă reține preferințele, pe fiecare dispozitiv pe care îl folosiți.",
     "free": {
       "name": "Cititor",
       "price": "Gratuit",
@@ -369,36 +369,34 @@
         "Fiecare articol și întregul ghid al insulei"
       ]
     },
-    "patron": {
-      "name": "Patron",
-      "price": "În curând",
-      "features": [
-        "Tot ce include nivelul Cititor",
-        "Invitații la seri pentru membri și degustări",
-        "Ediția tipărită de sezon, trimisă prin poștă",
-        "Privilegii cu nume selectate din ghidul nostru"
-      ]
-    },
-    "soon": "Abonamentul cu plată nu este încă disponibil. Înscrieți-vă gratuit ca Cititor și veți fi primii care află când se deschide nivelul Patron.",
     "note": "Întrebări despre calitatea de membru sau abonamente corporative? Scrieți-ne prin",
     "concierge": {
       "name": "Abonament Concierge",
       "tagline": "Concierge-ul tău personal pentru Cipru.",
       "perMonth": "/ lună",
+      "perYear": "/ an",
       "features": [
-        "Concierge prioritar — mereu primul la rând",
-        "Un concierge uman dedicat pentru orice, la comandă",
-        "Călătoriile și preferințele tale, reținute",
-        "Toată insula, aleasă pentru tine"
+        "Răspunsuri mai detaliate și anticipative din partea concierge-ului",
+        "Călătoriile și preferințele dumneavoastră, reținute pe toate dispozitivele",
+        "Restaurarea abonamentului pe orice dispozitiv, printr-un link securizat trimis pe email"
       ],
       "cta": "Devino membru",
       "sending": "Se deschide plata securizată…",
       "active": "Ești membru — îți mulțumim.",
       "welcome": "Bine ai venit. Concierge-ul tău e pregătit — caută clopoțelul.",
-      "restorePrompt": "Ești deja membru pe alt dispozitiv?",
+      "restorePrompt": "Sunteți deja membru pe alt dispozitiv? Vă trimitem un link securizat pe email.",
       "emailPh": "Emailul tău",
-      "restore": "Restaurează",
-      "notConfigured": "Abonamentele se deschid în curând — revino curând."
+      "restore": "Trimite linkul",
+      "notConfigured": "Abonamentele se deschid în curând — revino curând.",
+      "restoreBusy": "Se trimite…",
+      "restoreSent": "Dacă există un abonament pentru această adresă, un link securizat este pe drum. Verificați căsuța de email (și dosarul spam) — funcționează o singură dată și expiră în 30 de minute.",
+      "restoreInvalid": "Introduceți o adresă de email validă.",
+      "restoreError": "Nu am putut trimite acum. Încercați din nou peste câteva minute.",
+      "confirming": "Se restaurează abonamentul dumneavoastră…",
+      "confirmOk": "Abonamentul a fost restaurat pe acest dispozitiv — bine ați revenit.",
+      "confirmExpired": "Acest link a expirat sau a fost deja folosit. Solicitați unul nou mai jos.",
+      "confirmInvalid": "Acest link nu este valid. Solicitați unul nou mai jos.",
+      "confirmError": "Nu am putut restaura abonamentul acum. Deschideți linkul din nou în scurt timp."
     }
   },
   "collections": {

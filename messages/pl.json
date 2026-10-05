@@ -358,7 +358,7 @@
     "kicker": "Członkostwo",
     "title": "Zostań członkiem",
     "dek": "Dołącz do czytelników Cyprus Lifestyle — biznes, kultura i dobre życie wyspy, w siedmiu językach.",
-    "intro": "Członkostwo zaczyna się bezpłatnie i takie pozostanie. Każdy czytelnik otrzymuje Sobotni list, wszystkie siedem wydań oraz pełny magazyn wraz z katalogiem. Płatny poziom — z wieczorami dla członków, wydaniem drukowanym i przywilejami partnerskimi — jest w przygotowaniu.",
+    "intro": "Czytanie Cyprus Lifestyle jest bezpłatne: Sobotni list, wszystkie siedem wydań, cały magazyn i katalog wyspy. Członkostwo Concierge to opcjonalny płatny poziom — dokładniejszy concierge, który pamięta Twoje preferencje na każdym urządzeniu.",
     "free": {
       "name": "Czytelnik",
       "price": "Bezpłatnie",
@@ -369,36 +369,34 @@
         "Każdy artykuł i pełny katalog wyspy"
       ]
     },
-    "patron": {
-      "name": "Patron",
-      "price": "Wkrótce",
-      "features": [
-        "Wszystko z poziomu Czytelnik",
-        "Zaproszenia na wieczory dla członków i degustacje",
-        "Sezonowe wydanie drukowane, wysyłane do Ciebie",
-        "Przywileje u wybranych marek z naszego katalogu"
-      ]
-    },
-    "soon": "Płatne członkostwo nie jest jeszcze dostępne. Dołącz bezpłatnie jako Czytelnik, a jako pierwszy dowiesz się, gdy ruszy poziom Patron.",
     "note": "Pytania o członkostwo lub prenumeratę firmową? Napisz do nas przez",
     "concierge": {
       "name": "Członkostwo Concierge",
       "tagline": "Twój osobisty concierge na Cyprze.",
       "perMonth": "/ miesiąc",
+      "perYear": "/ rok",
       "features": [
-        "Priorytetowy concierge — zawsze pierwszy",
-        "Dedykowany concierge do wszystkiego na zamówienie",
-        "Twoje podróże i preferencje, zapamiętane",
-        "Cała wyspa, wybrana dla Ciebie"
+        "Dokładniejsze, przewidujące odpowiedzi Twojego concierge",
+        "Twoje podróże i preferencje, zapamiętane na wszystkich urządzeniach",
+        "Przywracanie członkostwa na dowolnym urządzeniu przez bezpieczny link e-mail"
       ],
       "cta": "Zostań członkiem",
       "sending": "Otwieranie bezpiecznej płatności…",
       "active": "Jesteś członkiem — dziękujemy.",
       "welcome": "Witaj. Twój concierge jest gotowy — poszukaj dzwonka.",
-      "restorePrompt": "Masz już członkostwo na innym urządzeniu?",
+      "restorePrompt": "Masz już członkostwo na innym urządzeniu? Wyślemy Ci bezpieczny link e-mailem.",
       "emailPh": "Twój e-mail",
-      "restore": "Przywróć",
-      "notConfigured": "Członkostwa ruszają wkrótce — zajrzyj później."
+      "restore": "Wyślij link",
+      "notConfigured": "Członkostwa ruszają wkrótce — zajrzyj później.",
+      "restoreBusy": "Wysyłanie…",
+      "restoreSent": "Jeśli dla tego adresu istnieje członkostwo, bezpieczny link jest już w drodze. Sprawdź skrzynkę (i folder ze spamem) — działa jednorazowo i wygasa po 30 minutach.",
+      "restoreInvalid": "Podaj prawidłowy adres e-mail.",
+      "restoreError": "Nie udało się tego teraz wysłać. Spróbuj ponownie za kilka minut.",
+      "confirming": "Przywracanie Twojego członkostwa…",
+      "confirmOk": "Członkostwo przywrócone na tym urządzeniu — witaj ponownie.",
+      "confirmExpired": "Ten link wygasł lub został już wykorzystany. Poproś o nowy poniżej.",
+      "confirmInvalid": "Ten link jest nieprawidłowy. Poproś o nowy poniżej.",
+      "confirmError": "Nie udało się teraz przywrócić członkostwa. Spróbuj otworzyć link ponownie za chwilę."
     }
   },
   "collections": {

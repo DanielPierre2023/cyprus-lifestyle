@@ -237,15 +237,25 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const bearer = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
     const secret = String(body.secret || "");
-    // Open by default: no secret needed. Supabase's own gateway already requires
-    // a valid project key to reach this function at all. If you want to lock it
-    // down later, set OSM_IMPORT_SECRET (or CRON_SECRET) as a *Supabase* Edge
-    // Function secret and it will then be required.
+    // Fail-CLOSED. This function used to be "open by default" when no secret was set, which
+    // let anyone who reached it trigger a large import. It now requires one of:
+    //   • body.secret equal to OSM_IMPORT_SECRET (or CRON_SECRET), or
+    //   • the service-role key (body.secret or Authorization: Bearer).
+    // Comparisons are constant-time.
     const requiredSecret = osmSecret || cronSecret;
-    if (requiredSecret && secret !== requiredSecret && secret !== serviceKey && bearer !== serviceKey) {
+    const enc = new TextEncoder();
+    const digest = async (v: string) => new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(v)));
+    const same = async (a: string, b: string) => {
+      if (!a || !b) return false;
+      const [x, y] = await Promise.all([digest(a), digest(b)]);
+      let d = 0; for (let n = 0; n < x.length; n++) d |= x[n] ^ y[n];
+      return d === 0;
+    };
+    const authorised = (await same(secret, requiredSecret)) || (await same(secret, serviceKey)) || (await same(bearer, serviceKey));
+    if (!authorised) {
       return new Response(JSON.stringify({
         ok: false,
-        error: "unauthorized — this function has a secret set; pass it as body.secret (or remove the OSM_IMPORT_SECRET/CRON_SECRET Supabase edge secret to run it open)",
+        error: "unauthorized — pass body.secret = OSM_IMPORT_SECRET (or CRON_SECRET), or the service-role key. If none is configured, set OSM_IMPORT_SECRET in Supabase → Edge Functions → Secrets.",
       }, null, 2), { status: 401, headers: CORS });
     }
 

@@ -5,12 +5,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isCronAuthorized } from '@/lib/cron';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { processBatch } from '@/lib/desk/queue';
+import { aiBudgetDeny } from '@/lib/spendGuard';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap; raise to 300 on Vercel Pro
 
 export async function GET(req: NextRequest) {
   if (!isCronAuthorized(req)) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+  const budgetDeny = await aiBudgetDeny();
+  if (budgetDeny) return NextResponse.json({ ok: true, skipped: 'ai_budget', reason: budgetDeny });
   const sb = supabaseAdmin();
   const { data: settings } = await sb.from('automation_settings').select('processor_enabled, auto_publish').eq('id', 1).maybeSingle();
   const s = settings as { processor_enabled: boolean; auto_publish: boolean } | null;

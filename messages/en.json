@@ -358,7 +358,7 @@
     "kicker": "Membership",
     "title": "Become a member",
     "dek": "Join the Cyprus Lifestyle readership — the island's business, culture and good living, in seven languages.",
-    "intro": "Membership begins free, and always will. Every reader gets the Saturday Letter, all seven editions, and the full run of the magazine and its directory. A paid tier — with member evenings, the print edition and partner privileges — is on the way.",
+    "intro": "Reading Cyprus Lifestyle is free: the Saturday Letter, all seven editions, the full magazine and the island directory. Concierge Membership is the optional paid tier — a more thorough concierge that remembers your preferences, on every device you use.",
     "free": {
       "name": "Reader",
       "price": "Free",
@@ -369,36 +369,34 @@
         "Every article, and the full island directory"
       ]
     },
-    "patron": {
-      "name": "Patron",
-      "price": "Coming soon",
-      "features": [
-        "Everything in Reader",
-        "Invitations to member evenings and tastings",
-        "The seasonal print edition, posted to you",
-        "Privileges with selected names in our directory"
-      ]
-    },
-    "soon": "Paid membership isn't open yet. Join free as a Reader and you'll be the first to hear when Patron opens.",
     "note": "Questions about membership or corporate subscriptions? Write to us via",
     "concierge": {
       "name": "Concierge Membership",
       "tagline": "Your personal concierge to Cyprus.",
       "perMonth": "/ month",
+      "perYear": "/ year",
       "features": [
-        "Priority concierge — always first in line",
-        "A dedicated human concierge for anything bespoke",
-        "Your trips & preferences, remembered",
-        "The whole island, curated for you"
+        "More thorough, anticipatory answers from your concierge",
+        "Your trips and preferences remembered across devices",
+        "Restore your membership on any device with a secure email link"
       ],
       "cta": "Become a member",
       "sending": "Opening secure checkout…",
       "active": "You're a member — thank you.",
       "welcome": "Welcome. Your concierge is ready — look for the bell.",
-      "restorePrompt": "Already a member on another device?",
+      "restorePrompt": "Already a member on another device? We'll email you a secure link.",
       "emailPh": "Your email",
-      "restore": "Restore",
-      "notConfigured": "Memberships open shortly — please check back soon."
+      "restore": "Email me a link",
+      "notConfigured": "Memberships open shortly — please check back soon.",
+      "restoreBusy": "Sending…",
+      "restoreSent": "If a membership exists for that address, a secure link is on its way. Check your inbox (and spam folder) — it works once and expires in 30 minutes.",
+      "restoreInvalid": "Please enter a valid email address.",
+      "restoreError": "We couldn't send that just now. Please try again in a few minutes.",
+      "confirming": "Restoring your membership…",
+      "confirmOk": "Membership restored on this device — welcome back.",
+      "confirmExpired": "This link has expired or has already been used. Request a new one below.",
+      "confirmInvalid": "This link isn't valid. Request a new one below.",
+      "confirmError": "We couldn't restore your membership just now. Please try the link again shortly."
     }
   },
   "collections": {

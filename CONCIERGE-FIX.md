@@ -36,10 +36,17 @@ makes it permanent.
 
 ## Confirm it — the new self-test
 
-After the fix + redeploy, open this in your browser (uses your ENRICH_SECRET):
+After the fix + redeploy, sign in to /admin and then open this in the same browser
+(your admin session authorises it — no secret in the URL):
 
 ```
-https://cyprus-lifestyle.vercel.app/api/concierge/selftest?key=enrich-live-3f9c7a2b
+https://cyprus-lifestyle.vercel.app/api/concierge/selftest
+```
+
+From a script, send the secret in a header instead of the URL:
+
+```
+curl -H "x-enrich-key: $ENRICH_SECRET" https://cyprus-lifestyle.vercel.app/api/concierge/selftest
 ```
 
 It calls Claude and OpenAI for real and shows the actual result:

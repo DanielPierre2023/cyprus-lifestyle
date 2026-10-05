@@ -53,7 +53,12 @@ export function isProfileEmpty(p: MemoryProfile): boolean {
   return !p || Object.keys(p).length === 0;
 }
 
-const CID_RE = /^[A-Za-z0-9_-]{8,64}$/;
+// The cid is a BEARER SECRET: it keys the guest's memory, saved items and (for a member)
+// their paid entitlement. So it must be unguessable: at least 32 chars of base64url/hex/UUID
+// alphabet (the client generates crypto.randomUUID(), 36 chars incl. hyphens). The old
+// 8-char minimum accepted short, guessable ids that could be enumerated.
+export const CID_MIN_LENGTH = 32;
+const CID_RE = /^[A-Za-z0-9_-]{32,64}$/;
 export const isValidCid = (cid: string) => CID_RE.test(cid);
 
 export async function loadMemory(cid: string): Promise<MemoryProfile> {

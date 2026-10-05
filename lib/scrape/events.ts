@@ -28,9 +28,10 @@ export async function refreshAgenda(opts?: { cities?: string; limit?: number; pe
   const key = process.env.ENRICH_SECRET;
   if (!base || !key) return { ok: false, status: 0, skipped: 'ENRICH_SECRET / SUPABASE_URL not set' };
   const cities = opts?.cities || 'limassol,nicosia,larnaca,paphos,ayia-napa';
-  const url = `${base}/functions/v1/events-ingest?key=${encodeURIComponent(key)}&cities=${encodeURIComponent(cities)}&limit=${opts?.limit ?? 24}&perCity=${opts?.perCity ?? 6}`;
+  // The secret travels in a header, never in the URL (URLs end up in access logs).
+  const url = `${base}/functions/v1/events-ingest?cities=${encodeURIComponent(cities)}&limit=${opts?.limit ?? 24}&perCity=${opts?.perCity ?? 6}`;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(55_000) });
+    const res = await fetch(url, { headers: { 'x-enrich-key': key }, signal: AbortSignal.timeout(55_000) });
     return { ok: res.ok, status: res.status };
   } catch (e) { return { ok: false, status: 0, skipped: (e as Error).message.slice(0, 120) }; }
 }

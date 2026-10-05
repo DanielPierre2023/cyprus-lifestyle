@@ -10,6 +10,10 @@ import { loadProfileForCid, clearProfileForCid } from '@/lib/concierge/subscribe
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
+  // cid is a bearer secret: throttle reads so ids can't be probed at speed.
+  if (!(await rateLimit(req, 'concierge-memory-read', 60, 60))) {
+    return NextResponse.json({ profile: {}, has: false }, { status: 429 });
+  }
   const cid = String(req.nextUrl.searchParams.get('cid') || '');
   if (!isValidCid(cid)) return NextResponse.json({ profile: {}, has: false });
   const profile = await loadProfileForCid(cid); // durable member profile + this browser's memory

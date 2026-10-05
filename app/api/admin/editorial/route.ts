@@ -5,12 +5,15 @@
 //   POST { mode: 'questions'|'interview'|'review', business: {...}, transcript?, notes? }
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
+import { aiBudgetDeny } from '@/lib/spendGuard';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  const budgetDeny = await aiBudgetDeny();
+  if (budgetDeny) return NextResponse.json({ ok: false, error: budgetDeny }, { status: 429 });
   const body = await req.json().catch(() => ({}));
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

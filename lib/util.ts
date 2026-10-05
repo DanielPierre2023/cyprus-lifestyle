@@ -24,3 +24,16 @@ export function wordCount(html: string): number {
 export function stripTags(html: string): string {
   return (html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
+
+/** Escape a value for safe interpolation into HTML text or a quoted attribute. */
+export function escapeHtml(v: unknown): string {
+  return String(v ?? '').replace(/[&<>"'`]/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' }[c] as string
+  ));
+}
+
+/** Only http(s) URLs may reach an href/src; anything else (javascript:, data:) becomes ''. */
+export function safeHttpUrl(v: unknown): string {
+  const s = String(v ?? '').trim();
+  return /^https?:\/\//i.test(s) ? s : '';
+}

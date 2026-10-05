@@ -10,6 +10,7 @@ import ArticleCard from '@/components/ArticleCard';
 import CommentSection from '@/components/CommentSection';
 import CoverImage from '@/components/CoverImage';
 import NewsletterSignup from '@/components/NewsletterSignup';
+import { sanitizeArticleHtml } from '@/lib/sanitizeHtml';
 import AskConcierge from '@/components/AskConcierge';
 
 // Culture / events articles get an "In our Agenda" block linking to the real events.
@@ -177,7 +178,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
 
         <div className="article wrap">
           <div className="rule-orn lead-orn"><span className="diamond" /></div>
-          <div className="prose" dangerouslySetInnerHTML={{ __html: localizeHtml(a.content, l) }} />
+          <div className="prose" dangerouslySetInnerHTML={{ __html: sanitizeArticleHtml(localizeHtml(a.content, l)) }} />
 
           {a.tags?.length ? (
             <div className="tags">

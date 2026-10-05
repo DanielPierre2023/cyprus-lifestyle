@@ -231,7 +231,9 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
   useEffect(() => {
     try {
       let c = localStorage.getItem('cl_cid');
-      if (!c) { c = (crypto.randomUUID?.() || String(Date.now()) + Math.random().toString(36).slice(2)).replace(/[^A-Za-z0-9_-]/g, ''); localStorage.setItem('cl_cid', c); }
+      // The cid is a bearer secret: server accepts only 32–64 chars of [A-Za-z0-9_-]. A legacy
+      // short/guessable id is replaced by a fresh random one (it was never safe to keep).
+      if (!c || !/^[A-Za-z0-9_-]{32,64}$/.test(c)) { c = (()=>{ try { if (crypto.randomUUID) return crypto.randomUUID(); } catch { /* insecure context */ } const b = new Uint8Array(24); crypto.getRandomValues(b); return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join(''); })(); localStorage.setItem('cl_cid', c); }
       cidRef.current = c;
     } catch { cidRef.current = ''; }
   }, []);

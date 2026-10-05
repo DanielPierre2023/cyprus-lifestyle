@@ -191,11 +191,11 @@ const view = (r: Row) => ({ cid: r.cid, email: r.email, tier: r.tier, status: r.
 const route = (() => { try { return readFileSync(join(process.cwd(), 'app/api/advertise/webhook/route.ts'), 'utf8'); } catch { return ''; } })();
 ok('webhook route readable', route.length > 0);
 ok('route reads the RAW body for the signature', /await req\.text\(\)/.test(route) && !/req\.json\(\)/.test(route));
-ok('route verifies the signature before any processing', route.indexOf('verifyWebhook(') > -1 && route.indexOf('verifyWebhook(') < route.indexOf('recordMembershipCheckout('));
+ok('route verifies the signature before any processing', route.indexOf('verifyWebhook(') > -1 && route.indexOf('verifyWebhook(') < route.indexOf('await claimEvent(') && route.indexOf('await claimEvent(') < route.indexOf('await processEvent('));
 ok('route rejects a bad signature with 400', /invalid signature[^\n]*status: 400/.test(route));
 ok('route no longer uses the broken .upsert() on concierge_members', !/\.upsert\(/.test(route));
 ok('route answers 500 when a membership write fails', /status: 500/.test(route) && /if \(!rec\.ok\) return await retryLater/.test(route));
-ok('route checks the cancel / payment-failed writes for errors', (route.match(/ad\.error \|\| mem\.error/g) || []).length === 2);
+ok('route checks every status-transition write for errors', (route.match(/const err = await transition\(/g) || []).length >= 4 && /return ad\.error \|\| mem\.error/.test(route));
 ok('route never logs the raw body or secret', !/console\.(log|error)\([^)]*\b(raw|secret)\b/.test(route));
 
 report('stripe.webhook.membership');

@@ -25,7 +25,7 @@ export default function PrivacyRequestForm({ labels, locale }: { labels: Privacy
       });
       const d = await res.json();
       if (res.ok && d.ok) { setState('done'); setMsg(d.message || 'Received.'); }
-      else { setState('idle'); setMsg(d.error || 'Please try again.'); }
+      else { setState('idle'); setMsg(d.message || 'Please try again.'); }
     } catch { setState('idle'); setMsg('Please try again.'); }
   }
 

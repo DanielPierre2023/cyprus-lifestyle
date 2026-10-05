@@ -3,6 +3,7 @@
 // route between them. Spend is logged to ai_spend_log (mirrors TT telemetry).
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { aiBudgetDeny } from '@/lib/spendGuard';
 
 // ── models ──────────────────────────────────────────────────────────────────
 export const CLAUDE_HAIKU = 'claude-haiku-4-5-20251001';
@@ -94,6 +95,8 @@ export async function callClaude(req: AiRequest & { fn?: string }): Promise<AiRe
   } = req;
   const apiKey = process.env.CLAUDE_API_KEY;
   if (!apiKey) return { text: '', error: 'CLAUDE_API_KEY not configured' };
+  const budgetDeny = await aiBudgetDeny();
+  if (budgetDeny) return { text: '', error: budgetDeny };
 
   const system = jsonMode
     ? `${systemInstruction}\n\nCRITICAL: Respond with ONLY a valid JSON object. No markdown, no backticks, no preamble, no explanation. Start with { and end with }.`
@@ -138,6 +141,8 @@ export async function callOpenAI(req: AiRequest & { fn?: string }): Promise<AiRe
   } = req;
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return { text: '', error: 'OPENAI_API_KEY not configured' };
+  const budgetDeny = await aiBudgetDeny();
+  if (budgetDeny) return { text: '', error: budgetDeny };
   try {
     const res = await fetchWithRetry('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -171,6 +176,8 @@ export async function callGemini(req: AiRequest & { fn?: string }): Promise<AiRe
   } = req;
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return { text: '', error: 'GEMINI_API_KEY not configured' };
+  const budgetDeny = await aiBudgetDeny();
+  if (budgetDeny) return { text: '', error: budgetDeny };
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   try {
     const res = await fetchWithRetry(url, {

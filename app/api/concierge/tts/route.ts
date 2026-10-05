@@ -6,6 +6,7 @@
 // nothing breaks. Voice/model are overridable via env.
 import { NextRequest } from 'next/server';
 import { rateLimit } from '@/lib/ratelimit';
+import { publicAiCeilingDeny } from '@/lib/spendGuard';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -17,6 +18,9 @@ const TTS_VOICE = process.env.OPENAI_TTS_VOICE || 'nova';
 
 export async function POST(req: NextRequest) {
   if (!(await rateLimit(req, 'concierge-tts', 40, 60))) {
+    return new Response(JSON.stringify({ error: 'busy' }), { status: 429, headers: { 'Content-Type': 'application/json' } });
+  }
+  if (await publicAiCeilingDeny('tts')) {
     return new Response(JSON.stringify({ error: 'busy' }), { status: 429, headers: { 'Content-Type': 'application/json' } });
   }
   const key = process.env.OPENAI_API_KEY;

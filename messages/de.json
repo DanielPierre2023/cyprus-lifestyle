@@ -358,7 +358,7 @@
     "kicker": "Mitgliedschaft",
     "title": "Mitglied werden",
     "dek": "Werden Sie Teil der Cyprus-Lifestyle-Leserschaft — Wirtschaft, Kultur und das gute Leben der Insel, in sieben Sprachen.",
-    "intro": "Die Mitgliedschaft beginnt kostenlos und bleibt es. Jede Leserin und jeder Leser erhält den Samstagsbrief, alle sieben Ausgaben und das gesamte Magazin samt Verzeichnis. Eine kostenpflichtige Stufe — mit Mitgliederabenden, der Printausgabe und Partnervorteilen — ist in Vorbereitung.",
+    "intro": "Cyprus Lifestyle zu lesen ist kostenlos: der Samstagsbrief, alle sieben Ausgaben, das ganze Magazin und das Inselverzeichnis. Die Concierge-Mitgliedschaft ist die optionale kostenpflichtige Stufe — ein gründlicherer Concierge, der sich Ihre Vorlieben merkt, auf jedem Ihrer Geräte.",
     "free": {
       "name": "Leser",
       "price": "Kostenlos",
@@ -369,36 +369,34 @@
         "Jeder Artikel und das vollständige Inselverzeichnis"
       ]
     },
-    "patron": {
-      "name": "Förderer",
-      "price": "Demnächst",
-      "features": [
-        "Alles aus der Leser-Stufe",
-        "Einladungen zu Mitgliederabenden und Verkostungen",
-        "Die saisonale Printausgabe, zu Ihnen nach Hause",
-        "Vorteile bei ausgewählten Namen in unserem Verzeichnis"
-      ]
-    },
-    "soon": "Die kostenpflichtige Mitgliedschaft ist noch nicht geöffnet. Treten Sie kostenlos als Leser bei, dann erfahren Sie als Erste, wenn die Förderer-Stufe startet.",
     "note": "Fragen zur Mitgliedschaft oder zu Firmenabonnements? Schreiben Sie uns über",
     "concierge": {
       "name": "Concierge-Mitgliedschaft",
       "tagline": "Ihr persönlicher Concierge für Zypern.",
       "perMonth": "/ Monat",
+      "perYear": "/ Jahr",
       "features": [
-        "Bevorzugter Concierge — immer zuerst",
-        "Ein persönlicher Concierge für alles Maßgeschneiderte",
-        "Ihre Reisen & Vorlieben, gemerkt",
-        "Die ganze Insel, für Sie kuratiert"
+        "Gründlichere, vorausschauende Antworten Ihres Concierge",
+        "Ihre Reisen und Vorlieben, geräteübergreifend gemerkt",
+        "Mitgliedschaft auf jedem Gerät per sicherem E-Mail-Link wiederherstellen"
       ],
       "cta": "Mitglied werden",
       "sending": "Sichere Bezahlung wird geöffnet…",
       "active": "Sie sind Mitglied — vielen Dank.",
       "welcome": "Willkommen. Ihr Concierge ist bereit — achten Sie auf die Glocke.",
-      "restorePrompt": "Schon Mitglied auf einem anderen Gerät?",
+      "restorePrompt": "Schon Mitglied auf einem anderen Gerät? Wir senden Ihnen einen sicheren Link per E-Mail.",
       "emailPh": "Ihre E-Mail",
-      "restore": "Wiederherstellen",
-      "notConfigured": "Mitgliedschaften starten in Kürze — bitte später erneut versuchen."
+      "restore": "Link senden",
+      "notConfigured": "Mitgliedschaften starten in Kürze — bitte später erneut versuchen.",
+      "restoreBusy": "Wird gesendet…",
+      "restoreSent": "Falls zu dieser Adresse eine Mitgliedschaft besteht, ist ein sicherer Link unterwegs. Prüfen Sie Ihren Posteingang (und den Spam-Ordner) — er funktioniert einmal und läuft nach 30 Minuten ab.",
+      "restoreInvalid": "Bitte geben Sie eine gültige E-Mail-Adresse ein.",
+      "restoreError": "Das konnten wir gerade nicht senden. Bitte versuchen Sie es in einigen Minuten erneut.",
+      "confirming": "Ihre Mitgliedschaft wird wiederhergestellt…",
+      "confirmOk": "Mitgliedschaft auf diesem Gerät wiederhergestellt — willkommen zurück.",
+      "confirmExpired": "Dieser Link ist abgelaufen oder wurde bereits verwendet. Fordern Sie unten einen neuen an.",
+      "confirmInvalid": "Dieser Link ist ungültig. Fordern Sie unten einen neuen an.",
+      "confirmError": "Wir konnten Ihre Mitgliedschaft gerade nicht wiederherstellen. Bitte öffnen Sie den Link in Kürze erneut."
     }
   },
   "collections": {

@@ -5,6 +5,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { brandedEmail, sendEmail } from '@/lib/email';
 import { logInboundToAccount } from '@/lib/crm';
+import { escapeHtml, safeHttpUrl } from '@/lib/util';
 import { LOCALES, isLocale, type Locale } from '@/lib/locales';
 
 function token(): string {
@@ -69,21 +70,21 @@ function digestHtml(locale: Locale, cards: PostCard[]): string {
   const path = locale === 'en' ? '' : `/${locale}`;
   return cards.map((c) => `
     <table role="presentation" width="100%" style="margin:0 0 22px"><tr>
-      ${c.cover_image ? `<td width="120" style="padding-inline-end:14px;vertical-align:top"><img src="${c.cover_image}" width="120" style="width:120px;border-radius:2px" alt=""></td>` : ''}
+      ${safeHttpUrl(c.cover_image) ? `<td width="120" style="padding-inline-end:14px;vertical-align:top"><img src="${escapeHtml(safeHttpUrl(c.cover_image))}" width="120" style="width:120px;border-radius:2px" alt=""></td>` : ''}
       <td style="vertical-align:top">
-        <a href="${base}${path}/article/${c.slug}" style="color:#16181C;text-decoration:none;font-weight:700;font-size:17px">${c.title}</a>
-        <p style="margin:6px 0 0;color:#4a463d;font-size:14px;line-height:1.5">${c.excerpt}</p>
+        <a href="${base}${path}/article/${encodeURIComponent(c.slug)}" style="color:#16181C;text-decoration:none;font-weight:700;font-size:17px">${escapeHtml(c.title)}</a>
+        <p style="margin:6px 0 0;color:#4a463d;font-size:14px;line-height:1.5">${escapeHtml(c.excerpt)}</p>
       </td>
     </tr></table>`).join('');
 }
 
 // A single tasteful sponsor block for the "sole sponsor" newsletter product.
 function sponsorBlockHtml(s: Record<string, unknown>): string {
-  const name = String(s.advertiser_name || '');
-  const headline = String(s.headline || name);
-  const body = String(s.body || '');
-  const url = String(s.url || '');
-  const image = String(s.image || '');
+  const name = escapeHtml(s.advertiser_name || '');
+  const headline = escapeHtml(s.headline || s.advertiser_name || '');
+  const body = escapeHtml(s.body || '');
+  const url = escapeHtml(safeHttpUrl(s.url));
+  const image = escapeHtml(safeHttpUrl(s.image));
   if (!headline && !body) return '';
   const cta = url ? `<a href="${url}" style="color:#8a5b12;text-decoration:none;font-weight:700">${name || 'Learn more'} →</a>` : '';
   return `
@@ -131,7 +132,7 @@ export async function weeklyDigest(sb: SupabaseClient, only?: Locale): Promise<{
     const sp = sponsorFor(locale);
     const sponsorHtml = sp ? sponsorBlockHtml(sp) : '';
     if (sp && sponsorHtml) usedSponsorIds.add(String(sp.id));
-    const html = brandedEmail({ locale, heading: subject, bodyHtml: sponsorHtml + digestHtml(locale, cards), preheader: cards[0]?.title, unsubscribe: true });
+    const html = brandedEmail({ locale, heading: subject, bodyHtml: sponsorHtml + digestHtml(locale, cards), preheader: escapeHtml(cards[0]?.title), unsubscribe: true });
     let sent = 0;
     for (const to of recipients) {
       const r = await sendEmail({ to, subject, html });

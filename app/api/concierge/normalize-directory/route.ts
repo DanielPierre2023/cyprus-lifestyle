@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { callClaude, CLAUDE_HAIKU, parseAiJson } from '@/lib/ai';
 import { classifyPromptList, coerceClassification, mapToCanonical } from '@/lib/directory/taxonomy';
+import { keyGateDeny as denyReason } from '@/lib/auth/keyGate';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -143,20 +144,14 @@ async function resetNormalization(): Promise<Record<string, unknown>> {
   return { ok: true, reset: true, cleared: count ?? null, note: 'Reset done — now call this endpoint WITHOUT reset or redo, repeatedly, until "remaining":0. It re-classifies using the loaded descriptions.' };
 }
 
-function denyReason(req: NextRequest): string | null {
-  if (!process.env.ENRICH_SECRET) return 'ENRICH_SECRET is not set on the server. Add it in Vercel → Settings → Environment Variables, redeploy, then call this URL with ?key=<that same value>.';
-  if ((req.nextUrl.searchParams.get('key') || '') !== process.env.ENRICH_SECRET) return 'Unauthorized — the ?key= value does not match ENRICH_SECRET set on the server.';
-  return null;
-}
-
 export async function GET(req: NextRequest) {
-  const deny = denyReason(req);
+  const deny = await denyReason(req);
   if (deny) return NextResponse.json({ ok: false, error: deny }, { status: 401 });
   if (req.nextUrl.searchParams.get('reset') === '1') return NextResponse.json(await resetNormalization());
   return NextResponse.json(await run(req.nextUrl.searchParams.get('redo') === '1'));
 }
 export async function POST(req: NextRequest) {
-  const deny = denyReason(req);
+  const deny = await denyReason(req);
   if (deny) return NextResponse.json({ ok: false, error: deny }, { status: 401 });
   if (req.nextUrl.searchParams.get('reset') === '1') return NextResponse.json(await resetNormalization());
   return NextResponse.json(await run(req.nextUrl.searchParams.get('redo') === '1'));
