@@ -58,28 +58,27 @@ const nextConfig = {
     return [{ source: '/:path*', headers: securityHeaders }];
   },
   images: {
-    // COVERS ARE SERVED UNOPTIMISED — deliberately. Routing every cover through the
-    // Vercel image optimiser (/_next/image) exhausted the plan's optimisation quota,
-    // after which the optimiser returns HTTP 402 for uncached images and covers
-    // vanish site-wide (the source files are fine — they 200 from Supabase/Unsplash).
-    // The sources are already web-optimised (Supabase serves WebP; Unsplash urls.regular
-    // is ~1080px; picsum is sized), so we skip the optimiser entirely: images load
-    // straight from the source CDN. Free, reliable, and no recurring optimisation bill.
-    // To re-enable optimisation later, remove `unoptimized` and raise the Vercel plan's
-    // image quota.
-    unoptimized: true,
-    // Kept for when optimisation is re-enabled: the ONLY hosts next/image may load.
-    // Every cover/listing photo is a Supabase Storage object, images.unsplash.com,
-    // or picsum.photos. Advertiser banners + the directory map use plain <img>/CSS.
+    // IMAGE STRATEGY (Phase 6.1, Vercel HOBBY + Supabase FREE; owner: no paid plans).
+    // The Vercel optimiser stays OFF for good reason: Hobby includes only 5,000 image
+    // transformations/month, after which new images return HTTP 402 and covers vanish
+    // (this already happened once). Instead a CUSTOM LOADER (lib/imageLoader.ts) serves
+    // responsive srcsets from sources that resize for free:
+    //   - Supabase Storage originals -> pre-resized WebP variants made once with sharp
+    //     (scripts/images/backfill-variants.ts; opt in with NEXT_PUBLIC_IMAGE_VARIANTS=1)
+    //   - Unsplash                    -> imgix params on Unsplash's own CDN
+    //   - everything else             -> per-image `unoptimized` (see components/CoverImage.tsx)
+    // /_next/image is never called, so there is nothing to meter. The srcset widths are the
+    // variant ladder (lib/imageVariants.ts), not Next's 8 default device sizes.
+    loader: 'custom',
+    loaderFile: './lib/imageLoader.ts',
+    deviceSizes: [480, 960, 1440],
+    imageSizes: [240],
+    // Unused by the custom loader, kept as documentation of the hosts we load images from.
     remotePatterns: [
       { protocol: 'https', hostname: '*.supabase.co' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 'picsum.photos' },
     ],
-    // Cost discipline: serve AVIF/WebP and keep optimised variants cached a month so
-    // the same image isn't re-optimised on every request.
-    formats: ['image/avif', 'image/webp'],
-    minimumCacheTTL: 2678400, // 31 days
   },
   // The AI desk routes call external model APIs and can run long; give them room.
   experimental: {

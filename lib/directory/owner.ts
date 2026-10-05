@@ -27,6 +27,8 @@ import 'server-only';
 import { createHash, randomBytes } from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { sendEmail, brandedEmail } from '@/lib/email';
+import { manageLinkMail } from '@/lib/directory/ownerCopy';
+import { isLocale, DEFAULT_LOCALE, type Locale } from '@/lib/locales';
 
 // ── config ───────────────────────────────────────────────────────────────────
 /** httpOnly cookie that carries the editing session token. Shared by the verify
@@ -188,20 +190,11 @@ export interface OwnerSaveResult {
 }
 
 // ── token lifecycle ──────────────────────────────────────────────────────────────
-async function sendManageLink(to: string, bizName: string, token: string): Promise<void> {
-  const url = `${siteUrl()}/api/directory/owner/verify?token=${encodeURIComponent(token)}`;
-  const html = brandedEmail({
-    locale: 'en',
-    heading: `Manage your listing — ${bizName}`,
-    bodyHtml:
-      `<p>You asked to manage the Cyprus Lifestyle listing for <strong>${esc(bizName)}</strong>.</p>` +
-      `<p>Use the secure link below to open your listing editor. It is valid for 60 minutes and can be used once.</p>` +
-      `<p>If you did not request this, you can safely ignore this email — nothing will change.</p>`,
-    ctaLabel: 'Open listing editor',
-    ctaUrl: url,
-    preheader: `Your management link for ${bizName} on Cyprus Lifestyle`,
-  });
-  await sendEmail({ to, subject: `Manage your listing — ${bizName}`, html }).catch(() => {});
+async function sendManageLink(to: string, bizName: string, token: string, locale: Locale = DEFAULT_LOCALE): Promise<void> {
+  const url = `${siteUrl()}/api/directory/owner/verify?token=${encodeURIComponent(token)}&lang=${locale}`;
+  const m = manageLinkMail(locale, bizName);
+  const html = brandedEmail({ locale, heading: m.heading, bodyHtml: m.bodyHtml, ctaLabel: m.ctaLabel, ctaUrl: url, preheader: m.preheader });
+  await sendEmail({ to, subject: m.subject, html }).catch(() => {});
 }
 
 async function notifyDesk(subject: string, heading: string, bodyHtml: string, preheader: string): Promise<void> {
@@ -219,7 +212,8 @@ async function notifyDesk(subject: string, heading: string, bodyHtml: string, pr
  * The result is ALWAYS the same generic shape — a caller can never tell whether the
  * listing exists, is owner-verified, or has an email on file. Never throws.
  */
-export async function requestOwnerLink(slug: string): Promise<{ ok: true }> {
+export async function requestOwnerLink(slug: string, localeIn?: string | null): Promise<{ ok: true }> {
+  const locale: Locale = localeIn && isLocale(localeIn) ? localeIn : DEFAULT_LOCALE;
   const generic = { ok: true } as const;
   const s = String(slug ?? '').trim().slice(0, 200);
   if (!s) return generic;
@@ -253,7 +247,7 @@ export async function requestOwnerLink(slug: string): Promise<{ ok: true }> {
     });
     if (error) return generic; // degrade silently (no enumeration, no secret sent)
 
-    await sendManageLink(contact, bizName, raw);
+    await sendManageLink(contact, bizName, raw, locale);
     await notifyDesk(
       `Owner management link requested — ${bizName}`,
       'An owner requested a management link',

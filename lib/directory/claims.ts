@@ -28,6 +28,8 @@ import 'server-only';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { sendEmail, brandedEmail } from '@/lib/email';
+import { claimVerifyMail } from '@/lib/directory/ownerCopy';
+import { isLocale, DEFAULT_LOCALE, type Locale } from '@/lib/locales';
 
 export type ClaimMethod = 'onfile_email' | 'domain_email' | 'phone_otp' | 'manual';
 
@@ -36,6 +38,8 @@ export interface StartClaimInput {
   name?: string | null;
   email?: string | null;
   phone?: string | null;
+  /** Edition the claimant is browsing; localises the verification e-mail and its pages. Default en. */
+  locale?: string | null;
 }
 
 export interface StartClaimResult {
@@ -171,20 +175,12 @@ const esc = (s: string): string =>
   String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
 
 // ── delivery (all best-effort; failures never surface to the claimant) ───────
-async function sendVerifyLink(to: string, bizName: string, token: string): Promise<void> {
-  const url = `${siteUrl()}/api/directory/claim/verify?token=${encodeURIComponent(token)}`;
-  const html = brandedEmail({
-    locale: 'en',
-    heading: `Confirm your claim of ${bizName}`,
-    bodyHtml:
-      `<p>Someone asked to claim and verify the Cyprus Lifestyle listing for <strong>${esc(bizName)}</strong>.</p>` +
-      `<p>If this was you (or your business), open the secure confirmation page below and click <strong>Confirm</strong> to take ownership of the listing. The link is valid for 72 hours and can be used once — ownership transfers only when you click Confirm on that page, so it is safe to open.</p>` +
-      `<p>If you did not request this, you can safely ignore this email — nothing will change.</p>`,
-    ctaLabel: 'Review your claim',
-    ctaUrl: url,
-    preheader: `Verify your claim of ${bizName} on Cyprus Lifestyle`,
-  });
-  await sendEmail({ to, subject: `Verify your claim — ${bizName}`, html }).catch(() => {});
+async function sendVerifyLink(to: string, bizName: string, token: string, locale: Locale = DEFAULT_LOCALE): Promise<void> {
+  // `lang` rides on the link so the confirm/result pages open in the same edition as the e-mail.
+  const url = `${siteUrl()}/api/directory/claim/verify?token=${encodeURIComponent(token)}&lang=${locale}`;
+  const m = claimVerifyMail(locale, bizName);
+  const html = brandedEmail({ locale, heading: m.heading, bodyHtml: m.bodyHtml, ctaLabel: m.ctaLabel, ctaUrl: url, preheader: m.preheader });
+  await sendEmail({ to, subject: m.subject, html }).catch(() => {});
 }
 
 // Minimal Twilio REST send, used only when the phone channel is reached (i.e. a provider
@@ -257,6 +253,7 @@ export async function startClaim(input: StartClaimInput): Promise<StartClaimResu
   const name = String(input.name ?? '').trim().slice(0, 160) || null;
   const claimantEmail = normEmail(input.email);
   const claimantPhone = normPhone(input.phone) || null;
+  const locale: Locale = input.locale && isLocale(input.locale) ? input.locale : DEFAULT_LOCALE;
 
   try {
     const sb = supabaseAdmin();
@@ -320,7 +317,7 @@ export async function startClaim(input: StartClaimInput): Promise<StartClaimResu
 
     // Deliver + tell the desk a claim has started (all best-effort).
     if (method === 'onfile_email') {
-      await sendVerifyLink(onfileEmail, bizName, rawToken);
+      await sendVerifyLink(onfileEmail, bizName, rawToken, locale);
       await notifyDesk(
         `Claim started — ${bizName}`,
         'A listing claim has started',
@@ -333,7 +330,7 @@ export async function startClaim(input: StartClaimInput): Promise<StartClaimResu
     }
 
     if (method === 'domain_email') {
-      await sendVerifyLink(claimantEmail, bizName, rawToken);
+      await sendVerifyLink(claimantEmail, bizName, rawToken, locale);
       await notifyDesk(
         `Claim started — ${bizName}`,
         'A listing claim has started',

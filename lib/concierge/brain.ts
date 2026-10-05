@@ -25,6 +25,9 @@ import { geocode, haversineMeters, bbox } from '@/lib/geo';
 import { getActivities, gygPartnerId } from '@/lib/activities/data';
 import { rankActivities } from '@/lib/activities/match';
 import { kindLabel, affiliateUrl, priceBasisLabel } from '@/lib/activities/classify';
+import { markLinkable, renderSourcesBlock, toCard, type SourceHit, type SourceNotes, type SourceCard, type TrustLabel } from '@/lib/concierge/sources';
+import { retrieveSources, publishedSet } from '@/lib/concierge/sourcesRetrieve';
+import { supabaseSourceDeps } from '@/lib/concierge/sourcesDeps';
 
 export const CONCIERGE_MODEL = process.env.SONNET_MODEL || CLAUDE_SONNET;
 const NEIGHBOURHOOD_RADIUS_M = Number(process.env.NEIGHBOURHOOD_RADIUS_M || 2500);
@@ -56,6 +59,9 @@ export interface Pick {
   commercialTier?: string | null; // real CRM tier: 'partner' | 'featured' | 'listed' | null (0108)
   commercialRank?: number | null; // orderable mirror of the tier: 3/2/1/0 — what ranking sorts on
   lat?: number | null; lng?: number | null;
+  // Increment 2.1: only status='published' listings have a public page. `linkable === false` means
+  // "mention by name, never link" (a 'listed' bulk-import business). Undefined = not checked (legacy).
+  linkable?: boolean; href?: string | null; label?: TrustLabel | null;
 }
 // A bookable experience from our own catalogue (public.activities) offered this turn;
 // it links out to book with the booking partner (GetYourGuide).
@@ -76,6 +82,8 @@ export interface ConciergeContext {
   luxury: boolean;
   near?: { label: string; radiusM: number } | null; // set when a neighbourhood point was resolved
   activities?: ActivityPick[]; // bookable experiences that fit this message (may be empty)
+  sources?: SourceHit[];       // events / articles / experiences / kb pages / regulation notes / webcams (2.1)
+  sourceNotes?: SourceNotes;
 }
 
 const LOCALES = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'];
@@ -683,7 +691,21 @@ export async function assembleContext(locale: string, latestUser: string): Promi
   const articles: ArticleLink[] = (related || []).map((a) => ({ slug: a.slug, title: a.title, category: a.category }));
   const luxury = luxuryIntent(latestUser);
   const activities = await activitiesP;
-  return { candidates, picks, guides, articles, kb, canRoute, luxury, near, activities };
+
+  // Increment 2.1 — retrieval over every other source + the "link only published listings" gate.
+  // Kill switch: CONCIERGE_ALL_SOURCES=0 restores the previous behaviour exactly.
+  if (process.env.CONCIERGE_ALL_SOURCES === '0') return { candidates, picks, guides, articles, kb, canRoute, luxury, near, activities };
+  const deps = supabaseSourceDeps();
+  const [bundle, published] = await Promise.all([
+    retrieveSources(deps, { q: latestUser, locale, qvec, district: intentDistrict }, process.env as Record<string, string | undefined>)
+      .catch(() => null),
+    publishedSet(deps, [...candidates.map((c) => c.slug), ...picks.map((c) => c.slug)]),
+  ]);
+  const flag = <T extends Pick>(list: T[]): T[] => markLinkable(list, published) as unknown as T[];
+  const seenAct = new Set((activities || []).map((a) => a.id));
+  const seenArt = new Set(articles.map((a) => a.slug));
+  const sources = (bundle?.hits || []).filter((h) => !(h.kind === 'activity' && seenAct.has(h.id)) && !(h.kind === 'article' && seenArt.has(h.id)));
+  return { candidates: flag(candidates), picks: flag(picks), guides, articles, kb, canRoute, luxury, near, activities, sources, sourceNotes: bundle?.notes };
 }
 
 function toActivityPick(a: Awaited<ReturnType<typeof getActivities>>[number], locale: string): ActivityPick {
@@ -791,7 +813,7 @@ export function groundingBlock(ctx: ConciergeContext, locale: string): string {
         : (c.commercialTier === 'featured' || c.featured) ? ' — ★ our featured partner'
         : c.commercialTier === 'listed' ? ' — our listed partner'
         : '';
-      parts.push(`• ${c.name} — ${kind}${c.district ? `, ${c.district}` : ''}${dm}${c.rating ? `, ${c.rating}★${c.rating_count ? ` (${c.rating_count})` : ''}` : ''}${c.price_band ? `, ${c.price_band}` : ''}${dev}${c.verified ? ', verified' : ''}${partner}`);
+      parts.push(`• ${c.name} — ${kind}${c.district ? `, ${c.district}` : ''}${dm}${c.rating ? `, ${c.rating}★${c.rating_count ? ` (${c.rating_count})` : ''}` : ''}${c.price_band ? `, ${c.price_band}` : ''}${dev}${c.verified ? ', verified' : ''}${partner}${c.linkable === false ? ' — no public page on our site (name it, never link it)' : ''}`);
       // The business's own note about its services/offers — you MAY relay this, but
       // attribute it as their own words ("they say…"), and never state it as our fact.
       if (c.partnerPitch) parts.push(`    ↳ ${c.name} says: ${String(c.partnerPitch).slice(0, 320)}`);
@@ -811,7 +833,11 @@ export function groundingBlock(ctx: ConciergeContext, locale: string): string {
     parts.push('\nCyprus Lifestyle articles relevant to this request — mention and recommend these BY TITLE where it fits (the interface links them), tying your answer to our own journalism:');
     for (const a of ctx.articles) parts.push(`• ${a.title}`);
   }
-  if (!ctx.kb.length && !ctx.candidates.length && !(ctx.activities && ctx.activities.length)) {
+  if (ctx.sources && ctx.sourceNotes) {
+    const block = renderSourcesBlock(ctx.sources, ctx.sourceNotes, locale);
+    if (block) parts.push(block);
+  }
+  if (!ctx.kb.length && !ctx.candidates.length && !(ctx.activities && ctx.activities.length) && !(ctx.sources && ctx.sources.length)) {
     parts.push('\n(No specific matches were found for this message. Do NOT dead-end — follow the always-answer ladder: (1) answer what you genuinely can from the Cyprus facts above and sound general knowledge of the Republic of Cyprus (south), clearly and honestly, never inventing a specific business, price or number; (2) give the guest a real next step — point them to the most relevant category or guide page; (3) ALWAYS offer to have our concierge desk find it for them, and warmly take a name and an email or WhatsApp so a person can follow up. Be honest about what you don’t have, and ask one clarifying question if that would let you help better. Never simply say you cannot help.)');
   }
   return parts.join('\n');
@@ -907,7 +933,7 @@ async function directAnswer(system: string, history: ChatMessage[]): Promise<str
 export type StreamEvent =
   | { type: 'status'; label: string }
   | { type: 'delta'; text: string }
-  | { type: 'meta'; picks: Pick[]; guides: GuideLink[]; articles: ArticleLink[]; canRoute: boolean; kb: number; near: boolean; activities: ActivityPick[] }
+  | { type: 'meta'; picks: Pick[]; guides: GuideLink[]; articles: ArticleLink[]; canRoute: boolean; kb: number; near: boolean; activities: ActivityPick[]; sourceCards?: SourceCard[] }
   | { type: 'error'; error: string }
   | { type: 'done' };
 
@@ -971,6 +997,6 @@ export async function* streamConcierge(messages: ChatMessage[], locale: string, 
   }
 
   if (!gotText) yield { type: 'error', error: errDetail || 'unavailable' };
-  yield { type: 'meta', picks: ctx.picks, guides: ctx.guides, articles: ctx.articles, canRoute: ctx.canRoute, kb: ctx.kb.length, near: !!ctx.near, activities: ctx.activities || [] };
+  yield { type: 'meta', picks: ctx.picks, guides: ctx.guides, articles: ctx.articles, canRoute: ctx.canRoute, kb: ctx.kb.length, near: !!ctx.near, activities: ctx.activities || [], sourceCards: (ctx.sources || []).map((h) => toCard(h, loc)) };
   yield { type: 'done' };
 }

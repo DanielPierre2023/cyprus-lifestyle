@@ -1,0 +1,31 @@
+{
+  "lib/concierge/localeGuess.ts#score": {
+    "missing": [
+      "en",
+      "el",
+      "ar",
+      "ru"
+    ]
+  },
+  "lib/concierge/localeGuess.ts#WORDS": {
+    "missing": [
+      "en",
+      "el",
+      "ar",
+      "ru"
+    ],
+    "shape": {
+      "de": [
+        "extra"
+      ],
+      "pl": [
+        "extra"
+      ]
+    }
+  },
+  "lib/stripe.ts#stripeCheckoutLocale()": {
+    "missing": [
+      "ar"
+    ]
+  }
+}

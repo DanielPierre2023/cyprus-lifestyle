@@ -1,8 +1,25 @@
 {
-  "_comment": "First-load JS budgets in KB, enforced by scripts/perf/check-budgets.mjs after `next build`. Keys are normalised routes (route groups like (panel) and the trailing /page are stripped); the longest matching prefix wins, else `default`. Only navigable pages are measured (route handlers, layout/loading/error fragments and framework specials are skipped). Calibrated 2026-09-22 from a real production compile of this repo (54 routes): public pages measured 395-426 KB, admin 598-619 KB — these ceilings sit ~10% above the measured max so the gate is green today and trips on a genuine regression (e.g. a heavy new dependency). NB: this per-route total counts each route's full chunk set and is larger than the 'First Load JS shared' line Next prints (~102 KB is only the shared chunks). Tighten as bundles shrink.",
+  "_comment": "First-load JS budgets in KB, enforced by scripts/perf/check-budgets.mjs after `next build`. Keys are normalised routes (route groups like (panel) and the trailing /page are stripped); the longest matching prefix wins, else `default`. Only navigable pages are measured (route handlers, layout/loading/error fragments and framework specials are skipped). Calibrated 2026-09-22 from a real production compile of this repo (54 routes): public pages measured 395-426 KB, admin 598-619 KB — these ceilings sit ~10% above the measured max so the gate is green today and trips on a genuine regression (e.g. a heavy new dependency). NB: this per-route total counts each route's full chunk set and is larger than the 'First Load JS shared' line Next prints (~102 KB is only the shared chunks). Tighten as bundles shrink. PHASE 6.1 (2026-10-05): ceilings re-calibrated after the font/messages/concierge work. Two new gates: fonts.preloadKB + html.maxKB (scripts/perf/check-preloads.mjs: bytes of <link rel=preload as=font> and size of the locale home HTML) and initialJsGzKB (scripts/perf/initial-js.mjs: page + ALL ancestor layout chunks, gzip - the number check-budgets cannot see because it reads only the page entry). /[locale]/directory and /[locale]/map were already over the old 470 ceiling before 6.1 (537 / 511 KB measured) and now carry their own explicit ceilings.",
   "default": 500,
   "routes": {
-    "/[locale]": 470,
+    "/[locale]": 455,
+    "/[locale]/directory": 590,
+    "/[locale]/map": 560,
     "/[locale]/admin": 680
+  },
+  "fonts": {
+    "preloadKB": 175
+  },
+  "html": {
+    "maxKB": 45
+  },
+  "initialJsGzKB": {
+    "default": 145,
+    "routes": {
+      "/[locale]/directory": 190,
+      "/[locale]/map": 180,
+      "/[locale]/ask": 155,
+      "/[locale]/advertise": 150
+    }
   }
 }

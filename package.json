@@ -16,7 +16,9 @@
     "check:secrets": "node scripts/check-secrets.mjs",
     "check:migrations": "node scripts/check-migrations.mjs",
     "check:i18n": "node scripts/check-i18n-parity.mjs",
-    "ci": "npm run check:secrets && npm run check:migrations && npm run check:i18n && npm run typecheck && npm run lint && npm test",
+    "check:i18n-dicts": "node scripts/check-i18n-dicts.mjs",
+    "report:i18n": "node scripts/i18n-report.mjs",
+    "ci": "npm run check:secrets && npm run check:migrations && npm run check:i18n && npm run check:i18n-dicts && npm run typecheck && npm run lint && npm test",
     "db:drill": "bash scripts/db/restore-drill.sh"
   },
   "dependencies": {

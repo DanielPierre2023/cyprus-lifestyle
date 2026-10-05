@@ -1,0 +1,20 @@
+// lib/business/loginEmail.ts — the Business Hub sign-in e-mail, in all seven editions (RTL-aware via brandedEmail).
+import type { Locale } from '@/lib/locales';
+
+export interface BusinessLoginCopy { subject: string; heading: string; body: string; cta: string; footnote: string }
+
+const COPY: Record<Locale, BusinessLoginCopy> = {
+  en: { subject: 'Your Cyprus Lifestyle business sign-in link', heading: 'Sign in to your business account', body: 'Use the button below to open the Cyprus Lifestyle Business Hub for your listing: your enquiries, your figures and your proposals to the editorial desk. The link works once and expires in 30 minutes.', cta: 'Sign in', footnote: 'If you did not ask for this e-mail, you can ignore it; nobody can sign in without this link.' },
+  de: { subject: 'Ihr Anmeldelink für das Cyprus-Lifestyle-Geschäftskonto', heading: 'In Ihr Geschäftskonto anmelden', body: 'Mit der Schaltfläche unten öffnen Sie den Cyprus Lifestyle Business Hub für Ihren Eintrag: Ihre Anfragen, Ihre Kennzahlen und Ihre Vorschläge an die Redaktion. Der Link funktioniert einmal und läuft nach 30 Minuten ab.', cta: 'Anmelden', footnote: 'Wenn Sie diese E-Mail nicht angefordert haben, ignorieren Sie sie einfach; ohne diesen Link kann sich niemand anmelden.' },
+  el: { subject: 'Ο σύνδεσμος σύνδεσης για τον επαγγελματικό σας λογαριασμό στο Cyprus Lifestyle', heading: 'Συνδεθείτε στον επαγγελματικό σας λογαριασμό', body: 'Με το κουμπί παρακάτω ανοίγετε το Business Hub του Cyprus Lifestyle για την καταχώρισή σας: τα αιτήματα επικοινωνίας, τα στατιστικά σας και τις προτάσεις σας προς τη συντακτική ομάδα. Ο σύνδεσμος λειτουργεί μία φορά και λήγει σε 30 λεπτά.', cta: 'Σύνδεση', footnote: 'Αν δεν ζητήσατε αυτό το email, αγνοήστε το· κανείς δεν μπορεί να συνδεθεί χωρίς αυτόν τον σύνδεσμο.' },
+  pl: { subject: 'Twój link do logowania na konto firmowe Cyprus Lifestyle', heading: 'Zaloguj się na konto firmowe', body: 'Przyciskiem poniżej otworzysz Business Hub Cyprus Lifestyle dla Twojego wpisu: zapytania, statystyki i propozycje dla redakcji. Link działa jednorazowo i wygasa po 30 minutach.', cta: 'Zaloguj się', footnote: 'Jeśli nie prosiłeś o tę wiadomość, po prostu ją zignoruj; bez tego linku nikt się nie zaloguje.' },
+  ro: { subject: 'Linkul dumneavoastră de autentificare pentru contul de afaceri Cyprus Lifestyle', heading: 'Autentificați-vă în contul de afaceri', body: 'Cu butonul de mai jos deschideți Business Hub Cyprus Lifestyle pentru înregistrarea dumneavoastră: solicitările primite, cifrele și propunerile către redacție. Linkul funcționează o singură dată și expiră în 30 de minute.', cta: 'Autentificare', footnote: 'Dacă nu ați cerut acest email, ignorați-l; nimeni nu se poate autentifica fără acest link.' },
+  ru: { subject: 'Ваша ссылка для входа в бизнес-кабинет Cyprus Lifestyle', heading: 'Вход в бизнес-кабинет', body: 'Кнопка ниже откроет Business Hub Cyprus Lifestyle для вашей карточки: обращения, показатели и ваши предложения редакции. Ссылка действует один раз и истекает через 30 минут.', cta: 'Войти', footnote: 'Если вы не запрашивали это письмо, просто проигнорируйте его: без этой ссылки войти нельзя.' },
+  ar: { subject: 'رابط تسجيل الدخول إلى حسابك التجاري في Cyprus Lifestyle', heading: 'سجّل الدخول إلى حسابك التجاري', body: 'استخدم الزر أدناه لفتح Business Hub في Cyprus Lifestyle الخاص بإدراجك: الاستفسارات والأرقام واقتراحاتك للتحرير. الرابط يعمل مرة واحدة وتنتهي صلاحيته خلال 30 دقيقة.', cta: 'تسجيل الدخول', footnote: 'إذا لم تطلب هذه الرسالة فتجاهلها؛ لا يمكن لأحد تسجيل الدخول بدون هذا الرابط.' },
+};
+export const businessLoginCopy = (l: Locale): BusinessLoginCopy => COPY[l] || COPY.en;
+
+/** Absolute link to the hub for a locale (English has no prefix). The token goes in the query and is exchanged by POST. */
+export function businessLoginUrl(site: string, locale: Locale, token: string): string {
+  return `${site.replace(/\/$/, '')}${locale === 'en' ? '' : `/${locale}`}/account/business?token=${encodeURIComponent(token)}`;
+}

@@ -35,7 +35,7 @@ export async function subscribe(sb: SupabaseClient, email: string, language: str
   // If the subscriber is from a business we track, note it on that account's timeline.
   await logInboundToAccount(sb, { email: em, subject: 'Newsletter signup' });
   const c = CONFIRM_COPY[locale];
-  const url = `${site()}/api/newsletter/confirm?token=${tok}`;
+  const url = `${site()}/api/newsletter/confirm?token=${tok}&l=${locale}`;
   await sendEmail({ to: em, subject: c.subject, html: brandedEmail({ locale, heading: c.heading, bodyHtml: `<p>${c.body}</p>`, ctaLabel: c.cta, ctaUrl: url, preheader: c.subject }) });
   return { ok: true };
 }
