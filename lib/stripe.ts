@@ -55,6 +55,17 @@ export function stripeCheckoutLocale(edition?: string): string {
   return ({ en: 'en', de: 'de', el: 'el', pl: 'pl', ro: 'ro', ru: 'ru' } as Record<string, string>)[String(edition || '').toLowerCase()] || 'auto';
 }
 
+/**
+ * The Stripe account is shared by several of the owner's businesses, so the account-wide Terms/Privacy URLs in the
+ * Stripe Dashboard cannot name Cyprus Lifestyle. Each Checkout Session therefore carries its own consent line above the
+ * Pay button (custom_text.submit). Markdown links are supported by Stripe; max 1200 characters. English only (Stripe
+ * has no per-language custom text).
+ */
+export function checkoutTermsMessage(env: Record<string, string | undefined> = process.env): string {
+  const site = (env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.eu').trim().replace(/\/+$/, '');
+  return `By paying you agree to the [Terms](${site}/terms) and acknowledge the [Privacy Policy](${site}/privacy) of Cyprus Lifestyle, operated by ADD Individual Solutions Ltd (Cyprus).`;
+}
+
 /** Form-encoded body for POST /v1/checkout/sessions. Pure (no network) so it is unit-tested. */
 export function buildCheckoutBody(p: CheckoutParams): Record<string, string | number | undefined> {
   const body: Record<string, string | number | undefined> = {
@@ -85,6 +96,7 @@ export function buildCheckoutBody(p: CheckoutParams): Record<string, string | nu
   if (p.taxCode) body['line_items[0][price_data][product_data][tax_code]'] = p.taxCode;
   if (p.invoiceCreation && p.mode === 'payment') body['invoice_creation[enabled]'] = 'true';
   if (p.locale) body.locale = p.locale;
+  body['custom_text[submit][message]'] = checkoutTermsMessage();
   for (const [k, v] of Object.entries(p.metadata || {})) {
     body[`metadata[${k}]`] = v;
     if (p.mode === 'subscription') body[`subscription_data[metadata][${k}]`] = v;
@@ -140,13 +152,20 @@ export async function createCustomer(p: {
 
 // ── Customer Portal (members manage card, invoices and cancellation on Stripe's own page) ───────────────────
 // Needs the portal to be configured once in the Stripe Dashboard (Settings → Billing → Customer portal → Save).
+// Because the Stripe account is shared with other businesses, set STRIPE_PORTAL_CONFIGURATION_ID (a `bpc_…` id, see
+// docs/STRIPE-SHARED-ACCOUNT.md) so members of THIS site get a portal that links to Cyprus Lifestyle's own Terms and
+// Privacy pages. Unset or malformed = the account's default portal, exactly as before.
+export function portalConfigurationId(env: Record<string, string | undefined> = process.env): string | undefined {
+  const v = (env.STRIPE_PORTAL_CONFIGURATION_ID || '').trim();
+  return /^bpc_[A-Za-z0-9]+$/.test(v) ? v : undefined;
+}
 export async function createPortalSession(p: { customerId: string; returnUrl: string; locale?: string }): Promise<{ url: string }> {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error('Stripe is not configured');
   const res = await fetch(`${API}/billing_portal/sessions`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: form({ customer: p.customerId, return_url: p.returnUrl, locale: p.locale && p.locale !== 'auto' ? p.locale : undefined }),
+    body: form({ customer: p.customerId, return_url: p.returnUrl, configuration: portalConfigurationId(), locale: p.locale && p.locale !== 'auto' ? p.locale : undefined }),
     signal: AbortSignal.timeout(20000),
   });
   const j = await res.json().catch(() => ({}));

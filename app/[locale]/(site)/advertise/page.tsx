@@ -20,7 +20,7 @@ const ADVERTISE_FAQ: { q: string; a: string }[] = [
   { q: 'Who reads Cyprus Lifestyle?', a: 'Residents, relocators, property buyers and high-spending visitors. Nearly a quarter of people living in Cyprus were born abroad, and Cyprus Lifestyle reaches them in their own language.' },
   { q: 'Is paid placement labelled?', a: 'Yes. Listed and Featured profiles and any sponsored feature are always clearly labelled as a partner placement. Editorial coverage is never for sale — the two stay separate — but any business can place its own profile in the directory.' },
   { q: 'Can I pay for advertising online?', a: 'Yes — Listed and Featured placements and the à-la-carte options can be purchased instantly by card. Bespoke Partner packages are arranged with our team so we can tailor the creative, category exclusivity and concierge routing.' },
-  { q: 'What is the Partner tier?', a: 'Partner is a bespoke annual package for businesses that want category exclusivity, editorial-grade features and priority concierge routing across all seven editions. It is tailored to your goals and quoted individually.' },
+  { q: 'What is the Partner tier?', a: 'Partner is a bespoke annual package for businesses that want category exclusivity, editorial-grade features and prominent placement across all seven editions. It is tailored to your goals and quoted individually.' },
 ];
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
