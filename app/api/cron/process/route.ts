@@ -10,7 +10,8 @@ import { aiBudgetDeny } from '@/lib/spendGuard';
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap (the batch below stops at 45 s)
 
-export async function GET(req: NextRequest) {
+// The Supabase scheduler (ops.cron_post) calls this route with POST; Vercel and manual checks use GET. Both do the same work.
+async function handle(req: NextRequest) {
   if (!isCronAuthorized(req)) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   const budgetDeny = await aiBudgetDeny();
   if (budgetDeny) return NextResponse.json({ ok: true, skipped: 'ai_budget', reason: budgetDeny });
@@ -21,3 +22,6 @@ export async function GET(req: NextRequest) {
   const result = await processBatch(sb, { autoPublish: !!s.auto_publish, max: 4, deadlineMs: 45_000 });
   return NextResponse.json({ ok: true, ...result });
 }
+
+export const GET = handle;
+export const POST = handle;
