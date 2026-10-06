@@ -82,19 +82,21 @@ eq('previous English texts preserved', [errorMessage('missing_listing', 'en'), e
 eq('unknown locale -> en', errorMessage('forbidden', 'xx'), 'Forbidden');
 ok('isApiErrorCode', isApiErrorCode('rate_limited') && !isApiErrorCode('nope') && !isApiErrorCode(3));
 
-// ── 5.2 adapters: migrated call sites keep English output identical, other editions use the shared tags ──
+// ── 5.2 adapters (owner decision 2026-10-06): English is day-month (en-GB); every date is shown in Asia/Nicosia ──
 const SAMPLE = new Date('2026-10-05T10:00:00Z');
 const OPTS: Intl.DateTimeFormatOptions[] = [
   { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }, { day: 'numeric', month: 'short' },
   { month: 'long', year: 'numeric' }, { day: '2-digit' }, { hour: '2-digit', minute: '2-digit' },
 ];
 for (const o of OPTS) {
-  eq('en identical to the previous bare-en Intl call ' + JSON.stringify(o), formatDateWith('en', SAMPLE, o), new Intl.DateTimeFormat('en', o).format(SAMPLE));
+  eq('en = en-GB in Nicosia time ' + JSON.stringify(o), formatDateWith('en', SAMPLE, o), new Intl.DateTimeFormat('en-GB', { ...o, timeZone: 'Asia/Nicosia' }).format(SAMPLE));
   for (const l of ['el', 'ro', 'de', 'pl', 'ru'] as const)
-    eq(`${l} identical to the previous bare-locale Intl call`, formatDateWith(l, SAMPLE, o), new Intl.DateTimeFormat(l, o).format(SAMPLE));
+    eq(`${l} = its site tag in Nicosia time`, formatDateWith(l, SAMPLE, o), new Intl.DateTimeFormat(siteIntlTag(l), { ...o, timeZone: 'Asia/Nicosia' }).format(SAMPLE));
 }
 ok('ar digits are Latin and Gregorian', !/[٠-٩]/.test(formatDateWith('ar', SAMPLE, OPTS[0])) && /2026/.test(formatDateWith('ar', SAMPLE, OPTS[0])));
-eq('siteIntlTag en = legacy', [siteIntlTag('en'), siteIntlTag('xx'), siteIntlTag(null)], ['en', 'en', 'en']);
+eq('siteIntlTag en = en-GB (day-month)', [siteIntlTag('en'), siteIntlTag('xx'), siteIntlTag(null)], ['en-GB', 'en-GB', 'en-GB']);
+eq('English day-month order', formatDateWith('en', SAMPLE, { day: 'numeric', month: 'short' }), '5 Oct');
+eq('Nicosia is UTC+3 in October', formatDateWith('en', new Date('2026-10-05T21:30:00Z'), { day: 'numeric', month: 'short' }), '6 Oct');
 eq('siteIntlTag el = el-GR', siteIntlTag('el'), 'el-GR');
 eq('formatDateWith invalid -> empty', formatDateWith('el', 'nope', OPTS[1]), '');
 ok('time zone is applied when given', dateFormatter('en', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, 'Asia/Nicosia').format(new Date('2026-10-05T21:30:00Z')) === '00:30');

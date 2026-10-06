@@ -97,18 +97,20 @@ export function formatList(locale: string | null | undefined, items: string[], t
 // ── Adapters for call sites that build their own Intl options (increment 5.2) ─────────────────────
 // The pre-5.2 pages passed the bare site locale ('en', 'el', …) to Intl. For every locale except English that
 // is identical to intlTag(); for English a bare 'en' means US month-day order ("Oct 5") whereas intlTag('en')
-// is en-GB ("5 Oct"). To keep English output byte-identical for the migrated pages they use siteIntlTag();
-// set LEGACY_EN_TAG to 'en-GB' (one line) to move English onto the Cyprus day-month convention everywhere.
-export const LEGACY_EN_TAG = 'en';
+// is en-GB ("5 Oct"). Since 2026-10-06 the owner has chosen day-month for English everywhere, so LEGACY_EN_TAG is
+// 'en-GB'. Set it back to 'en' (one line) to return to US month-day order.
+export const LEGACY_EN_TAG = 'en-GB';   // owner decision 2026-10-06: English dates read "5 Oct" (day-month), the Cyprus convention
 
 export function siteIntlTag(locale?: string | null): string {
   const l: Locale = locale && isLocale(locale) ? locale : 'en';
   return l === 'en' ? LEGACY_EN_TAG : intlTag(l);
 }
 
-/** `new Intl.DateTimeFormat(...)` with the site tag. No time zone unless given (same as the call sites it replaces). */
-export function dateFormatter(locale: string | null | undefined, options: Intl.DateTimeFormatOptions, timeZone?: string): Intl.DateTimeFormat {
-  return new Intl.DateTimeFormat(siteIntlTag(locale), timeZone ? { ...options, timeZone } : options);
+/** `new Intl.DateTimeFormat(...)` with the site tag, in the island's time zone (Asia/Nicosia) unless another is given.
+ *  One fixed zone means the server (UTC on Vercel) and every visitor's browser print the same date, so there is no
+ *  hydration mismatch and an event at 00:30 Cyprus time is never shown on the previous day. */
+export function dateFormatter(locale: string | null | undefined, options: Intl.DateTimeFormatOptions, timeZone: string = TIME_ZONE): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat(siteIntlTag(locale), { ...options, timeZone: options.timeZone ?? timeZone });
 }
 
 /** Format a date/ISO string/timestamp with explicit Intl options. Invalid input returns '' (never throws). */
