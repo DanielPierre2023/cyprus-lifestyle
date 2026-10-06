@@ -78,7 +78,8 @@ eq('pl', detectLocaleFull('Szukam dobrej restauracji, gdzie jest blisko plaży?'
 eq('ro', detectLocaleFull('Caut un restaurant bun, unde pot mânca aproape de mare?'), 'ro');
 eq('en stays en', detectLocaleFull('Where can I rent a car at the airport?'), 'en');
 const wa = readFileSync('app/api/whatsapp/route.ts', 'utf8'); const tg = readFileSync('app/api/telegram/route.ts', 'utf8');
-ok('whatsapp + telegram use detectLocaleFull', wa.includes('detectLocaleFull(text)') && tg.includes('detectLocaleFull(query)') && !/detectLocale\(/.test(wa + tg));
+// 5.3: the routes call resolveChannelLocale (lib/concierge/localeMemory.ts), which wraps detectLocaleFull and adds the per-sender memory.
+ok('whatsapp + telegram resolve the language with detectLocaleFull + memory', wa.includes('resolveChannelLocale({ text,') && tg.includes('resolveChannelLocale({ text: query') && !/detectLocale\(/.test(wa + tg));
 ok('whatsapp + telegram share the channel link builder', wa.includes('appendChannelLinks') && tg.includes('appendChannelLinks'));
 
 // ── 6. static KB must not be crowded out by scraped-page vectors ──

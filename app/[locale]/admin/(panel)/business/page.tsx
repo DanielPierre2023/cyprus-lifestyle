@@ -16,6 +16,7 @@ export default function BusinessHubTab() {
   const [status, setStatus] = useState<(typeof STATUSES)[number]>('submitted');
   const [accounts, setAccounts] = useState(0);
   const [waiting, setWaiting] = useState(0);
+  const [ownerEdits, setOwnerEdits] = useState<number | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
@@ -27,6 +28,10 @@ export default function BusinessHubTab() {
     setErr(''); setRows(r.rows); setAccounts(r.accounts); setWaiting(r.waiting);
   }, [status]);
   useEffect(() => { load(); }, [load]);
+  // Items waiting in the other queue (Admin → Moderation); best-effort, shown only as a pointer.
+  useEffect(() => {
+    fetch('/api/admin/moderation/edits', { cache: 'no-store' }).then((x) => x.json()).then((d) => setOwnerEdits(d?.ok && Array.isArray(d.edits) ? d.edits.length : null)).catch(() => setOwnerEdits(null));
+  }, []);
 
   async function decide(id: string, action: 'approve' | 'reject' | 'request_changes') {
     setBusy(id); setMsg(''); setErr('');
@@ -41,6 +46,11 @@ export default function BusinessHubTab() {
     <>
       <h1>Business Hub</h1>
       <p className="sub">Proposals that verified businesses send about their own listing. Approving a description or photo proposal writes it to the listing; a news proposal publishes nothing by itself. Rejections and change requests need a short note, which the business sees.</p>
+      <p className="sub">
+        This queue holds proposals sent from a business&rsquo;s own Business Hub account. Edits from the older owner editor, and listings held back by the
+        enrichment job, are a separate queue: <a href="/admin/moderation">Admin → Moderation</a>
+        {ownerEdits === null ? '' : ` (${ownerEdits} owner edit${ownerEdits === 1 ? '' : 's'} waiting)`}.
+      </p>
       <div className="cards">
         <div className="stat"><div className="n">{waiting}</div><div className="k">Waiting for the desk</div></div>
         <div className="stat"><div className="n">{accounts}</div><div className="k">Business accounts</div></div>

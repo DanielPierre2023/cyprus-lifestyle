@@ -25,10 +25,10 @@ begin
     insert into public.events (slug, ingest_key, source_url, title_en, starts_at) values ('other-slug', 'cy-public-holidays:2026-10-28|Ohi Day', 'https://x.invalid/1', 'dup', now());
     raise exception 'EVENTS FAIL: a duplicate ingest_key was accepted';
   exception when unique_violation then null; end;
-  begin
-    insert into public.events (slug, ingest_key, source_url, title_en, starts_at) values ('other-slug-2', 'k2', 'https://date.nager.at/PublicHoliday/Country/CY#2026-10-28', 'dup', now());
-    raise exception 'EVENTS FAIL: a duplicate source_url was accepted';
-  exception when unique_violation then null; end;
+  -- source_url is deliberately NOT unique: production already holds duplicate source_url values from older imports
+  -- (the unique index could not be created there). The pipeline dedupes by ingest_key and in code, so a repeated URL is accepted.
+  insert into public.events (slug, ingest_key, source_url, title_en, starts_at) values ('other-slug-2', 'k2', 'https://date.nager.at/PublicHoliday/Country/CY#2026-10-28', 'same url, other key', now());
+  delete from public.events where slug = 'other-slug-2';
 
   insert into public.events_sources (slug, enabled, last_status, last_found, last_added) values ('cy-public-holidays', true, 'ok', 32, 1);
   insert into public.events_ingest_runs (trigger, found, added) values ('queue', 32, 1);

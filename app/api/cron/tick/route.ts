@@ -12,6 +12,7 @@ import { runWorker } from '@/lib/jobs';
 import { enqueueGeocodeBacklog, enqueueDailySubsystems } from '@/lib/jobs.handlers';
 import { isFridayUtc, notifyApprover, prepareDigest } from '@/lib/newsletterDigest';
 import { reconcileMembers } from '@/lib/member/reconcile';
+import { purgeExpiredBusinessCredentials } from '@/lib/business/cleanup';
 import { watchdogIfDue } from '@/lib/ops/watchdog';
 
 export const runtime = 'nodejs';
@@ -39,6 +40,9 @@ export async function GET(req: NextRequest) {
 
   // Members: make sure nobody keeps member benefits after a missed cancellation, and tidy expired sessions/links.
   try { out.members = await reconcileMembers(sb); } catch (e) { await logServerError('cron-tick:members', e); }
+
+  // Business Hub: delete expired sign-in sessions and long-expired sign-in links (credentials only).
+  try { out.business = await purgeExpiredBusinessCredentials(sb); } catch (e) { await logServerError('cron-tick:business', e); }
 
   // Drain a time-boxed batch now, so work progresses even without pg_cron. pg_cron
   // (when enabled) drains continuously between ticks.

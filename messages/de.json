@@ -372,15 +372,16 @@
     "note": "Fragen zur Mitgliedschaft oder zu Firmenabonnements? Schreiben Sie uns über",
     "concierge": {
       "name": "Concierge-Mitgliedschaft",
-      "tagline": "Ihr persönlicher Concierge für Zypern.",
+      "tagline": "Ihr Concierge für Zypern.",
       "perMonth": "/ Monat",
       "perYear": "/ Jahr",
       "inclVat": "inkl. MwSt.",
       "features": [
         "Gründlichere, vorausschauende Antworten Ihres Concierge",
-        "Ihre Reisen und Vorlieben, geräteübergreifend gemerkt",
+        "Ihre Vorlieben und Reisedetails, geräteübergreifend gemerkt",
         "Mitgliedschaft auf jedem Gerät per sicherem E-Mail-Link wiederherstellen",
-        "Prioritätsspur für angemeldete Mitglieder: Ihre Anfragen werden vor Standardanfragen bearbeitet"
+        "Prioritätsspur für angemeldete Mitglieder: Ihre Anfragen werden vor Standardanfragen bearbeitet",
+        "Digitale Mitgliedskarte (QR-Code), die Sie als Mitglied ausweist; Partnerangebote kommen nach und nach hinzu"
       ],
       "priorityHint": "Für die Prioritätsspur melden Sie sich an, bevor Sie eine Anfrage senden. Ohne Anmeldung gesendete Anfragen kommen in die Standardwarteschlange.",
       "cta": "Mitglied werden",

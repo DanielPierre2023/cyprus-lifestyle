@@ -372,15 +372,16 @@
     "note": "Questions about membership or corporate subscriptions? Write to us via",
     "concierge": {
       "name": "Concierge Membership",
-      "tagline": "Your personal concierge to Cyprus.",
+      "tagline": "Your concierge to Cyprus.",
       "perMonth": "/ month",
       "perYear": "/ year",
       "inclVat": "incl. VAT",
       "features": [
         "More thorough, anticipatory answers from your concierge",
-        "Your trips and preferences remembered across devices",
+        "Your preferences and trip details remembered across devices",
         "Restore your membership on any device with a secure email link",
-        "Priority lane for signed-in members: your requests are handled before standard ones"
+        "Priority lane for signed-in members: your requests are handled before standard ones",
+        "A digital member card (QR code) that identifies you as a member; partner offers are added over time"
       ],
       "priorityHint": "To use the priority lane, sign in to your account before you send a request. Requests sent while signed out go to the standard queue.",
       "cta": "Become a member",

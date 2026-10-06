@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { formatDateWith, formatNumber } from '@/lib/i18n/format';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
@@ -11,12 +12,14 @@ import DirectoryMap from '@/components/DirectoryMap';
 import CoverImage from '@/components/CoverImage';
 import DirectoryReviews from '@/components/DirectoryReviews';
 import ClaimListing from '@/components/ClaimListing';
+import { hubCopy, hubPath } from '@/lib/business/hubCopy';
 import TrackView from '@/components/TrackView';
 import TrackedCTA from '@/components/TrackedCTA';
 import EnquiryForm, { type EnquiryLabels } from '@/components/EnquiryForm';
 import { TAXI_APPS } from '@/lib/mobility';
 
-export const revalidate = 300;
+// ISR 1 h: DB webhooks call /api/revalidate/tags on every edit (PERFORMANCE-SETUP.md 2b); this is only the safety net. Keep equal to TTL in lib/queries.cached.ts.
+export const revalidate = 3600;
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string; type: string; slug: string }> }): Promise<Metadata> {
   const { locale, type, slug } = await params;
@@ -77,7 +80,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
     ? [{ lat: x.lat, lng: x.lng, name: x.name, type: x.type, image: x.image },
        ...nearby.filter((n) => n.lat != null && n.lng != null).map((n) => ({ lat: n.lat as number, lng: n.lng as number, name: n.name, type: n.type, image: n.image, href: `/${l}/directory/${n.type}/${n.slug}` }))]
     : [];
-  const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(l, { day: 'numeric', month: 'short' });
+  const fmtDate = (iso: string) => formatDateWith(l, iso, { day: 'numeric', month: 'short' });
   const enqLabels: EnquiryLabels = {
     title: t('enquiry.title'), intro: t('enquiry.intro'), name: t('enquiry.name'),
     email: t('enquiry.email'), message: t('enquiry.message'), send: t('enquiry.send'),
@@ -102,7 +105,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
           <div className="lh-hero-cap">
             <h1 style={{ margin: 0 }}>{x.name}</h1>
             <div className="lh-badges">
-              {x.rating != null ? <span className="lh-badge"><Stars rating={x.rating} /> <b>{x.rating.toFixed(1)}</b>{x.rating_count ? <span className="muted"> · {x.rating_count.toLocaleString(l)} {t('directory.reviews')}</span> : null}</span> : null}
+              {x.rating != null ? <span className="lh-badge"><Stars rating={x.rating} /> <b>{x.rating.toFixed(1)}</b>{x.rating_count ? <span className="muted"> · {formatNumber(l, x.rating_count)} {t('directory.reviews')}</span> : null}</span> : null}
               {x.price_band ? <span className="lh-badge">{x.price_band}</span> : null}
               {x.featured ? <span className="lh-badge featured">★ {t('enquiry.featured')}</span> : null}
               {x.verified ? <span className="lh-badge verified">✓ {t('directory.verified')}</span> : null}
@@ -193,7 +196,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
               {x.address ? <div className="lh-fact"><span className="k">{t('directory.address')}</span><span className="v">{x.address}</span></div> : null}
               {x.district ? <div className="lh-fact"><span className="k">{t('directory.district')}</span><span className="v" style={{ textTransform: 'capitalize' }}>{x.district}</span></div> : null}
               {x.price_band ? <div className="lh-fact"><span className="k">{t('directory.price')}</span><span className="v">{x.price_band}</span></div> : null}
-              {x.rating != null ? <div className="lh-fact"><span className="k">{t('directory.rating')}</span><span className="v">{x.rating.toFixed(1)} / 5{x.rating_count ? ` · ${x.rating_count.toLocaleString(l)}` : ''}</span></div> : null}
+              {x.rating != null ? <div className="lh-fact"><span className="k">{t('directory.rating')}</span><span className="v">{x.rating.toFixed(1)} / 5{x.rating_count ? ` · ${formatNumber(l, x.rating_count)}` : ''}</span></div> : null}
               {x.phone ? <div className="lh-fact"><span className="k">{t('directory.phone')}</span><span className="v"><TrackedCTA slug={x.slug} label="phone" href={`tel:${x.phone.replace(/\s+/g, '')}`}>{x.phone}</TrackedCTA></span></div> : null}
             </div>
             <div className="lh-actions">
@@ -210,7 +213,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
           {points.length ? <div className="lh-map"><DirectoryMap points={points} height={300} locale={l} typeLabels={typeLabels} viewLabel={t('directory.view')} placesLabel={t('directory.places')} ariaLabel={t('directory.mapAria')} /></div> : null}
           <EnquiryForm listingSlug={x.slug} listingType={x.type} listingName={x.name} locale={l} labels={enqLabels} />
           {/* Claim-to-own: lets the business verify ownership and flip the listing to owned data. */}
-          <ClaimListing slug={x.slug} verified={x.provenance === 'owner-verified'} />
+          <ClaimListing slug={x.slug} verified={x.provenance === 'owner-verified'} labels={{ hubHint: hubCopy(l).hint, hubLink: hubCopy(l).link, hubHref: hubPath(l) }} />
           {/* Owner editor entry point — only for already owner-verified listings. The manage
               page emails a secure management link to the owner contact on file. */}
           {x.provenance === 'owner-verified' ? (

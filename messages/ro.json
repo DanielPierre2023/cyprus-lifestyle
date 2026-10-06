@@ -372,15 +372,16 @@
     "note": "Întrebări despre calitatea de membru sau abonamente corporative? Scrieți-ne prin",
     "concierge": {
       "name": "Abonament Concierge",
-      "tagline": "Concierge-ul tău personal pentru Cipru.",
+      "tagline": "Concierge-ul tău pentru Cipru.",
       "perMonth": "/ lună",
       "perYear": "/ an",
       "inclVat": "TVA inclus",
       "features": [
         "Răspunsuri mai detaliate și anticipative din partea concierge-ului",
-        "Călătoriile și preferințele dumneavoastră, reținute pe toate dispozitivele",
+        "Preferințele și detaliile călătoriilor dumneavoastră, reținute pe toate dispozitivele",
         "Restaurarea abonamentului pe orice dispozitiv, printr-un link securizat trimis pe email",
-        "Culoar prioritar pentru membrii autentificați: cererile dumneavoastră sunt tratate înaintea celor standard"
+        "Culoar prioritar pentru membrii autentificați: cererile dumneavoastră sunt tratate înaintea celor standard",
+        "Card digital de membru (cod QR) care vă identifică drept membru; ofertele partenerilor sunt adăugate în timp"
       ],
       "priorityHint": "Pentru culoarul prioritar, autentificați-vă în cont înainte de a trimite o cerere. Cererile trimise fără autentificare intră în coada standard.",
       "cta": "Devino membru",

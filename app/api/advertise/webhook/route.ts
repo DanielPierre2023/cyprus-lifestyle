@@ -104,6 +104,7 @@ async function processEvent(sb: SupabaseClient, event: Record<string, unknown>, 
         customerId: (obj.customer as string) || null,
         subscriptionId: (obj.subscription as string) || null,
         sessionId: (obj.id as string) || null,
+        locale: meta.locale || null,
       }, now);
       if (!rec.ok) return await retryLater(event, 'membership checkout write', rec.error);
       return ok();

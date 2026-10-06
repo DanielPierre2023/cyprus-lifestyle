@@ -28,20 +28,20 @@ step() { printf '\n▶ %s\n' "$*"; }
 
 adm -c "create database $DB"
 
-step "1/15  Supabase emulation (roles, auth.uid(), storage stubs)"
+step "1/17  Supabase emulation (roles, auth.uid(), storage stubs)"
 db -f "$BASE/drill-harness.sql"
 
 # Three extensions are managed by Supabase itself and do not exist on plain PostgreSQL.
 sed -E 's/^(create extension if not exists (supabase_vault|pg_cron|pg_net)\b)/-- [drill: Supabase-managed] \1/' \
   "$BASE/0000_live_schema_baseline.sql" > "$WORK/baseline.sql"
 
-step "2/15  Baseline on an empty database (any error fails the drill)"
+step "2/17  Baseline on an empty database (any error fails the drill)"
 db -f "$WORK/baseline.sql"
 
-step "3/15  Baseline again — must be idempotent"
+step "3/17  Baseline again — must be idempotent"
 db -f "$WORK/baseline.sql"
 
-step "4/15  Fingerprint of the rebuilt schema vs production at snapshot time"
+step "4/17  Fingerprint of the rebuilt schema vs production at snapshot time"
 db -At -F ' | ' -f "$BASE/verify-parity.sql" > "$WORK/parity.txt"
 if ! diff -u "$BASE/expected-parity.txt" "$WORK/parity.txt"; then
   echo "✗ The rebuilt schema differs from production's snapshot (see diff above)." >&2
@@ -49,7 +49,7 @@ if ! diff -u "$BASE/expected-parity.txt" "$WORK/parity.txt"; then
 fi
 echo "  identical: $(wc -l < "$WORK/parity.txt" | tr -d ' ') fingerprints (counts + content digests)"
 
-step "5/15  Migrations newer than the baseline ($(tr -d '[:space:]' < "$BASE/BASELINE_VERSION")) — each applied twice"
+step "5/17  Migrations newer than the baseline ($(tr -d '[:space:]' < "$BASE/BASELINE_VERSION")) — each applied twice"
 BV="$(tr -d '[:space:]' < "$BASE/BASELINE_VERSION")"
 applied=0
 for f in $(ls supabase/migrations | sort); do
@@ -62,35 +62,41 @@ for f in $(ls supabase/migrations | sort); do
 done
 echo "  $applied migration(s) applied"
 
-step "6/15  Security invariants"
+step "6/17  Security invariants"
 db -f scripts/db/security-smoke.sql
 
-step "7/15  Administrator audit trail (who changed what)"
+step "7/17  Administrator audit trail (who changed what)"
 db -f scripts/db/audit-smoke.sql
 
-step "8/15  Newsletter workflow tables"
+step "8/17  Newsletter workflow tables"
 db -f scripts/db/newsletter-smoke.sql
 
-step "9/15  Social auto-post queue"
+step "9/17  Social auto-post queue"
 db -f scripts/db/social-smoke.sql
 
-step "10/15  Member sessions"
+step "10/17  Member sessions"
 db -f scripts/db/member-smoke.sql
 
-step "11/15  Business Hub tables"
+step "11/17  Business Hub tables"
 db -f scripts/db/business-smoke.sql
 
-step "12/15  Booking engine (lanes, partner links, commission ledger)"
+step "12/17  Booking engine (lanes, partner links, commission ledger)"
 db -f scripts/db/booking-smoke.sql
 db -f scripts/db/booking-erase-smoke.sql
 
-step "13/15  Scheduled-job installer + health function"
+step "13/17  Scheduled-job installer + health function"
 db -f scripts/db/cron-install-smoke.sql
 
-step "14/15  Revalidation triggers (webhook payloads, silent no-ops, never blocks a write)"
+step "14/17  Revalidation triggers (webhook payloads, silent no-ops, never blocks a write)"
 db -f scripts/db/revalidate-smoke.sql
 
-step "15/15  Automated agenda (event sources, runs, switch)"
+step "15/17  Automated agenda (event sources, runs, switch)"
 db -f scripts/db/events-smoke.sql
+
+step "16/17  Member card, partner offers and redemption log"
+db -f scripts/db/member-card-smoke.sql
+
+step "17/17  Privacy erasure of Business Hub accounts"
+db -f scripts/db/business-erase-smoke.sql
 
 printf '\n✓ restore drill passed: the schema rebuilds from the repo, is idempotent, matches production, and the security and audit invariants hold.\n'

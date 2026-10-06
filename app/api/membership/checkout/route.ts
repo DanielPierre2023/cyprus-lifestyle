@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/ratelimit';
 import { stripeConfigured, createCheckoutSession, automaticTaxEnabled, stripeCheckoutLocale } from '@/lib/stripe';
 import { isLocale } from '@/lib/locales';
+import { localeOf } from '@/lib/i18n/resolveLocale';
+import { keyedErrorBody, codedError } from '@/lib/i18n/apiErrors';
 import { MEMBERSHIP_TAX } from '@/lib/vat/products';
 import { isValidCid } from '@/lib/concierge/memory';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -16,14 +18,14 @@ export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   if (!(await rateLimit(req, 'membership-checkout', 8, 60))) {
-    return NextResponse.json({ ok: false, error: 'busy' }, { status: 429 });
+    return NextResponse.json(keyedErrorBody('rate_limited', 'busy', localeOf(req)), { status: 429 });
   }
-  if (!stripeConfigured()) return NextResponse.json({ ok: false, error: 'not_configured' }, { status: 400 });
+  if (!stripeConfigured()) return NextResponse.json(keyedErrorBody('not_configured', 'not_configured', localeOf(req)), { status: 400 });
 
   const body = await req.json().catch(() => ({}));
   const cid = isValidCid(String(body.cid || '')) ? String(body.cid) : '';
   const email = typeof body.email === 'string' && body.email.includes('@') ? body.email.trim() : undefined;
-  const locale = isLocale(String(body.locale)) ? String(body.locale) : 'en';
+  const locale = isLocale(String(body.locale)) ? String(body.locale) : localeOf(req);
   const prefix = locale === 'en' ? '' : `${locale}/`;
 
   // Block a double subscription: an ACTIVE member (by cid, or by email — case-insensitive
@@ -36,7 +38,7 @@ export async function POST(req: NextRequest) {
     if (email) lookups.push(sb.from('concierge_members').select('id').eq('status', 'active').ilike('email', escapeLike(email)).limit(1));
     for (const { data, error } of await Promise.all(lookups)) {
       if (error) await logServerError('membership-checkout', new Error(`active-member lookup failed: ${error.message}`.slice(0, 300)), {}, 'warn');
-      else if (data && data.length > 0) return NextResponse.json({ ok: false, error: 'already_member' }, { status: 409 });
+      else if (data && data.length > 0) return NextResponse.json(keyedErrorBody('already_member', 'already_member', locale), { status: 409 });
     }
   } catch (e) { await logServerError('membership-checkout', e, {}, 'warn'); }
 
@@ -55,7 +57,7 @@ export async function POST(req: NextRequest) {
       cancelUrl: `${origin}/${prefix}membership`,
       customerEmail: email,
       clientReferenceId: cid || undefined,
-      metadata: { kind: 'membership', tier: 'concierge', cid },
+      metadata: { kind: 'membership', tier: 'concierge', cid, locale },
       // VAT: the €19 is the FINAL price — VAT is included, and is the VAT of the member's own country (an online
       // service to consumers). Stripe Tax works it out from the billing address; no business VAT-number step here.
       automaticTax: automaticTaxEnabled(), taxBehavior: MEMBERSHIP_TAX.taxBehavior, taxCode: MEMBERSHIP_TAX.taxCode,
@@ -63,6 +65,6 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, url: session.url });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
+    return NextResponse.json(codedError('checkout_failed', (e as Error).message), { status: 502 });
   }
 }

@@ -10,7 +10,9 @@
 // Optional: WHATSAPP_API_VERSION (default v21.0), NEXT_PUBLIC_SITE_URL.
 import { NextRequest, after } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { runConcierge, detectLocale, type ChatMessage } from '@/lib/concierge/brain';
+import { runConcierge, type ChatMessage } from '@/lib/concierge/brain';
+import { resolveChannelLocale } from '@/lib/concierge/localeMemory';
+import { appendChannelLinks } from '@/lib/concierge/channelLinks';
 import { verifyMetaSignature } from '@/lib/auth/webhookSignature';
 import { rateLimitKey } from '@/lib/ratelimit';
 import { publicAiCeilingDeny } from '@/lib/spendGuard';
@@ -86,23 +88,27 @@ async function handleTextMessage(phoneId: string, token: string, msg: WaMessage)
   // Load memory + dedupe Meta's retries by message id.
   let history: ChatMessage[] = [];
   let turns = 0;
+  let rememberedLocale: string | null = null; let rememberedAt: string | null = null;
   try {
-    const { data } = await sb.from('concierge_wa_threads').select('messages,last_msg_id,turns').eq('wa_id', wa).maybeSingle();
+    const { data } = await sb.from('concierge_wa_threads').select('messages,last_msg_id,turns,locale,updated_at').eq('wa_id', wa).maybeSingle();
     if (data) {
+      rememberedLocale = typeof data.locale === 'string' ? data.locale : null; rememberedAt = typeof data.updated_at === 'string' ? data.updated_at : null;
       if (data.last_msg_id === msg.id) return; // already handled this exact message
       if (Array.isArray(data.messages)) history = data.messages as ChatMessage[];
       turns = Number(data.turns) || 0;
     }
   } catch { /* no memory available — answer statelessly */ }
 
-  const locale = detectLocale(text);
+  // Language: this message when it is clearly identifiable; a short / ambiguous one ("ja bitte") keeps the sender's last confident language.
+  const lang = resolveChannelLocale({ text, remembered: rememberedLocale, rememberedAt });
+  const locale = lang.locale;
   const convo: ChatMessage[] = [...history, { role: 'user', content: text }];
 
   let reply = '';
   try {
     const { ctx, text: answer } = await runConcierge(convo, locale, { matchLanguage: true });
     reply = answer || fallbackNote(locale);
-    reply = appendLink(reply, ctx, locale);
+    reply = appendChannelLinks(reply, ctx, locale, SITE);
   } catch (e) {
     console.error('[whatsapp] brain', (e as Error).message);
     reply = fallbackNote(locale);
@@ -114,27 +120,9 @@ async function handleTextMessage(phoneId: string, token: string, msg: WaMessage)
   const nextMessages = [...convo, { role: 'assistant' as const, content: reply }].slice(-12);
   try {
     await sb.from('concierge_wa_threads').upsert({
-      wa_id: wa, locale, messages: nextMessages, last_msg_id: msg.id, turns: turns + 1, updated_at: new Date().toISOString(),
+      wa_id: wa, locale: lang.persist, messages: nextMessages, last_msg_id: msg.id, turns: turns + 1, updated_at: new Date().toISOString(),
     });
   } catch { /* memory write is best-effort */ }
-}
-
-// Append the single most relevant on-site link (the connector), tastefully.
-function appendLink(reply: string, ctx: { guides: { label: string; path: string }[]; picks: { type: string; slug: string; name: string }[]; activities?: { title: string; url: string | null }[] }, locale: string): string {
-  const prefix = locale && locale !== 'en' ? `/${locale}` : '';
-  const lines: string[] = [];
-  if (ctx.guides && ctx.guides.length) {
-    const g = ctx.guides[0];
-    lines.push(`${g.label}: ${SITE}${prefix}${g.path}`);
-  } else if (ctx.picks && ctx.picks.length) {
-    const p = ctx.picks[0];
-    lines.push(`${p.name}: ${SITE}${prefix}/directory/${p.type}/${p.slug}`);
-  }
-  // Up to two bookable experiences from our catalogue (GetYourGuide booking link, partner id
-  // applied, disclosed as a partner link) when the guest asked for things to do.
-  const PARTNER: Record<string, string> = { en: 'partner link', el: 'σύνδεσμος συνεργάτη', ro: 'link de partener', ar: 'رابط شريك', de: 'Partnerlink', pl: 'link partnerski', ru: 'партнёрская ссылка' };
-  for (const a of (ctx.activities || []).slice(0, 2)) if (a.url) lines.push(`${a.title} (GetYourGuide, ${PARTNER[locale] || PARTNER.en}): ${a.url}`);
-  return lines.length ? `${reply}\n\n${lines.join('\n')}` : reply;
 }
 
 function fallbackNote(locale: string): string {

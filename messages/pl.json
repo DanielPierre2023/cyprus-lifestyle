@@ -372,15 +372,16 @@
     "note": "Pytania o członkostwo lub prenumeratę firmową? Napisz do nas przez",
     "concierge": {
       "name": "Członkostwo Concierge",
-      "tagline": "Twój osobisty concierge na Cyprze.",
+      "tagline": "Twój concierge na Cyprze.",
       "perMonth": "/ miesiąc",
       "perYear": "/ rok",
       "inclVat": "z VAT",
       "features": [
         "Dokładniejsze, przewidujące odpowiedzi Twojego concierge",
-        "Twoje podróże i preferencje, zapamiętane na wszystkich urządzeniach",
+        "Twoje preferencje i szczegóły podróży, zapamiętane na wszystkich urządzeniach",
         "Przywracanie członkostwa na dowolnym urządzeniu przez bezpieczny link e-mail",
-        "Priorytetowa ścieżka dla zalogowanych członków: Twoje zapytania są obsługiwane przed standardowymi"
+        "Priorytetowa ścieżka dla zalogowanych członków: Twoje zapytania są obsługiwane przed standardowymi",
+        "Cyfrowa karta członkowska (kod QR) potwierdzająca, że jesteś członkiem; oferty partnerów są dodawane z czasem"
       ],
       "priorityHint": "Aby skorzystać ze ścieżki priorytetowej, zaloguj się na konto przed wysłaniem zapytania. Zapytania wysłane bez logowania trafiają do kolejki standardowej.",
       "cta": "Zostań członkiem",

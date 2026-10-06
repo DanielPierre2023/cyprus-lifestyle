@@ -6,6 +6,7 @@ import { isLocale, type Locale } from '@/lib/locales';
 import { breadcrumbJsonLd, ld, pageMetadata } from '@/lib/seo';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import MembershipCheckout from '@/components/MembershipCheckout';
+import { LEGAL_UI } from '@/lib/legal';
 
 export const revalidate = 3600;
 
@@ -25,7 +26,7 @@ export default async function MembershipPage({ params }: { params: Promise<{ loc
 
   const free = t.raw('membership.free') as { name: string; price: string; cta: string; features: string[] };
   const conc = t.raw('membership.concierge') as {
-    name: string; tagline: string; perMonth: string; perYear: string; inclVat: string; features: string[];
+    name: string; tagline: string; perMonth: string; perYear: string; inclVat: string; features: string[]; priorityHint: string;
     cta: string; sending: string; active: string; welcome: string;
     restorePrompt: string; emailPh: string; restore: string; notConfigured: string;
     restoreBusy: string; restoreSent: string; restoreInvalid: string; restoreError: string;
@@ -34,6 +35,7 @@ export default async function MembershipPage({ params }: { params: Promise<{ loc
   // Same source of truth as app/api/membership/checkout (price + billing interval).
   const priceEur = process.env.MEMBERSHIP_PRICE_EUR || '19';
   const perLabel = process.env.MEMBERSHIP_INTERVAL === 'year' ? conc.perYear : conc.perMonth;
+  const legalUi = LEGAL_UI[l] || LEGAL_UI.en;
   const crumbLd = breadcrumbJsonLd(l, [{ name: t('brand.name'), path: '/' }, { name: t('membership.title'), path: '/membership' }]);
 
   return (
@@ -66,11 +68,16 @@ export default async function MembershipPage({ params }: { params: Promise<{ loc
             <ul style={{ listStyle: 'none', padding: 0, margin: '16px 0 20px' }}>
               {conc.features.map((f, i) => <li key={i} style={{ padding: '7px 0', borderBottom: '1px solid rgba(201,162,76,.22)', fontSize: 15 }}>◆&nbsp;&nbsp;{f}</li>)}
             </ul>
+            <p style={{ margin: '-8px 0 18px', fontSize: 13, lineHeight: 1.5, color: '#c9bfa6' }}>{conc.priorityHint}</p>
             <MembershipCheckout locale={locale} labels={{
               cta: conc.cta, sending: conc.sending, active: conc.active, welcome: conc.welcome, restorePrompt: conc.restorePrompt, emailPh: conc.emailPh, restore: conc.restore, notConfigured: conc.notConfigured,
               restoreBusy: conc.restoreBusy, restoreSent: conc.restoreSent, restoreInvalid: conc.restoreInvalid, restoreError: conc.restoreError,
               confirming: conc.confirming, confirmOk: conc.confirmOk, confirmExpired: conc.confirmExpired, confirmInvalid: conc.confirmInvalid, confirmError: conc.confirmError,
             }} />
+            <p style={{ margin: '14px 0 0', fontSize: 12.5, lineHeight: 1.55, color: '#c9bfa6' }}>
+              {legalUi.membershipNote}{' '}
+              <Link href="/terms" style={{ color: '#E9C978' }}>{legalUi.terms}</Link> · <Link href="/privacy" style={{ color: '#E9C978' }}>{t('footer.privacy')}</Link>
+            </p>
           </div>
         </div>
 

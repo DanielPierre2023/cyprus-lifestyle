@@ -4,6 +4,8 @@ import {
   scanPosts, rankWorst,
   type RawPost, type Edition, type Level,
 } from '@/lib/editorial/qualityScan';
+import { langProfile } from '@/lib/antiAiLang';
+import type { Lang } from '@/lib/antiAi';
 import RepairActions from '@/components/admin/RepairActions';
 import QualityBulkClean from '@/components/admin/QualityBulkClean';
 
@@ -28,6 +30,7 @@ function toneForLevel(level: Level): string {
 function levelFromScore(score: number): Level {
   return score === 0 ? 'clean' : score <= 15 ? 'low' : score <= 40 ? 'medium' : 'high';
 }
+function profile(l: Edition) { return langProfile(l as Lang); }
 function Dot({ color }: { color: string }) {
   return (
     <span
@@ -68,6 +71,10 @@ export default async function QualityTab() {
         of the local language, and which local drafts still read as <strong>AI</strong>. Read-only; use it to pick the pieces and languages that need a human pass.
         Scanning the {scanned.toLocaleString('en-GB')} most recent published stories.
       </p>
+      <p className="sub">
+        Scores are advisory: nothing here blocks or delays publishing. The German, Greek, Polish, Romanian, Russian and Arabic detector word lists
+        were written without a native editor and are marked <em>needs native review</em>; treat a high score as a prompt to read the piece, not a verdict.
+      </p>
 
       <div className="cards">
         <div className="stat"><div className="n">{scanned.toLocaleString('en-GB')}</div><div className="k">Articles scanned</div></div>
@@ -92,7 +99,11 @@ export default async function QualityTab() {
               <div className="k">{l.toUpperCase()} · {EDITION_NAMES[l]}</div>
               <div className="sub" style={{ margin: '6px 0 0' }}>
                 <span style={{ color: s.untranslated ? '#9a2020' : '#6b6552' }}>{s.untranslated} untranslated</span>
-                {' · '}{s.scored} scored{s.high ? ` · ${s.high} high` : ''}
+                {' · '}{s.scored} scored{s.high ? ` · ${s.high} high` : ''}{s.flagged ? ` · ${s.flagged} flagged` : ''}
+              </div>
+              <div className="sub" style={{ margin: '4px 0 0', fontSize: 12 }}>
+                {profile(l).lexicalDefs} language detectors + {profile(l).structural} structural checks
+                {profile(l).nativeReview ? <span style={{ color: '#8a6d1f' }}> · needs native review</span> : null}
               </div>
             </div>
           );
@@ -126,6 +137,11 @@ export default async function QualityTab() {
                   {f.untranslated
                     ? <>Untranslated <span className="sub" style={{ margin: 0 }}>(serving English)</span></>
                     : <>AI: {f.level} · {f.score}</>}
+                  {!f.untranslated && f.tells.length
+                    ? <div className="sub" style={{ margin: '3px 0 0', fontWeight: 400, whiteSpace: 'normal', maxWidth: 380 }}>
+                        {f.tells.map((t) => `${t.label}${t.count > 1 ? ` ×${t.count}` : ''}`).join(' · ')}
+                      </div>
+                    : null}
                 </td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   {f.untranslated

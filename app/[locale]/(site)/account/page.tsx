@@ -1,12 +1,20 @@
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { formatDateWith } from '@/lib/i18n/format';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { SESSION_COOKIE, resolveSession } from '@/lib/member/session';
 import { accountState, keyDate, GRACE_DAYS } from '@/lib/member/entitlement';
+import { bookingCopy } from '@/lib/booking/copy';
+import { bookingDeps } from '@/lib/booking/runtime';
+import { memberBookings, type MemberBookingView } from '@/lib/booking/account';
+import { logServerError } from '@/lib/monitor.server';
+import { LEGAL_UI } from '@/lib/legal';
+import { cardView, rememberLocale } from '@/lib/member/cardView';
+import MemberCardPanel from '@/components/account/MemberCardPanel';
 import { AccountActions, AccountConfirm, AccountSignIn, type AccountLabels } from '@/components/account/AccountClient';
 
 // Private and personal: never cached, never indexed.
@@ -21,7 +29,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 
 const fmt = (iso: string | null, l: Locale) => {
   if (!iso) return '';
-  try { return new Date(iso).toLocaleDateString(l === 'ar' ? 'ar' : l, { year: 'numeric', month: 'long', day: 'numeric' }); } catch { return ''; }
+  return formatDateWith(l, iso, { year: 'numeric', month: 'long', day: 'numeric' });
 };
 
 export default async function AccountPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ restore?: string }> }) {
@@ -65,6 +73,12 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
   }
 
   const m = session.member;
+  // The member's own concierge requests (reference, status, lane, shared partner answers). Best-effort: the account page works without it.
+  const bc = bookingCopy(locale);
+  let mine: MemberBookingView[] = [];
+  try { mine = await memberBookings(bookingDeps(supabaseAdmin()), { id: m.id, email: m.email || null }); } catch (e) { await logServerError('account-bookings', e).catch(() => undefined); }
+  const card = await cardView(supabaseAdmin(), m, locale);      // null for an ended membership (no card) or if the card tables are not there yet
+  await rememberLocale(supabaseAdmin(), m.id, m.locale, locale);
   const state = accountState(m);
   const date = fmt(keyDate(m), l);
   const features = t.raw('membership.concierge.features') as string[];
@@ -98,8 +112,28 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
             </>
           ) : null}
         </div>
+        {card ? <MemberCardPanel {...card} /> : null}
+        <section aria-labelledby="acct-requests" style={{ border: '1px solid #e6e0d2', borderRadius: 6, padding: '20px 22px', background: '#fff', marginBottom: 20 }}>
+          <div className="kicker" id="acct-requests">{bc.acctTitle}</div>
+          <p style={{ margin: '6px 0 10px', fontSize: 14, color: '#6b6555' }}>{bc.acctIntro}</p>
+          {mine.length === 0 ? <p style={{ margin: 0, fontSize: 15 }}>{bc.acctNone}</p> : (
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {mine.map((b) => (
+                <li key={b.ref} style={{ padding: '12px 0', borderTop: '1px solid #f0ece0' }}>
+                  <div style={{ fontSize: 15 }}><b>{b.ref}</b> · {(bc as unknown as Record<string, string>)[`st_${b.status}`] || b.status}</div>
+                  <div style={{ fontSize: 13.5, color: '#4a463d', margin: '2px 0' }}>{b.query}</div>
+                  <div style={{ fontSize: 13, color: '#6b6555' }}>
+                    {b.lane === 'member' ? bc.queueMember : bc.queueStandard} · {bc.acctSent} {fmt(b.createdAt, l)}
+                    {b.sharedAnswers > 0 ? <> · {bc.acctShared.replace('{n}', String(b.sharedAnswers))}</> : null}
+                  </div>
+                  <a href={b.statusUrl} style={{ fontSize: 14, color: '#8a7a4a' }} rel="nofollow">{bc.acctOpen}</a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
         <AccountActions labels={labels} locale={locale} hasBilling={!!m.stripe_customer_id} ended={state === 'ended'} />
-        <p style={{ marginTop: 22, fontSize: 13.5 }}><Link href="/privacy" style={{ color: '#8a7a4a' }}>{t('account.privacy')}</Link></p>
+        <p style={{ marginTop: 22, fontSize: 13.5 }}><Link href="/privacy" style={{ color: '#8a7a4a' }}>{t('account.privacy')}</Link> · <Link href="/terms" style={{ color: '#8a7a4a' }}>{(LEGAL_UI[locale as Locale] || LEGAL_UI.en).terms}</Link></p>
       </div>
     </div>
   );

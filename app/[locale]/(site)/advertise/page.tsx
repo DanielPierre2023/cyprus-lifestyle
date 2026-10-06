@@ -5,6 +5,8 @@ import { isLocale, type Locale } from '@/lib/locales';
 import { pageMetadata, faqJsonLd, ld } from '@/lib/seo';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import AdvertiseFunnel, { type RateItem } from '@/components/AdvertiseFunnel';
+import { Link } from '@/lib/i18n/routing';
+import { LEGAL_UI } from '@/lib/legal';
 
 export const revalidate = 300;
 
@@ -75,6 +77,10 @@ export default async function AdvertisePage({
       </div>
 
       <AdvertiseFunnel items={items} locale={l} status={status} />
+
+      <p style={{ textAlign: 'center', fontSize: 13.5, marginTop: 22 }}>
+        <Link href="/terms">{(LEGAL_UI[l] || LEGAL_UI.en).terms}</Link> · <Link href="/privacy">{t('footer.privacy')}</Link>
+      </p>
 
       {l === 'en' ? (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(faqJsonLd(ADVERTISE_FAQ)) }} />
