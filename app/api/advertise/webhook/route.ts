@@ -20,7 +20,7 @@
 //     so a late/duplicate event can never resurrect a 'canceled' row.
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { verifyWebhook } from '@/lib/stripe';
+import { verifyWebhook, portalLoginUrl } from '@/lib/stripe';
 import { onboardingEmail, type OrderLike } from '@/lib/fulfilment';
 import { sendEmail } from '@/lib/email';
 import { paymentFailedMail } from '@/lib/advertise/paymentFailedMail';
@@ -211,7 +211,7 @@ async function processEvent(sb: SupabaseClient, event: Record<string, unknown>, 
         if (err) return await retryLater(event, 'payment-failed write', err.message);
         for (const o of (toNotify.data || []) as { customer_email: string | null; locale: string | null }[]) {
           if (!o.customer_email) continue;
-          const mail = paymentFailedMail(o.locale);
+          const mail = paymentFailedMail(o.locale, portalLoginUrl());
           await sendEmail({ to: o.customer_email, subject: mail.subject, html: mail.html }).catch(() => {});
         }
       }

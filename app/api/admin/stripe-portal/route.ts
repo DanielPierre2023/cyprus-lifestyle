@@ -5,7 +5,7 @@
 //   Open while signed in to /admin:
 //     /api/admin/stripe-portal            → shows whether the configuration exists (changes nothing)
 //     /api/admin/stripe-portal?create=1   → creates it if missing (re-opening never creates a second one)
-//   Then set STRIPE_PORTAL_CONFIGURATION_ID in Vercel to the returned id and redeploy.
+//   Then set STRIPE_PORTAL_CONFIGURATION_ID (the id) and STRIPE_PORTAL_LOGIN_URL (loginUrl) in Vercel and redeploy.
 //
 // Admin session only, and only requests typed into / opened from the browser's own address bar or this site
 // (Sec-Fetch-Site none|same-origin) may create: a link on another website cannot trigger it.
@@ -31,8 +31,10 @@ export async function GET(req: NextRequest) {
     const r = await findOrCreatePortalConfiguration(site, create);
     if (!r.id) return NextResponse.json({ ok: true, exists: false, next: `${site}/api/admin/stripe-portal?create=1` });
     return NextResponse.json({
-      ok: true, exists: true, created: r.created, id: r.id,
-      next: 'Set STRIPE_PORTAL_CONFIGURATION_ID to this id in Vercel (Settings → Environment Variables), then redeploy.',
+      ok: true, exists: true, created: r.created, id: r.id, loginUrl: r.loginUrl,
+      next: r.loginUrl
+        ? 'In Vercel (Settings → Environment Variables) set STRIPE_PORTAL_CONFIGURATION_ID to the id and STRIPE_PORTAL_LOGIN_URL to loginUrl, then redeploy.'
+        : 'Open this address once with ?create=1: it switches on the Stripe login page and shows loginUrl. Then set STRIPE_PORTAL_CONFIGURATION_ID and STRIPE_PORTAL_LOGIN_URL in Vercel and redeploy.',
     });
   } catch (e) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });

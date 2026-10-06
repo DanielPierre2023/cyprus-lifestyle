@@ -174,29 +174,44 @@ export function buildPortalConfigBody(siteUrl: string): Record<string, string> {
     'features[customer_update][allowed_updates][2]': 'name',
     'features[subscription_cancel][enabled]': 'true',
     'features[subscription_cancel][mode]': 'at_period_end',
+    'login_page[enabled]': 'true', // Stripe-hosted page where a customer types their e-mail and gets a sign-in link (used by the payment-failed e-mail)
     'metadata[site]': 'cyprus-lifestyle',
   };
 }
 
+/** Only a Stripe-hosted portal login address is ever put into an e-mail. */
+export function portalLoginUrl(env: Record<string, string | undefined> = process.env): string | undefined {
+  const v = (env.STRIPE_PORTAL_LOGIN_URL || '').trim();
+  return /^https:\/\/billing\.stripe\.com\/[A-Za-z0-9_\-/]+$/.test(v) ? v : undefined;
+}
+
 /**
- * Admin helper: find the portal configuration tagged for this site, or (create=true) create it once.
- * Reuses an existing one, so calling it twice never creates a duplicate.
+ * Admin helper: find the portal configuration tagged for this site, or (create=true) create it once, and (create=true) make
+ * sure its Stripe-hosted login page is enabled. Reuses an existing one, so calling it twice never creates a duplicate.
  */
-export async function findOrCreatePortalConfiguration(siteUrl: string, create: boolean): Promise<{ id: string | null; created: boolean }> {
+export async function findOrCreatePortalConfiguration(siteUrl: string, create: boolean): Promise<{ id: string | null; created: boolean; loginUrl: string | null }> {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error('Stripe is not configured');
   const headers = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/x-www-form-urlencoded' };
+  type Cfg = { id: string; is_active?: boolean; metadata?: Record<string, string>; login_page?: { enabled?: boolean; url?: string | null } };
   const list = await fetch(`${API}/billing_portal/configurations?limit=100`, { headers, signal: AbortSignal.timeout(20000) });
   const lj = await list.json().catch(() => ({}));
   if (!list.ok) throw new Error(lj?.error?.message || `Stripe error ${list.status}`);
-  const hit = ((lj.data || []) as { id: string; is_active?: boolean; metadata?: Record<string, string> }[])
-    .find((c) => c.is_active !== false && c.metadata?.site === 'cyprus-lifestyle');
-  if (hit) return { id: hit.id, created: false };
-  if (!create) return { id: null, created: false };
-  const res = await fetch(`${API}/billing_portal/configurations`, { method: 'POST', headers, body: form(buildPortalConfigBody(siteUrl)), signal: AbortSignal.timeout(20000) });
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(j?.error?.message || `Stripe error ${res.status}`);
-  return { id: j.id as string, created: true };
+  let hit = ((lj.data || []) as Cfg[]).find((c) => c.is_active !== false && c.metadata?.site === 'cyprus-lifestyle');
+  let created = false;
+  if (!hit) {
+    if (!create) return { id: null, created: false, loginUrl: null };
+    const res = await fetch(`${API}/billing_portal/configurations`, { method: 'POST', headers, body: form(buildPortalConfigBody(siteUrl)), signal: AbortSignal.timeout(20000) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j?.error?.message || `Stripe error ${res.status}`);
+    hit = j as Cfg; created = true;
+  } else if (create && !hit.login_page?.enabled) {
+    const res = await fetch(`${API}/billing_portal/configurations/${hit.id}`, { method: 'POST', headers, body: form({ 'login_page[enabled]': 'true' }), signal: AbortSignal.timeout(20000) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j?.error?.message || `Stripe error ${res.status}`);
+    hit = j as Cfg;
+  }
+  return { id: hit.id, created, loginUrl: hit.login_page?.enabled ? hit.login_page.url ?? null : null };
 }
 
 export async function createPortalSession(p: { customerId: string; returnUrl: string; locale?: string }): Promise<{ url: string }> {

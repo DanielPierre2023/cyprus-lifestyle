@@ -24,5 +24,15 @@ The site creates it for you with the Stripe key it already has on the server.
    Cyprus Lifestyle Terms and Privacy links.
 Unset or invalid = the account's default portal, as before.
 
+## C. Advertisers: self-service card update (login page)
+Advertisers have no account on this site, so the "payment failed" e-mail (lib/advertise/paymentFailedMail.ts) sends them to Stripe's
+own hosted login page: they type the e-mail address of their order, Stripe mails them a sign-in link, and they update the card
+in the portal of section B.
+1. Signed in to `/admin`, open `https://cypruslifestyle.eu/api/admin/stripe-portal?create=1` again. It switches on the login
+   page of the existing configuration and shows `"loginUrl":"https://billing.stripe.com/p/login/..."`.
+2. Vercel -> Environment Variables: `STRIPE_PORTAL_LOGIN_URL` = that address (Production). Redeploy.
+Unset = the e-mail asks the advertiser to reply instead (no button). Only addresses on `https://billing.stripe.com/` are ever used.
+Members are not affected: they get their own e-mails from the daily job and sign in on the site.
+
 ## Also (Dashboard, Settings -> Business -> Customer emails)
-Switch off the failed-payment e-mails to customers (our site sends its own member e-mails).
+Keep Stripe's own failed-payment customer e-mails OFF (members get ours from the daily job, advertisers get the e-mail above), so nobody receives two.

@@ -2,12 +2,13 @@
 // subscription fails (sent from the Stripe webhook, once per failure episode: the order only moves active -> failed once).
 // Members are NOT mailed from here: they already get the grace/ended notices of lib/member/lifecycle.ts, so Stripe's own
 // failed-payment e-mails stay OFF (docs/MEMBER-CARD.md) and nobody receives two messages.
-// An advertiser has no sign-in, so there is no self-service link; the message asks them to reply and says a secure Stripe
-// link will follow. Only claims what the code does. Seven editions; non-English text needs native review.
+// An advertiser has no sign-in of ours. With STRIPE_PORTAL_LOGIN_URL set, the e-mail carries a button to Stripe's own hosted
+// login page (type the order e-mail, get a sign-in link, update the card); without it the message asks them to reply and
+// says a secure link will follow. Only claims what the code does. Seven editions; non-English text needs native review.
 import { brandedEmail } from '@/lib/email';
 import { isLocale, type Locale } from '@/lib/locales';
 
-export interface PaymentFailedCopy { subject: string; heading: string; body: string; how: string; foot: string }
+export interface PaymentFailedCopy { subject: string; heading: string; body: string; how: string; howLink: string; cta: string; foot: string }
 
 export const PAYMENT_FAILED_COPY: Record<Locale, PaymentFailedCopy> = {
   en: {
@@ -15,6 +16,8 @@ export const PAYMENT_FAILED_COPY: Record<Locale, PaymentFailedCopy> = {
     heading: 'We could not collect your advertising payment',
     body: 'The latest card payment for your Cyprus Lifestyle advertising subscription did not go through. Stripe, our payment provider, will try the card again.',
     how: 'To update your card, simply reply to this e-mail and we will send you a secure link to do it. No card details are ever sent by e-mail.',
+    howLink: 'To update your card, use the button below: enter the e-mail address of your order and Stripe sends you a secure sign-in link. No card details are ever sent by e-mail.',
+    cta: 'Update my card',
     foot: 'If you have already fixed this, you can ignore this message. You are receiving it once for this payment problem.',
   },
   de: {
@@ -22,6 +25,8 @@ export const PAYMENT_FAILED_COPY: Record<Locale, PaymentFailedCopy> = {
     heading: 'Wir konnten Ihre Werbezahlung nicht einziehen',
     body: 'Die letzte Kartenzahlung für Ihr Werbeabonnement bei Cyprus Lifestyle ist nicht durchgegangen. Stripe, unser Zahlungsdienstleister, versucht es mit der Karte erneut.',
     how: 'Um Ihre Karte zu aktualisieren, antworten Sie einfach auf diese E-Mail, dann senden wir Ihnen einen sicheren Link dafür. Kartendaten werden niemals per E-Mail verschickt.',
+    howLink: 'Um Ihre Karte zu aktualisieren, nutzen Sie die Schaltfläche unten: Geben Sie die E-Mail-Adresse Ihrer Bestellung ein, und Stripe sendet Ihnen einen sicheren Anmeldelink. Kartendaten werden niemals per E-Mail verschickt.',
+    cta: 'Karte aktualisieren',
     foot: 'Wenn Sie das bereits erledigt haben, können Sie diese Nachricht ignorieren. Sie erhalten sie einmalig zu diesem Zahlungsproblem.',
   },
   el: {
@@ -29,6 +34,8 @@ export const PAYMENT_FAILED_COPY: Record<Locale, PaymentFailedCopy> = {
     heading: 'Δεν καταφέραμε να εισπράξουμε την πληρωμή της διαφήμισής σας',
     body: 'Η τελευταία πληρωμή με κάρτα για τη διαφημιστική σας συνδρομή στο Cyprus Lifestyle δεν ολοκληρώθηκε. Η Stripe, ο πάροχος πληρωμών μας, θα επαναλάβει την προσπάθεια με την κάρτα.',
     how: 'Για να ενημερώσετε την κάρτα σας, απαντήστε απλώς σε αυτό το e-mail και θα σας στείλουμε έναν ασφαλή σύνδεσμο. Στοιχεία κάρτας δεν αποστέλλονται ποτέ με e-mail.',
+    howLink: 'Για να ενημερώσετε την κάρτα σας, χρησιμοποιήστε το κουμπί παρακάτω: εισαγάγετε τη διεύθυνση e-mail της παραγγελίας σας και η Stripe θα σας στείλει έναν ασφαλή σύνδεσμο σύνδεσης. Στοιχεία κάρτας δεν αποστέλλονται ποτέ με e-mail.',
+    cta: 'Ενημέρωση κάρτας',
     foot: 'Αν το έχετε ήδη διορθώσει, αγνοήστε αυτό το μήνυμα. Το λαμβάνετε μία φορά για αυτό το πρόβλημα πληρωμής.',
   },
   ro: {
@@ -36,6 +43,8 @@ export const PAYMENT_FAILED_COPY: Record<Locale, PaymentFailedCopy> = {
     heading: 'Nu am putut încasa plata pentru publicitate',
     body: 'Ultima plată cu cardul pentru abonamentul dumneavoastră publicitar Cyprus Lifestyle nu a fost procesată. Stripe, furnizorul nostru de plăți, va încerca din nou cardul.',
     how: 'Pentru a actualiza cardul, răspundeți pur și simplu la acest e-mail și vă vom trimite un link securizat. Datele cardului nu sunt trimise niciodată prin e-mail.',
+    howLink: 'Pentru a actualiza cardul, folosiți butonul de mai jos: introduceți adresa de e-mail a comenzii și Stripe vă trimite un link securizat de autentificare. Datele cardului nu sunt trimise niciodată prin e-mail.',
+    cta: 'Actualizez cardul',
     foot: 'Dacă ați rezolvat deja, ignorați acest mesaj. Îl primiți o singură dată pentru această problemă de plată.',
   },
   ar: {
@@ -43,6 +52,8 @@ export const PAYMENT_FAILED_COPY: Record<Locale, PaymentFailedCopy> = {
     heading: 'تعذّر علينا تحصيل دفعة إعلانكم',
     body: 'لم تتم آخر دفعة بالبطاقة لاشتراككم الإعلاني في Cyprus Lifestyle. ستعيد Stripe، مزوّد الدفع لدينا، محاولة الدفع بالبطاقة.',
     how: 'لتحديث بطاقتكم، يكفي أن تردّوا على هذه الرسالة وسنرسل لكم رابطًا آمنًا لذلك. لا تُرسَل بيانات البطاقة عبر البريد الإلكتروني أبدًا.',
+    howLink: 'لتحديث بطاقتكم، استخدموا الزر أدناه: أدخلوا عنوان البريد الإلكتروني الخاص بطلبكم وسترسل لكم Stripe رابط دخول آمنًا. لا تُرسَل بيانات البطاقة عبر البريد الإلكتروني أبدًا.',
+    cta: 'تحديث البطاقة',
     foot: 'إذا كنتم قد عالجتم الأمر بالفعل، فيمكنكم تجاهل هذه الرسالة. تصلكم مرة واحدة فقط عن مشكلة الدفع هذه.',
   },
   pl: {
@@ -50,6 +61,8 @@ export const PAYMENT_FAILED_COPY: Record<Locale, PaymentFailedCopy> = {
     heading: 'Nie udało się pobrać płatności za reklamę',
     body: 'Ostatnia płatność kartą za subskrypcję reklamową w Cyprus Lifestyle nie powiodła się. Stripe, nasz operator płatności, ponowi próbę obciążenia karty.',
     how: 'Aby zaktualizować kartę, wystarczy odpowiedzieć na tę wiadomość, a wyślemy Ci bezpieczny link. Dane karty nigdy nie są wysyłane e-mailem.',
+    howLink: 'Aby zaktualizować kartę, skorzystaj z przycisku poniżej: podaj adres e-mail z zamówienia, a Stripe wyśle Ci bezpieczny link do logowania. Dane karty nigdy nie są wysyłane e-mailem.',
+    cta: 'Zaktualizuj kartę',
     foot: 'Jeśli już to naprawiłeś, zignoruj tę wiadomość. Otrzymujesz ją jednorazowo w związku z tym problemem z płatnością.',
   },
   ru: {
@@ -57,6 +70,8 @@ export const PAYMENT_FAILED_COPY: Record<Locale, PaymentFailedCopy> = {
     heading: 'Нам не удалось списать оплату за рекламу',
     body: 'Последний платёж картой за вашу рекламную подписку в Cyprus Lifestyle не прошёл. Stripe, наш платёжный провайдер, повторит попытку списания.',
     how: 'Чтобы обновить карту, просто ответьте на это письмо, и мы пришлём вам безопасную ссылку. Данные карты никогда не отправляются по электронной почте.',
+    howLink: 'Чтобы обновить карту, воспользуйтесь кнопкой ниже: введите адрес электронной почты из заказа, и Stripe пришлёт вам безопасную ссылку для входа. Данные карты никогда не отправляются по электронной почте.',
+    cta: 'Обновить карту',
     foot: 'Если вы уже всё исправили, просто проигнорируйте это письмо. Вы получаете его один раз по этой платёжной проблеме.',
   },
 };
@@ -64,13 +79,15 @@ export const PAYMENT_FAILED_COPY: Record<Locale, PaymentFailedCopy> = {
 const esc = (s: string) => s.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] as string));
 const loc = (l: string | null | undefined): Locale => (l && isLocale(l) ? (l as Locale) : 'en');
 
-export function paymentFailedMail(locale: string | null | undefined): { subject: string; html: string } {
+/** `loginUrl`: Stripe's hosted portal login page (STRIPE_PORTAL_LOGIN_URL). Without it the e-mail asks the advertiser to reply instead. */
+export function paymentFailedMail(locale: string | null | undefined, loginUrl?: string): { subject: string; html: string } {
   const l = loc(locale), c = PAYMENT_FAILED_COPY[l];
   return {
     subject: c.subject,
     html: brandedEmail({
       locale: l, heading: esc(c.heading),
-      bodyHtml: `<p>${esc(c.body)}</p><p>${esc(c.how)}</p><p style="opacity:.75;font-size:14px">${esc(c.foot)}</p>`,
+      bodyHtml: `<p>${esc(c.body)}</p><p>${esc(loginUrl ? c.howLink : c.how)}</p><p style="opacity:.75;font-size:14px">${esc(c.foot)}</p>`,
+      ...(loginUrl ? { ctaLabel: c.cta, ctaUrl: loginUrl } : {}),
       preheader: c.heading,
     }),
   };
