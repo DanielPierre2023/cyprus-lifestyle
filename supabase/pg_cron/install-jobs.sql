@@ -13,6 +13,9 @@
 -- Extensions needed (Database → Extensions): pg_cron, pg_net, supabase_vault.
 --
 -- Jobs:
+--   cl-booking-sla     every 15 min  concierge booking: first-reply breach alerts and partner reminders
+--   cl-embed-sources   daily 02:15   indexes new articles, events and activities for the concierge (a no-op without OPENAI_API_KEY)
+--   cl-events-ingest   every 3 h     refreshes the Agenda from the event sources (only enqueues; needs no secret)
 --   cl-worker          every 3 min   background queue + sends approved newsletter editions + Facebook/Instagram posts + health checks
 --   cl-process         every 15 min  AI desk: rewrites queued articles (does nothing unless "AI processor" is switched on in Admin → AI)
 --   cyprus-scrape-rss  every 3 h     RSS scraper edge function (does nothing unless "RSS scraper" is switched on)
@@ -87,6 +90,12 @@ select ops.schedule_job('cl-worker',         '*/3 * * * *', $c$select ops.cron_p
 select ops.schedule_job('cl-process',        '*/15 * * * *', $c$select ops.cron_post('site', '/api/cron/process')$c$, array['cl_site_url', 'cl_cron_secret']);
 select ops.schedule_job('cyprus-scrape-rss', '0 */3 * * *', $c$select ops.cron_post('edge', '/functions/v1/scrape-rss', '{"source":"cron"}'::jsonb)$c$, array['cl_service_role']);
 select ops.schedule_job('enrich-slow-all',   '0 3 * * *',   $c$select ops.cron_post('enrich', '/functions/v1/enrich-directory?entity=directory&status=all&limit=30&reviews=1')$c$, array['cl_enrich_secret']);
+
+select ops.schedule_job('cl-booking-sla',   '*/15 * * * *', $c$select ops.cron_post('site', '/api/cron/booking-sla')$c$, array['cl_site_url', 'cl_cron_secret']);
+select ops.schedule_job('cl-embed-sources', '15 2 * * *',   $c$select ops.cron_post('site', '/api/concierge/embed-sources?batch=1')$c$, array['cl_site_url', 'cl_cron_secret']);
+select ops.schedule_job('cl-events-ingest', '17 */3 * * *',
+  $c$select public.job_enqueue('events_ingest', '{"trigger":"cron"}'::jsonb, now(), 1, 3, 'events:' || to_char(now() at time zone 'utc', 'YYYY-MM-DD-HH24'))$c$,
+  array[]::text[]);
 
 -- Result:  select jobname, schedule, active from cron.job order by jobname;
 --          select * from public.ops_cron_health();      -- last run of each job (migration 20261005170000)

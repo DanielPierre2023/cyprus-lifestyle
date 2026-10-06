@@ -9,7 +9,8 @@ import { breadcrumbJsonLd, itemListJsonLd, ld, pageMetadata } from '@/lib/seo';
 import DirectoryMap from '@/components/DirectoryMap';
 import CoverImage from '@/components/CoverImage';
 
-export const revalidate = 300;
+// ISR 1 h: DB webhooks call /api/revalidate/tags on every edit (PERFORMANCE-SETUP.md 2b); this is only the safety net. Keep equal to TTL in lib/queries.cached.ts.
+export const revalidate = 3600;
 
 export function generateStaticParams() {
   return DIRECTORY_TYPES.map((type) => ({ type }));

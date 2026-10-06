@@ -10,13 +10,15 @@ import { rateLimit } from '@/lib/ratelimit';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { confirmLogin } from '@/lib/concierge/membership';
 import { SESSION_COOKIE, cookieOptions, createSession, sameOrigin } from '@/lib/member/session';
+import { localeOf } from '@/lib/i18n/resolveLocale';
+import { keyedErrorBody } from '@/lib/i18n/apiErrors';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
-  if (!sameOrigin(req)) return NextResponse.json({ ok: false, error: 'invalid' }, { status: 403 });
+  if (!sameOrigin(req)) return NextResponse.json(keyedErrorBody('forbidden', 'invalid', localeOf(req)), { status: 403 });
   if (!(await rateLimit(req, 'membership-restore-confirm', 10, 600))) {
-    return NextResponse.json({ ok: false, error: 'busy' }, { status: 429 });
+    return NextResponse.json(keyedErrorBody('rate_limited', 'busy', localeOf(req)), { status: 429 });
   }
   const body = await req.json().catch(() => ({}));
   const sb = supabaseAdmin();
@@ -24,11 +26,11 @@ export async function POST(req: NextRequest) {
   if (r.outcome === 'error') console.error('[membership/restore] confirm failed (are migrations 20261004130100 and 20261005160000 applied?)');
   if (r.outcome === 'signed_in') {
     const session = await createSession(sb, r.memberId, req.headers.get('user-agent'));
-    if (!session) return NextResponse.json({ ok: false, error: 'unavailable' }, { status: 503 });
+    if (!session) return NextResponse.json(keyedErrorBody('unavailable', 'unavailable', localeOf(req)), { status: 503 });
     (await cookies()).set(SESSION_COOKIE, session, cookieOptions());
     return NextResponse.json({ ok: true, member: r.entitled, signedIn: true });
   }
   // Generic and non-leaking: callers only learn "expired/used" vs "invalid" vs "try later".
-  if (r.outcome === 'error') return NextResponse.json({ ok: false, error: 'unavailable' }, { status: 503 });
-  return NextResponse.json({ ok: false, error: r.outcome === 'expired' ? 'expired' : 'invalid' }, { status: 400 });
+  if (r.outcome === 'error') return NextResponse.json(keyedErrorBody('unavailable', 'unavailable', localeOf(req)), { status: 503 });
+  return NextResponse.json(r.outcome === 'expired' ? keyedErrorBody('link_expired', 'expired', localeOf(req)) : keyedErrorBody('link_invalid', 'invalid', localeOf(req)), { status: 400 });
 }

@@ -10,8 +10,8 @@ import CoverImage from '@/components/CoverImage';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import SponsorBanner from '@/components/SponsorBanner';
 
-// ISR: served static and fast, refreshed every 5 minutes (and on-demand via /api/revalidate).
-export const revalidate = 300;
+// ISR 1 h: DB webhooks call /api/revalidate/tags on every edit (PERFORMANCE-SETUP.md 2b); this is only the safety net. Keep equal to TTL in lib/queries.cached.ts.
+export const revalidate = 3600;
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;

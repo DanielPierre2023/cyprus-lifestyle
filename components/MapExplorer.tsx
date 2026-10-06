@@ -32,6 +32,7 @@ import {
 } from '@/lib/map/maplibre';
 import { decodeIndex, rankScore, F, DISTRICT_CENTRE, SOCIAL_ORDER, type ExplorerIndex, type ExplorerPoint, type ExplorerDetail } from '@/lib/map/explorer-index';
 import { openState } from '@/lib/map/hours';
+import { formatDateWith, formatNumber } from '@/lib/i18n/format';
 import { EVENT_CAT, EVENT_GROUP, isActivityCat, type ExplorerCategory, type ExplorerGroup } from '@/lib/map/explorer-taxonomy';
 import type { ExplorerUi } from '@/lib/map/explorer-i18n';
 
@@ -105,7 +106,7 @@ const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
 const fmtRating = (r: number) => (r >= 4.95 ? '5' : (Math.round(r * 10) / 10).toFixed(1));
 function fmtDate(iso: string | null | undefined, locale: string): string {
   if (!iso) return '';
-  try { return new Date(iso).toLocaleDateString(locale, { day: 'numeric', month: 'short' }); } catch { return ''; }
+  return formatDateWith(locale, iso, { day: 'numeric', month: 'short' });
 }
 function readSaved(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem(SAVED_KEY) || '[]') as string[]); } catch { return new Set(); }
@@ -127,7 +128,7 @@ function Stars({ value, count, locale, size = 14 }: { value: number; count: numb
     <span className="clm-stars" aria-label={`${fmtRating(value)} / 5${count ? ` (${count})` : ''}`}>
       <span className="clm-stars__row">{row('clm-stars__bg')}<span className="clm-stars__fg" style={{ width: `${pct}%` }}>{row('clm-stars__on')}</span></span>
       <b>{fmtRating(value)}</b>
-      {count ? <span className="clm-stars__n">({count.toLocaleString(locale)})</span> : null}
+      {count ? <span className="clm-stars__n">({formatNumber(locale, count)})</span> : null}
     </span>
   );
 }
@@ -445,7 +446,7 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
         next.set(`r|${d}|${list.length}`, {
           lngLat: [lng, lat],
           build: () => {
-            const el = button('clm-region', `<b>${esc(titleCase(d))}</b><span>${list.length.toLocaleString(locale)} ${esc(U.results)}</span>`);
+            const el = button('clm-region', `<b>${esc(titleCase(d))}</b><span>${formatNumber(locale, list.length)} ${esc(U.results)}</span>`);
             el.addEventListener('click', (e) => { e.stopPropagation(); flyToPoints(list); });
             return el;
           },
@@ -871,7 +872,7 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
   const nActive = activeCount(filters) - (activeTab === 'custom' ? 0 : filters.cats.length);
   const tab = (k: string, label: string, icon: string | null, n: number | null) => (
     <button key={k} type="button" className={`clm-chip${activeTab === k ? ' is-on' : ''}`} aria-pressed={activeTab === k} onClick={() => selectTab(k)}>
-      {icon ? <CatIcon icon={icon} size={15} /> : null}{label}{n != null ? <span className="clm-chip__n">{n.toLocaleString(locale)}</span> : null}
+      {icon ? <CatIcon icon={icon} size={15} /> : null}{label}{n != null ? <span className="clm-chip__n">{formatNumber(locale, n)}</span> : null}
     </button>
   );
 
@@ -884,7 +885,8 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
   const timeOf = (iso: string) => {
     const t = new Date(iso);
     if (t.getHours() === 0 && t.getMinutes() === 0) return '';
-    try { return `, ${t.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`; } catch { return ''; }
+    const hm = formatDateWith(locale, t, { hour: '2-digit', minute: '2-digit' });
+    return hm ? `, ${hm}` : '';
   };
   /** "12 Oct, 19:00" · "12 Oct – 3 Nov" · "On now · until 30 Nov". */
   const eventWhen = (p: ExplorerPoint) => {
@@ -910,7 +912,7 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
     isAct(p) ? null : p.rating ? { v: p.rating, n: p.ratingCount } : d?.own?.count ? { v: d.own.avg, n: d.own.count } : null;
 
   const priceOf = (p: ExplorerPoint, d: ExplorerDetail | null) =>
-    p.priceFrom ? `${U.from} €${p.priceFrom.toLocaleString(locale)}` : (d?.eventPrice || p.price || null);
+    p.priceFrom ? `${U.from} €${formatNumber(locale, p.priceFrom)}` : (d?.eventPrice || p.price || null);
   const priceNode = (p: ExplorerPoint, d: ExplorerDetail | null) => {
     const price = priceOf(p, d);
     if (!price) return null;
@@ -929,7 +931,7 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
     return (
       <div className={`clm-date${isOngoing(p) ? ' is-now' : ''}${big ? ' clm-date--big' : ''}`}>
         <b>{t.getDate()}</b>
-        <span>{isOngoing(p) ? `${U.until.replace('{d}', '').trim()} ` : ''}{(() => { try { return t.toLocaleDateString(locale, { month: 'short' }); } catch { return ''; } })()}</span>
+        <span>{isOngoing(p) ? `${U.until.replace('{d}', '').trim()} ` : ''}{formatDateWith(locale, t, { month: 'short' })}</span>
       </div>
     );
   };
@@ -1117,7 +1119,7 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
         <input type="checkbox" checked={on} disabled={disabled && !on} onChange={() => setDraft((d) => (d ? { ...d, [key]: toggleIn(d[key], v) } : d))} />
         <span className="clm-check__box"><Icon d={P.check} size={14} sw={3} /></span>
         <span className="clm-check__label">{label}</span>
-        {n != null ? <span className="clm-check__n">{n.toLocaleString(locale)}</span> : null}
+        {n != null ? <span className="clm-check__n">{formatNumber(locale, n)}</span> : null}
       </label>
     );
   };
@@ -1169,7 +1171,7 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
               <span className="clm-check__box"><Icon d={nOn > 0 && !allOn ? P.minus : P.check} size={14} sw={3} /></span>
               <span className="clm-grp__ic" style={{ color: g.color }}><CatIcon icon={g.icon} size={16} /></span>
               <span className="clm-check__label">{g.label}</span>
-              <span className="clm-check__n">{total.toLocaleString(locale)}</span>
+              <span className="clm-check__n">{formatNumber(locale, total)}</span>
             </label>
             <button type="button" className="clm-grp__tog" aria-expanded={open} aria-label={g.label} onClick={() => setOpenGroups((s) => ({ ...s, [g.k]: !open }))}>
               <Icon d={P.chevD} size={16} sw={2.2} />
@@ -1230,7 +1232,7 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
                           {s.kind === 'addr' ? <>{U.searchAddress}: <b>{s.label}</b></> : <b>{s.label}</b>}
                           {s.kind === 'biz' && s.sub ? <small>{s.sub}</small> : null}
                         </span>
-                        {s.kind === 'cat' || s.kind === 'district' ? <span className="clm-sug__n">{s.count.toLocaleString(locale)}</span> : null}
+                        {s.kind === 'cat' || s.kind === 'district' ? <span className="clm-sug__n">{formatNumber(locale, s.count)}</span> : null}
                       </button>
                     );
                   })}
@@ -1263,7 +1265,7 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
         </div>
 
         <div className="clm-count">
-          <span>{points ? `${inView.length.toLocaleString(locale)} ${U.inView} · ${shown.length.toLocaleString(locale)} ${U.total}` : loadFailed ? U.noMatches : U.loading}</span>
+          <span>{points ? `${formatNumber(locale, inView.length)} ${U.inView} · ${formatNumber(locale, shown.length)} ${U.total}` : loadFailed ? U.noMatches : U.loading}</span>
           {activeCount(filters) ? <button type="button" className="clm-linkbtn" onClick={() => setFilters(EMPTY)}>{U.resetAll}</button> : null}
         </div>
 
@@ -1271,7 +1273,7 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
           {!points && !loadFailed ? Array.from({ length: 4 }, (_, i) => <div key={i} className="clm-card clm-card--ghost"><div className="clm-card__media" /><div className="clm-card__body"><span className="clm-skel" /><span className="clm-skel clm-skel--s" /></div></div>) : null}
           {visible.map((p) => renderCard(p))}
           {inView.length > limit
-            ? <button type="button" className="clm-more" onClick={() => setLimit((n) => n + PAGE)}>{U.showMore} ({(inView.length - limit).toLocaleString(locale)})</button>
+            ? <button type="button" className="clm-more" onClick={() => setLimit((n) => n + PAGE)}>{U.showMore} ({formatNumber(locale, (inView.length - limit))})</button>
             : null}
           {points && inView.length === 0 ? <p className="clm-empty">{U.noMatches}</p> : null}
         </div>
@@ -1344,7 +1346,7 @@ export default function MapExplorer({ locale, categories, groups, ui, mode = 'pa
             <footer className="clm-dialog__foot">
               <button type="button" className="clm-linkbtn clm-linkbtn--strong" onClick={() => setDraft({ ...EMPTY })}>{U.resetAll}</button>
               <button type="button" className="clm-primary" onClick={applyFilters} disabled={draftCount === 0}>
-                {U.showResults.replace('{n}', draftCount.toLocaleString(locale))}
+                {U.showResults.replace('{n}', formatNumber(locale, draftCount))}
               </button>
             </footer>
           </div>

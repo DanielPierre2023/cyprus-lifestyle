@@ -9,6 +9,8 @@ import { rateLimit } from '@/lib/ratelimit';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { brandedEmail, sendEmail } from '@/lib/email';
 import { isLocale, type Locale } from '@/lib/locales';
+import { localeOf } from '@/lib/i18n/resolveLocale';
+import { keyedErrorBody } from '@/lib/i18n/apiErrors';
 import { memberStatus, issueLoginToken } from '@/lib/concierge/membership';
 import { isPlausibleEmail, normalizeEmail } from '@/lib/concierge/restoreToken';
 import { loginEmailCopy } from '@/lib/member/loginEmail';
@@ -31,12 +33,12 @@ export async function POST(req: NextRequest) {
   // Per-IP limits (the per-address cap lives in issueRestoreToken). Throttled callers get
   // the same generic answer's shape but 429, which reveals nothing about any address.
   if (!(await rateLimit(req, 'membership-restore', 5, 600)) || !(await rateLimit(req, 'membership-restore-min', 3, 60))) {
-    return NextResponse.json({ ok: false, error: 'busy' }, { status: 429 });
+    return NextResponse.json(keyedErrorBody('rate_limited', 'busy', localeOf(req)), { status: 429 });
   }
   const body = await req.json().catch(() => ({}));
   const email = normalizeEmail(body?.email);
   const locale: Locale = isLocale(String(body?.locale || '')) ? (body.locale as Locale) : 'en';
-  if (!isPlausibleEmail(email)) return NextResponse.json({ ok: false, error: 'invalid' }, { status: 400 });
+  if (!isPlausibleEmail(email)) return NextResponse.json(keyedErrorBody('invalid_email', 'invalid', locale), { status: 400 });
 
   const base = site(req);
   // Do the lookup + mail after responding so response time doesn't leak membership either.

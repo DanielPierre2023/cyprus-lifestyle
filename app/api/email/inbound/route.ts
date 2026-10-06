@@ -13,6 +13,8 @@ import { runInboundAssist } from '@/lib/mail/assist';
 import { logServerError } from '@/lib/monitor.server';
 import { threadKey, computePriority, routeDesk, slaDue } from '@/lib/mail/tickets';
 import { linkInboundToCrm } from '@/lib/crm/inbound';
+import { attachInboundToBooking } from '@/lib/booking/inbound';
+import { htmlToText } from '@/lib/booking/correspondence';
 
 export const runtime = 'nodejs';
 // We respond to the webhook immediately (Resend/Svix want a fast 200) and let the
@@ -181,6 +183,12 @@ export async function POST(req: NextRequest) {
             .update({ desk: 'partnerships', tags: ['prospect-reply'] }).eq('id', inserted.id);
         }
       } catch (e) { await logServerError('mail-inbound:crm-link', e, { emailId: inserted.id }); }
+      // Booking engine: a reply that carries a booking reference (CL-XXXXXX) joins that booking's history (guest or partner correspondence).
+      // Matching rules and safety: lib/booking/correspondence.ts. Never throws; an unmatched mail simply stays here in Admin → Mail.
+      await attachInboundToBooking(supabaseAdmin(), {
+        emailId: inserted.id, fromEmail: inserted.from_email, fromName: inserted.from_name, toEmail: inserted.to_email,
+        subject: inserted.subject, body: inserted.text_body || (inserted.html_body ? htmlToText(inserted.html_body) : null), messageId: inserted.message_id,
+      });
     });
   }
   return NextResponse.json({ ok: true });

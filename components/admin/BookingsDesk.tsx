@@ -15,6 +15,9 @@ interface Partner {
 }
 interface Ledger { id: string; partner_name: string; partner_request_id: string | null; gross_cents: number; rate_bps: number; commission_cents: number; status: string; note: string | null; void_reason: string | null; created_at: string }
 interface Ev { id: string; at: string; actor: string; kind: string; detail: Record<string, unknown> | null }
+interface MailDetail { direction: 'out' | 'in'; kind: string; party: string; to: string | null; from: string | null; subject: string; body: string; ok: boolean | null; error?: string | null; verified?: boolean; partner?: string | null }
+const MAIL_KINDS = ['mail_out', 'mail_in'];
+const PARTY_TEXT: Record<string, string> = { guest: 'guest', partner: 'partner', desk: 'desk', unknown: 'UNVERIFIED sender' };
 interface Detail {
   booking: Booking; guestLink: string; partners: Partner[]; ledger: Ledger[]; events: Ev[];
   totals: { expectedCents: number; confirmedCents: number; grossCents: number; entries: number; voided: number };
@@ -54,6 +57,8 @@ export default function BookingsDesk() {
     if (j.ok) setDetail(j as Detail); else setMsg(j.error || 'Could not load the booking.');
   }, []);
   useEffect(() => { load(); const t = setInterval(load, 60_000); return () => clearInterval(t); }, [load]);
+  // /admin/bookings?open=<booking id> (linked from the Concierge Requests page)
+  useEffect(() => { try { const o = new URLSearchParams(window.location.search).get('open'); if (o && /^[0-9a-f-]{36}$/i.test(o)) setOpen(o); } catch { /* no window */ } }, []);
   useEffect(() => { if (open) loadDetail(open); else setDetail(null); }, [open, loadDetail]);
 
   async function act(body: Record<string, unknown>, okText = 'Saved.'): Promise<boolean> {
@@ -70,6 +75,7 @@ export default function BookingsDesk() {
   return (
     <>
       <h1>Bookings</h1>
+      <p style={{ margin: '0 0 6px', fontSize: 13 }}>The older list of <b>every</b> concierge request (including anonymous demand signals with no contact) is <a href="/admin/requests">Requests (Cereri)</a>; each request that left an e-mail or phone has its booking here.</p>
       <p className="sub">Concierge requests that left a way to reach the guest. <b>Signed-in members with an active entitlement are always listed first</b> (priority lane); within a lane, requests still waiting for a first personal reply come first, earliest deadline first.</p>
 
       {sum ? (
@@ -134,6 +140,7 @@ function DetailPanel({ d, act }: { d: Detail; act: (b: Record<string, unknown>, 
   const box: React.CSSProperties = { border: '1px solid var(--line,#e3d9c4)', borderRadius: 8, padding: '14px 16px', marginTop: 14 };
   const copy = (t: string) => navigator.clipboard?.writeText(t).catch(() => undefined);
   const canCommission = b.status === 'confirmed' || b.status === 'completed';
+  const mail = d.events.filter((e) => MAIL_KINDS.includes(e.kind) && e.detail).slice().reverse();
 
   return (
     <div style={{ marginTop: 22 }}>
@@ -230,9 +237,29 @@ function DetailPanel({ d, act }: { d: Detail; act: (b: Record<string, unknown>, 
       </div>
 
       <div style={box}>
+        <b>Correspondence</b> <span style={{ fontSize: 12, opacity: .6 }}>— every e-mail this booking sent or received, oldest first: acknowledgement, partner links and reminders, desk alerts, your replies, and replies that arrived by e-mail quoting {b.ref}. Private links are never stored.</span>
+        {mail.length === 0 ? <p style={{ fontSize: 13, opacity: .7 }}>No e-mails recorded yet.</p> : mail.map((e) => {
+          const m = e.detail as unknown as MailDetail;
+          const out = m.direction === 'out';
+          return (
+            <details key={e.id} style={{ borderTop: '1px solid var(--line,#eee6d2)', marginTop: 8, paddingTop: 6, fontSize: 13 }}>
+              <summary style={{ cursor: 'pointer' }}>
+                <span style={{ opacity: .6 }}>{new Date(e.at).toLocaleString()}</span> ·{' '}
+                <b style={{ color: out ? undefined : '#1c6b34' }}>{out ? '→ OUT' : '← IN'}</b> · {out ? `to ${m.to || '?'}` : `from ${m.from || '?'}`} ({PARTY_TEXT[m.party] || m.party}{m.partner ? `: ${m.partner}` : ''})
+                {out && m.ok === false ? <b style={{ color: '#b3261e' }}> · NOT SENT{m.error ? ` (${m.error})` : ''}</b> : null}
+                {!out && m.verified === false ? <b style={{ color: '#b26a00' }}> · sender not recognised — read only, nothing was changed</b> : null}
+                <div style={{ fontWeight: 600 }}>{m.subject}</div>
+              </summary>
+              <pre style={{ whiteSpace: 'pre-wrap', font: 'inherit', margin: '6px 0 4px', padding: '8px 10px', background: 'rgba(201,162,76,.07)', borderRadius: 6 }}>{m.body}</pre>
+            </details>
+          );
+        })}
+      </div>
+
+      <div style={box}>
         <b>History</b>
         <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0', fontSize: 13 }}>
-          {d.events.map((e) => (
+          {d.events.filter((e) => !MAIL_KINDS.includes(e.kind)).map((e) => (
             <li key={e.id} style={{ padding: '3px 0', borderTop: '1px solid var(--line,#eee6d2)' }}>
               <span style={{ opacity: .6 }}>{new Date(e.at).toLocaleString()}</span> · <b>{e.kind.replace(/_/g, ' ')}</b> · {e.actor}
               {e.detail && Object.keys(e.detail).length ? <span style={{ opacity: .7 }}> — {Object.entries(e.detail).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join(', ').slice(0, 220)}</span> : null}

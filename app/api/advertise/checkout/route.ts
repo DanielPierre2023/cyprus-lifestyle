@@ -19,6 +19,7 @@ import { rateLimit, isHoneypot } from '@/lib/ratelimit';
 import { createCheckoutSession, createCustomer, stripeConfigured, automaticTaxEnabled, stripeCheckoutLocale } from '@/lib/stripe';
 import { SITE_URL } from '@/lib/seo';
 import { isLocale } from '@/lib/locales';
+import type { ApiErrorCode } from '@/lib/i18n/apiErrors';
 import { isCountryCode, isEuMemberState } from '@/lib/vat/countries';
 import { parseVatForCountry } from '@/lib/vat/parse';
 import { checkVatNumber, type ViesResult } from '@/lib/vat/vies';
@@ -31,7 +32,16 @@ export const runtime = 'nodejs';
 const INTERVAL: Record<string, 'month' | 'year' | undefined> = { 'per month': 'month', 'per year': 'year' };
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
-const fail = (error: string, status: number, extra?: Record<string, unknown>) => NextResponse.json({ ok: false, error, ...extra }, { status });
+// `error` is unchanged (the funnel switches on these keys / texts); `code` is the stable, localisable code.
+const CODE_FOR: Record<string, ApiErrorCode> = {
+  'Too many requests — please wait a moment.': 'rate_limited',
+  'Online checkout is not available yet — request a quote and we will set you up.': 'not_configured',
+  email_required: 'invalid_email', country_required: 'invalid_input', company_required: 'invalid_input',
+  vat_format: 'invalid_input', vat_invalid: 'invalid_input', vat_unverifiable: 'unavailable',
+  'This placement is arranged by quote.': 'unavailable', 'Could not start checkout.': 'checkout_failed',
+};
+const fail = (error: string, status: number, extra?: Record<string, unknown>) =>
+  NextResponse.json({ ok: false, code: CODE_FOR[error] ?? 'invalid_input', error, ...extra }, { status });
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));

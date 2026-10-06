@@ -7,6 +7,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit, isHoneypot } from '@/lib/ratelimit';
 import { sendEmail, brandedEmail } from '@/lib/email';
 import { isLocale, type Locale } from '@/lib/locales';
+import { localeOf } from '@/lib/i18n/resolveLocale';
+import { errorBody, codedError } from '@/lib/i18n/apiErrors';
 
 export const runtime = 'nodejs';
 
@@ -16,7 +18,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   if (isHoneypot(body)) return NextResponse.json({ ok: true });
   if (!(await rateLimit(req, 'directory-lead'))) {
-    return NextResponse.json({ ok: false, error: 'Too many requests — please wait a moment.' }, { status: 429 });
+    return NextResponse.json(errorBody('rate_limited', localeOf(req, body.locale)), { status: 429 });
   }
 
   const name = String(body.name || '').trim().slice(0, 120);
@@ -27,9 +29,9 @@ export async function POST(req: NextRequest) {
   const listingName = String(body.listingName || '').trim().slice(0, 200) || null;
   const locale: Locale = isLocale(String(body.locale)) ? (body.locale as Locale) : 'en';
 
-  if (!listingSlug) return NextResponse.json({ ok: false, error: 'Missing listing.' }, { status: 400 });
+  if (!listingSlug) return NextResponse.json(errorBody('missing_listing', locale), { status: 400 });
   if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return NextResponse.json({ ok: false, error: 'A name and a valid email are required.' }, { status: 400 });
+    return NextResponse.json(errorBody('name_email_required', locale), { status: 400 });
   }
 
   const sb = supabaseAdmin();
@@ -47,7 +49,7 @@ export async function POST(req: NextRequest) {
     listing_slug: listingSlug, listing_type: listingType, listing_name: listingName,
     name, email, message, locale, status: 'new', org_id: orgId,
   });
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+  if (error) return NextResponse.json(codedError('save_failed', error.message), { status: 400 });
 
   if (orgId) {
     await sb.from('crm_activities').insert({

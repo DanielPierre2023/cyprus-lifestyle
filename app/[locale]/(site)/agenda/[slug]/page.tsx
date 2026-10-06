@@ -1,13 +1,21 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { dateFormatter } from '@/lib/i18n/format';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { getEventBySlug, getListingsByDistrict } from '@/lib/queries';
+import { getListingsByDistrict } from '@/lib/queries';
+import { getEventBySlug } from '@/lib/queries.cached';
 import { breadcrumbJsonLd, eventJsonLd, ld, pageMetadata } from '@/lib/seo';
 import DirectoryMap from '@/components/DirectoryMap';
+import { AGENDA_COPY, sourceLabel } from '@/lib/events/copy';
+import { EVENT_SOURCES } from '@/lib/events/sources';
+import { nicosiaParts, TZ } from '@/lib/events/time';
+import CoverImage from '@/components/CoverImage';
+import { isOptimisableImage } from '@/lib/images';
 
-export const revalidate = 300;
+// ISR 1 h: DB webhooks call /api/revalidate/tags on every edit (PERFORMANCE-SETUP.md 2b); this is only the safety net. Keep equal to TTL in lib/queries.cached.ts.
+export const revalidate = 3600;
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }): Promise<Metadata> {
   const { locale, slug } = await params;
@@ -26,12 +34,19 @@ export default async function EventDetail({ params }: { params: Promise<{ locale
   const e = await getEventBySlug(l, slug);
   if (!e) notFound();
 
-  const dl = l === 'ar' ? 'ar' : l;
   const start = new Date(e.starts_at);
-  const fmtFull = new Intl.DateTimeFormat(dl, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const fmtTime = new Intl.DateTimeFormat(dl, { hour: '2-digit', minute: '2-digit' });
+  const c = AGENDA_COPY[l];
+  const dl = l;
+  const fmtFull = new Intl.DateTimeFormat(dl, { timeZone: TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const fmtTime = new Intl.DateTimeFormat(dl, { timeZone: TZ, hour: '2-digit', minute: '2-digit' });
   const dateStr = fmtFull.format(start);
-  const timeStr = fmtTime.format(start) + (e.ends_at ? `–${fmtTime.format(new Date(e.ends_at))}` : '');
+  const sp = nicosiaParts(start.getTime()), ep = e.ends_at ? nicosiaParts(Date.parse(e.ends_at)) : null;
+  const allDay = sp.h === 0 && sp.mi === 0 && (!ep || (ep.h === 23 && ep.mi === 59));
+  const timeStr = allDay ? c.allDay : fmtTime.format(start) + (e.ends_at ? `–${fmtTime.format(new Date(e.ends_at))}` : '');
+  const names = Object.fromEntries(EVENT_SOURCES.map((x) => [x.slug, x.attribution]));
+  const src = sourceLabel(e.source, e.source_url, names);
+  const tbc = e.date_confidence === 'approximate';
+  const originalLink = e.source_url && /^https?:\/\//.test(e.source_url) && !e.tags.includes('public-holiday') ? e.source_url : null;
 
   const nearby = e.district ? await getListingsByDistrict(l, e.district, 6) : [];
   const points = (e.lat != null && e.lng != null) ? [{ lat: e.lat, lng: e.lng, name: e.venue || e.title }] : [];
@@ -48,7 +63,7 @@ export default async function EventDetail({ params }: { params: Promise<{ locale
 
   const card = { background: 'var(--paper, #fff)', border: '1px solid var(--line, #e3d9c4)', borderRadius: 6 };
   const facts: [string, string | null][] = [
-    ['When', `${dateStr} · ${timeStr}`],
+    ['When', `${dateStr} · ${timeStr}${e.ends_at && allDay && ep && (ep.d !== sp.d || ep.m !== sp.m) ? ` — ${c.until} ${fmtFull.format(new Date(e.ends_at))}` : ''}${tbc ? ` · ${c.dateTbc}` : ''}`],
     ['Where', [e.venue, e.district].filter(Boolean).join(', ') || null],
     ['Price', e.price || null],
   ];
@@ -69,7 +84,9 @@ export default async function EventDetail({ params }: { params: Promise<{ locale
         </div>
 
         {e.image ? (
-          <img src={e.image} alt={e.title} style={{ width: '100%', maxHeight: 460, objectFit: 'cover', borderRadius: 6, marginBottom: 22 }} />
+          isOptimisableImage(e.image)
+            ? <div style={{ position: 'relative', width: '100%', height: 'min(460px, 56vw)', borderRadius: 6, overflow: 'hidden', marginBottom: 22 }}><CoverImage src={e.image} seed={e.slug} alt={e.title} className="ph-img" sizes="(max-width: 1100px) 100vw, 1100px" priority /></div>
+            : <img src={e.image} alt={e.title} style={{ width: '100%', maxHeight: 460, objectFit: 'cover', borderRadius: 6, marginBottom: 22 }} /> /* third-party hot-link */
         ) : null}
 
         {/* Facts + tickets */}
@@ -82,9 +99,15 @@ export default async function EventDetail({ params }: { params: Promise<{ locale
               </div>
             ))}
           </div>
-          {e.url ? (
+          {e.url && !e.source ? (
             <p style={{ marginTop: 16, marginBottom: 0 }}>
               <a className="btn" href={e.url} target="_blank" rel="noopener nofollow">Get tickets →</a>
+            </p>
+          ) : null}
+          {(src || originalLink) ? (
+            <p style={{ marginTop: 16, marginBottom: 0, fontSize: 14, color: 'var(--ink-soft, #5b5647)' }}>
+              {c.source}: {src || ''}{originalLink ? <>{src ? ' · ' : ''}<a href={originalLink} target="_blank" rel="noopener nofollow" style={{ color: 'var(--gold-deep, #a9832f)' }}>{c.originalListing} ↗</a></> : null}
+              {e.untranslated ? <><br />{c.englishOnly}</> : null}
             </p>
           ) : null}
         </div>
@@ -108,7 +131,11 @@ export default async function EventDetail({ params }: { params: Promise<{ locale
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
               {nearby.map((n) => (
                 <Link key={n.slug} href={`/directory/${n.type}/${n.slug}`} style={{ ...card, overflow: 'hidden', textDecoration: 'none', color: 'inherit', display: 'block' }}>
-                  {n.image ? <img src={n.image} alt={n.name} style={{ width: '100%', height: 120, objectFit: 'cover' }} /> : <div style={{ height: 120, background: 'var(--obsidian, #0B0E11)' }} />}
+                  {n.image
+                    ? (isOptimisableImage(n.image)
+                      ? <div style={{ position: 'relative', height: 120 }}><CoverImage src={n.image} seed={n.slug} alt={n.name} className="ph-img" sizes="(max-width: 700px) 100vw, 260px" /></div>
+                      : <img src={n.image} alt={n.name} style={{ width: '100%', height: 120, objectFit: 'cover' }} />)
+                    : <div style={{ height: 120, background: 'var(--obsidian, #0B0E11)' }} />}
                   <div style={{ padding: '10px 12px' }}>
                     <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--gold-deep, #a9832f)' }}>{t(`directory.${n.type}`)}</div>
                     <div style={{ fontWeight: 700, color: 'var(--ink, #171922)', margin: '2px 0 3px' }}>{n.name}</div>

@@ -2,6 +2,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import HoneypotField from '@/components/HoneypotField';
 import { HONEYPOT_FIELD } from '@/lib/honeypot';
+import { numberFormatter } from '@/lib/i18n/format';
 import { dir as dirOf, type Locale } from '@/lib/locales';
 import { COUNTRY_CODES, isEuMemberState } from '@/lib/vat/countries';
 
@@ -198,7 +199,7 @@ const GOLD = '#C9A24C';
 
 export default function AdvertiseFunnel({ items, locale = 'en', status }: { items: RateItem[]; locale?: string; status?: string }) {
   const d = L[locale] || L.en;
-  const nf = new Intl.NumberFormat(locale === 'ar' ? 'ar' : locale, { maximumFractionDigits: 0 });
+  const nf = numberFormatter(locale, { maximumFractionDigits: 0 });
   const packages = items.filter((i) => i.kind === 'package');
   const alacarte = items.filter((i) => i.kind !== 'package');
 

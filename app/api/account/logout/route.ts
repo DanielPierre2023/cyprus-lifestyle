@@ -7,7 +7,7 @@ import { SESSION_COOKIE, endAllSessions, endSession, resolveSession, sameOrigin 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
-  if (!sameOrigin(req)) return NextResponse.json({ ok: false }, { status: 403 });
+  if (!sameOrigin(req)) return NextResponse.json({ ok: false, code: 'forbidden' }, { status: 403 });
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   const sb = supabaseAdmin();

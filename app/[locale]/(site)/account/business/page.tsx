@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { formatDateWith } from '@/lib/i18n/format';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
@@ -29,7 +30,7 @@ export default async function BusinessHubPage({ params, searchParams }: { params
   const t = await getTranslations();
   const L = t.raw('business') as L;
   const sp = await searchParams;
-  const fmt = (iso: string) => { try { return new Date(iso).toLocaleDateString(l, { year: 'numeric', month: 'long', day: 'numeric' }); } catch { return ''; } };
+  const fmt = (iso: string) => formatDateWith(l, iso, { year: 'numeric', month: 'long', day: 'numeric' });
 
   const head = (
     <div className="page-head">

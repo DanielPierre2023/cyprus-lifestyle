@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { formatDateWith } from '@/lib/i18n/format';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
@@ -30,9 +31,10 @@ const ASK: Record<string, { heading: string; label: string; q: (t: string) => st
   ru: { heading: 'Спросите консьержа Cyprus Lifestyle', label: 'Спросить об этом', q: (t) => `Я читаю «${t}». Помогите, пожалуйста, и подскажите, что делать дальше.` },
 };
 const AGENDA_LABEL: Record<string, string> = { en: 'In our Agenda', el: 'Στην Ατζέντα μας', ro: 'În Agenda noastră', ar: 'في أجندتنا', de: 'In unserem Kalender', pl: 'W naszej Agendzie', ru: 'В нашей Афише' };
-const eventWhen = (iso: string, l: string) => { try { return new Date(iso).toLocaleDateString(l === 'ar' ? 'ar' : l, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
+const eventWhen = (iso: string, l: string) => formatDateWith(l, iso, { day: 'numeric', month: 'short', year: 'numeric' });
 
-export const revalidate = 300;
+// ISR 1 h: DB webhooks call /api/revalidate/tags on every edit (PERFORMANCE-SETUP.md 2b); this is only the safety net. Keep equal to TTL in lib/queries.cached.ts.
+export const revalidate = 3600;
 
 // Article HTML is stored with root-relative links (/directory/g/…, /ask). next-intl
 // serves non-English editions under a locale prefix, so rewrite internal links to the
@@ -91,7 +93,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
   if (!a) notFound();
 
   const date = a.published_at
-    ? new Date(a.published_at).toLocaleDateString(l === 'ar' ? 'ar' : l, { year: 'numeric', month: 'long', day: 'numeric' })
+    ? formatDateWith(l, a.published_at, { year: 'numeric', month: 'long', day: 'numeric' })
     : '';
   const catLabel = a.category ? (t.has(`nav.${a.category}`) ? t(`nav.${a.category}`) : a.category) : '';
   const metaTail = [date, a.reading_time_min ? `${a.reading_time_min} ${t('common.minRead')}` : ''].filter(Boolean);

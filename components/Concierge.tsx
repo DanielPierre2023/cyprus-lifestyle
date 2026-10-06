@@ -7,6 +7,8 @@ import { useState } from 'react';
 import { Link } from '@/lib/i18n/routing';
 import CoverImage from '@/components/CoverImage';
 import ActivityCards, { type ActivityCardItem } from '@/components/ActivityCards';
+import ConciergeSources, { type SourceHints } from '@/components/ConciergeSources';
+import type { SourceCard } from '@/lib/concierge/sources';
 import type { Locale } from '@/lib/locales';
 
 export interface ConciergeReqLabels {
@@ -17,7 +19,7 @@ export interface ConciergeReqLabels {
 export interface ConciergePick {
   slug: string; type: string; name: string; district: string | null;
   rating: number | null; rating_count: number | null; price_band: string | null;
-  image: string | null; why: string;
+  image: string | null; why: string; linkable?: boolean;
 }
 export interface ConciergeGuide { label: string; path: string; }
 export interface ConciergeLabels {
@@ -39,6 +41,8 @@ export default function Concierge({ locale, labels, autofocus = false }: { local
   const [picks, setPicks] = useState<ConciergePick[]>([]);
   const [activities, setActivities] = useState<ActivityCardItem[]>([]);
   const [guides, setGuides] = useState<ConciergeGuide[]>([]);
+  const [sourceCards, setSourceCards] = useState<SourceCard[]>([]);
+  const [hints, setHints] = useState<SourceHints | null>(null);
   const [error, setError] = useState('');
   const [asked, setAsked] = useState(false);
   const [reqEmail, setReqEmail] = useState('');
@@ -68,9 +72,9 @@ export default function Concierge({ locale, labels, autofocus = false }: { local
         body: JSON.stringify({ q: query, locale }),
       });
       const d = await res.json();
-      if (!d.ok) { setError(d.error || labels.error); setAnswer(''); setPicks([]); setGuides([]); setActivities([]); }
-      else { setAnswer(d.answer || ''); setPicks(Array.isArray(d.picks) ? d.picks : []); setGuides(Array.isArray(d.guides) ? d.guides : []); setActivities(Array.isArray(d.activities) ? d.activities : []); }
-    } catch { setError(labels.error); setAnswer(''); setPicks([]); setGuides([]); setActivities([]); }
+      if (!d.ok) { setError(d.error || labels.error); setAnswer(''); setPicks([]); setGuides([]); setActivities([]); setSourceCards([]); setHints(null); }
+      else { setAnswer(d.answer || ''); setPicks(Array.isArray(d.picks) ? d.picks : []); setGuides(Array.isArray(d.guides) ? d.guides : []); setActivities(Array.isArray(d.activities) ? d.activities : []); setSourceCards(Array.isArray(d.sourceCards) ? d.sourceCards : []); setHints(d.sourceHints || null); }
+    } catch { setError(labels.error); setAnswer(''); setPicks([]); setGuides([]); setActivities([]); setSourceCards([]); setHints(null); }
     finally { setLoading(false); }
   }
 
@@ -117,6 +121,24 @@ export default function Concierge({ locale, labels, autofocus = false }: { local
           <h3 className="cnc-picks-t">{labels.picksTitle}</h3>
           <div className="cnc-picks">
             {picks.map((p, i) => (
+              p.linkable === false ? (
+                <div key={p.slug} className="cnc-pick">
+                <span className="cnc-pick-img">
+                  <CoverImage src={p.image} seed={p.slug} alt={p.name} className="ph-img" sizes="120px" fallbackKind="brand" />
+                  <span className="cnc-pick-rank">{i + 1}</span>
+                </span>
+                <span className="cnc-pick-body">
+                  <span className="cnc-pick-meta">
+                    <span className="d" style={{ background: TYPE_DOT[p.type] || '#C9A24C' }} />
+                    {p.district ? <span className="cnc-cap">{p.district}</span> : null}
+                    {p.rating != null ? <span className="cnc-rate">★ {p.rating.toFixed(1)}</span> : null}
+                    {p.price_band ? <span>· {p.price_band}</span> : null}
+                  </span>
+                  <span className="cnc-pick-name">{p.name}</span>
+                  <span className="cnc-pick-why">{p.why}</span>
+                </span>
+              </div>
+              ) : (
               <Link key={p.slug} href={`/directory/${p.type}/${p.slug}`} className="cnc-pick">
                 <span className="cnc-pick-img">
                   <CoverImage src={p.image} seed={p.slug} alt={p.name} className="ph-img" sizes="120px" fallbackKind="brand" />
@@ -133,9 +155,14 @@ export default function Concierge({ locale, labels, autofocus = false }: { local
                   <span className="cnc-pick-why">{p.why}</span>
                 </span>
               </Link>
+              )
             ))}
           </div>
         </>
+      ) : null}
+
+      {!loading && (sourceCards.length || hints?.agenda || hints?.live) ? (
+        <ConciergeSources cards={sourceCards} hints={hints} locale={locale} dark />
       ) : null}
 
       {!loading && activities.length ? (

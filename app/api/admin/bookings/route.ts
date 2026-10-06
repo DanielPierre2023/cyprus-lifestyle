@@ -1,6 +1,7 @@
 // Admin → Bookings (the request queue). Admin only.
 //   GET                 → the queue (members first) + recent finished bookings + counters
-//   GET ?id=<uuid>      → one booking: partners (with their magic links), events, ledger
+//   GET ?id=<uuid>      → one booking: partners (with their magic links), events (incl. every e-mail in/out), ledger
+//   GET ?requests=a,b   → which concierge requests already have a booking: { [requestId]: { id, ref } } (for the Requests page)
 //   POST { action, … }  → assign · status · note · message_guest · first_reply · partner_add · share · commission · commission_confirm · commission_void
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin, supabaseServer } from '@/lib/supabase/server';
@@ -31,6 +32,14 @@ export async function GET(req: NextRequest) {
   const sb = supabaseAdmin();
   const d = bookingDeps(sb);
   const now = new Date();
+  const reqIds = req.nextUrl.searchParams.get('requests');
+  if (reqIds) {
+    const ids = reqIds.split(',').map((x) => x.trim()).filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 300);
+    const { data } = ids.length ? await sb.from('bookings').select('id, ref, concierge_request_id').in('concierge_request_id', ids) : { data: [] };
+    const map: Record<string, { id: string; ref: string }> = {};
+    for (const r of (data as { id: string; ref: string; concierge_request_id: string }[]) || []) map[r.concierge_request_id] = { id: r.id, ref: r.ref };
+    return NextResponse.json({ ok: true, map });
+  }
   const id = req.nextUrl.searchParams.get('id');
   if (id) {
     const b = await d.store.getBooking(id);

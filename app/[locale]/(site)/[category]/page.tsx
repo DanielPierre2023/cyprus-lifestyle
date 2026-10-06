@@ -11,7 +11,8 @@ import CoverImage from '@/components/CoverImage';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import SectionSponsor from '@/components/SectionSponsor';
 
-export const revalidate = 300;
+// ISR 1 h: DB webhooks call /api/revalidate/tags on every edit (PERFORMANCE-SETUP.md 2b); this is only the safety net. Keep equal to TTL in lib/queries.cached.ts.
+export const revalidate = 3600;
 
 // Public section pages: the nine merged departments (lib/editorial/taxonomy.ts) plus
 // the legacy keys kept working for URL continuity. 'agenda' is handled by the

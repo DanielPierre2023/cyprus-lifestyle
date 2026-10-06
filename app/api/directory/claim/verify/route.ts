@@ -19,6 +19,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { peekClaimToken, verifyClaimToken, verifyClaimOtp } from '@/lib/directory/claims';
 import { pageCopy, withBiz, withBizText } from '@/lib/directory/ownerCopy';
 import { localeOf } from '@/lib/i18n/resolveLocale';
+import { errorBody } from '@/lib/i18n/apiErrors';
+import { claimMessages, otpWrongLeftMessage } from '@/lib/i18n/notices';
 import { dir, type Locale } from '@/lib/locales';
 
 export const runtime = 'nodejs';
@@ -165,14 +167,16 @@ export async function POST(req: NextRequest) {
 
   // ── phone-OTP path — unchanged JSON contract for the on-page claim widget. ──
   if (!claimId || !code) {
-    return NextResponse.json({ ok: false, error: 'A claim id and code are required.' }, { status: 400 });
+    return NextResponse.json(errorBody('code_required', locale), { status: 400 });
   }
   const res = await verifyClaimOtp({ claimId, code });
   if (res.ok) return NextResponse.json({ ok: true, slug: res.slug ?? null });
 
-  const msg = res.error === 'expired' ? 'That code has expired. Please start the claim again.'
-    : res.error === 'locked' ? 'Too many incorrect attempts — this claim is locked. Please start again.'
-    : typeof res.remaining === 'number' ? `That code is not correct. ${res.remaining} attempt${res.remaining === 1 ? '' : 's'} left.`
-    : 'That code is not correct.';
-  return NextResponse.json({ ok: false, error: msg }, { status: 400 });
+  const cm = claimMessages(locale);
+  const msg = res.error === 'expired' ? cm.otpExpired
+    : res.error === 'locked' ? cm.otpLocked
+    : typeof res.remaining === 'number' ? otpWrongLeftMessage(locale, res.remaining)
+    : cm.otpWrong;
+  const errCode = res.error === 'expired' ? 'link_expired' : res.error === 'locked' ? 'forbidden' : 'invalid_input';
+  return NextResponse.json({ ok: false, code: errCode, error: msg }, { status: 400 });
 }

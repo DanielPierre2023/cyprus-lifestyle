@@ -4,9 +4,9 @@
 // so "Published and live now" never appeared and readers saw changes only after the timer. The server-to-server
 // variant for Supabase webhooks stays at /api/revalidate (secret header).
 import { NextResponse } from 'next/server';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { isAdmin } from '@/lib/supabase/server';
-import { pathsFor } from '@/lib/revalidatePaths';
+import { pathsFor, tagsFor } from '@/lib/revalidatePaths';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -16,5 +16,8 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as { slug?: unknown; category?: unknown };
   const revalidated = pathsFor(body);
   for (const p of revalidated) revalidatePath(p);
-  return NextResponse.json({ ok: true, revalidated });
+  // Also by data tag (lib/cache/tags.ts): pages built from the cached reads refresh in every locale, not only the listed paths.
+  const tags = tagsFor(body);
+  for (const t of tags) revalidateTag(t);
+  return NextResponse.json({ ok: true, revalidated, tags });
 }

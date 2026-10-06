@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { formatDateWith } from '@/lib/i18n/format';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
@@ -25,7 +26,7 @@ export default async function WhenToVisitPage({ params }: { params: Promise<{ lo
   const t = await getTranslations();
   const swimLabel: Record<Swim, string> = { yes: t('whenToVisit.yes'), shoulder: t('whenToVisit.shoulder'), no: t('whenToVisit.no') };
   const crumbLd = breadcrumbJsonLd(l, [{ name: t('brand.name'), path: '/' }, { name: t('whenToVisit.title'), path: '/when-to-visit' }]);
-  const monthName = (m: number) => new Date(2025, m, 1).toLocaleString(l, { month: 'long' });
+  const monthName = (m: number) => formatDateWith(l, new Date(2025, m, 1), { month: 'long' });
 
   return (
     <>

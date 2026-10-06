@@ -18,6 +18,7 @@ export default function RequestsInbox() {
   const [rows, setRows] = useState<Row[]>([]);
   const [filter, setFilter] = useState<string>('open');
   const [loading, setLoading] = useState(true);
+  const [bookings, setBookings] = useState<Record<string, { id: string; ref: string }>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -26,6 +27,14 @@ export default function RequestsInbox() {
       .order('created_at', { ascending: false }).limit(500);
     setRows((data as Row[]) || []);
     setLoading(false);
+    // which of these already have a booking (Admin → Bookings)? best-effort
+    try {
+      const ids = ((data as Row[]) || []).filter((r) => r.email || r.phone).slice(0, 300).map((r) => r.id);
+      if (ids.length) {
+        const j = await (await fetch(`/api/admin/bookings?requests=${ids.join(',')}`, { cache: 'no-store' })).json();
+        if (j.ok) setBookings(j.map || {});
+      }
+    } catch { /* the page works without the links */ }
   }, [sb]);
   useEffect(() => { load(); }, [load]);
 
@@ -52,6 +61,7 @@ export default function RequestsInbox() {
   return (
     <>
       <h1>Concierge Requests</h1>
+      <p style={{ margin: '0 0 6px', fontSize: 13 }}>Requests that left an e-mail or phone are worked in <a href="/admin/bookings"><b>Bookings</b></a> (priority lane, first-reply timer, partners, full e-mail history). This page stays as the complete log, including anonymous demand signals.</p>
       <p className="sub">Every request a guest asked the concierge to arrange or route. Contact left = a warm lead; no picks = a demand gap to fill in the directory.</p>
 
       <div className="cards">
@@ -85,6 +95,7 @@ export default function RequestsInbox() {
                   {r.query}
                 </div>
                 {r.note ? <div style={{ fontSize: 13, opacity: .8, marginTop: 3 }}>{r.note}</div> : null}
+                {bookings[r.id] ? <div style={{ fontSize: 12, marginTop: 3 }}><a href={`/admin/bookings?open=${bookings[r.id].id}`}>Booking {bookings[r.id].ref} →</a></div> : null}
                 {(r.category || r.district) ? <div style={{ fontSize: 11, opacity: .6, marginTop: 3 }}>{[r.category, r.district].filter(Boolean).join(' · ')}</div> : null}
               </td>
               <td>
