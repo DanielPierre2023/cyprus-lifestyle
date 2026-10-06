@@ -13,6 +13,8 @@
 // touches the network, the database or `server-only`.
 // ============================================================================
 
+import { langFromName, nativeRegisterRules, promptTellList } from '@/lib/antiAiLang';
+
 // ── locales (the seven editions, matching blog_posts' column families) ────────
 export const LOCALES = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'] as const;
 export type Locale = (typeof LOCALES)[number];
@@ -230,6 +232,7 @@ export function draftPrompt(
 // meaning, tone and formatting. JSON out (title + body).
 export function translatePrompt(targetLocale: string): string {
   const name = isLocale(targetLocale) ? LOCALE_NAMES[targetLocale] : targetLocale;
+  const nativeLang = langFromName(targetLocale) || langFromName(name);
   return [
     HOUSE_VOICE,
     '',
@@ -242,6 +245,12 @@ export function translatePrompt(targetLocale: string): string {
       'Translate the title too. Keep proper nouns, brand names and Cyprus place names appropriate for the language ' +
       '(transliterate where that is the natural convention).',
     '',
+    ...(nativeLang ? [
+      `NATIVE REGISTER — this is a ${name} newspaper edition, not a translation exercise:`,
+      nativeRegisterRules(nativeLang),
+      `Never use these stock phrases (nor their inflected forms, nor literal ${name} renderings of English clichés): ${promptTellList(nativeLang)}.`,
+      '',
+    ] : []),
     'Return ONLY JSON of the exact shape: {"title":"<translated title>","body":"<translated body, same format>"}.',
   ].join('\n');
 }

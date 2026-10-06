@@ -29,6 +29,7 @@ import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { sendEmail, brandedEmail } from '@/lib/email';
 import { claimVerifyMail } from '@/lib/directory/ownerCopy';
+import { hubUrl } from '@/lib/business/hubCopy';
 import { claimMessages } from '@/lib/i18n/notices';
 import { isLocale, DEFAULT_LOCALE, type Locale } from '@/lib/locales';
 
@@ -178,7 +179,7 @@ const esc = (s: string): string =>
 async function sendVerifyLink(to: string, bizName: string, token: string, locale: Locale = DEFAULT_LOCALE): Promise<void> {
   // `lang` rides on the link so the confirm/result pages open in the same edition as the e-mail.
   const url = `${siteUrl()}/api/directory/claim/verify?token=${encodeURIComponent(token)}&lang=${locale}`;
-  const m = claimVerifyMail(locale, bizName);
+  const m = claimVerifyMail(locale, bizName, hubUrl(siteUrl(), locale));
   const html = brandedEmail({ locale, heading: m.heading, bodyHtml: m.bodyHtml, ctaLabel: m.ctaLabel, ctaUrl: url, preheader: m.preheader });
   await sendEmail({ to, subject: m.subject, html }).catch(() => {});
 }

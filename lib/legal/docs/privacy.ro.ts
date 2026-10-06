@@ -1,0 +1,76 @@
+import type { LegalDoc } from '@/lib/legal/types';
+
+export const privacyRo: LegalDoc = {
+  title: 'Politica de confidențialitate',
+  dek: 'Cum colectează, folosește, transmite și protejează Cyprus Lifestyle datele cu caracter personal, în temeiul Regulamentului general al UE privind protecția datelor (GDPR) și al Legii cipriote 125(I)/2018.',
+  sections: [
+    { h: '1. Operatorul de date', p: [
+      'Operatorul este {company}, societate înregistrată în Republica Cipru cu numărul {reg}, cu sediul în {town}, Cipru. Cyprus Lifestyle ({site}) este titlul ei media. Pentru orice chestiune privind datele dumneavoastră scrieți la {privacy_mail}.',
+    ] },
+    { h: '2. Ce date personale prelucrăm', p: ['În funcție de ce faceți pe site, prelucrăm:'], li: [
+      'Mesaje și formulare: nume, adresă de e-mail, număr de telefon și conținutul a ceea ce ne trimiteți (formular de contact, solicitări, comentarii, recenzii, e-mailuri).',
+      'Buletinul informativ („Saturday Letter”): adresa de e-mail și limba, plus dovezile de confirmare și dezabonare.',
+      'Concierge (chatbotul site-ului): întrebările pe care le scrieți sau le dictați, răspunsurile, limba, un identificator anonim aleatoriu al browserului (cl_cid) și, dacă alegeți, preferințele pe care le comunicați (de ex. date de călătorie, număr de persoane, regim alimentar, interese, buget). Îi cerem concierge-ului să nu rețină date sensibile; vă rugăm să nu introduceți în chat date de sănătate, de card de plată sau similare.',
+      'Cereri de rezervare: datele din cerere (ce doriți, date, număr de persoane, date de contact, mesaje) și corespondența noastră pe această temă, inclusiv cu firma parteneră care ar putea furniza serviciul.',
+      'Abonamentul de membru: e-mail, starea abonamentului și perioada de facturare, o referință de client și de abonament Stripe, preferințele memorate, sesiunile de autentificare și linkurile unice de restaurare. Datele cardului sau ale băncii le introduceți la Stripe și nu ajung niciodată pe serverele noastre.',
+      'Advertiseri și firme: nume, firmă, e-mail, țară, date de facturare și, pentru firmele din UE, un cod de TVA pe care îl verificăm în serviciul UE VIES; date de revendicare și verificare a fișelor din director.',
+      'Date tehnice: adresa IP și informații despre dispozitiv/browser în jurnalele serverului și în mecanismele de securitate, jurnale de erori și, numai dacă acceptați analiza, statistici anonime de utilizare și performanță.',
+    ] },
+    { h: '3. Scopuri și temeiuri juridice (art. 6 GDPR)', li: [
+      'Pentru a furniza serviciul solicitat și pentru demersuri precontractuale: să vă răspundem, să tratăm cererile de rezervare, să furnizăm și să facturăm abonamentul, să oferim concierge-ul (contract / măsuri precontractuale).',
+      'Pentru buletinul informativ, pentru memorarea preferințelor concierge-ului dincolo de o singură vizită, la cererea dumneavoastră, și pentru încărcarea scripturilor opționale de analiză și ale partenerilor: consimțământul dumneavoastră, pe care îl puteți retrage oricând (retragerea nu afectează prelucrarea anterioară).',
+      'Pentru securitatea site-ului, prevenirea abuzurilor și fraudei, limitarea ratei cererilor, înregistrarea și remedierea erorilor, întreținerea directorului de firme, contactarea firmelor privind fișe sau publicitate (cu dezabonare ușoară) și îmbunătățirea concierge-ului: interesele noastre legitime, puse în balanță cu drepturile dumneavoastră.',
+      'Pentru evidențe contabile și fiscale și răspunsuri către autorități: obligații legale.',
+    ] },
+    { h: '4. Concierge-ul și prelucrarea automată', p: [
+      'Concierge-ul este un asistent automat al acestui site. Întrebările dumneavoastră sunt trimise unor furnizori de servicii de inteligență artificială (vezi secțiunea 6) pentru a genera răspunsuri și a căuta în articolele, fișele și ghidurile noastre. Oferă informații și sugestii generale; nu este consultanță profesională și nu ia decizii cu efecte juridice sau similar de semnificative asupra dumneavoastră. O cerere de rezervare este tratată întotdeauna de o persoană: proprietarul prelucrează personal cererile din zona de administrare.',
+      'Pentru membri, concierge-ul poate reține preferințele comunicate, pe toate dispozitivele. Le puteți vedea și șterge singuri (sertarul de memorie din concierge și „forget me” în cont).',
+    ] },
+    { h: '5. Cine primește datele dumneavoastră', p: ['Transmitem date personale doar cât este necesar, următoarelor categorii de destinatari:'], li: [
+      'Furnizori de servicii care acționează la instrucțiunile noastre (persoane împuternicite), enumerați la secțiunea 6.',
+      'Firme partenere (de ex. restaurant, vilă, furnizor de experiențe) când trimiteți o cerere de rezervare care le privește: primesc ce este necesar pentru a vă răspunde și prelucrează apoi datele conform propriei politici de confidențialitate.',
+      'Autorități, consultanți și instanțe, când legea o cere sau pentru constatarea, exercitarea ori apărarea unor drepturi în justiție.',
+      'Nu vindem date personale.',
+    ] },
+    { h: '6. Persoane împuternicite, alți furnizori și transferuri internaționale', p: ['Furnizorii de mai jos prelucrează date pentru noi sau le primesc atunci când folosiți funcția respectivă. Baza noastră de date este găzduită în UE (Supabase, regiunea Frankfurt), iar funcțiile noastre de server rulează la Frankfurt (Vercel). Mai mulți furnizori au sediul sau afiliați în afara Spațiului Economic European (în special în SUA). Când datele sunt transferate în afara SEE, ne bazăm pe o decizie de adecvare (de ex. EU-US Data Privacy Framework, dacă furnizorul este certificat) sau pe clauzele contractuale standard ale Comisiei Europene, cu garanții suplimentare unde este cazul. Puteți cere o copie a garanțiilor.'], li: [
+      'Supabase: bază de date, autentificare și stocare (regiune UE).',
+      'Vercel: găzduire și livrare; Vercel Web Analytics și Speed Insights numai dacă acceptați analiza.',
+      'Stripe (Stripe Payments Europe, Irlanda, și societăți din grup): plăți și abonamente, calculul taxelor și portalul clienților. Pentru unele scopuri (de ex. prevenirea fraudei, obligații de reglementare) Stripe este operator independent, conform propriei politici.',
+      'Resend: trimiterea e-mailurilor tranzacționale (linkuri de restaurare, corespondență de rezervare) și a buletinului informativ.',
+      'Anthropic: prelucrarea de către un model lingvistic a conversațiilor cu concierge-ul și ajutor la răspunsurile către solicitări.',
+      'OpenAI: transformarea întrebării într-un vector de căutare (embeddings), citirea cu voce tare (textul răspunsului este trimis pentru a genera sunetul) și ilustrarea conținutului editorial.',
+      'Google: modele lingvistice AI în fluxul editorial și geocodarea adreselor firmelor; nu trimitem intenționat acolo date personale ale vizitatorilor. Playere de webcam de la YouTube (Google) se pot încărca pe pagina Live (vezi Politica privind cookie-urile).',
+      'Meta (WhatsApp Business / Graph API): dacă scrieți concierge-ului pe WhatsApp, mesajul și numărul de telefon trec prin Meta; publicăm de asemenea postări editoriale pe paginile noastre de Facebook și Instagram.',
+      'Telegram: dacă scrieți concierge-ului pe Telegram, mesajul trece prin Telegram.',
+      'Twilio: SMS, unde este folosit pentru verificarea proprietarilor de firme.',
+      'Upstash: contoare de scurtă durată pentru limitarea cererilor (adresa dumneavoastră IP, pentru secunde sau minute), dacă este configurat.',
+      'GetYourGuide: widgeturi de experiențe ale partenerului (încărcate doar după acceptarea dumneavoastră) și rezervarea pe site-ul lor dacă dați clic.',
+      'CARTO și jsDelivr: dale de hartă și biblioteca de hărți, care primesc adresa dumneavoastră IP când deschideți o hartă.',
+      'Windy: playere încorporate de meteo și webcam pe pagina Live.',
+      'Serviciul UE VIES (Comisia Europeană): verificarea codului de TVA al unui advertiser.',
+      'Sentry: monitorizarea erorilor, numai dacă este activat.',
+    ] },
+    { h: '7. Cât timp păstrăm datele', p: ['Păstrăm datele doar cât este necesar scopului. Perioadele aplicate de sistemele noastre sunt:'], li: [
+      'Preferințele membrului stocate de concierge: șterse automat la 90 de zile după încetarea abonamentului; șterse imediat când folosiți „forget me”.',
+      'Sesiunea de autentificare a membrului: până la 30 de zile, reînnoită cât folosiți site-ul; se încheie mai devreme dacă vă deconectați. Linkul unic de restaurare din e-mail: valabil 30 de minute.',
+      'Linkul de autentificare al contului de firmă: 30 de minute; sesiunea de firmă: 14 zile. Linkul de gestionare a fișei și sesiunea de editare: câte 60 de minute. Linkul de verificare a revendicării: 72 de ore.',
+      'Jurnalul tehnic de erori: șters automat după 90 de zile.',
+      'Datele buletinului informativ: până la dezabonare.',
+      'Mesaje de contact, solicitări prin e-mail și cereri de rezervare (cu corespondența lor): cât este necesar pentru tratarea lor și apoi cât timp mai pot apărea pretenții; șterse la cerere, dacă nu avem obligația să le păstrăm.',
+      'Evidențe de plăți și facturi: cât cer legislația fiscală și contabilă. La o cerere de ștergere eliminăm sau anonimizăm identificatorii personali și păstrăm înregistrarea financiară.',
+      'Jurnalele anonime ale concierge-ului (textul întrebării, limba, acoperirea): cât timp sunt utile pentru îmbunătățirea serviciului; sunt șterse împreună cu celelalte date ale dumneavoastră când le putem lega de abonament.',
+      'După o cerere de ștergere păstrăm adresa dumneavoastră de e-mail pe o listă de „nu contactați”, ca să nu vă mai scriem (interes legitim), și un jurnal al ștergerii care conține doar o amprentă ireversibilă (hash) a adresei.',
+    ] },
+    { h: '8. Cookie-uri și stocare locală', p: ['Folosim puține cookie-uri și intrări de stocare în browser; pe cele opționale doar cu consimțământul dumneavoastră. Numele, scopurile și duratele sunt în Politica privind cookie-urile.'] },
+    { h: '9. Drepturile dumneavoastră', p: ['Conform GDPR aveți dreptul de acces, rectificare, ștergere, restricționare a prelucrării, portabilitate și opoziție față de prelucrarea bazată pe interese legitime, precum și dreptul de a vă retrage consimțământul oricând. Exercitarea drepturilor este gratuită. Răspundem în cel mult o lună (prelungibilă cu încă două luni pentru cereri complexe, caz în care vă informăm). Pentru protecția dumneavoastră, vă putem cere să vă confirmați identitatea.'] },
+    { h: '10. Cum vă exercitați drepturile și plângeri', p: [
+      'Scrieți la {privacy_mail} și spuneți-ne ce doriți. Membrii își pot șterge singuri memoria concierge-ului din cont.',
+      'Aveți și dreptul de a depune plângere la autoritatea de supraveghere: Office of the Commissioner for Personal Data Protection al Republicii Cipru, 1 Iasonos Street, 1082 Nicosia (C.P. 23378, 1682 Nicosia), telefon +357 22 818 456, e-mail commissioner@dataprotection.gov.cy, www.dataprotection.gov.cy. Vă puteți adresa și autorității din țara UE în care locuiți.',
+    ] },
+    { h: '11. Obligația de a furniza date, copii și securitate', p: [
+      'Puteți naviga fără să ne dați date personale. Unele funcții necesită anumite date (de ex. o adresă de e-mail pentru abonament sau pentru un răspuns); fără ele nu le putem oferi. Site-ul nu se adresează copiilor sub 16 ani și nu colectăm cu bună știință datele lor.',
+      'Protejăm datele prin controlul accesului, criptare în tranzit, token-uri de autentificare stocate sub formă de hash și acces restricționat al personalului. Niciun sistem nu este complet sigur; vă vom informa pe dumneavoastră și autoritatea despre o încălcare a securității, când legea o cere.',
+    ] },
+    { h: '12. Modificări ale politicii', p: ['Actualizăm această politică atunci când se schimbă serviciile sau legea și afișăm data în partea de sus a paginii. Pentru modificări importante vă vom informa, când este cazul.'] },
+  ],
+};

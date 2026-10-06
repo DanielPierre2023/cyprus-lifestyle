@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/lib/i18n/routing';
 import LocaleSwitch from '@/components/LocaleSwitch';
+import { formatDateWith } from '@/lib/i18n/format';
+import { experiencesNavLabel } from '@/lib/activities/uiLabels';
 
 // Order echoes the print masthead: lead with the marquee sections.
 // The nine merged departments (see lib/editorial/taxonomy.ts). Subcategories and
@@ -17,9 +19,9 @@ export default function Header() {
   const locale = useLocale();
   const [open, setOpen] = useState(false);
 
-  const date = new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : locale, {
+  const date = formatDateWith(locale, new Date(), {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-  }).format(new Date());
+  });
 
   return (
     <header>
@@ -35,6 +37,7 @@ export default function Header() {
             <LocaleSwitch placement="down" variant="util" />
             <Link className="sub" href="/live">{t('live')}</Link>
             <Link className="sub" href="/directory">{t('directory')}</Link>
+            <Link className="sub hide" href="/activities">{experiencesNavLabel(locale)}</Link>
             <Link className="sub hide" href="/search" aria-label={t('search')}>{t('search')}</Link>
             <Link className="sub" href="/membership">{t('membership')}</Link>
             <Link className="sub" href="/#letter">{th('subscribe')}</Link>

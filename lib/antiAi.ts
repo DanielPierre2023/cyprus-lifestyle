@@ -9,6 +9,8 @@
 // using Unicode letter boundaries because ASCII \b does not delimit Greek,
 // Arabic or Cyrillic letters (Latin de/pl keep \b).
 
+import { lexicalTells, structuralTells, prepare } from '@/lib/antiAiLang';
+
 export type Lang = 'en' | 'el' | 'ro' | 'ar' | 'de' | 'pl' | 'ru';
 
 // Acronyms/caps tokens that must STAY uppercase when a title is de-shouted.
@@ -479,6 +481,16 @@ export function scoreAiTells(input: { title?: string; content?: string; lang?: L
         tells.push({ key: def.key, label: def.label, severity: def.severity, count, sample: sampleAround(content, new RegExp(def.re.source, def.re.flags)) });
         score += WEIGHT[def.severity] * Math.min(count, 5) * (count > 1 ? 0.7 : 1);
       }
+    }
+  }
+  // Per-language lexical detectors + structural checks (lib/antiAiLang.ts). Additive:
+  // the original detectors above are untouched, the new keys never repeat their phrases.
+  if (content) {
+    const pre = prepare(content, lang);
+    const extra = [...lexicalTells(content, lang), ...structuralTells(pre.text, lang, pre.view)];
+    for (const t of extra) {
+      tells.push(t);
+      score += WEIGHT[t.severity] * Math.min(t.count, 5) * (t.count > 1 ? 0.7 : 1);
     }
   }
   // Burstiness — a language-neutral rhythm signal folded in additively.

@@ -25,6 +25,8 @@ export const base = {
   dir: (type?: string | null): TagBase => (type ? `dir:${type}` : 'dir:all'),
   events: (): TagBase => 'events',
   event: (slug: string): TagBase => `event:${slug}`,
+  activities: (): TagBase => 'activities',
+  activity: (slug: string): TagBase => `activity:${slug}`,
 };
 
 /** Tags a cached read should carry: the base tag plus its per-locale twin. */
@@ -43,7 +45,8 @@ export function cleanLocales(l: unknown): Locale[] {
 export type Change =
   | { kind: 'article'; slug: string; category?: string; locales?: Locale[] }
   | { kind: 'listing'; slug: string; type?: string; locales?: Locale[] }
-  | { kind: 'event'; slug: string; locales?: Locale[] };
+  | { kind: 'event'; slug: string; locales?: Locale[] }
+  | { kind: 'activity'; slug: string; locales?: Locale[] };
 
 const ok = (v: unknown): v is string => typeof v === 'string' && SAFE_KEY.test(v);
 
@@ -63,6 +66,7 @@ export function parseChange(body: unknown): Change | null {
     return { kind: 'listing', slug: b.slug, ...(ok(b.type) ? { type: b.type } : {}), ...loc };
   }
   if (b.kind === 'event' && ok(b.slug)) return { kind: 'event', slug: b.slug, ...loc };
+  if (b.kind === 'activity' && ok(b.slug)) return { kind: 'activity', slug: b.slug, ...loc };
   return null;
 }
 
@@ -81,6 +85,7 @@ export function changesFromWebhook(body: unknown): Change[] {
       b.table === 'blog_posts' ? parseChange({ kind: 'article', slug: r.slug, category: r.category })
       : b.table === 'directory_listings' ? parseChange({ kind: 'listing', slug: r.slug, type: r.type })
       : b.table === 'events' ? parseChange({ kind: 'event', slug: r.slug })
+      : b.table === 'activities' ? parseChange({ kind: 'activity', slug: r.slug })
       : null;
     if (c) out.push(c);
   }
@@ -96,6 +101,8 @@ export function tagsForChange(c: Change): string[] {
   } else if (c.kind === 'listing') {
     bases.push(base.listing(c.slug));
     bases.push(base.dir(c.type ?? null));                    // its type index (or all types when unknown)
+  } else if (c.kind === 'activity') {
+    bases.push(base.activity(c.slug), base.activities());   // the experience page + the /activities lists
   } else {
     bases.push(base.event(c.slug), base.events());
   }

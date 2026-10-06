@@ -1,0 +1,76 @@
+import type { LegalDoc } from '@/lib/legal/types';
+
+export const privacyDe: LegalDoc = {
+  title: 'Datenschutzerklärung',
+  dek: 'Wie Cyprus Lifestyle personenbezogene Daten erhebt, nutzt, weitergibt und schützt – nach der EU-Datenschutz-Grundverordnung (DSGVO) und dem zyprischen Gesetz 125(I)/2018.',
+  sections: [
+    { h: '1. Verantwortlicher', p: [
+      'Verantwortlich ist {company}, eine in der Republik Zypern unter der Registernummer {reg} eingetragene Gesellschaft mit Sitz in {town}, Zypern. Cyprus Lifestyle ({site}) ist ihr Medientitel. Für alle Fragen zu Ihren Daten schreiben Sie an {privacy_mail}.',
+    ] },
+    { h: '2. Welche personenbezogenen Daten wir verarbeiten', p: ['Je nachdem, was Sie auf der Website tun, verarbeiten wir:'], li: [
+      'Nachrichten und Formulare: Name, E-Mail-Adresse, Telefonnummer und den Inhalt Ihrer Mitteilung (Kontaktformular, Anfragen, Kommentare, Bewertungen, E-Mails an uns).',
+      'Newsletter („Saturday Letter“): E-Mail-Adresse und Sprache sowie Bestätigungs- und Abmeldenachweise.',
+      'Concierge (unser Website-Chatbot): die Fragen, die Sie tippen oder diktieren, die Antworten, die Sprache, eine anonyme zufällige Browser-Kennung (cl_cid) und – wenn Sie es wünschen – die Vorlieben, die Sie angeben (z. B. Reisedaten, Personenzahl, Ernährungsweise, Interessen, Budget). Wir weisen den Concierge an, keine sensiblen Daten zu speichern; bitte geben Sie im Chat keine Gesundheits-, Zahlungskarten- oder ähnlich sensiblen Daten ein.',
+      'Buchungsanfragen: die Angaben zu Ihrer Anfrage (Wunsch, Daten, Personenzahl, Kontaktdaten, Nachrichten) und unser Schriftverkehr dazu, auch mit dem Partnerunternehmen, das die Leistung erbringen könnte.',
+      'Mitgliedschaft: E-Mail-Adresse, Mitgliedsstatus und Abrechnungszeitraum, eine Stripe-Kunden- und Abonnementreferenz, Ihre gemerkten Vorlieben, Anmelde-Sitzungen und einmalige Wiederherstellungslinks. Karten- und Bankdaten geben Sie bei Stripe ein; sie gelangen nie auf unsere Server.',
+      'Werbekunden und Unternehmen: Name, Firma, E-Mail, Land, Rechnungsdaten und – bei EU-Unternehmen – eine USt-IdNr., die wir im EU-Dienst VIES prüfen; Anspruchs- und Verifizierungsdaten für Verzeichniseinträge.',
+      'Technische Daten: IP-Adresse und Geräte-/Browserangaben in Server-Logs und Sicherheitsmechanismen, Fehlerprotokolle und – nur wenn Sie Analyse akzeptieren – anonyme Nutzungs- und Leistungsstatistiken.',
+    ] },
+    { h: '3. Zwecke und Rechtsgrundlagen (Art. 6 DSGVO)', li: [
+      'Zur Erbringung der von Ihnen gewünschten Leistung und für vorvertragliche Schritte: Ihnen antworten, Buchungsanfragen bearbeiten, Mitgliedschaft bereitstellen und abrechnen, den Concierge bereitstellen (Vertrag / vorvertragliche Maßnahmen).',
+      'Für den Newsletter, das Merken von Concierge-Vorlieben über einen Besuch hinaus auf Ihren Wunsch sowie das Laden optionaler Analyse- und Partnerskripte: Ihre Einwilligung, die Sie jederzeit widerrufen können (der Widerruf berührt die frühere Verarbeitung nicht).',
+      'Für Sicherheit der Website, Missbrauchs- und Betrugsabwehr, Begrenzung von Anfragen, Fehlerprotokollierung und -behebung, das Unternehmensverzeichnis, die Kontaktaufnahme mit Unternehmen zu Einträgen oder Werbung (mit einfacher Abmeldemöglichkeit) und die Verbesserung des Concierge: unsere berechtigten Interessen, abgewogen gegen Ihre Rechte.',
+      'Für Buchführung, Steuerunterlagen und Auskünfte an Behörden: rechtliche Verpflichtungen.',
+    ] },
+    { h: '4. Der Concierge und automatisierte Verarbeitung', p: [
+      'Der Concierge ist ein automatisierter Assistent dieser Website. Ihre Fragen werden an KI-Dienstleister (siehe Abschnitt 6) gesendet, um Antworten zu erzeugen und unsere Artikel, Einträge und Ratgeber zu durchsuchen. Er gibt allgemeine Informationen und Empfehlungen; das ist keine Fachberatung, und er trifft keine Entscheidungen mit rechtlicher oder ähnlich erheblicher Wirkung für Sie. Eine Buchungsanfrage wird stets von einem Menschen bearbeitet: Der Inhaber bearbeitet Anfragen persönlich im Backoffice.',
+      'Für Mitglieder kann sich der Concierge die angegebenen Vorlieben geräteübergreifend merken. Sie können sie selbst einsehen und löschen (Gedächtnis-Fenster im Concierge und „Vergessen“ im Konto).',
+    ] },
+    { h: '5. Empfänger Ihrer Daten', p: ['Wir geben personenbezogene Daten nur im erforderlichen Umfang weiter, an folgende Empfängerkategorien:'], li: [
+      'Dienstleister, die nach unseren Weisungen handeln (Auftragsverarbeiter), siehe Abschnitt 6.',
+      'Partnerunternehmen (z. B. Restaurant, Villa, Erlebnisanbieter), wenn Sie eine Buchungsanfrage senden, die sie betrifft: Sie erhalten, was zur Beantwortung nötig ist, und verarbeiten die Daten dann nach ihrer eigenen Datenschutzerklärung.',
+      'Behörden, Berater und Gerichte, soweit gesetzlich erforderlich oder zur Geltendmachung, Ausübung oder Verteidigung von Rechtsansprüchen.',
+      'Wir verkaufen keine personenbezogenen Daten.',
+    ] },
+    { h: '6. Auftragsverarbeiter, weitere Anbieter und Drittlandübermittlung', p: ['Die folgenden Anbieter verarbeiten Daten für uns oder erhalten sie, wenn Sie die jeweilige Funktion nutzen. Unsere Datenbank wird in der EU gehostet (Supabase, Region Frankfurt), unsere Serverfunktionen laufen in Frankfurt (Vercel). Mehrere Anbieter sitzen – oder haben Konzerngesellschaften – außerhalb des Europäischen Wirtschaftsraums (insbesondere in den USA). Bei Übermittlungen außerhalb des EWR stützen wir uns auf einen Angemessenheitsbeschluss (z. B. das EU-US Data Privacy Framework, soweit der Anbieter zertifiziert ist) oder auf die Standardvertragsklauseln der Europäischen Kommission, bei Bedarf mit zusätzlichen Garantien. Eine Kopie der Garantien erhalten Sie auf Anfrage.'], li: [
+      'Supabase: Datenbank, Anmeldung und Speicher (EU-Region).',
+      'Vercel: Hosting und Auslieferung; Vercel Web Analytics und Speed Insights nur, wenn Sie Analyse akzeptieren.',
+      'Stripe (Stripe Payments Europe, Irland, und Konzerngesellschaften): Zahlungen und Abonnements, Steuerberechnung und Kundenportal. Für einzelne Zwecke (z. B. Betrugsprävention, regulatorische Pflichten) ist Stripe nach eigener Datenschutzerklärung eigenständig Verantwortlicher.',
+      'Resend: Versand von Transaktions-E-Mails (Wiederherstellungslinks, Buchungspost) und des Newsletters.',
+      'Anthropic: Sprachmodell-Verarbeitung von Concierge-Gesprächen und Unterstützung bei Antworten auf Anfragen.',
+      'OpenAI: Umwandlung Ihrer Frage in einen Suchvektor (Embeddings), Vorlesefunktion (der Antworttext wird zur Audioerzeugung gesendet) und Bebilderung redaktioneller Inhalte.',
+      'Google: KI-Sprachmodelle im redaktionellen Ablauf und Geokodierung von Unternehmensadressen; wir senden personenbezogene Daten von Besuchern nicht absichtlich dorthin. Webcam-Player von YouTube (Google) können auf der Live-Seite laden (siehe Cookie-Richtlinie).',
+      'Meta (WhatsApp Business / Graph API): Wenn Sie den Concierge über WhatsApp kontaktieren, laufen Nachricht und Telefonnummer über Meta; außerdem veröffentlichen wir redaktionelle Beiträge auf unseren Facebook- und Instagram-Seiten.',
+      'Telegram: Wenn Sie den Concierge über Telegram kontaktieren, läuft die Nachricht über Telegram.',
+      'Twilio: SMS, soweit zur Verifizierung von Unternehmensinhabern genutzt.',
+      'Upstash: kurzlebige Zähler zur Anfragenbegrenzung (Ihre IP-Adresse, für Sekunden oder Minuten), soweit konfiguriert.',
+      'GetYourGuide: Partner-Widgets für Erlebnisse (erst nach Ihrer Zustimmung geladen) und Buchung auf deren Seite, wenn Sie dorthin klicken.',
+      'CARTO und jsDelivr: Kartenkacheln und Kartenbibliothek; sie erhalten Ihre IP-Adresse, wenn Sie eine Karte öffnen.',
+      'Windy: eingebettete Wetter- und Webcam-Player auf der Live-Seite.',
+      'EU-Dienst VIES (Europäische Kommission): Prüfung der USt-IdNr. eines Werbekunden.',
+      'Sentry: Fehlerüberwachung, nur falls aktiviert.',
+    ] },
+    { h: '7. Speicherdauer', p: ['Wir speichern Daten nur so lange, wie es der Zweck erfordert. Unsere Systeme wenden folgende Fristen an:'], li: [
+      'Vom Concierge gespeicherte Mitglieder-Vorlieben: automatisch gelöscht 90 Tage nach Ende der Mitgliedschaft; sofort gelöscht, wenn Sie „Vergessen“ nutzen.',
+      'Mitglieder-Anmeldesitzung: bis zu 30 Tage, verlängert, solange Sie die Website nutzen; endet früher bei Abmeldung. Einmaliger E-Mail-Wiederherstellungslink: 30 Minuten gültig und nur einmal verwendbar.',
+      'Anmeldelink für Unternehmenskonten: 30 Minuten; Unternehmenssitzung: 14 Tage. Verwaltungslink und Bearbeitungssitzung für Verzeichniseinträge: je 60 Minuten. Bestätigungslink bei Eintragsübernahme: 72 Stunden.',
+      'Technisches Fehlerprotokoll: automatisch nach 90 Tagen gelöscht.',
+      'Newsletter-Daten: bis zur Abmeldung.',
+      'Kontaktnachrichten, E-Mail-Anfragen und Buchungsanfragen (mit Schriftverkehr): solange zur Bearbeitung nötig und danach so lange, wie noch Ansprüche entstehen können; auf Antrag gelöscht, soweit keine Aufbewahrungspflicht besteht.',
+      'Zahlungs- und Rechnungsunterlagen: solange Steuer- und Buchführungsrecht es verlangen. Bei einem Löschantrag entfernen oder anonymisieren wir die persönlichen Kennungen und behalten den finanziellen Eintrag.',
+      'Anonyme Concierge-Protokolle (Fragetext, Sprache, Abdeckung): solange sie zur Verbesserung des Dienstes nützlich sind; sie werden zusammen mit Ihren übrigen Daten gelöscht, wenn wir sie Ihrer Mitgliedschaft zuordnen können.',
+      'Nach einem Löschantrag behalten wir Ihre E-Mail-Adresse auf einer Sperrliste, damit wir Sie nicht erneut anschreiben (berechtigtes Interesse), sowie ein Löschprotokoll, das nur einen Einweg-Hash der Adresse enthält.',
+    ] },
+    { h: '8. Cookies und lokaler Speicher', p: ['Wir verwenden wenige Cookies und Browser-Speichereinträge; optionale nur nach Ihrer Einwilligung. Namen, Zwecke und Laufzeiten stehen in unserer Cookie-Richtlinie.'] },
+    { h: '9. Ihre Rechte', p: ['Nach der DSGVO haben Sie das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch gegen Verarbeitung aufgrund berechtigter Interessen sowie das Recht, eine Einwilligung jederzeit zu widerrufen. Die Ausübung ist kostenlos. Wir antworten innerhalb eines Monats (bei komplexen Anfragen um zwei weitere Monate verlängerbar; dann informieren wir Sie). Zu Ihrem Schutz können wir einen Identitätsnachweis verlangen.'] },
+    { h: '10. Rechte ausüben und Beschwerde', p: [
+      'Schreiben Sie an {privacy_mail} und teilen Sie uns Ihr Anliegen mit. Mitglieder können das Concierge-Gedächtnis auch selbst in ihrem Konto löschen.',
+      'Sie haben außerdem das Recht auf Beschwerde bei der Aufsichtsbehörde: Office of the Commissioner for Personal Data Protection der Republik Zypern, 1 Iasonos Street, 1082 Nicosia (Postfach 23378, 1682 Nicosia), Telefon +357 22 818 456, E-Mail commissioner@dataprotection.gov.cy, www.dataprotection.gov.cy. Sie können sich auch an die Behörde Ihres EU-Wohnsitzlandes wenden.',
+    ] },
+    { h: '11. Bereitstellungspflicht, Kinder und Sicherheit', p: [
+      'Sie können die Website nutzen, ohne uns personenbezogene Daten zu geben. Einige Funktionen brauchen bestimmte Daten (z. B. eine E-Mail-Adresse für die Mitgliedschaft oder eine Antwort); ohne sie können wir sie nicht anbieten. Die Website richtet sich nicht an Kinder unter 16 Jahren; wir erheben wissentlich keine Daten von ihnen.',
+      'Wir schützen Daten durch Zugriffskontrollen, Verschlüsselung bei der Übertragung, gehashte Anmelde-Token und beschränkten Mitarbeiterzugriff. Kein System ist völlig sicher; bei einer Datenpanne informieren wir Sie und die Behörde, soweit das Gesetz es verlangt.',
+    ] },
+    { h: '12. Änderungen dieser Erklärung', p: ['Wir aktualisieren diese Erklärung, wenn sich unsere Dienste oder die Rechtslage ändern, und nennen oben das Datum. Über wesentliche Änderungen informieren wir Sie, wo angemessen.'] },
+  ],
+};

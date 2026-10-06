@@ -605,12 +605,13 @@ export async function getSectionSponsor(sectionKey: string): Promise<SectionSpon
 
 export interface Author {
   id: string; slug: string; name: string; title: string; bio: string; specialties: string[];
+  editorKey: string | null; socialX: string | null; // editor_key is set for house desks, null for named people
 }
 
 export async function getAuthor(locale: Locale, slug: string): Promise<Author | null> {
   const l = locale;
   const { data } = await supabaseAdmin().from('authors')
-    .select(`id, slug, specialties, name_${l}, name_en, title_${l}, title_en, bio_${l}, bio_en`)
+    .select(`id, slug, specialties, editor_key, social_x, name_${l}, name_en, title_${l}, title_en, bio_${l}, bio_en`)
     .eq('slug', slug).eq('active', true).maybeSingle();
   if (!data) return null;
   const r = data as unknown as Record<string, unknown>;
@@ -618,6 +619,8 @@ export async function getAuthor(locale: Locale, slug: string): Promise<Author | 
     id: String(r.id), slug: String(r.slug),
     name: pick(r, 'name', l), title: pick(r, 'title', l), bio: pick(r, 'bio', l),
     specialties: Array.isArray(r.specialties) ? (r.specialties as string[]) : [],
+    editorKey: (r.editor_key as string | null) ?? null,
+    socialX: (r.social_x as string | null) ?? null,
   };
 }
 

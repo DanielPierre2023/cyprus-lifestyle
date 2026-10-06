@@ -7,6 +7,8 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isValidCid } from '@/lib/concierge/memory';
+import { isLocale } from '@/lib/locales';
+import { MEMBER_PROMPT } from '@/lib/member/truth';
 import { entitled, canSignIn, type MemberLike } from '@/lib/member/entitlement';
 import {
   RESTORE_MAX_PER_HOUR, escapeLike, generateRestoreToken, hashRestoreToken, isPlausibleEmail,
@@ -212,6 +214,7 @@ export interface MembershipCheckout {
   cid: string | null;             // anonymous browser id the member checked out from
   email: string | null;
   tier: string;
+  locale?: string | null;         // the edition they joined from (lifecycle e-mails go out in it)
 }
 export type RecordMembershipResult =
   | { ok: true; action: 'inserted' | 'updated' }
@@ -231,6 +234,7 @@ export async function recordMembershipCheckout(
     cid: m.cid, email: m.email, tier: m.tier, status: 'active',
     stripe_customer_id: m.customerId, stripe_subscription_id: m.subscriptionId, stripe_session_id: m.sessionId,
     updated_at: nowIso,
+    ...(m.locale && isLocale(m.locale) ? { locale: m.locale } : {}),
   };
   const refresh = () => sb.from('concierge_members').update(row).eq(key[0], key[1]).select('id');
 
@@ -257,8 +261,8 @@ export async function recordMembershipCheckout(
   }
 }
 
-// The system-prompt note that upgrades the concierge for a member. It must describe only
-// what membership really changes: a more thorough, anticipatory answer, with preferences
-// remembered across devices. There is no human concierge, queue priority or quota.
-export const MEMBER_BLOCK =
-  '\n\nThis guest is a Cyprus Lifestyle MEMBER. Give them your very best: be especially thorough, anticipatory and generous with detail; go a step beyond what was asked and use what you remember of their preferences. Do not promise a human concierge, priority handling or response times: for anything bespoke, offer to take their details through the concierge request form.';
+// The system-prompt note that upgrades the concierge for a member. It must describe only what membership really changes
+// (wording and the reasons live in lib/member/truth.ts): a more thorough, anticipatory answer, preferences remembered across
+// devices, the priority lane for requests sent while signed in (a first-reply TARGET, not a guarantee). No named human
+// concierge, no guaranteed times, no discounts.
+export const MEMBER_BLOCK = MEMBER_PROMPT;

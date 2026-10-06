@@ -10,6 +10,7 @@ import 'server-only';
 import { callClaude, CLAUDE_HAIKU } from '@/lib/ai';
 import { humanizeHtml, humanizeText, scoreAiTells, type Lang } from '@/lib/antiAi';
 import { LOCALE_NAME } from '@/lib/locales';
+import { promptTellList, nativeRegisterRules } from '@/lib/antiAiLang';
 
 // The inflected editions where the deterministic net alone leaves residual AI-tells
 // and a targeted model pass earns its keep. EN/RO have full deterministic coverage
@@ -43,6 +44,8 @@ export async function proofread(opts: { text: string; lang: Lang; isHtml: boolea
     `Rewrite the ${isHtml ? 'HTML' : 'text'} below to remove machine/AI-sounding phrasing while keeping the meaning, facts, names, numbers and tone exactly.`,
     isHtml ? `Preserve the HTML structure EXACTLY — same tags, attributes and order; change only the human-readable text between tags.` : `Return plain text only.`,
     `Neutralise these tells in particular (including inflected forms): ${tells}.`,
+    `Also avoid the usual ${LOCALE_NAME[lang]} AI phrasing: ${promptTellList(lang)}.`,
+    nativeRegisterRules(lang),
     `No em/en dashes. Headings stay sentence case. Keep it natural, editorial ${LOCALE_NAME[lang]}; do not add or remove information.${rtl}`,
     `Return ONLY the rewritten ${isHtml ? 'HTML' : 'text'} — no code fences, no preamble, no notes.`,
   ].join('\n');

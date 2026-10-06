@@ -24,10 +24,12 @@ import { mapToCanonical } from '@/lib/directory/taxonomy';
 import { geocode, haversineMeters, bbox } from '@/lib/geo';
 import { getActivities, gygPartnerId } from '@/lib/activities/data';
 import { rankActivities } from '@/lib/activities/match';
+import { isActivitySlug } from '@/lib/activities/browse';
 import { kindLabel, affiliateUrl, priceBasisLabel } from '@/lib/activities/classify';
 import { markLinkable, renderSourcesBlock, toCard, sourceHints, type SourceHit, type SourceNotes, type SourceCard, type TrustLabel } from '@/lib/concierge/sources';
 import { retrieveSources, publishedSet } from '@/lib/concierge/sourcesRetrieve';
 import { supabaseSourceDeps } from '@/lib/concierge/sourcesDeps';
+import { MEMBERSHIP_FACTS } from '@/lib/member/truth';
 
 export const CONCIERGE_MODEL = process.env.SONNET_MODEL || CLAUDE_SONNET;
 const NEIGHBOURHOOD_RADIUS_M = Number(process.env.NEIGHBOURHOOD_RADIUS_M || 2500);
@@ -66,7 +68,8 @@ export interface Pick {
 // A bookable experience from our own catalogue (public.activities) offered this turn;
 // it links out to book with the booking partner (GetYourGuide).
 export interface ActivityPick {
-  id: string; title: string; kind: string; kindLabel: string; district: string | null; town: string | null; area: string | null;
+  id: string; slug?: string | null; pageHref?: string | null; // pageHref: locale-free public page /activities/<slug> (the card's main link)
+  title: string; kind: string; kindLabel: string; district: string | null; town: string | null; area: string | null;
   priceBand: string | null; priceBasis: string | null; duration: string | null; tags: string[];
   url: string | null; summary: string | null;
 }
@@ -131,7 +134,7 @@ const CY_FACTS =
 // features beyond what is stated here.
 const CL_OFFERING =
   "\n\nCYPRUS LIFESTYLE — WHAT WE OFFER (you may explain and warmly recommend these when relevant, in the guest's language). " +
-  "FOR READERS: (1) The Saturday Letter — our FREE weekly editorial dispatch on Cyprus life; invite anyone who is enjoying the guide to subscribe. (2) Concierge Membership — a paid subscription for residents and frequent visitors: you answer more thoroughly and remember their preferences across devices. It does NOT include a human concierge, priority handling or any guaranteed response time — never imply it does. Never quote its price: point them to the Membership page, which shows the current price, to join. " +
+  "FOR READERS: (1) The Saturday Letter — our FREE weekly editorial dispatch on Cyprus life; invite anyone who is enjoying the guide to subscribe. " + MEMBERSHIP_FACTS + "Never quote its price: point them to the Membership page, which shows the current price, to join. " +
   "FOR BUSINESSES who want to place their own content with us — this is a normal, welcome part of what we do, and any paid placement is always clearly labelled: (1) Listed — a premium, verified directory listing (full profile, photography, top-of-category, map priority, contact links), self-serve. (2) Featured — everything in Listed plus a rotating display placement, one sponsored feature per quarter and a newsletter mention; the workhorse for hotels, developers and clinics. (3) Partner — category exclusivity, an editorial series and priority everywhere, arranged bespoke. Never quote prices: the Advertise page shows the current rates. Plus à-la-carte options: homepage and section banners, section sponsorships, sponsored features (branded, promoted, in all languages), sole sponsorship of the Saturday Letter, a directory category-exclusive, and featured events in the Agenda. Every placement runs across all seven language editions with translation included. When a business is interested, explain the tier that fits, point them to the Advertise page, and warmly offer to take a name and email so our partnerships team can follow up. " +
   "THE DIRECTORY covers every category a visitor, resident or investor needs — dining and stays, real estate and property, professional services (legal, tax, banking, insurance, company formation), home and relocation services, health, retail, food and wineries, nature and beaches, culture and activities, community and schools, and mobility — so you can always guide someone to the right category and, where the context provides them, name verified listings.";
 
@@ -725,7 +728,7 @@ export async function assembleContext(locale: string, latestUser: string): Promi
 
 function toActivityPick(a: Awaited<ReturnType<typeof getActivities>>[number], locale: string): ActivityPick {
   return {
-    id: a.external_id, title: a.title, kind: a.kind, kindLabel: kindLabel(a.kind, locale),
+    id: a.external_id, slug: a.slug && isActivitySlug(a.slug) ? a.slug : null, pageHref: a.slug && isActivitySlug(a.slug) ? `/activities/${a.slug}` : null, title: a.title, kind: a.kind, kindLabel: kindLabel(a.kind, locale),
     district: a.district, town: a.town, area: a.landmark,
     priceBand: a.price_band, priceBasis: a.price_basis ? priceBasisLabel(a.price_basis, locale, a.group_max) : null,
     duration: a.duration_label, tags: a.tags || [],

@@ -41,6 +41,9 @@ export interface EditionFinding {
   untranslated: boolean;
   score: number;
   level: Level;
+  // The strongest tells behind the score (label, severity, count) so the admin page can
+  // say WHY an edition reads as machine output. Flag-only: nothing here blocks publishing.
+  tells: Array<{ key: string; label: string; severity: 'high' | 'medium' | 'low'; count: number }>;
 }
 
 export interface LangSummary {
@@ -49,6 +52,7 @@ export interface LangSummary {
   scored: number;       // translated editions actually scored in this language
   avgScore: number;     // mean AI-tell score over `scored` editions (0 when none)
   high: number;         // scored editions whose AI level is 'high'
+  flagged: number;      // scored editions at 'medium' or 'high' (worth a human pass)
 }
 
 export interface ScanResult {
@@ -73,6 +77,9 @@ export function stripHtml(html: unknown): string {
   if (!html) return '';
   return String(html)
     .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+    // Block ends become a blank line so paragraph-level detectors (summary openers,
+    // uniform paragraph sizes) still see paragraphs after the tags are gone.
+    .replace(/<\s*(?:br|\/p|\/div|\/li|\/h[1-6]|\/blockquote|\/tr)\s*\/?>/gi, '\n\n')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
@@ -81,7 +88,9 @@ export function stripHtml(html: unknown): string {
     .replace(/&(?:quot|#34);/gi, '"')
     .replace(/&(?:#39|apos|rsquo|lsquo);/gi, "'")
     .replace(/&[#0-9a-z]+;/gi, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/[ \t\f\v\r\u00a0]+/g, ' ')
+    .replace(/ ?\n ?/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
@@ -97,7 +106,7 @@ function sourceOf(v: unknown): Edition {
 
 function emptyPerLang(): Record<Edition, LangSummary> {
   return Object.fromEntries(
-    LANGS.map((l) => [l, { total: 0, untranslated: 0, scored: 0, avgScore: 0, high: 0 }]),
+    LANGS.map((l) => [l, { total: 0, untranslated: 0, scored: 0, avgScore: 0, high: 0, flagged: 0 }]),
   ) as Record<Edition, LangSummary>;
 }
 
@@ -135,8 +144,10 @@ export function scanPosts(posts: RawPost[]): ScanResult {
         sum.scored += 1;
         scoreSum[l] += r.score;
         if (r.level === 'high') sum.high += 1;
+        if (r.level === 'high' || r.level === 'medium') sum.flagged += 1;
       }
-      editions.push({ id, slug, title, lang: l, untranslated, score: r.score, level: r.level });
+      const tells = r.tells.slice(0, 4).map((t) => ({ key: t.key, label: t.label, severity: t.severity, count: t.count }));
+      editions.push({ id, slug, title, lang: l, untranslated, score: r.score, level: r.level, tells });
     }
   }
 

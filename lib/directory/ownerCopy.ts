@@ -4,6 +4,7 @@
 // tiny builders, no I/O, unit-tested. English is the source (exact previous wording).
 // el/ro/ar/de/pl/ru: machine-written in increment 5.1 -> NEEDS NATIVE REVIEW before launch.
 import { isLocale, type Locale } from '@/lib/locales';
+import { hubMailParagraph } from '@/lib/business/hubCopy';
 
 const pick = <T,>(m: Record<Locale, T>, l?: string | null): T => m[l && isLocale(l) ? l : 'en'];
 const esc = (s: string): string => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
@@ -117,15 +118,18 @@ const MANAGE_MAIL: Record<Locale, MailCopy> = {
 
 export interface BuiltMail { subject: string; heading: string; bodyHtml: string; ctaLabel: string; preheader: string }
 
-function buildMail(c: MailCopy, ignore: string, biz: string): BuiltMail {
+function buildMail(c: MailCopy, ignore: string, biz: string, hub = ''): BuiltMail {
   return {
     subject: fillText(c.subject, biz), heading: fill(c.heading, biz),
-    bodyHtml: `<p>${fill(c.p1, biz)}</p><p>${c.p2}</p><p>${ignore}</p>`,
+    bodyHtml: `<p>${fill(c.p1, biz)}</p><p>${c.p2}</p>${hub}<p>${ignore}</p>`,
     ctaLabel: c.cta, preheader: fillText(c.preheader, biz),
   };
 }
-export const claimVerifyMail = (locale: string | null | undefined, biz: string): BuiltMail => buildMail(pick(CLAIM_MAIL, locale), pick(IGNORE, locale), biz);
-export const manageLinkMail = (locale: string | null | undefined, biz: string): BuiltMail => buildMail(pick(MANAGE_MAIL, locale), pick(IGNORE, locale), biz);
+/** `hubLink` (optional): absolute URL of the Business Hub; adds a one-paragraph pointer to it. Without it the mail is unchanged. */
+export const claimVerifyMail = (locale: string | null | undefined, biz: string, hubLink?: string): BuiltMail =>
+  buildMail(pick(CLAIM_MAIL, locale), pick(IGNORE, locale), biz, hubLink ? hubMailParagraph(locale, 'claim', hubLink) : '');
+export const manageLinkMail = (locale: string | null | undefined, biz: string, hubLink?: string): BuiltMail =>
+  buildMail(pick(MANAGE_MAIL, locale), pick(IGNORE, locale), biz, hubLink ? hubMailParagraph(locale, 'manage', hubLink) : '');
 
 // ── pages behind the links ───────────────────────────────────────────────────────────
 export interface PageCopy {

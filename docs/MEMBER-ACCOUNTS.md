@@ -33,4 +33,4 @@ Safety net: every day the site asks Stripe about paid memberships whose period e
 ## 4. Honest notes
 * The sign-in e-mail goes out in the language of the page the member requested it on.
 * A member's browser is "bound" to the membership when they sign in; signing in elsewhere moves the binding (one browser = one membership) — same rule as before.
-* Not built (not asked): e-mail to the member when a payment fails or the membership ends. Stripe sends its own payment-failure e-mails if you enable them in Settings → Billing → Subscriptions and e-mails.
+* Since Increment 3.2 the daily job e-mails the member once when a payment problem starts (grace period) and once when the membership ends (docs/MEMBER-CARD.md, section 5). Keep Stripe's own payment-failure e-mails OFF so members do not get two; receipts stay on.

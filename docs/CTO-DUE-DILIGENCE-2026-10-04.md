@@ -64,7 +64,7 @@ Additional concierge defects: recommends `listed` businesses that have **no publ
 | The whole island, curated | Not enforced by anything |
 | (technical) | One sentence `MEMBER_BLOCK` in the prompt + "✦ Member" badge |
 
-Billing defects: no `invoice.paid`/`customer.subscription.updated` handler → **a member whose card is recovered by Stripe retry stays locked out**; no Customer Portal/cancel; no annual plan; no VAT/invoice handling; no idempotency on webhook redelivery; no guard against double subscription; membership keyed to `localStorage cl_cid`; and the page copy says "Membership begins free, and always will… a paid tier is on the way" directly above a live paid tier. Patron ("print edition, member evenings") is a vapor card.
+Billing defects: no `invoice.paid`/`customer.subscription.updated` handler → **a member whose card is recovered by Stripe retry stays locked out**; no Customer Portal/cancel; no annual plan; no VAT/invoice handling; no idempotency on webhook redelivery; no guard against double subscription; membership keyed to `localStorage cl_cid`; and the page copy says "Membership begins free, and always will… a paid tier is on the way" directly above a live paid tier. Patron (a card promising benefits that do not exist, one of which is no longer planned) is a vapor card.
 
 ### 2.3 Booking / request flow (concierge → redaction)
 
@@ -169,7 +169,7 @@ Positives worth preserving: server-only service client, Stripe HMAC, hashed toke
 3. **Island Key card (innovative):** a digital member card (wallet pass + QR) redeemed at partner venues for member privileges. Every redemption is logged → **partners get measurable ROI; the redaction gets a commission/fee ledger; the subscription becomes self-financing and sellable** (partners in Signature/Partner tiers fund the privileges — member never pays twice). This also turns the directory into a *loyalty network* no competitor has.
 4. **Trip Dossier:** the AI builds a personalised itinerary (dates, party, tastes, language) from the *whole* database (directory, events, activities, weather, regulations), an editor-reviewed PDF + live link, re-planned automatically if weather/events change.
 5. **Concierge on the member's channel:** one thread across web / WhatsApp / Telegram, same memory, verified by magic link (not a browser id).
-6. **Editorial access:** quarterly print/digital edition, early access to *The Island Index*, member-only events, "Ask the Editors" monthly session, the Circle diary.
+6. **Editorial access:** early access to *The Island Index*, member-only events, "Ask the Editors" monthly session, the Circle diary.
 7. **Quotas that mean something:** e.g. 2 bespoke arrangements/month included, extra at a disclosed fee — replaces the meaningless "unlimited".
 8. **Billing self-service:** Stripe Customer Portal, annual plan, VAT-inclusive consumer pricing.
 
@@ -178,9 +178,9 @@ Positives worth preserving: server-only service client, Stripe HMAC, hashed toke
 | Tier | Price (VAT incl.) | Purpose |
 |---|---|---|
 | **Reader** | Free | Letter, archive, saved items, AI concierge (rate-limited), account via magic link |
-| **Member — The Island Key** | €19/mo or €190/yr (existing price, now *earned*) | Items 1–8 above; print edition included at annual |
+| **Member — The Island Key** | €19/mo or €190/yr (existing price, now *earned*) | Items 1–8 above |
 | **Private Client** | from €79/mo, capped seats, application-based | Named senior concierge, 1-hour SLA, bespoke arrangements, private events |
-| *Retire* | Patron; the vapor card | Fold print + events into Member |
+| *Retire* | Patron; the vapor card | Fold events into Member |
 
 (The commercial reviewer proposed €9/€49; I recommend keeping €19 *only if* items 1–3 ship — otherwise the price is not defensible. Test €9 "Insider" without priority/dossier as a conversion rung if needed.)
 
@@ -321,7 +321,7 @@ Durations assume a small senior team (2–3 engineers + 1 designer + editorial l
 - Extend reply-language lists (proof, comment-reply, scraper, media kit, inbox) to all 7.
 
 ### Phase 6 — Brand, scale & growth (months 5–9)
-- Image strategy (CDN/transform instead of `unoptimized`), font diet, JS budget cut, tag-based revalidation for 7×~3k pages; data-licensing review for Google-sourced content; print edition tooling; sponsorship inventory manager; partner marketplace; mobile PWA/app for Island Key.
+- Image strategy (CDN/transform instead of `unoptimized`), font diet, JS budget cut, tag-based revalidation for 7×~3k pages; data-licensing review for Google-sourced content; sponsorship inventory manager; partner marketplace; mobile PWA/app for Island Key.
 
 ---
 
@@ -336,5 +336,9 @@ Editorial: % pieces with fact-check complete (target 100%), time idea→publish,
 3. Admin language scope: public + business hub + emails in 7 languages, admin English-first (my recommendation) vs translate admin too.
 4. Island Key pricing: keep €19 only if priority/named-human/card ship; confirm willingness to fund partner privileges via Signature tier.
 5. Budget acknowledgements for paid services my standards ask me to flag: Vercel Pro (commercial use), Supabase Pro/staging, Upstash, Resend volume, Sentry, transcription (e.g. Whisper API — or self-hosted open-source to avoid cost), and Google Places enrichment (~$500–650 per repo docs). Free/self-hosted alternatives will be preferred where viable.
+
+**Owner decisions recorded 2026-10-06**
+- **No AI-disclosure statement on articles.** Owner decision: articles carry no notice about AI involvement, in any of the seven languages, and the generation and translation prompts now say so. This replaces the "publish AI policy" part of the recommendation in item 2 above. Risk accepted by the owner and noted here for the record: finding 9 in the table above (EU AI Act Art. 50, from Aug 2026, which exempts text that has undergone human review or editorial control under someone's editorial responsibility; and Google's scaled-content policy). Application dates were not re-checked when this note was written.
+- Auto-publish stays as it is.
 
 Upon approval I will deliver each phase as complete files with full paths, starting with Phase 0.

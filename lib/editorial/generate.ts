@@ -263,7 +263,7 @@ export async function polishPiece(
   const body0 = String(bodyMd || '');
   if (!body0.trim()) return { title: '', bodyMd: '', tellsBefore: [], tellsAfter: [], error: 'Nothing to polish (empty body).' };
   const langName = isLocale(locale) ? LOCALE_NAMES[locale] : 'English';
-  const tellsBefore = lintAiTells(`${title}\n${body0}`);
+  const tellsBefore = lintAiTells(`${title}\n${body0}`, locale);
 
   const r = await callClaude({
     systemInstruction: polishSystem(franchise, kind, tellsBefore, langName),
@@ -282,7 +282,7 @@ export async function polishPiece(
   const outTitle = humaniseTitle(typeof j.title === 'string' && j.title.trim() ? j.title.trim() : title, lang);
   const outBody = humaniseBody(typeof j.body_md === 'string' ? j.body_md.trim() : '', lang);
   if (!outBody) return { title: outTitle, bodyMd: '', tellsBefore, tellsAfter: tellsBefore, error: 'Could not parse the polished body from the model response.' };
-  const tellsAfter = lintAiTells(`${outTitle}\n${outBody}`);
+  const tellsAfter = lintAiTells(`${outTitle}\n${outBody}`, locale);
   const sc = scoreAiTells({ title: outTitle, content: stripHtml(outBody), lang });
   return { title: outTitle, bodyMd: outBody, tellsBefore, tellsAfter, score: sc.score, level: sc.level };
 }

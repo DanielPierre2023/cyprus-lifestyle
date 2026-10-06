@@ -12,8 +12,10 @@ import { retrieveSubscription, type SubscriptionLookup } from '@/lib/stripe';
 import { mapSubscriptionStatus, subscriptionPeriod } from '@/lib/stripe/events';
 import { PROFILE_RETENTION_DAYS, needsReconcile, type MemberLike } from '@/lib/member/entitlement';
 import { logServerError } from '@/lib/monitor.server';
+import { sendEmail } from '@/lib/email';
+import { runLifecycleNotices, type Sender } from '@/lib/member/lifecycle';
 
-export interface ReconcileSummary { checked: number; changed: number; lapsedStamped: number; profilesErased: number; sessionsPurged: number; errors: number }
+export interface ReconcileSummary { checked: number; changed: number; lapsedStamped: number; profilesErased: number; sessionsPurged: number; errors: number; graceNotices: number; endedNotices: number; noticeFailures: number }
 
 interface Row extends MemberLike { id: string; stripe_subscription_id: string | null }
 
@@ -37,8 +39,8 @@ export function planUpdate(row: Row, lookup: SubscriptionLookup, nowIso: string)
   return patch;
 }
 
-export async function reconcileMembers(sb: SupabaseClient, now: Date = new Date(), lookup: (id: string) => Promise<SubscriptionLookup> = (id) => retrieveSubscription(id)): Promise<ReconcileSummary> {
-  const out: ReconcileSummary = { checked: 0, changed: 0, lapsedStamped: 0, profilesErased: 0, sessionsPurged: 0, errors: 0 };
+export async function reconcileMembers(sb: SupabaseClient, now: Date = new Date(), lookup: (id: string) => Promise<SubscriptionLookup> = (id) => retrieveSubscription(id), send: Sender = (m) => sendEmail(m)): Promise<ReconcileSummary> {
+  const out: ReconcileSummary = { checked: 0, changed: 0, lapsedStamped: 0, profilesErased: 0, sessionsPurged: 0, errors: 0, graceNotices: 0, endedNotices: 0, noticeFailures: 0 };
   const nowIso = now.toISOString();
   try {
     // 1. ask Stripe about stale rows (cap per run keeps the daily job short)
@@ -73,6 +75,16 @@ export async function reconcileMembers(sb: SupabaseClient, now: Date = new Date(
   } catch (e) {
     out.errors++;
     await logServerError('member-reconcile', e, {}, 'warn');
+  }
+
+  // 5. lifecycle e-mails (own try/catch: a mail problem must never undo or hide the steps above)
+  try {
+    const site = (process.env.NEXT_PUBLIC_SITE_URL || 'https://cypruslifestyle.eu').replace(/\/$/, '');
+    const n = await runLifecycleNotices(sb, now, send, site);
+    out.graceNotices = n.graceSent; out.endedNotices = n.endedSent; out.noticeFailures = n.failed;
+  } catch (e) {
+    out.errors++;
+    await logServerError('member-lifecycle', e, {}, 'warn');
   }
   return out;
 }

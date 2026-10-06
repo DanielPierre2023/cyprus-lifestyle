@@ -28,6 +28,9 @@ export interface ClaimLabels {
   verifiedTitle: string; // "Verified owner"
   verifiedBody: string;
   error: string;
+  hubHint: string;     // pointer to the Business Hub shown next to the verified badge
+  hubLink: string;     // link text
+  hubHref: string;     // '' = no pointer
 }
 
 const DEFAULTS: ClaimLabels = {
@@ -45,6 +48,9 @@ const DEFAULTS: ClaimLabels = {
   verifiedTitle: 'Verified owner',
   verifiedBody: 'This profile has been claimed and verified by its owner.',
   error: 'Something went wrong — please try again.',
+  hubHint: '',
+  hubLink: '',
+  hubHref: '',
 };
 
 export default function ClaimListing({
@@ -72,6 +78,7 @@ export default function ClaimListing({
       <div className="clm clm-verified">
         <span className="clm-badge">✓ {t.verifiedTitle}</span>
         <p className="clm-vbody">{t.verifiedBody}</p>
+        {t.hubHref ? <p className="clm-vbody">{t.hubHint} <a href={t.hubHref}>{t.hubLink} →</a></p> : null}
         <style>{CLM_CSS}</style>
       </div>
     );
@@ -114,6 +121,7 @@ export default function ClaimListing({
       <div className="clm clm-done">
         <span className="clm-badge">✓ {t.verifiedTitle}</span>
         <p className="clm-vbody">{msg}</p>
+        {t.hubHref ? <p className="clm-vbody">{t.hubHint} <a href={t.hubHref}>{t.hubLink} →</a></p> : null}
         <style>{CLM_CSS}</style>
       </div>
     );

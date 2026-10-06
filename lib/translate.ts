@@ -7,21 +7,16 @@
 import 'server-only';
 import { callClaude, CLAUDE_SONNET, parseAiJson } from '@/lib/ai';
 import { humanizeHtml, humanizeText, type Lang } from '@/lib/antiAi';
+import { promptTellList, nativeRegisterRules } from '@/lib/antiAiLang';
 import { LOCALE_NAME, type Locale } from '@/lib/locales';
 
 function stripFences(s: string): string {
   return (s || '').trim().replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
 }
 
-const AI_TELL_HINT: Record<Locale, string> = {
-  en: 'delve, boasts, nestled, tapestry, "a testament to", underscores, showcases, "it\'s worth noting", "plays a crucial role", moreover / furthermore',
-  el: '«αξίζει να σημειωθεί», «διαδραματίζει κρίσιμο ρόλο», «αποτελεί απόδειξη/μαρτυρία», «ένα ευρύ φάσμα», «μια πληθώρα», «στην καρδιά της», «ρίχνει φως σε», «στη σύγχρονη/ψηφιακή εποχή», «όχι μόνο… αλλά και», «Επιπλέον/Επιπροσθέτως», «Εν κατακλείδι/Συμπερασματικά»',
-  ro: '„joacă un rol crucial", „reprezintă o dovadă", „merită menționat că", „o gamă largă de", „în cele din urmă"',
-  ar: '«تجدر الإشارة إلى أن»، «من الجدير بالذكر»، «يلعب دورا حاسما/محوريا»، «يشكل دليلا على»، «يسلط الضوء على»، «مجموعة واسعة من»، «في قلب»، «في عالم اليوم»، «ليس فقط… بل أيضا»، «علاوة على ذلك/بالإضافة إلى ذلك»، «في الختام/في نهاية المطاف»',
-  de: '„es ist erwähnenswert", „spielt eine entscheidende Rolle", „ist ein Zeugnis für", „eine breite Palette von", „im Herzen von", „wirft ein Licht auf", „in der heutigen Zeit", „nicht nur… sondern auch", „zudem / darüber hinaus", „letztlich / schließlich"',
-  pl: '„warto zauważyć, że", „odgrywa kluczową rolę", „stanowi dowód/świadectwo", „szeroki wachlarz", „w sercu", „rzuca światło na", „w dzisiejszych czasach", „nie tylko… ale także", „co więcej / ponadto", „ostatecznie"',
-  ru: '«стоит отметить, что», «играет ключевую/решающую роль», «является свидетельством», «широкий спектр», «в самом сердце», «проливает свет на», «в современном мире», «не только… но и», «более того / кроме того», «в конечном счёте»',
-};
+// The forbidden-phrase list per edition lives in lib/antiAiLang.ts (promptTellList), the same
+// vocabulary the detectors score — so the prompt and the quality scan can never drift apart.
+const AI_TELL_HINT = (target: Locale): string => promptTellList(target as Lang);
 
 // Translate a rich HTML body, preserving structure 1:1.
 export async function translateHtml(html: string, source: Locale, target: Locale): Promise<{ ok: boolean; html?: string; error?: string }> {
@@ -46,11 +41,13 @@ export async function translateHtml(html: string, source: Locale, target: Locale
     ``,
     `Write natural, editorial ${LOCALE_NAME[target]} — never machine-like:`,
     `- Translate faithfully and in full: preserve the exact meaning, facts, figures, names and nuance — no additions, omissions, softening or embellishment.`,
-    `- Read as if originally written by a native ${LOCALE_NAME[target]} journalist for print: idiomatic, precise and publication-grade — accurate to the source yet never a word-for-word calque.`,
+    `- Read as if originally written by a native ${LOCALE_NAME[target]} journalist for publication: idiomatic, precise and publication-grade — accurate to the source yet never a word-for-word calque.`,
     `- Use NO em/en dashes (— –); use commas, periods or parentheses.`,
     `- Headings stay sentence case, never ALL CAPS or Title Case; keep real acronyms (EU, VAT, NATO).`,
-    `- Avoid AI-tell words and filler: ${AI_TELL_HINT[target]}. Prefer plain words.`,
+    `- Avoid AI-tell words and filler (and their inflected forms or literal renderings): ${AI_TELL_HINT(target)}. Prefer plain words.`,
     `- No summary/conclusion filler paragraph; keep it factual and direct.`,
+    `Native register for ${LOCALE_NAME[target]}:`,
+    nativeRegisterRules(target as Lang),
     `Output ONLY the translated HTML — no code fences, no preamble.`,
   ].join('\n');
 
@@ -70,6 +67,8 @@ export async function translateText(text: string, source: Locale, target: Locale
     `You are a translator for Cyprus Lifestyle, a luxury Cyprus magazine. Translate this ${kind} from ${LOCALE_NAME[source]} to ${LOCALE_NAME[target]}.`,
     `Translate faithfully but idiomatically — as a native ${LOCALE_NAME[target]} journalist would write it, accurate to the source yet natural, never a literal calque or machine-like.`,
     `Return ONLY the translation — no quotes, no notes. Sentence case (never ALL CAPS/Title Case). No em/en dashes. Keep EUR figures and proper names.${rtlNote}`,
+    nativeRegisterRules(target as Lang),
+    `Never use these stock phrases or their literal renderings: ${AI_TELL_HINT(target)}.`,
   ].join('\n');
   const { text: out } = await callClaude({ systemInstruction: system, userMessage: body, model: CLAUDE_SONNET, temperature: 0.2, maxTokens: 400, fn: 'translate-text' });
   return humanizeText(stripFences(out) || body, target as Lang);

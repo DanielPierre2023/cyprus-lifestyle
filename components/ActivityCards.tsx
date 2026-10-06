@@ -6,11 +6,13 @@
 // in a new tab, is marked rel="sponsored" and carries a partner-link note.
 // Self-contained styles.
 // ============================================================================
+import { Link } from '@/lib/i18n/routing';
 import { kindOf } from '@/lib/activities/classify';
 
 export interface ActivityCardItem {
   id: string; title: string; kind: string; kindLabel: string; town: string | null; area: string | null;
   priceBand: string | null; priceBasis: string | null; duration: string | null; url: string | null;
+  pageHref?: string | null; // our own public page /activities/<slug> (locale-free): the card's main link; `url` (partner booking link) becomes the secondary 'Book' action
 }
 
 const T: Record<string, { title: string; book: string; note: string }> = {
@@ -23,8 +25,8 @@ const T: Record<string, { title: string; book: string; note: string }> = {
   ru: { title: 'Впечатления с бронированием', book: 'Забронировать', note: 'Партнёрские ссылки — мы можем получить комиссию без доплаты с вашей стороны.' },
 };
 
-export default function ActivityCards({ items, locale = 'en', dark = false, onOpen }: {
-  items: ActivityCardItem[]; locale?: string; dark?: boolean; onOpen?: (id: string) => void;
+export default function ActivityCards({ items, locale = 'en', dark = false, onOpen, onNavigate }: {
+  items: ActivityCardItem[]; locale?: string; dark?: boolean; onOpen?: (id: string) => void; onNavigate?: () => void;
 }) {
   if (!items || !items.length) return null;
   const t = T[locale] || T.en;
@@ -44,28 +46,47 @@ export default function ActivityCards({ items, locale = 'en', dark = false, onOp
         .ac-m{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:auto;font-size:12px;color:#5b5647}
         .ac-m b{color:#171922;letter-spacing:.02em}
         .ac-go{margin-inline-start:auto;font-weight:700;color:#123A4A;white-space:nowrap}
+        .ac-split{flex-direction:column;gap:6px}
+        .ac-main{display:flex;gap:10px;align-items:stretch;color:inherit;text-decoration:none}
+        .ac-main:hover{text-decoration:none}
+        .ac-bookbtn{align-self:flex-end;font-size:12px;font-weight:700;color:#123A4A;border:1px solid rgba(18,58,74,.35);border-radius:999px;padding:3px 12px;text-decoration:none;white-space:nowrap}
+        .ac-bookbtn:hover{background:#123A4A;color:#fff;text-decoration:none}
         .ac-note{display:block;margin-top:6px;font-family:var(--sans,'Jost',system-ui,sans-serif);font-size:11px;color:#6E6455}
       `}</style>
       <span className="ac-h">◆ {t.title}</span>
       <div className="ac-list">
-        {items.map((a) => (
-          <a key={a.id} className="ac-card" href={a.url || '#'} target="_blank" rel="sponsored noopener" onClick={() => onOpen?.(a.id)}>
-            <span className="ac-ic" aria-hidden="true">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
-                dangerouslySetInnerHTML={{ __html: kindOf(a.kind).icon }} />
-            </span>
-            <span className="ac-b">
-              <span className="ac-k">{[a.kindLabel, a.town].filter(Boolean).join(' · ')}</span>
-              <span className="ac-t">{a.title}</span>
-              <span className="ac-m">
-                {a.area && a.area !== a.town ? <span>{a.area}</span> : null}
-                {a.duration ? <span>{a.duration}</span> : null}
-                {a.priceBand ? <span><b>{a.priceBand}</b>{a.priceBasis ? ` ${a.priceBasis}` : ''}</span> : null}
-                <span className="ac-go">{t.book} ↗</span>
+        {items.map((a) => {
+          const inner = (
+            <>
+              <span className="ac-ic" aria-hidden="true">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
+                  dangerouslySetInnerHTML={{ __html: kindOf(a.kind).icon }} />
               </span>
-            </span>
-          </a>
-        ))}
+              <span className="ac-b">
+                <span className="ac-k">{[a.kindLabel, a.town].filter(Boolean).join(' · ')}</span>
+                <span className="ac-t">{a.title}</span>
+                <span className="ac-m">
+                  {a.area && a.area !== a.town ? <span>{a.area}</span> : null}
+                  {a.duration ? <span>{a.duration}</span> : null}
+                  {a.priceBand ? <span><b>{a.priceBand}</b>{a.priceBasis ? ` ${a.priceBasis}` : ''}</span> : null}
+                  {a.pageHref ? null : <span className="ac-go">{t.book} ↗</span>}
+                </span>
+              </span>
+            </>
+          );
+          // With a public page: the card opens OUR page; the partner link is a separate, secondary "Book" action.
+          if (a.pageHref) {
+            return (
+              <div key={a.id} className="ac-card ac-split">
+                <Link href={a.pageHref} className="ac-main" onClick={() => onNavigate?.()}>{inner}</Link>
+                {a.url ? <a className="ac-bookbtn" href={a.url} target="_blank" rel="sponsored nofollow noopener" onClick={() => onOpen?.(a.id)}>{t.book} ↗</a> : null}
+              </div>
+            );
+          }
+          return (
+            <a key={a.id} className="ac-card" href={a.url || '#'} target="_blank" rel="sponsored noopener" onClick={() => onOpen?.(a.id)}>{inner}</a>
+          );
+        })}
       </div>
       <span className="ac-note">{t.note}</span>
     </div>

@@ -20,6 +20,7 @@
 // scripts/tests/concierge-sources*.test.ts exercise all of this offline.
 // ============================================================================
 import type { Locale } from '@/lib/locales';
+import { isActivitySlug } from '@/lib/activities/browse';
 
 export const SOURCE_LOCALES: readonly Locale[] = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'];
 export const isSourceLocale = (l: string): l is Locale => (SOURCE_LOCALES as readonly string[]).includes(l);
@@ -56,6 +57,7 @@ export interface SourceHit {
   snippet: string;               // already sanitised + truncated
   href: string | null;           // locale-free internal path ('/article/x'), or an external https URL, or null
   external: boolean;             // href is an external site (open in a new tab; knowledge source / booking partner)
+  bookHref?: string | null;      // activity with its own public page: the partner booking link, shown as the SECONDARY 'Book' action
   sourceName?: string | null;    // kb_doc: the site the page comes from (attribution shown on the card)
   label: TrustLabel | null;
   lang: string;                  // language the title/snippet are actually written in
@@ -285,12 +287,14 @@ export function articleHit(r: Row, locale: string, score = 0.5): SourceHit | nul
   };
 }
 
-export interface ActivityLike { external_id: string; title: string; summary: string | null; kind: string; district: string | null; town: string | null; price_band: string | null; duration_label: string | null; }
+export interface ActivityLike { external_id: string; slug?: string | null; title: string; summary: string | null; kind: string; district: string | null; town: string | null; price_band: string | null; duration_label: string | null; }
 export function activityHit(a: ActivityLike, locale: string, bookUrl: string | null, score = 0.5): SourceHit | null {
   if (!a.external_id || !a.title) return null;
+  // An experience with a public page (/activities/<slug>) links THERE; the partner link stays as the secondary 'Book' action.
+  const slug = a.slug && isActivitySlug(a.slug) ? a.slug : null;
   return {
     kind: 'activity', id: a.external_id, title: safeText(a.title, 140), snippet: safeText(a.summary, 280),
-    href: bookUrl, external: true, label: 'booking_partner',
+    href: slug ? `/activities/${slug}` : bookUrl, external: !slug, ...(slug ? { bookHref: bookUrl } : {}), label: 'booking_partner',
     // catalogue text is English (GetYourGuide); the guest's language needs a faithful translation
     lang: 'en', fellBack: locale !== 'en', score,
     where: safeText([a.town, a.district].filter(Boolean).join(', '), 80) || null,
@@ -445,12 +449,12 @@ export function renderSourcesBlock(hits: SourceHit[], notes: SourceNotes, locale
 }
 
 /** Slim, UI-safe card for a hit (what the chat meta event carries). */
-export interface SourceCard { kind: SourceKind; id: string; title: string; href: string | null; external: boolean; label: TrustLabel | null; labelText: string | null; when: string | null; where: string | null; sourceName: string | null; }
+export interface SourceCard { kind: SourceKind; id: string; title: string; href: string | null; external: boolean; bookHref?: string | null; label: TrustLabel | null; labelText: string | null; when: string | null; where: string | null; sourceName: string | null; }
 export function toCard(h: SourceHit, locale: string): SourceCard {
   // A knowledge page's chip reads "Knowledge source: My Cyprus Life" so attribution is always visible.
   const base = h.label ? labelText(h.label, locale) : null;
   return {
-    kind: h.kind, id: h.id, title: h.title, href: h.href, external: h.external, label: h.label,
+    kind: h.kind, id: h.id, title: h.title, href: h.href, external: h.external, ...(h.bookHref ? { bookHref: h.bookHref } : {}), label: h.label,
     labelText: base && h.sourceName ? `${base}: ${h.sourceName}` : base, when: h.when?.startsAt ?? null, where: h.where ?? null,
     sourceName: h.sourceName ?? null,
   };

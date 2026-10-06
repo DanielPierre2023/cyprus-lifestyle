@@ -28,6 +28,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { sendEmail, brandedEmail } from '@/lib/email';
 import { manageLinkMail } from '@/lib/directory/ownerCopy';
+import { hubUrl } from '@/lib/business/hubCopy';
 import { isLocale, DEFAULT_LOCALE, type Locale } from '@/lib/locales';
 
 // ── config ───────────────────────────────────────────────────────────────────
@@ -192,7 +193,7 @@ export interface OwnerSaveResult {
 // ── token lifecycle ──────────────────────────────────────────────────────────────
 async function sendManageLink(to: string, bizName: string, token: string, locale: Locale = DEFAULT_LOCALE): Promise<void> {
   const url = `${siteUrl()}/api/directory/owner/verify?token=${encodeURIComponent(token)}&lang=${locale}`;
-  const m = manageLinkMail(locale, bizName);
+  const m = manageLinkMail(locale, bizName, hubUrl(siteUrl(), locale));
   const html = brandedEmail({ locale, heading: m.heading, bodyHtml: m.bodyHtml, ctaLabel: m.ctaLabel, ctaUrl: url, preheader: m.preheader });
   await sendEmail({ to, subject: m.subject, html }).catch(() => {});
 }

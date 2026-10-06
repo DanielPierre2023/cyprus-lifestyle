@@ -1,0 +1,76 @@
+import type { LegalDoc } from '@/lib/legal/types';
+
+export const privacyEn: LegalDoc = {
+  title: 'Privacy Policy',
+  dek: 'How Cyprus Lifestyle collects, uses, shares and protects personal data, under the EU General Data Protection Regulation (GDPR) and Cyprus Law 125(I)/2018.',
+  sections: [
+    { h: '1. Who is responsible (data controller)', p: [
+      'The controller is {company}, a company registered in the Republic of Cyprus under registration number {reg}, based in {town}, Cyprus. Cyprus Lifestyle ({site}) is its media title. For anything about your data write to {privacy_mail}.',
+    ] },
+    { h: '2. What personal data we process', p: ['Depending on what you do on the site, we process:'], li: [
+      'Messages and forms: name, e-mail address, phone number and the content of what you send us (contact form, enquiries, comments, reviews, e-mails you write to us).',
+      'Newsletter (the Saturday Letter): e-mail address and language, plus your confirmation and unsubscribe records.',
+      'Concierge (our website chatbot): the questions you type or dictate, the answers given, the language, an anonymous random browser identifier (cl_cid) and, if you choose, the preferences you volunteer (for example travel dates, party size, dietary needs, interests, budget). We ask the concierge not to store sensitive data; please do not enter health, payment-card or similar sensitive information in the chat.',
+      'Booking requests: the details you give for a request (what you want, dates, number of people, contact details, your messages) and our correspondence about it, including with the partner business that may provide the service.',
+      'Membership: e-mail address, the membership status and billing period, a Stripe customer and subscription reference, your remembered preferences, sign-in sessions and one-time restore links. Card and bank details are entered on Stripe and never reach our servers.',
+      'Advertisers and business owners: name, company, e-mail, country, billing details, and, for EU businesses, a VAT number that we verify in the EU VIES service; claim and verification records for directory listings.',
+      'Technical data: IP address and device/browser information in server logs and security controls, error records, and, only if you accept analytics, anonymous usage and performance statistics.',
+    ] },
+    { h: '3. Why we use it, and on what legal basis (GDPR Article 6)', li: [
+      'To provide the service you ask for, and to take steps before a contract: answering you, handling booking requests, providing and billing the membership, providing the concierge (contract / pre-contractual steps).',
+      'To send the newsletter, to remember concierge preferences beyond a single visit if you ask us to, and to load optional analytics and partner scripts: your consent, which you can withdraw at any time (withdrawal does not affect earlier processing).',
+      'To keep the site secure, prevent abuse and fraud, limit request rates, log and fix errors, maintain the business directory and contact businesses about listings or advertising (with an easy opt-out), and to improve the concierge: our legitimate interests, balanced against your rights.',
+      'To keep accounting and tax records and to respond to authorities: legal obligations.',
+    ] },
+    { h: '4. The concierge and automated processing', p: [
+      'The concierge is an automated assistant on this website. Your questions are sent to AI service providers (see section 6) to produce answers and to search our articles, listings and guides. The concierge gives general information and suggestions; it is not professional advice and it does not take decisions that have legal or similarly significant effects on you. A booking request is always handled by a person: the owner processes requests personally from the back office.',
+      'For members, the concierge can remember the preferences you stated, across devices. You can view and erase them yourself (the memory drawer in the concierge and "forget me" in your account).',
+    ] },
+    { h: '5. Who receives your data', p: ['We share personal data only as needed, with these categories of recipient:'], li: [
+      'Service providers acting on our instructions (processors), listed in section 6.',
+      'Partner businesses (for example a restaurant, villa or experience provider) when you send a booking request that involves them: they receive what is needed to answer you. They then handle your data under their own privacy notice.',
+      'Authorities, advisers and courts where the law requires it or to establish, exercise or defend legal claims.',
+      'We do not sell personal data.',
+    ] },
+    { h: '6. Our processors and other providers, and international transfers', p: ['The providers below process data for us or receive it when you use the related feature. Our database is hosted in the EU (Supabase, Frankfurt region) and our server functions run in Frankfurt (Vercel). Several providers are, or have affiliates, outside the European Economic Area (in particular in the United States). Where personal data is transferred outside the EEA we rely on an adequacy decision (for example the EU-US Data Privacy Framework, where the provider is certified) or on the European Commission Standard Contractual Clauses, with additional safeguards where needed. You can ask us for a copy of the safeguards.'], li: [
+      'Supabase: database, sign-in and storage (EU region).',
+      'Vercel: hosting and delivery; Vercel Web Analytics and Speed Insights only if you accept analytics.',
+      'Stripe (Stripe Payments Europe, Ireland, and group companies): payments and subscriptions, tax calculation and the customer portal. For some purposes (for example fraud prevention and regulatory duties) Stripe is an independent controller under its own privacy policy.',
+      'Resend: sending of transactional e-mail (restore links, booking mail) and the newsletter.',
+      'Anthropic: language-model processing of concierge conversations and of assistance with replies to enquiries.',
+      'OpenAI: converting your question into a search vector (embeddings), read-aloud speech (the text of the answer is sent to produce audio) and illustration of editorial content.',
+      'Google: AI language models used in the editorial workflow and address geocoding for business listings; we do not intentionally send visitors’ personal data to these. Webcam players from YouTube (Google) may load on the live page (see the Cookie Policy).',
+      'Meta (WhatsApp Business / Graph API): if you contact the concierge on WhatsApp, the message and your phone number pass through Meta; we also publish editorial posts to our Facebook and Instagram pages.',
+      'Telegram: if you contact the concierge on Telegram, the message passes through Telegram.',
+      'Twilio: SMS, where used to verify business owners.',
+      'Upstash: short-lived rate-limit counters (your IP address, for seconds or minutes), where configured.',
+      'GetYourGuide: partner experience widgets (loaded only after you accept) and booking on their site if you click through.',
+      'CARTO and jsDelivr: map tiles and map library, which receive your IP address when you open a map.',
+      'Windy: embedded weather and webcam players on the live page.',
+      'EU VIES service (European Commission): checks the VAT number of an advertiser.',
+      'Sentry: error monitoring, only if enabled.',
+    ] },
+    { h: '7. How long we keep data', p: ['We keep data only as long as needed for the purpose. The periods applied by our systems are:'], li: [
+      'Member preferences stored by the concierge: erased automatically 90 days after your membership lapses; erased immediately when you use "forget me".',
+      'Member sign-in session: up to 30 days, renewed while you use the site; ends earlier if you sign out. One-time e-mail restore link: valid for 30 minutes and single-use.',
+      'Business-account sign-in link: 30 minutes; business session: 14 days. Directory owner management link and editing session: 60 minutes each. Claim verification e-mail link: 72 hours.',
+      'Technical error log: automatically deleted after 90 days.',
+      'Newsletter data: until you unsubscribe.',
+      'Contact messages, e-mail enquiries and booking requests (with their correspondence): for as long as needed to handle them and, afterwards, for the period in which claims may still arise; they are erased on request unless we must keep them.',
+      'Payment and invoice records: as long as tax and accounting law requires. If you ask for erasure we remove or anonymise the personal identifiers and keep the financial entry.',
+      'Anonymous concierge logs (question text, language, coverage): kept as long as useful to improve the service; they are erased with your other data when we can link them to your membership.',
+      'After an erasure request we keep your e-mail address on a do-not-contact list so that we do not write to you again (legitimate interest), and a log of the erasure that holds only a one-way hash of the address.',
+    ] },
+    { h: '8. Cookies and local storage', p: ['We use a small number of cookies and browser storage entries; optional ones only after your consent. Details, names and durations are in our Cookie Policy.'] },
+    { h: '9. Your rights', p: ['Under the GDPR you have the right to access your data, have it corrected, have it erased, restrict its processing, receive it in a portable format and object to processing based on legitimate interests, and to withdraw consent at any time. Exercising your rights is free of charge. We answer within one month (extendable by two further months for complex requests, in which case we tell you). To protect you, we may ask you to confirm your identity.'] },
+    { h: '10. How to exercise your rights, and complaints', p: [
+      'Write to {privacy_mail} and tell us what you want. Members can also erase concierge memory themselves in their account.',
+      'You also have the right to lodge a complaint with the supervisory authority: the Office of the Commissioner for Personal Data Protection of the Republic of Cyprus, 1 Iasonos Street, 1082 Nicosia (P.O. Box 23378, 1682 Nicosia), telephone +357 22 818 456, e-mail commissioner@dataprotection.gov.cy, www.dataprotection.gov.cy. You may complain to the authority of your own EU country of residence as well.',
+    ] },
+    { h: '11. Obligation to provide data, children and security', p: [
+      'You are free to browse without giving us personal data. Some features need certain data (for example an e-mail address for the membership or a reply); without it we cannot offer them. The site is not directed at children under 16 and we do not knowingly collect their data.',
+      'We protect data with access controls, encryption in transit, hashed sign-in tokens and restricted staff access. No system is completely secure; we will notify you and the authority of a breach where the law requires it.',
+    ] },
+    { h: '12. Changes to this policy', p: ['We update this policy when our services or the law change and show the date at the top of the page. For material changes we will inform you where appropriate.'] },
+  ],
+};

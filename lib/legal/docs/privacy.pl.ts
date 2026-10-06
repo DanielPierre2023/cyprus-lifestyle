@@ -1,0 +1,76 @@
+import type { LegalDoc } from '@/lib/legal/types';
+
+export const privacyPl: LegalDoc = {
+  title: 'Polityka prywatności',
+  dek: 'Jak Cyprus Lifestyle zbiera, wykorzystuje, udostępnia i chroni dane osobowe – zgodnie z unijnym rozporządzeniem o ochronie danych osobowych (RODO) i cypryjską ustawą 125(I)/2018.',
+  sections: [
+    { h: '1. Administrator danych', p: [
+      'Administratorem jest {company}, spółka zarejestrowana w Republice Cypryjskiej pod numerem {reg}, z siedzibą w miejscowości {town} na Cyprze. Cyprus Lifestyle ({site}) jest jej tytułem medialnym. W sprawach dotyczących Twoich danych napisz na adres {privacy_mail}.',
+    ] },
+    { h: '2. Jakie dane osobowe przetwarzamy', p: ['W zależności od tego, co robisz w serwisie, przetwarzamy:'], li: [
+      'Wiadomości i formularze: imię i nazwisko, adres e-mail, numer telefonu oraz treść tego, co do nas wysyłasz (formularz kontaktowy, zapytania, komentarze, opinie, e-maile).',
+      'Newsletter („Saturday Letter”): adres e-mail i język oraz potwierdzenia zapisu i wypisu.',
+      'Concierge (chatbot w serwisie): pytania, które wpisujesz lub dyktujesz, odpowiedzi, język, anonimowy losowy identyfikator przeglądarki (cl_cid) oraz – jeśli zechcesz – preferencje, które podajesz (np. terminy podróży, liczba osób, dieta, zainteresowania, budżet). Prosimy concierge, by nie zapisywał danych wrażliwych; nie wpisuj w czacie danych o zdrowiu, karty płatniczej ani podobnych.',
+      'Prośby o rezerwację: dane podane w prośbie (czego oczekujesz, terminy, liczba osób, dane kontaktowe, wiadomości) i nasza korespondencja w tej sprawie, także z firmą partnerską, która może wykonać usługę.',
+      'Członkostwo: adres e-mail, status członkostwa i okres rozliczeniowy, identyfikator klienta i subskrypcji w Stripe, zapamiętane preferencje, sesje logowania i jednorazowe linki przywracające. Dane karty i konta wpisujesz w Stripe i nigdy nie trafiają na nasze serwery.',
+      'Reklamodawcy i firmy: imię i nazwisko, firma, e-mail, kraj, dane rozliczeniowe oraz – dla firm z UE – numer VAT, który weryfikujemy w usłudze VIES; dane zgłoszeń i weryfikacji wpisów w katalogu.',
+      'Dane techniczne: adres IP i informacje o urządzeniu/przeglądarce w logach serwera i zabezpieczeniach, dzienniki błędów oraz – tylko jeśli zaakceptujesz analitykę – anonimowe statystyki użycia i wydajności.',
+    ] },
+    { h: '3. Cele i podstawy prawne (art. 6 RODO)', li: [
+      'Aby świadczyć usługę, o którą prosisz, i podejmować działania przed zawarciem umowy: odpowiadać Ci, obsługiwać prośby o rezerwację, świadczyć i rozliczać członkostwo, udostępniać concierge (umowa / działania przedumowne).',
+      'Newsletter, zapamiętywanie preferencji concierge dłużej niż jedna wizyta na Twoją prośbę oraz ładowanie opcjonalnych skryptów analitycznych i partnerskich: Twoja zgoda, którą możesz w każdej chwili cofnąć (cofnięcie nie wpływa na wcześniejsze przetwarzanie).',
+      'Bezpieczeństwo serwisu, zapobieganie nadużyciom i oszustwom, ograniczanie liczby żądań, rejestrowanie i naprawa błędów, prowadzenie katalogu firm, kontakt z firmami w sprawie wpisów lub reklamy (z łatwą rezygnacją) oraz ulepszanie concierge: nasze prawnie uzasadnione interesy, wyważone z Twoimi prawami.',
+      'Prowadzenie ksiąg rachunkowych i podatkowych oraz odpowiedzi organom: obowiązki prawne.',
+    ] },
+    { h: '4. Concierge i zautomatyzowane przetwarzanie', p: [
+      'Concierge to zautomatyzowany asystent w tym serwisie. Twoje pytania są wysyłane do dostawców usług AI (zob. pkt 6), by tworzyć odpowiedzi i przeszukiwać nasze artykuły, wpisy i poradniki. Udziela ogólnych informacji i sugestii; nie jest to porada zawodowa i nie podejmuje decyzji wywołujących wobec Ciebie skutki prawne ani podobnie istotne. Prośbę o rezerwację zawsze obsługuje człowiek: właściciel rozpatruje prośby osobiście w panelu zaplecza.',
+      'Członkom concierge może pamiętać podane preferencje na różnych urządzeniach. Możesz je sam przeglądać i usuwać (szuflada pamięci w concierge i „forget me” na koncie).',
+    ] },
+    { h: '5. Odbiorcy danych', p: ['Udostępniamy dane osobowe tylko w niezbędnym zakresie, następującym kategoriom odbiorców:'], li: [
+      'Dostawcy usług działający na nasze polecenie (podmioty przetwarzające), wymienieni w pkt 6.',
+      'Firmy partnerskie (np. restauracja, willa, organizator atrakcji), gdy wysyłasz prośbę o rezerwację, która ich dotyczy: otrzymują to, co potrzebne do odpowiedzi, i dalej przetwarzają dane według własnej polityki prywatności.',
+      'Organy, doradcy i sądy, gdy wymaga tego prawo lub dla ustalenia, dochodzenia i obrony roszczeń.',
+      'Nie sprzedajemy danych osobowych.',
+    ] },
+    { h: '6. Podmioty przetwarzające, inni dostawcy i transfery międzynarodowe', p: ['Poniżsi dostawcy przetwarzają dane w naszym imieniu lub otrzymują je, gdy korzystasz z danej funkcji. Nasza baza danych jest hostowana w UE (Supabase, region Frankfurt), a nasze funkcje serwerowe działają we Frankfurcie (Vercel). Kilku dostawców ma siedzibę lub spółki powiązane poza Europejskim Obszarem Gospodarczym (zwłaszcza w USA). Przy przekazywaniu danych poza EOG opieramy się na decyzji o adekwatności (np. EU-US Data Privacy Framework, jeśli dostawca jest certyfikowany) lub na standardowych klauzulach umownych Komisji Europejskiej, w razie potrzeby z dodatkowymi zabezpieczeniami. Na prośbę udostępnimy kopię zabezpieczeń.'], li: [
+      'Supabase: baza danych, logowanie i przechowywanie (region UE).',
+      'Vercel: hosting i dostarczanie; Vercel Web Analytics i Speed Insights tylko po akceptacji analityki.',
+      'Stripe (Stripe Payments Europe, Irlandia, i spółki grupy): płatności i subskrypcje, obliczanie podatku, portal klienta. Do niektórych celów (np. zapobieganie oszustwom, obowiązki regulacyjne) Stripe jest odrębnym administratorem według własnej polityki prywatności.',
+      'Resend: wysyłka e-maili transakcyjnych (linki przywracające, poczta rezerwacyjna) i newslettera.',
+      'Anthropic: przetwarzanie rozmów concierge przez model językowy i pomoc w odpowiedziach na zapytania.',
+      'OpenAI: zamiana pytania na wektor wyszukiwania (embeddings), czytanie na głos (tekst odpowiedzi jest wysyłany do wygenerowania dźwięku) i ilustrowanie treści redakcyjnych.',
+      'Google: modele językowe AI w pracy redakcyjnej i geokodowanie adresów firm; nie wysyłamy tam celowo danych osobowych odwiedzających. Odtwarzacze kamer internetowych z YouTube (Google) mogą ładować się na stronie Live (zob. Politykę cookies).',
+      'Meta (WhatsApp Business / Graph API): jeśli piszesz do concierge na WhatsApp, wiadomość i numer telefonu przechodzą przez Metę; publikujemy też posty redakcyjne na naszych stronach na Facebooku i Instagramie.',
+      'Telegram: jeśli piszesz do concierge na Telegramie, wiadomość przechodzi przez Telegram.',
+      'Twilio: SMS, gdy służą do weryfikacji właścicieli firm.',
+      'Upstash: krótkotrwałe liczniki ograniczania żądań (Twój adres IP, przez sekundy lub minuty), jeśli skonfigurowane.',
+      'GetYourGuide: widżety atrakcji partnera (ładowane dopiero po Twojej zgodzie) i rezerwacja na ich stronie po kliknięciu.',
+      'CARTO i jsDelivr: kafelki map i biblioteka map, które otrzymują Twój adres IP po otwarciu mapy.',
+      'Windy: osadzone odtwarzacze pogody i kamer na stronie Live.',
+      'Usługa VIES UE (Komisja Europejska): sprawdzenie numeru VAT reklamodawcy.',
+      'Sentry: monitorowanie błędów, tylko jeśli włączone.',
+    ] },
+    { h: '7. Jak długo przechowujemy dane', p: ['Przechowujemy dane tylko tak długo, jak wymaga tego cel. Nasze systemy stosują następujące okresy:'], li: [
+      'Preferencje członka zapisane przez concierge: usuwane automatycznie 90 dni po wygaśnięciu członkostwa; usuwane od razu po użyciu „forget me”.',
+      'Sesja logowania członka: do 30 dni, odnawiana podczas korzystania z serwisu; kończy się wcześniej po wylogowaniu. Jednorazowy link przywracający z e-maila: ważny 30 minut.',
+      'Link logowania konta firmowego: 30 minut; sesja firmowa: 14 dni. Link zarządzania wpisem i sesja edycji: po 60 minut. Link weryfikacji zgłoszenia: 72 godziny.',
+      'Techniczny dziennik błędów: usuwany automatycznie po 90 dniach.',
+      'Dane newslettera: do wypisania się.',
+      'Wiadomości kontaktowe, zapytania e-mail i prośby o rezerwację (z korespondencją): tak długo, jak potrzeba do ich obsługi, a potem przez okres, w którym mogą jeszcze powstać roszczenia; usuwane na prośbę, o ile nie musimy ich zachować.',
+      'Dokumenty płatności i faktur: tak długo, jak wymagają przepisy podatkowe i rachunkowe. Na prośbę o usunięcie usuwamy lub anonimizujemy dane identyfikujące i zachowujemy zapis finansowy.',
+      'Anonimowe dzienniki concierge (treść pytania, język, pokrycie): dopóki są przydatne do ulepszania usługi; usuwane wraz z Twoimi innymi danymi, gdy możemy powiązać je z Twoim członkostwem.',
+      'Po prośbie o usunięcie zachowujemy Twój adres e-mail na liście „nie kontaktować”, byśmy nie pisali do Ciebie ponownie (uzasadniony interes), oraz dziennik usunięcia zawierający tylko jednokierunkowy skrót (hash) adresu.',
+    ] },
+    { h: '8. Pliki cookie i pamięć lokalna', p: ['Używamy niewielu plików cookie i wpisów w pamięci przeglądarki; opcjonalnych tylko za Twoją zgodą. Nazwy, cele i okresy znajdziesz w Polityce cookies.'] },
+    { h: '9. Twoje prawa', p: ['Na mocy RODO masz prawo dostępu do danych, ich sprostowania, usunięcia, ograniczenia przetwarzania, przenoszenia oraz sprzeciwu wobec przetwarzania opartego na prawnie uzasadnionych interesach, a także prawo cofnięcia zgody w dowolnym momencie. Korzystanie z praw jest bezpłatne. Odpowiadamy w ciągu miesiąca (w złożonych sprawach można przedłużyć o kolejne dwa miesiące – wtedy poinformujemy Cię). Dla Twojej ochrony możemy poprosić o potwierdzenie tożsamości.'] },
+    { h: '10. Jak skorzystać z praw i skargi', p: [
+      'Napisz na {privacy_mail} i powiedz, czego chcesz. Członkowie mogą też sami usunąć pamięć concierge na swoim koncie.',
+      'Masz też prawo wnieść skargę do organu nadzorczego: Office of the Commissioner for Personal Data Protection Republiki Cypryjskiej, 1 Iasonos Street, 1082 Nikozja (skr. poczt. 23378, 1682 Nikozja), tel. +357 22 818 456, e-mail commissioner@dataprotection.gov.cy, www.dataprotection.gov.cy. Możesz też zwrócić się do organu w swoim państwie UE zamieszkania.',
+    ] },
+    { h: '11. Dobrowolność podania danych, dzieci i bezpieczeństwo', p: [
+      'Możesz przeglądać serwis, nie podając nam danych osobowych. Niektóre funkcje wymagają określonych danych (np. e-maila do członkostwa lub odpowiedzi); bez nich nie możemy ich zapewnić. Serwis nie jest skierowany do dzieci poniżej 16 lat i świadomie nie zbieramy ich danych.',
+      'Chronimy dane kontrolą dostępu, szyfrowaniem w transmisji, haszowanymi tokenami logowania i ograniczonym dostępem personelu. Żaden system nie jest w pełni bezpieczny; o naruszeniu poinformujemy Ciebie i organ, gdy wymaga tego prawo.',
+    ] },
+    { h: '12. Zmiany polityki', p: ['Aktualizujemy politykę, gdy zmieniają się nasze usługi lub przepisy, a datę podajemy na górze strony. O istotnych zmianach poinformujemy Cię, gdy to właściwe.'] },
+  ],
+};

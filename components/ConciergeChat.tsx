@@ -8,6 +8,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from '@/lib/i18n/routing';
 import CoverImage from '@/components/CoverImage';
 import ActivityCards, { type ActivityCardItem } from '@/components/ActivityCards';
+import ConciergeSources, { type SourceHints } from '@/components/ConciergeSources';
+import type { SourceCard } from '@/lib/concierge/sources';
 import type { Locale } from '@/lib/locales';
 
 export interface ConciergeChatLabels {
@@ -22,10 +24,10 @@ export interface ConciergeChatLabels {
   member: string;
 }
 interface MemoryProfile { name?: string; language?: string; interests?: string[]; base?: string; party?: string; dates?: string; dietary?: string; status?: string; notes?: string; }
-interface Pick { slug: string; type: string; name: string; district: string | null; rating: number | null; rating_count: number | null; price_band: string | null; image: string | null; verified?: boolean; }
+interface Pick { slug: string; type: string; name: string; district: string | null; rating: number | null; rating_count: number | null; price_band: string | null; image: string | null; verified?: boolean; linkable?: boolean; }
 interface GuideLink { label: string; path: string; }
 interface ArticleLink { slug: string; title: string; category: string | null; }
-interface Msg { role: 'user' | 'assistant'; content: string; picks?: Pick[]; guides?: GuideLink[]; articles?: ArticleLink[]; activities?: ActivityCardItem[]; canRoute?: boolean; streaming?: boolean; }
+interface Msg { role: 'user' | 'assistant'; content: string; picks?: Pick[]; guides?: GuideLink[]; articles?: ArticleLink[]; activities?: ActivityCardItem[]; sourceCards?: SourceCard[]; sourceHints?: SourceHints; canRoute?: boolean; streaming?: boolean; }
 
 // "On Cyprus Lifestyle" heading for the related-articles block, per edition.
 const ARTICLES_TITLE: Record<string, string> = {
@@ -296,7 +298,7 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
           let evt: Record<string, unknown>; try { evt = JSON.parse(raw); } catch { continue; }
           if (evt.type === 'status') setStatus(evt.label === 'composing' ? labels.composing : labels.searching);
           else if (evt.type === 'delta') { acc += String(evt.text || ''); setStatus(''); setLast({ content: acc, streaming: true }); }
-          else if (evt.type === 'meta') setLast({ picks: (evt.picks as Pick[]) || [], guides: (evt.guides as GuideLink[]) || [], articles: (evt.articles as ArticleLink[]) || [], activities: (evt.activities as ActivityCardItem[]) || [], canRoute: Boolean(evt.canRoute) });
+          else if (evt.type === 'meta') setLast({ picks: (evt.picks as Pick[]) || [], guides: (evt.guides as GuideLink[]) || [], articles: (evt.articles as ArticleLink[]) || [], activities: (evt.activities as ActivityCardItem[]) || [], sourceCards: (evt.sourceCards as SourceCard[]) || [], sourceHints: (evt.sourceHints as SourceHints) || undefined, canRoute: Boolean(evt.canRoute) });
           else if (evt.type === 'error') { if (!acc) setLast({ content: labels.error }); }
           else if (evt.type === 'done') setLast({ streaming: false });
         }
@@ -446,6 +448,15 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
                         <div className="cc-picks">
                           {m.picks.map((p) => (
                             <div key={p.slug} style={{ display: 'flex', alignItems: 'stretch', gap: 6 }}>
+                              {p.linkable === false ? (
+                              <div className="cc-pick" style={{ flex: 1, minWidth: 0 }}>
+                                <span className="cc-pick-img"><CoverImage src={p.image} seed={p.slug} alt={p.name} className="ph-img" sizes="72px" fallbackKind="brand" /></span>
+                                <span className="cc-pick-b">
+                                  <span className="cc-pick-meta"><span className="d" style={{ background: TYPE_DOT[p.type] || '#C9A24C' }} />{p.district || p.type}{p.rating != null ? <span className="cc-rate"> · ★ {p.rating.toFixed(1)}</span> : null}{p.verified ? <span className="cc-seal">✓</span> : null}</span>
+                                  <span className="cc-pick-name">{p.name}</span>
+                                </span>
+                              </div>
+                              ) : (
                               <Link href={`/directory/${p.type}/${p.slug}`} className="cc-pick" style={{ flex: 1, minWidth: 0 }} onClick={() => { try { fetch('/api/track/rec-click', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug: p.slug, source: 'concierge', cid: cidRef.current, locale }) }); } catch { /* best-effort attribution */ } setOpen(false); }}>
                                 <span className="cc-pick-img"><CoverImage src={p.image} seed={p.slug} alt={p.name} className="ph-img" sizes="72px" fallbackKind="brand" /></span>
                                 <span className="cc-pick-b">
@@ -453,6 +464,7 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
                                   <span className="cc-pick-name">{p.name}</span>
                                 </span>
                               </Link>
+                              )}
                               <button type="button" aria-label={savedSlugs.has(p.slug) ? 'On your trip plan' : 'Add to trip plan'} title={savedSlugs.has(p.slug) ? 'On your trip plan' : 'Add to trip plan'} onClick={(e) => { e.preventDefault(); e.stopPropagation(); saveTrip(p.slug); }} style={{ flex: '0 0 auto', width: 34, borderRadius: 10, cursor: 'pointer', border: '1px solid var(--cc-line,rgba(201,162,76,.4))', background: savedSlugs.has(p.slug) ? 'rgba(201,162,76,.22)' : 'transparent', color: 'inherit', fontSize: 15 }}>{savedSlugs.has(p.slug) ? '✓' : '＋'}</button>
                             </div>
                           ))}
@@ -460,8 +472,12 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
                       </>
                     )}
 
+                    {m.role === 'assistant' && !m.streaming && ((m.sourceCards && m.sourceCards.length > 0) || m.sourceHints?.agenda || m.sourceHints?.live) && (
+                      <ConciergeSources cards={m.sourceCards || []} hints={m.sourceHints} locale={locale} onNavigate={() => setOpen(false)} />
+                    )}
+
                     {m.role === 'assistant' && !m.streaming && m.activities && m.activities.length > 0 && (
-                      <ActivityCards items={m.activities} locale={locale} onOpen={(id: string) => { try { fetch('/api/track/rec-click', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug: `gyg:${id}`, source: 'concierge', label: 'book', locale }) }); } catch { /* best-effort attribution */ } }} />
+                      <ActivityCards items={m.activities} locale={locale} onNavigate={() => setOpen(false)} onOpen={(id: string) => { try { fetch('/api/track/rec-click', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug: `gyg:${id}`, source: 'concierge', label: 'book', locale }) }); } catch { /* best-effort attribution */ } }} />
                     )}
 
                     {m.role === 'assistant' && !m.streaming && m.canRoute && i === msgs.length - 1 && (

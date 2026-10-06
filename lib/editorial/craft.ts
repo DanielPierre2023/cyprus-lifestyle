@@ -15,6 +15,9 @@
 //                           slips.
 // ============================================================================
 
+import { scoreAiTells } from '@/lib/antiAi';
+import { langFromName, promptTellList, nativeRegisterRules } from '@/lib/antiAiLang';
+
 // ── 1. Per-franchise redactional format ─────────────────────────────────────────
 // Keyed by franchise key (see lib/editorial/pipeline.ts FRANCHISES). Each is the
 // architecture the writer must follow for that column, at magazine standard.
@@ -127,10 +130,13 @@ export const BURSTINESS: string = [
 // The instruction block that makes the model write undetectably. Language-agnostic
 // (the same rules hold in every edition); `language` names the target for translations.
 export function antiAiRules(language = 'English'): string {
+  const tellLang = langFromName(language);
   return [
     `WRITE UNDETECTABLY AS A HUMAN ${language.toUpperCase()} STAFF WRITER — this is non-negotiable:`,
     '• NEVER use an em dash (—) or a spaced en dash used as one. Use commas, full stops, semicolons or parentheses instead.',
-    '• NEVER use these phrases or their close variants: ' + AI_TELLS.slice(0, 40).join('; ') + '.',
+    (tellLang && tellLang !== 'en'
+      ? `• NEVER use these ${language} phrases or their close, inflected variants (and never a literal ${language} rendering of the English ones, such as "nestled in the heart of", "a testament to", "plays a crucial role"): ` + promptTellList(tellLang) + '.'
+      : '• NEVER use these phrases or their close variants: ' + AI_TELLS.slice(0, 40).join('; ') + '.'),
     '• Vary sentence length and rhythm hard: mix short, blunt sentences with longer ones. Do not start consecutive sentences the same way, and avoid participial openers ("Nestled…", "Boasting…", "Perched…").',
     BURSTINESS,
     '• No habitual tricolons (lists of three), no "not only X but also Y", no "isn’t just X, it’s Y", no rhetorical questions as filler.',
@@ -141,6 +147,9 @@ export function antiAiRules(language = 'English'): string {
     (language === 'English'
       ? '• Write in British English spelling and Cyprus usage.'
       : `• Write idiomatic, publication-grade ${language} as a native journalist would — never a translated-sounding or machine-sounding rendering, and avoid ${language}’s own AI/marketing clichés.`),
+    // Native register, local idiom and anti-calque rules for the target language.
+    ...(tellLang ? ['NATIVE REGISTER (' + language + '):', nativeRegisterRules(tellLang)] : []),
+    '• The article carries no statement about how it was produced: no disclaimer, no “translated by”, no translator’s or editor’s note.',
   ].join('\n');
 }
 
@@ -168,11 +177,19 @@ export function deAiScrub(input: string): string {
 
 // Which AI tells appear in a text (case-insensitive), plus the em-dash flag. Used to
 // score a draft and to tell the polish pass exactly what to remove.
-export function lintAiTells(text: string): string[] {
+export function lintAiTells(text: string, lang?: string | null): string[] {
   const hay = ' ' + String(text || '').toLowerCase().replace(/\s+/g, ' ') + ' ';
   const found = new Set<string>();
   for (const t of AI_TELLS) if (hay.includes(t.toLowerCase())) found.add(t);
   if (/—|―/.test(String(text || ''))) found.add('em dash (—)');
+  // Non-English editions: add what the per-language detectors (lib/antiAiLang.ts) find,
+  // so the polish pass is told the tells in the language it is editing.
+  const l = langFromName(lang);
+  if (l && l !== 'en') {
+    for (const t of scoreAiTells({ content: String(text || ''), lang: l }).tells) {
+      if (t.severity !== 'low' && t.key !== 'em_dash') found.add(t.label);
+    }
+  }
   return [...found];
 }
 
