@@ -1,7 +1,7 @@
 // Increment 2.1b — wiring of the all-sources concierge: trust labels, link rules, channel lines,
 // static-KB-vs-scraped-vector crowding, nightly embed helpers, eval set. Offline, no API call.
 import { readFileSync } from 'node:fs';
-import { kbDocHit, toCard, labelText, sourceHints, renderSourcesBlock, LABEL_TEXT, SOURCE_LOCALES, eventHit, articleHit, webcamHit, type SourceHit } from '@/lib/concierge/sources';
+import { kbDocHit, toCard, cardsFor, labelText, sourceHints, renderSourcesBlock, LABEL_TEXT, SOURCE_LOCALES, eventHit, articleHit, webcamHit, type SourceHit } from '@/lib/concierge/sources';
 import { SOURCES_UI, sourcesUi, relFor } from '@/lib/concierge/sourcesUi';
 import { buildChannelLines, appendChannelLinks, MAX_LINES } from '@/lib/concierge/channelLinks';
 import { staticKbIds, KB_VECTOR_DEPTH } from '@/lib/concierge/brain';
@@ -16,12 +16,12 @@ const SITE = 'https://cypruslifestyle.eu';
 // ── 1. kb_docs are trusted but ATTRIBUTED; no "unverified" wording anywhere a guest or the model reads ──
 const kb = kbDocHit({ id: 'u1', title: 'Hidden villages of Troodos', description: 'A guide', url: 'https://mycypruslife.com/troodos', source: 'mycypruslife', lang: 'en' }, 'en', 0.6) as SourceHit;
 eq('kb doc carries the site name', kb.sourceName, 'My Cyprus Life');
-ok('kb caveat names the site and asks for attribution', kb.caveats[0].includes('My Cyprus Life') && kb.caveats[0].includes('attribute'));
+ok('kb caveat forbids naming the site and quoting', !kb.caveats[0].includes('My Cyprus Life') && kb.caveats[0].includes('never name') && kb.caveats[0].includes('own words'));
 ok('no "unverified"/"not verified" in kb caveat', !/unverified|not verified/i.test(kb.caveats.join(' ')));
 for (const l of SOURCE_LOCALES) ok(`label third_party (${l}) is not a warning`, !/unverif|not verified|nicht gepr|neweryfik|neverific|не проверен|لم نتحقق|δεν έχει επαληθ/i.test(LABEL_TEXT.third_party[l]));
-ok('card chip reads "label: site"', toCard(kb, 'en').labelText === 'Knowledge source: My Cyprus Life');
-eq('card keeps original external url', toCard(kb, 'de').href, 'https://mycypruslife.com/troodos');
-ok('card is external', toCard(kb, 'en').external === true);
+eq('a background knowledge page has no chip, no site name, no outside link, even if mapped by hand', [toCard(kb, 'en').labelText, toCard(kb, 'en').sourceName, toCard(kb, 'de').href, toCard(kb, 'en').external], [null, null, null, false]);
+eq('cardsFor never shows background knowledge pages', cardsFor([kb], 'en').length, 0);
+eq('cardsFor keeps our own sources', cardsFor([kb, articleHit({ slug: 'a', title_en: 'A' }, 'en') as SourceHit], 'en').length, 1);
 eq('kb without https url has no link', kbDocHit({ id: 'u2', title: 'x', url: 'javascript:alert(1)', source: 'imin' }, 'en')?.href, null);
 const block = renderSourcesBlock([kb], { eventsIntent: false, eventsFound: 0, regulationIntent: false, regulationFound: 0, conditionsIntent: false }, 'en');
 ok('prompt block has no "unverified"/"third-party"', !/unverified|third-party/i.test(block));

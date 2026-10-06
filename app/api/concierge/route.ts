@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/ratelimit';
 import { publicAiCeilingDeny } from '@/lib/spendGuard';
 import { runConcierge, type ChatMessage } from '@/lib/concierge/brain';
-import { toCard, sourceHints } from '@/lib/concierge/sources';
+import { cardsFor, sourceHints } from '@/lib/concierge/sources';
 
 export const runtime = 'nodejs';
 // The brain embeds, retrieves across several legs, reranks, then makes one
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     // Bookable experiences (GetYourGuide) that fit this question — rendered as booking cards.
     const activities = ctx.activities || [];
     // Cards for events / articles / knowledge pages / official notes / webcams, each with its trust label.
-    const sourceCards = (ctx.sources || []).map((h) => toCard(h, locale));
+    const sourceCards = cardsFor(ctx.sources, locale);
     return NextResponse.json({ ok: true, answer: text, picks, guides, activities, sourceCards, sourceHints: sourceHints(ctx.sources, ctx.sourceNotes) });
   } catch (e) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });

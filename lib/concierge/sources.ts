@@ -33,7 +33,7 @@ export type TrustLabel =
   | 'sponsored'                                  // paid editorial (blog_posts.sponsored)
   | 'booking_partner'                            // bookable via GetYourGuide (affiliate link)
   | 'official'                                   // reviewed note about an official government page
-  | 'third_party'                                // scraped knowledge page (kb_docs) — owner-approved as trusted; always attributed to its site
+  | 'third_party'                                // scraped knowledge page (kb_docs) — background knowledge only: never shown to a guest as a source (see cardsFor)
   | 'editorial'                                  // our own journalism
   | 'agenda';                                    // our events agenda (organiser-supplied, may change)
 
@@ -58,7 +58,7 @@ export interface SourceHit {
   href: string | null;           // locale-free internal path ('/article/x'), or an external https URL, or null
   external: boolean;             // href is an external site (open in a new tab; knowledge source / booking partner)
   bookHref?: string | null;      // activity with its own public page: the partner booking link, shown as the SECONDARY 'Book' action
-  sourceName?: string | null;    // kb_doc: the site the page comes from (attribution shown on the card)
+  sourceName?: string | null;    // kb_doc: the site the page comes from (internal / admin only, never shown to a guest)
   label: TrustLabel | null;
   lang: string;                  // language the title/snippet are actually written in
   fellBack: boolean;             // true when lang !== requested locale (model must translate faithfully)
@@ -316,7 +316,7 @@ export function kbDocHit(r: Row, locale: string, score = 0.5): SourceHit | null 
     href: /^https:\/\//i.test(url) ? url : null, external: true, label: 'third_party',
     lang, fellBack: lang !== locale, score,
     sourceName: src,
-    caveats: [`from the site "${src}" — attribute it ("according to ${src}") and point the guest to the original page; we hold only its title and short summary, so give no price, opening hours or booking details from it`],
+    caveats: ['background knowledge: say it in your own words, never quote it, never name or link the website it comes from, and give no price, opening hours or booking details from it'],
   };
 }
 
@@ -402,11 +402,11 @@ export function eventsOverlapping<T extends { starts_at?: unknown; ends_at?: unk
 // ── grounding block ─────────────────────────────────────────────────────────
 const KIND_HEADING: Record<SourceKind, string> = {
   event: 'EVENTS from our agenda', article: 'ARTICLES from Cyprus Lifestyle', activity: 'BOOKABLE EXPERIENCES (semantic matches)',
-  kb_doc: 'KNOWLEDGE PAGES (attribute each to the site named in its caveat)', regulation: 'REVIEWED CHANGES on official government pages', webcam: 'LIVE WEBCAMS',
+  kb_doc: 'BACKGROUND KNOWLEDGE (paraphrase; never name or link the site)', regulation: 'REVIEWED CHANGES on official government pages', webcam: 'LIVE WEBCAMS',
 };
 const LABEL_EN: Record<TrustLabel, string> = {
   partner: 'our partner', featured: 'our featured partner', listed_partner: 'our listed partner', sponsored: 'SPONSORED',
-  booking_partner: 'bookable with our partner GetYourGuide', official: 'official source', third_party: 'knowledge page from a named site', editorial: 'our own article', agenda: 'agenda listing',
+  booking_partner: 'bookable with our partner GetYourGuide', official: 'official source', third_party: 'background knowledge', editorial: 'our own article', agenda: 'agenda listing',
 };
 export const dateFmt = (iso: string, locale: string, withTime: boolean) => {
   try {
@@ -451,13 +451,20 @@ export function renderSourcesBlock(hits: SourceHit[], notes: SourceNotes, locale
 /** Slim, UI-safe card for a hit (what the chat meta event carries). */
 export interface SourceCard { kind: SourceKind; id: string; title: string; href: string | null; external: boolean; bookHref?: string | null; label: TrustLabel | null; labelText: string | null; when: string | null; where: string | null; sourceName: string | null; }
 export function toCard(h: SourceHit, locale: string): SourceCard {
-  // A knowledge page's chip reads "Knowledge source: My Cyprus Life" so attribution is always visible.
-  const base = h.label ? labelText(h.label, locale) : null;
+  // Background knowledge pages are never shown to a guest as a source: no label, no site name, no outside link
+  // (cardsFor() drops them; this is the second lock if a caller maps by hand).
+  const hidden = h.kind === 'kb_doc';
+  const base = !hidden && h.label ? labelText(h.label, locale) : null;
   return {
-    kind: h.kind, id: h.id, title: h.title, href: h.href, external: h.external, ...(h.bookHref ? { bookHref: h.bookHref } : {}), label: h.label,
+    kind: h.kind, id: h.id, title: h.title, href: hidden ? null : h.href, external: hidden ? false : h.external, ...(h.bookHref ? { bookHref: h.bookHref } : {}), label: hidden ? null : h.label,
     labelText: base && h.sourceName ? `${base}: ${h.sourceName}` : base, when: h.when?.startsAt ?? null, where: h.where ?? null,
-    sourceName: h.sourceName ?? null,
+    sourceName: hidden ? null : h.sourceName ?? null,
   };
+}
+
+/** The cards a guest sees under an answer: our own articles, events, experiences and official notes. Background knowledge pages (kb_doc) stay out. */
+export function cardsFor(hits: SourceHit[] | undefined, locale: string): SourceCard[] {
+  return (hits || []).filter((h) => h.kind !== 'kb_doc').map((h) => toCard(h, locale));
 }
 
 /** Which /agenda and /live shortcuts are relevant to this turn (shown as links under the answer). */

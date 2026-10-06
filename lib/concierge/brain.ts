@@ -26,7 +26,7 @@ import { getActivities, gygPartnerId } from '@/lib/activities/data';
 import { rankActivities } from '@/lib/activities/match';
 import { isActivitySlug } from '@/lib/activities/browse';
 import { kindLabel, affiliateUrl, priceBasisLabel } from '@/lib/activities/classify';
-import { markLinkable, renderSourcesBlock, toCard, sourceHints, type SourceHit, type SourceNotes, type SourceCard, type TrustLabel } from '@/lib/concierge/sources';
+import { markLinkable, renderSourcesBlock, cardsFor, sourceHints, type SourceHit, type SourceNotes, type SourceCard, type TrustLabel } from '@/lib/concierge/sources';
 import { retrieveSources, publishedSet } from '@/lib/concierge/sourcesRetrieve';
 import { supabaseSourceDeps } from '@/lib/concierge/sourcesDeps';
 import { MEMBERSHIP_FACTS } from '@/lib/member/truth';
@@ -1015,6 +1015,6 @@ export async function* streamConcierge(messages: ChatMessage[], locale: string, 
   }
 
   if (!gotText) yield { type: 'error', error: errDetail || 'unavailable' };
-  yield { type: 'meta', picks: ctx.picks, guides: ctx.guides, articles: ctx.articles, canRoute: ctx.canRoute, kb: ctx.kb.length, near: !!ctx.near, activities: ctx.activities || [], sourceCards: (ctx.sources || []).map((h) => toCard(h, loc)), sourceHints: sourceHints(ctx.sources, ctx.sourceNotes) };
+  yield { type: 'meta', picks: ctx.picks, guides: ctx.guides, articles: ctx.articles, canRoute: ctx.canRoute, kb: ctx.kb.length, near: !!ctx.near, activities: ctx.activities || [], sourceCards: cardsFor(ctx.sources, loc), sourceHints: sourceHints(ctx.sources, ctx.sourceNotes) };
   yield { type: 'done' };
 }

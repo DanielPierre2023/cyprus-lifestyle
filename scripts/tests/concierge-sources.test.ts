@@ -116,7 +116,7 @@ eq('"tax" is', isRegulationIntent('how much is tax'), true);
 
   const kb = kbDocHit({ id: 'u1', source: 'mycypruslife', url: 'https://x.example/p', lang: 'ro', title: 'Troodos', description: 'd' }, 'ro');
   eq('kb doc third-party label', kb?.label, 'third_party');
-  ok('kb doc attributed', !!kb?.caveats[0].includes('My Cyprus Life'));
+  ok('kb doc: the caveat does not name the site', !kb?.caveats[0].includes('My Cyprus Life'));
   eq('kb doc non-https url dropped', kbDocHit({ id: 'u2', source: 'imin', url: 'javascript:alert(1)', title: 'T' }, 'en')?.href, null);
 
   const reg = regulationHit({ id: 'r1', title: 'VAT change', summary: 'Rate moved', url: 'https://www.businessincyprus.gov.cy/x', detected_at: '2026-01-01T00:00:00Z' }, NOW);
