@@ -104,6 +104,20 @@ export const SPONSORED_LABEL: Record<Locale, string> = {
   en: 'Sponsored', de: 'Anzeige', el: 'Χορηγούμενο', pl: 'Materiał sponsorowany', ro: 'Conținut sponsorizat', ru: 'Реклама', ar: 'محتوى برعاية',
 };
 
+/** Each edition's name in its own language, as readers know it. */
+export const NATIVE_NAME: Record<Locale, string> = { en: 'English', de: 'Deutsch', el: 'Ελληνικά', ro: 'Română', pl: 'Polski', ru: 'Русский', ar: 'العربية' };
+/** "Also in" in the language of the post (non-English text needs native review). */
+export const ALSO_IN: Record<Locale, string> = {
+  en: 'Also in', de: 'Auch auf', el: 'Επίσης στα', ro: 'Și în', pl: 'Także po', ru: 'Также на', ar: 'متوفر أيضًا بـ',
+};
+const EDITION_ORDER: Locale[] = ['en', 'de', 'el', 'ro', 'pl', 'ru', 'ar'];
+
+/** One line telling readers the story exists in other editions, e.g. "Also in Deutsch · Ελληνικά · Română". Empty when there is none. */
+export function editionsLine(a: Pick<ArticleFacts, 'locale' | 'editions'>): string {
+  const names = EDITION_ORDER.filter((l) => l !== a.locale && (a.editions || []).includes(l)).map((l) => NATIVE_NAME[l]);
+  return names.length ? `${ALSO_IN[a.locale] || ALSO_IN.en} ${names.join(' · ')}` : '';
+}
+
 // ── text helpers ─────────────────────────────────────────────────────────────
 
 /** Collapse whitespace, strip HTML and the characters that make AI text look like AI text (em/en dashes). */
@@ -141,6 +155,8 @@ export function withUtm(url: string, platform: SocialPlatform, campaign = 'autop
 
 export interface ArticleFacts {
   title: string; description: string; tags: string[]; county?: string | null; category?: string | null; sponsored?: boolean; sponsorName?: string | null; locale: Locale;
+  /** The editions that really exist for this article (a headline of its own); drives the "also in ..." line. */
+  editions?: Locale[];
 }
 export interface Generated { hook?: string; body?: string; altText?: string }
 
@@ -155,8 +171,9 @@ export function buildFacebookPost(a: ArticleFacts, g: Generated | null): BuiltPo
   const body = clip(g?.body || a.description, 300);
   const parts = [hook, body && body !== hook ? body : ''].filter(Boolean).join('\n\n');
   const prefix = sponsoredPrefix(a);
-  const text = clip(`${prefix}${parts}`, LIMITS.facebookMessage - hashtags.join(' ').length - 2).trimEnd();
-  return { text: `${text}\n\n${hashtags.join(' ')}`.trim(), hashtags, usedAi: !!g };
+  const also = editionsLine(a);
+  const text = clip(`${prefix}${parts}`, LIMITS.facebookMessage - hashtags.join(' ').length - 2 - (also ? also.length + 2 : 0)).trimEnd();
+  return { text: [text, also, hashtags.join(' ')].filter(Boolean).join('\n\n').trim(), hashtags, usedAi: !!g };
 }
 
 /** Instagram: hook line (≤125), body, localized "link in bio", hashtags; always within 2,200 characters and 30 hashtags. */
@@ -167,8 +184,9 @@ export function buildInstagramPost(a: ArticleFacts, g: Generated | null): BuiltP
   const cta = CTA_IG[a.locale] || CTA_IG.en;
   const tagLine = hashtags.join(' ');
   const prefix = sponsoredPrefix(a);
-  let text = [`${prefix}${hook}`, body && body !== hook ? body : '', cta, tagLine].filter(Boolean).join('\n\n');
-  if (text.length > LIMITS.instagramCaption) text = [`${prefix}${hook}`, cta, tagLine].filter(Boolean).join('\n\n');
+  const also = editionsLine(a);
+  let text = [`${prefix}${hook}`, body && body !== hook ? body : '', cta, also, tagLine].filter(Boolean).join('\n\n');
+  if (text.length > LIMITS.instagramCaption) text = [`${prefix}${hook}`, cta, also, tagLine].filter(Boolean).join('\n\n');
   const altText = clip(g?.altText || `${a.title}${a.county ? ` · ${a.county}` : ''}`, LIMITS.altText);
   return { text: text.slice(0, LIMITS.instagramCaption), hashtags, altText, usedAi: !!g };
 }

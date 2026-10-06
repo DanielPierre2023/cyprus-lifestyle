@@ -1,7 +1,7 @@
 // Facebook + Instagram auto-posting rules: hashtags, captions, limits, retries, settings.
 import {
   toHashtag, buildHashtags, clip, cleanText, withUtm, buildFacebookPost, buildInstagramPost, parseGenerated, parseSettings, postingGate,
-  backoffMs, classifyMetaError, isStale, igAspectOk, LIMITS, MAX_ATTEMPTS, CTA_IG, SPONSORED_LABEL, DEFAULT_SETTINGS, type ArticleFacts,
+  editionsLine, NATIVE_NAME, ALSO_IN, backoffMs, classifyMetaError, isStale, igAspectOk, LIMITS, MAX_ATTEMPTS, CTA_IG, SPONSORED_LABEL, DEFAULT_SETTINGS, type ArticleFacts,
 } from '@/lib/socialPlan';
 import { LOCALES } from '@/lib/locales';
 import { eq, ok, report } from './_harness';
@@ -99,5 +99,21 @@ eq('anything else → permanent', classifyMetaError(100, 'Invalid parameter'), '
   ok('queued-on-purpose older articles are never stale', !isStale('2025-01-01T00:00:00Z', 36, now, true));
 }
 ok('Instagram aspect range 4:5 … 1.91:1', igAspectOk(1080, 1350) && igAspectOk(1200, 630) && igAspectOk(1080, 1080) && !igAspectOk(1000, 2000) && !igAspectOk(2000, 500) && !igAspectOk(0, 10));
+
+// ── "also in ..." line: the readers are told which other editions exist ──────────────
+{
+  const all = ['en', 'de', 'el', 'ro', 'pl', 'ru', 'ar'] as const;
+  eq('line lists the other six editions in their own names', editionsLine({ locale: 'en', editions: [...all] }), 'Also in Deutsch · Ελληνικά · Română · Polski · Русский · العربية');
+  eq('only editions that exist are named', editionsLine({ locale: 'en', editions: ['en', 'de', 'ro'] }), 'Also in Deutsch · Română');
+  eq('no other edition -> no line', editionsLine({ locale: 'en', editions: ['en'] }), '');
+  eq('unknown editions -> no line', editionsLine({ locale: 'en' }), '');
+  eq('the post language is never listed', editionsLine({ locale: 'de', editions: [...all] }).includes('Deutsch'), false);
+  ok('every edition has a native name and an "also in" phrase', LOCALES.every((l) => !!NATIVE_NAME[l] && !!ALSO_IN[l]));
+  const f = buildFacebookPost(facts({ editions: [...all] }), null);
+  ok('Facebook: the line sits before the hashtags and the post stays within its budget', f.text.includes('Also in Deutsch') && f.text.indexOf('Also in') < f.text.indexOf('#') && f.text.length <= LIMITS.facebookMessage && f.text.endsWith(f.hashtags.join(' ')));
+  const i = buildInstagramPost(facts({ editions: [...all] }), null);
+  ok('Instagram: the line follows "link in bio" and the caption is still within limits', i.text.indexOf(CTA_IG.en) < i.text.indexOf('Also in') && i.text.length <= LIMITS.instagramCaption && i.text.endsWith(i.hashtags.join(' ')));
+  ok('no editions given -> posts are unchanged', !buildFacebookPost(facts(), null).text.includes('Also in') && !buildInstagramPost(facts(), null).text.includes('Also in'));
+}
 
 report('social.plan');

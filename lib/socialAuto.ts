@@ -103,7 +103,8 @@ export async function loadArticle(sb: SupabaseClient, id: string): Promise<Loade
   const row = base as unknown as ArticleRow;
   const src = (LOCALES as readonly string[]).includes(String(row.source_lang)) ? (row.source_lang as Locale) : 'en';
   const cols = (l: string) => `title_${l}, excerpt_${l}, summary_${l}, seo_description_${l}, tags_${l}`;
-  const { data: txt } = await sb.from('blog_posts').select(`${cols(src)}${src === 'en' ? '' : `, ${cols('en')}`}`).eq('id', id).maybeSingle();
+  const titles = (LOCALES as readonly string[]).map((l) => `title_${l}`).join(', ');   // which editions exist
+  const { data: txt } = await sb.from('blog_posts').select(`${cols(src)}${src === 'en' ? '' : `, ${cols('en')}`}, ${titles}`).eq('id', id).maybeSingle();
   const t = (txt || {}) as unknown as Record<string, unknown>;
   // Post in the language the article was written in; if that edition has no headline, fall back to English.
   const locale: Locale = src !== 'en' && !t[`title_${src}`] ? 'en' : src;
@@ -114,6 +115,8 @@ export async function loadArticle(sb: SupabaseClient, id: string): Promise<Loade
     description: cleanText(pick('seo_description') || pick('summary') || pick('excerpt')),
     tags: Array.isArray(tagsRaw) ? tagsRaw : [],
     county: row.county, category: row.category, sponsored: !!row.sponsored, sponsorName: row.sponsor_name, locale,
+    // An edition counts only if it has a headline of its own (a copy of the English one is the site's fallback, not a translation).
+    editions: (LOCALES as readonly Locale[]).filter((l) => { const v = String(t[`title_${l}`] || '').trim(); return !!v && (l === 'en' || v !== String(t.title_en || '').trim()); }),
   };
   return { row, locale, facts };
 }
