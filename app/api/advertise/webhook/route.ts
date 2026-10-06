@@ -23,6 +23,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { verifyWebhook } from '@/lib/stripe';
 import { onboardingEmail, type OrderLike } from '@/lib/fulfilment';
 import { sendEmail } from '@/lib/email';
+import { paymentFailedMail } from '@/lib/advertise/paymentFailedMail';
 import { recordMembershipCheckout } from '@/lib/concierge/membership';
 import { logServerError } from '@/lib/monitor.server';
 import { recordVatOutcome } from '@/lib/vat/record';
@@ -202,8 +203,17 @@ async function processEvent(sb: SupabaseClient, event: Record<string, unknown>, 
       const sub = invoiceSubscriptionId(obj);
       if (sub) {
         strict = true;
+        // Advertisers to tell: only orders that are ACTIVE right now and are about to move to 'failed'. A repeat failure of
+        // the same invoice finds them already 'failed', so the notice goes out once per failure episode (members get theirs
+        // from the daily lifecycle job; nothing is sent for them here).
+        const toNotify = await sb.from('ad_orders').select('id, customer_email, locale').eq('stripe_subscription_id', sub).in('status', allowedFrom('failed'));
         const err = await transition(sb, sub, 'failed', now);
         if (err) return await retryLater(event, 'payment-failed write', err.message);
+        for (const o of (toNotify.data || []) as { customer_email: string | null; locale: string | null }[]) {
+          if (!o.customer_email) continue;
+          const mail = paymentFailedMail(o.locale);
+          await sendEmail({ to: o.customer_email, subject: mail.subject, html: mail.html }).catch(() => {});
+        }
       }
     } else if (type === 'invoice.paid') {
       // A card recovered by Stripe's retry: failed → active, and only from failed.
