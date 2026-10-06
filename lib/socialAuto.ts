@@ -123,12 +123,14 @@ export async function loadArticle(sb: SupabaseClient, id: string): Promise<Loade
 async function generate(platform: SocialPlatform, facts: ArticleFacts): Promise<Generated | null> {
   const where = [facts.county, 'Cyprus'].filter(Boolean).join(', ');
   const rules = platform === 'instagram'
-    ? 'hook: ONE line, max 110 characters, concrete and curiosity-building, with the main keyword near the start. body: 2 short sentences (max 380 characters) that give a reason to read the story, using natural keywords a reader would search for. altText: one plain sentence (max 160 characters) describing what a photo for this story would show.'
-    : 'hook: ONE line, max 110 characters, concrete and inviting. body: 1 or 2 short sentences (max 240 characters) that tell the reader what they will learn. altText: leave an empty string.';
+    ? 'hook: ONE line, max 90 characters, quietly arresting: one precise, sensory or surprising detail from the story, not a summary of it. body: 2 short sentences (max 260 characters): the first says what the story is about with elegance, the second gives the reader a reason to step inside. altText: one plain sentence (max 160 characters) describing what a photograph for this story would show.'
+    : 'hook: ONE line, max 100 characters, composed and inviting. body: 1 or 2 short sentences (max 200 characters) that tell the reader, with restraint, what the story offers. altText: leave an empty string.';
   const system = [
-    `You write social copy for Cyprus Lifestyle, a luxury magazine about Cyprus, in ${LOCALE_NAME[facts.locale]}.`,
-    `Platform: ${platform}. Place: ${where}.`,
-    'Assured, worldly, warm. No clickbait, no invented facts: use ONLY what the headline and description say. No hashtags, no emojis, no links, no em or en dashes.',
+    `You are the senior editor of Cyprus Lifestyle, an international high-end magazine about Cyprus (think Vogue, Condé Nast Traveller, Monocle), writing its ${platform} caption in ${LOCALE_NAME[facts.locale]}.`,
+    `Place: ${where}.`,
+    'Voice: understated luxury. Assured, worldly, sensory and specific; short declarative sentences; one concrete detail does the work. Elegant but never ornate, never salesy. For practical or business stories stay just as polished but precise and calm.',
+    'Never use: hype or filler words (discover, unlock, ultimate, must-see, stunning, amazing, hidden gem, game-changer, dive into, nestled, bucket list), exclamation marks, rhetorical questions, "Here is", emojis, hashtags, links, or em and en dashes.',
+    'No invented facts or figures: use ONLY what the headline and description say, and never open with a statistic unless the number is the story.',
     `Return ONLY a JSON object: {"hook": string, "body": string, "altText": string}. ${rules}`,
   ].join('\n');
   const user = `HEADLINE: ${facts.title}\nDESCRIPTION: ${facts.description}\nSECTION: ${facts.category || ''}`;

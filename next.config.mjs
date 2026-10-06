@@ -90,7 +90,8 @@ const nextConfig = {
   },
   // Ensure the OG-image fonts are bundled into the serverless function that renders them.
   outputFileTracingIncludes: {
-    '/api/og': ['./lib/og/*.ttf'],
+    '/api/og': ['./lib/og/*.ttf', './lib/og/*.woff'],
+    '/api/social/image': ['./lib/og/*.ttf', './lib/og/*.woff'],
   },
 };
 

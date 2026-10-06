@@ -2,8 +2,9 @@
 // The picture Instagram posts for an article, in the only shape Instagram accepts through the API:
 // JPEG, sRGB, within 4:5 … 1.91:1, ≤ 8 MB. Instagram downloads it from this URL when the post is created.
 //   • the article's OWN cover (our storage only — scraped third-party pictures are never re-published), smart-cropped to
-//     4:5 (1080×1350) around the most interesting part of the photo;
-//   • otherwise the branded text card the site already uses for link previews (/api/og), converted to JPEG.
+//     4:5 (1080×1350) and set into an editorial look of lib/og/igCard.tsx: the Masthead cover, or the ivory Arch for food, travel
+//     and lifestyle (see pickVariant in lib/og/igText.ts);
+//   • otherwise the obsidian Noir Gold card of the same file (monumental monogram, double gold frame, centred headline).
 // The slug is looked up in the database — the caller never supplies an image URL, so this cannot be pointed at other hosts.
 import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
@@ -11,7 +12,9 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/ratelimit';
 import { isOwnedImage } from '@/lib/images';
 import { isLocale, type Locale } from '@/lib/locales';
-import { ogImage } from '@/lib/og/card';
+import { igCardImage } from '@/lib/og/igCard';
+import { photoBox, pickVariant, sectionLabel } from '@/lib/og/igText';
+import en from '@/messages/en.json';
 import { IG_SIZE } from '@/lib/socialPlan';
 
 export const runtime = 'nodejs';
@@ -43,21 +46,20 @@ export async function GET(req: NextRequest) {
   if (!a) return new NextResponse('Not found', { status: 404 });
   const row = a as unknown as Record<string, string | null>;
 
-  let source: Buffer | null = null;
-  let cropped = false;
-  if (row.cover_image && isOwnedImage(row.cover_image)) {
-    source = await fetchBuffer(row.cover_image);
-    cropped = !!source;
-  }
-  if (!source) {                                         // text card (1200×630 = 1.91:1, inside Instagram's range)
-    const card = await ogImage({ title: String(row[`title_${locale}`] || row.title_en || 'Cyprus Lifestyle'), kicker: row.category || undefined, locale, coverUrl: null });
-    source = Buffer.from(await card.arrayBuffer());
+  // The look: no photograph of ours -> Noir Gold; a photograph -> the Masthead cover, or the ivory Arch for food, travel and lifestyle.
+  // The photograph is our own (our storage only), cropped around its most interesting part to the size that look needs.
+  const raw = row.cover_image && isOwnedImage(row.cover_image) ? await fetchBuffer(row.cover_image) : null;
+  const variant = pickVariant({ hasPhoto: !!raw, category: row.category });
+  const box = photoBox(variant, 'portrait');
+  let photo: Buffer | null = null;
+  if (raw && box) {
+    try { photo = await sharp(raw, { failOn: 'none' }).rotate().resize(box.width, box.height, { fit: 'cover', position: sharp.strategy.attention }).toColourspace('srgb').jpeg({ quality: 88, mozjpeg: true }).toBuffer(); }
+    catch { photo = null; }
   }
   try {
-    const img = sharp(source, { failOn: 'none' }).rotate();
-    const out = cropped
-      ? await img.resize(IG_SIZE.width, IG_SIZE.height, { fit: 'cover', position: sharp.strategy.attention }).toColourspace('srgb').jpeg({ quality: 86, mozjpeg: true }).toBuffer()
-      : await img.resize(1200, 630, { fit: 'cover' }).flatten({ background: '#0B0E11' }).toColourspace('srgb').jpeg({ quality: 90 }).toBuffer();
+    const names = ((en as unknown as { nav?: Record<string, string> }).nav) || {};
+    const card = await igCardImage({ variant: photo ? variant : 'noir', title: String(row[`title_${locale}`] || row.title_en || 'Cyprus Lifestyle'), kicker: sectionLabel(row.category, names) || undefined, locale, photo });
+    const out = await sharp(Buffer.from(await card.arrayBuffer())).resize(IG_SIZE.width, IG_SIZE.height, { fit: 'cover' }).flatten({ background: '#0B0E11' }).toColourspace('srgb').jpeg({ quality: 90, mozjpeg: true }).toBuffer();
     return new NextResponse(new Uint8Array(out), { headers: JPEG });
   } catch {
     return new NextResponse('Image could not be prepared', { status: 502 });

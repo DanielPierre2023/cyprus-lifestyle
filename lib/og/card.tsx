@@ -1,21 +1,17 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { ImageResponse } from 'next/og';
+import sharp from 'sharp';
 import type { Locale } from '@/lib/locales';
+import { editorialImage } from '@/lib/og/igCard';
+import { photoBox, pickVariant } from '@/lib/og/igText';
+import en from '@/messages/en.json';
+import de from '@/messages/de.json';
+import el from '@/messages/el.json';
+import pl from '@/messages/pl.json';
+import ro from '@/messages/ro.json';
+import ru from '@/messages/ru.json';
+import ar from '@/messages/ar.json';
 
 export const OG_SIZE = { width: 1200, height: 630 };
 export const OG_CONTENT_TYPE = 'image/png';
-
-// Latin+Greek serif (static instance) + a Naskh Arabic face, read from disk once.
-// Bundled into the function via outputFileTracingIncludes (next.config).
-const fontsPromise = (async () => {
-  const dir = join(process.cwd(), 'lib', 'og');
-  const [serif, arabic] = await Promise.all([
-    readFile(join(dir, 'NotoSerif-static.ttf')),
-    readFile(join(dir, 'NotoNaskhArabic-og.ttf')),
-  ]);
-  return { serif, arabic };
-})();
 
 // SSRF guard for the cover fetch. coverUrl arrives from the public ?c= query param,
 // so only fetch genuinely public https images — never let it reach loopback, private
@@ -41,15 +37,21 @@ function isPublicHttpsUrl(raw: string): boolean {
   return true;
 }
 
+type Nav = { nav?: Record<string, string> };
+/** The localized names of the food / travel sections, so a translated kicker still selects the ivory Arch look. */
+const ARCH_LABELS: string[] = [en, de, el, pl, ro, ru, ar].flatMap((m) => {
+  const nav = (m as unknown as Nav).nav || {};
+  return [nav.table, nav.escapes].filter(Boolean) as string[];
+});
+
+/**
+ * The link-preview card (Facebook, WhatsApp, LinkedIn, Telegram ...), 1200 x 630, in the editorial looks of lib/og/igCard.tsx:
+ * Masthead (article with a photo), Arch (food, travel, lifestyle with a photo) or Noir Gold (no photo).
+ */
 export async function ogImage(opts: { title: string; kicker?: string; locale: Locale; coverUrl?: string | null }) {
   const { title, kicker, locale, coverUrl } = opts;
-  const { serif, arabic } = await fontsPromise;
-  // Satori can't shape Arabic contextual forms, so the Arabic edition uses a clean
-  // branded photo card (the Arabic headline still travels in og:title text).
-  const rtl = locale === 'ar';
-  const big = title.length > 58 ? 54 : title.length > 40 ? 64 : 74;
 
-  let cover: string | null = null;
+  let raw: Buffer | null = null;
   // Only fetch a vetted public https image; disallow redirects (a public URL could 302
   // to an internal one), cap the time and the size so a hostile URL can't hang or flood.
   if (coverUrl && isPublicHttpsUrl(coverUrl)) {
@@ -58,52 +60,17 @@ export async function ogImage(opts: { title: string; kicker?: string; locale: Lo
       const ct = res.headers.get('content-type') || '';
       if (res.ok && ct.startsWith('image/')) {
         const buf = Buffer.from(await res.arrayBuffer());
-        if (buf.byteLength <= 8_000_000) {
-          cover = `data:${ct};base64,${buf.toString('base64')}`;
-        }
+        if (buf.byteLength <= 8_000_000) raw = buf;
       }
-    } catch { cover = null; }
+    } catch { raw = null; }
   }
 
-  const wordmark = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-      <div style={{ width: 42, height: 42, borderRadius: 42, border: '2px solid #C9A24C', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F4EFE6', fontSize: 18, fontFamily: 'Noto Serif' }}>CL</div>
-      <div style={{ color: '#F4EFE6', fontSize: 22, letterSpacing: 8, fontFamily: 'Noto Serif' }}>CYPRUS LIFESTYLE</div>
-    </div>
-  );
-
-  return new ImageResponse(
-    (
-      <div style={{ width: '100%', height: '100%', display: 'flex', position: 'relative', backgroundColor: '#0B0E11' }}>
-        {cover ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={cover} width={1200} height={630} style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: 630, objectFit: 'cover' }} />
-        ) : null}
-        <div style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: 630, display: 'flex', backgroundImage: 'linear-gradient(180deg, rgba(11,14,17,0.25) 0%, rgba(11,14,17,0.45) 45%, rgba(11,14,17,0.94) 100%)' }} />
-        <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 64 }}>
-          {wordmark}
-          {rtl ? (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <div style={{ color: '#E6D6AE', fontSize: 20, letterSpacing: 4, textTransform: 'uppercase', fontFamily: 'Noto Serif', marginBottom: 16 }}>The Arabic Edition</div>
-              <div style={{ color: '#F6F1E7', fontSize: 60, letterSpacing: 10, fontFamily: 'Noto Serif' }}>CYPRUS LIFESTYLE</div>
-              <div style={{ marginTop: 24, width: 92, height: 3, backgroundColor: '#C9A24C', display: 'flex' }} />
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-              {kicker ? <div style={{ color: '#E6D6AE', fontSize: 22, letterSpacing: 5, textTransform: 'uppercase', fontFamily: 'Noto Serif', marginBottom: 20 }}>{kicker}</div> : null}
-              <div style={{ color: '#F6F1E7', fontSize: big, lineHeight: 1.06, fontFamily: 'Noto Serif', maxWidth: 1040, display: 'flex' }}>{title}</div>
-              <div style={{ marginTop: 26, width: 92, height: 3, backgroundColor: '#C9A24C', display: 'flex' }} />
-            </div>
-          )}
-        </div>
-      </div>
-    ),
-    {
-      ...OG_SIZE,
-      fonts: [
-        { name: 'Noto Serif', data: serif, style: 'normal', weight: 600 },
-        { name: 'Arabic', data: arabic, style: 'normal', weight: 400 },
-      ],
-    },
-  );
+  const variant = pickVariant({ hasPhoto: !!raw, kicker, labels: ARCH_LABELS });
+  const box = photoBox(variant, 'landscape');
+  let photo: Buffer | null = null;
+  if (raw && box) {
+    try { photo = await sharp(raw, { failOn: 'none' }).rotate().resize(box.width, box.height, { fit: 'cover', position: sharp.strategy.attention }).toColourspace('srgb').jpeg({ quality: 86 }).toBuffer(); }
+    catch { photo = null; }
+  }
+  return editorialImage({ variant: photo ? variant : 'noir', format: 'landscape', title, kicker, locale, photo });
 }
