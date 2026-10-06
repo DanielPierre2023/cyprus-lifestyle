@@ -159,6 +159,46 @@ export function portalConfigurationId(env: Record<string, string | undefined> = 
   const v = (env.STRIPE_PORTAL_CONFIGURATION_ID || '').trim();
   return /^bpc_[A-Za-z0-9]+$/.test(v) ? v : undefined;
 }
+/** Form body for POST /v1/billing_portal/configurations: Cyprus Lifestyle's own portal (own Terms/Privacy links). Pure, unit-tested. */
+export function buildPortalConfigBody(siteUrl: string): Record<string, string> {
+  const site = siteUrl.trim().replace(/\/+$/, '');
+  return {
+    'business_profile[headline]': 'Cyprus Lifestyle membership',
+    'business_profile[privacy_policy_url]': `${site}/privacy`,
+    'business_profile[terms_of_service_url]': `${site}/terms`,
+    'features[invoice_history][enabled]': 'true',
+    'features[payment_method_update][enabled]': 'true',
+    'features[customer_update][enabled]': 'true',
+    'features[customer_update][allowed_updates][0]': 'email',
+    'features[customer_update][allowed_updates][1]': 'address',
+    'features[customer_update][allowed_updates][2]': 'name',
+    'features[subscription_cancel][enabled]': 'true',
+    'features[subscription_cancel][mode]': 'at_period_end',
+    'metadata[site]': 'cyprus-lifestyle',
+  };
+}
+
+/**
+ * Admin helper: find the portal configuration tagged for this site, or (create=true) create it once.
+ * Reuses an existing one, so calling it twice never creates a duplicate.
+ */
+export async function findOrCreatePortalConfiguration(siteUrl: string, create: boolean): Promise<{ id: string | null; created: boolean }> {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('Stripe is not configured');
+  const headers = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/x-www-form-urlencoded' };
+  const list = await fetch(`${API}/billing_portal/configurations?limit=100`, { headers, signal: AbortSignal.timeout(20000) });
+  const lj = await list.json().catch(() => ({}));
+  if (!list.ok) throw new Error(lj?.error?.message || `Stripe error ${list.status}`);
+  const hit = ((lj.data || []) as { id: string; is_active?: boolean; metadata?: Record<string, string> }[])
+    .find((c) => c.is_active !== false && c.metadata?.site === 'cyprus-lifestyle');
+  if (hit) return { id: hit.id, created: false };
+  if (!create) return { id: null, created: false };
+  const res = await fetch(`${API}/billing_portal/configurations`, { method: 'POST', headers, body: form(buildPortalConfigBody(siteUrl)), signal: AbortSignal.timeout(20000) });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j?.error?.message || `Stripe error ${res.status}`);
+  return { id: j.id as string, created: true };
+}
+
 export async function createPortalSession(p: { customerId: string; returnUrl: string; locale?: string }): Promise<{ url: string }> {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error('Stripe is not configured');

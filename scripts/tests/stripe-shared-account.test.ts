@@ -1,5 +1,5 @@
 // The Stripe account is shared with other businesses: Cyprus Lifestyle's terms travel with each Checkout Session.
-import { buildCheckoutBody, checkoutTermsMessage, portalConfigurationId } from '@/lib/stripe';
+import { buildCheckoutBody, checkoutTermsMessage, portalConfigurationId, buildPortalConfigBody } from '@/lib/stripe';
 import { eq, ok, report } from './_harness';
 
 const base = { mode: 'subscription' as const, currency: 'eur', unitAmount: 1000, productName: 'x', successUrl: 'https://a.b/s', cancelUrl: 'https://a.b/c' };
@@ -11,4 +11,7 @@ eq('links follow NEXT_PUBLIC_SITE_URL, trailing slashes stripped', checkoutTerms
 eq('valid bpc_ id is used', portalConfigurationId({ STRIPE_PORTAL_CONFIGURATION_ID: ' bpc_1AbC ' }), 'bpc_1AbC');
 eq('invalid id ignored', portalConfigurationId({ STRIPE_PORTAL_CONFIGURATION_ID: 'whsec_x' }), undefined);
 eq('unset ignored', portalConfigurationId({}), undefined);
+const pc = buildPortalConfigBody('https://example.test/');
+eq('portal config links to this site\'s terms and privacy', [pc['business_profile[terms_of_service_url]'], pc['business_profile[privacy_policy_url]']], ['https://example.test/terms', 'https://example.test/privacy']);
+eq('portal config is tagged so it is found again (no duplicates)', pc['metadata[site]'], 'cyprus-lifestyle');
 report('stripe-shared-account');
