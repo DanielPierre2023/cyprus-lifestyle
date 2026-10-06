@@ -28,8 +28,7 @@ alter table public.events add column if not exists last_seen_at    timestamptz; 
 alter table public.events add column if not exists geocoded_at     timestamptz;                -- venue geocoding attempted (once)
 
 create unique index if not exists events_ingest_key_uidx on public.events (ingest_key);
--- NOT unique: production already holds duplicate source_url values (older imports); the pipeline dedupes in code, never by constraint.
-create index if not exists events_source_url_idx on public.events (source_url);
+create unique index if not exists events_source_url_uidx on public.events (source_url);
 create index if not exists events_source_idx on public.events (source);
 create index if not exists events_geocode_todo_idx on public.events (created_at desc) where source is not null and geocoded_at is null;
 create index if not exists events_upcoming_idx on public.events (status, starts_at, ends_at);

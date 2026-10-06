@@ -9,7 +9,7 @@
 import { NextRequest, after } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { runConcierge, type ChatMessage } from '@/lib/concierge/brain';
-import { resolveChannelLocale } from '@/lib/concierge/localeMemory';
+import { detectLocaleFull } from '@/lib/concierge/localeGuess';
 import { appendChannelLinks } from '@/lib/concierge/channelLinks';
 import { safeEqual } from '@/lib/auth/secretMatch';
 import { rateLimitKey } from '@/lib/ratelimit';
@@ -31,13 +31,13 @@ function tgLocale(code?: string): string {
 
 // /start & /help welcome, per edition (the name is never translated).
 const WELCOME: Record<string, string> = {
-  en: 'Welcome to Cyprus Lifestyle — your guide to the island. Ask me where to dine, stay, swim or go out; about property, relocation, residency or business; or the practical, from a late-night pharmacy to an emergency number. Tell me what you need, in any language.',
-  el: 'Καλώς ήρθατε στο Cyprus Lifestyle — ο οδηγός σας για το νησί. Ρωτήστε με πού να δειπνήσετε, να μείνετε, να κολυμπήσετε ή να βγείτε· για ακίνητα, μετεγκατάσταση, διαμονή ή επιχειρήσεις· ή τα πρακτικά, από ένα διανυκτερεύον φαρμακείο έως έναν αριθμό έκτακτης ανάγκης. Πείτε μου τι χρειάζεστε, σε οποιαδήποτε γλώσσα.',
-  ro: 'Bine ați venit la Cyprus Lifestyle — ghidul dumneavoastră pentru insulă. Întrebați-mă unde să luați masa, să vă cazați, să înotați sau să ieșiți; despre proprietăți, relocare, rezidență sau afaceri; ori despre lucruri practice, de la o farmacie non-stop la un număr de urgență. Spuneți-mi de ce aveți nevoie, în orice limbă.',
-  ar: 'مرحبًا بكم في Cyprus Lifestyle — دليلكم إلى الجزيرة. اسألوني أين تتناولون العشاء أو تقيمون أو تسبحون أو تخرجون؛ عن العقارات والانتقال والإقامة والأعمال؛ أو الأمور العملية، من صيدلية مناوبة إلى رقم للطوارئ. أخبروني بما تحتاجون، بأي لغة.',
-  de: 'Willkommen bei Cyprus Lifestyle — Ihr Begleiter für die Insel. Fragen Sie mich, wo Sie essen, übernachten, schwimmen oder ausgehen können; nach Immobilien, Umzug, Aufenthalt oder Business; oder nach Praktischem, von der Nachtapotheke bis zur Notrufnummer. Sagen Sie mir, was Sie brauchen — in jeder Sprache.',
-  pl: 'Witamy w Cyprus Lifestyle — Twój przewodnik po wyspie. Zapytaj mnie, gdzie zjeść, się zatrzymać, popływać czy wyjść; o nieruchomości, przeprowadzkę, rezydencję lub biznes; albo o sprawy praktyczne, od nocnej apteki po numer alarmowy. Powiedz, czego potrzebujesz — w dowolnym języku.',
-  ru: 'Добро пожаловать в Cyprus Lifestyle — ваш гид по острову. Спросите, где поужинать, остановиться, искупаться или провести вечер; о недвижимости, переезде, ВНЖ или бизнесе; или о практичном — от круглосуточной аптеки до номера экстренной службы. Скажите, что вам нужно, на любом языке.',
+  en: 'Welcome to Cyprus Lifestyle — your personal concierge for the island. Ask me where to dine, stay, swim or go out; about property, relocation, residency or business; or the practical, from a late-night pharmacy to an emergency number. Tell me what you need, in any language.',
+  el: 'Καλώς ήρθατε στο Cyprus Lifestyle — ο προσωπικός σας κονσιέρζ για το νησί. Ρωτήστε με πού να δειπνήσετε, να μείνετε, να κολυμπήσετε ή να βγείτε· για ακίνητα, μετεγκατάσταση, διαμονή ή επιχειρήσεις· ή τα πρακτικά, από ένα διανυκτερεύον φαρμακείο έως έναν αριθμό έκτακτης ανάγκης. Πείτε μου τι χρειάζεστε, σε οποιαδήποτε γλώσσα.',
+  ro: 'Bine ați venit la Cyprus Lifestyle — concierge-ul dumneavoastră personal pentru insulă. Întrebați-mă unde să luați masa, să vă cazați, să înotați sau să ieșiți; despre proprietăți, relocare, rezidență sau afaceri; ori despre lucruri practice, de la o farmacie non-stop la un număr de urgență. Spuneți-mi de ce aveți nevoie, în orice limbă.',
+  ar: 'مرحبًا بكم في Cyprus Lifestyle — الكونسيرج الشخصي لكم في الجزيرة. اسألوني أين تتناولون العشاء أو تقيمون أو تسبحون أو تخرجون؛ عن العقارات والانتقال والإقامة والأعمال؛ أو الأمور العملية، من صيدلية مناوبة إلى رقم للطوارئ. أخبروني بما تحتاجون، بأي لغة.',
+  de: 'Willkommen bei Cyprus Lifestyle — Ihr persönlicher Concierge für die Insel. Fragen Sie mich, wo Sie essen, übernachten, schwimmen oder ausgehen können; nach Immobilien, Umzug, Aufenthalt oder Business; oder nach Praktischem, von der Nachtapotheke bis zur Notrufnummer. Sagen Sie mir, was Sie brauchen — in jeder Sprache.',
+  pl: 'Witamy w Cyprus Lifestyle — Twój osobisty concierge na wyspie. Zapytaj mnie, gdzie zjeść, się zatrzymać, popływać czy wyjść; o nieruchomości, przeprowadzkę, rezydencję lub biznes; albo o sprawy praktyczne, od nocnej apteki po numer alarmowy. Powiedz, czego potrzebujesz — w dowolnym języku.',
+  ru: 'Добро пожаловать в Cyprus Lifestyle — ваш личный консьерж на острове. Спросите, где поужинать, остановиться, искупаться или провести вечер; о недвижимости, переезде, ВНЖ или бизнесе; или о практичном — от круглосуточной аптеки до номера экстренной службы. Скажите, что вам нужно, на любом языке.',
 };
 
 // Topic shortcuts (the /setcommands menu). Each maps to a natural query, localized so
@@ -109,17 +109,12 @@ async function handleTextMessage(token: string, chatId: string, raw: string, uiL
 
   // Load memory.
   let history: ChatMessage[] = [];
-  let rememberedLocale: string | null = null; let rememberedAt: string | null = null;
   try {
-    const { data } = await sb.from('concierge_tg_threads').select('messages,locale,updated_at').eq('chat_id', chatId).maybeSingle();
+    const { data } = await sb.from('concierge_tg_threads').select('messages').eq('chat_id', chatId).maybeSingle();
     if (data && Array.isArray(data.messages)) history = data.messages as ChatMessage[];
-    if (data) { rememberedLocale = typeof data.locale === 'string' ? data.locale : null; rememberedAt = typeof data.updated_at === 'string' ? data.updated_at : null; }
   } catch { /* no memory available — answer statelessly */ }
 
-  // Language: this message when clearly identifiable; a short / ambiguous one keeps the chat's last confident language;
-  // a brand-new chat falls back to the Telegram UI language, then English.
-  const lang = resolveChannelLocale({ text: query, remembered: rememberedLocale, rememberedAt, hint: uiLocale });
-  const locale = lang.locale;
+  const locale = detectLocaleFull(query); // script first, then a Latin-script guess (de/pl/ro), else en
   const convo: ChatMessage[] = [...history, { role: 'user', content: query }];
 
   let reply = '';
@@ -138,7 +133,7 @@ async function handleTextMessage(token: string, chatId: string, raw: string, uiL
   const nextMessages = [...convo, { role: 'assistant' as const, content: reply }].slice(-10);
   try {
     await sb.from('concierge_tg_threads').upsert({
-      chat_id: chatId, locale: lang.persist, messages: nextMessages, updated_at: new Date().toISOString(),
+      chat_id: chatId, locale, messages: nextMessages, updated_at: new Date().toISOString(),
     });
   } catch { /* memory write is best-effort */ }
 }

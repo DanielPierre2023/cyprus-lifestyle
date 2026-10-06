@@ -477,7 +477,7 @@ export default function ConciergeChat({ locale, labels }: { locale: Locale; labe
                     )}
 
                     {m.role === 'assistant' && !m.streaming && m.activities && m.activities.length > 0 && (
-                      <ActivityCards items={m.activities} locale={locale} onNavigate={() => setOpen(false)} onOpen={(id: string) => { try { fetch('/api/track/rec-click', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug: `gyg:${id}`, source: 'concierge', label: 'book', locale }) }); } catch { /* best-effort attribution */ } }} />
+                      <ActivityCards items={m.activities} locale={locale} onOpen={(id: string) => { try { fetch('/api/track/rec-click', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug: `gyg:${id}`, source: 'concierge', label: 'book', locale }) }); } catch { /* best-effort attribution */ } }} />
                     )}
 
                     {m.role === 'assistant' && !m.streaming && m.canRoute && i === msgs.length - 1 && (

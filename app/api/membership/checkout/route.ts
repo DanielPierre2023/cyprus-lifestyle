@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       cancelUrl: `${origin}/${prefix}membership`,
       customerEmail: email,
       clientReferenceId: cid || undefined,
-      metadata: { kind: 'membership', tier: 'concierge', cid, locale },
+      metadata: { kind: 'membership', tier: 'concierge', cid },
       // VAT: the €19 is the FINAL price — VAT is included, and is the VAT of the member's own country (an online
       // service to consumers). Stripe Tax works it out from the billing address; no business VAT-number step here.
       automaticTax: automaticTaxEnabled(), taxBehavior: MEMBERSHIP_TAX.taxBehavior, taxCode: MEMBERSHIP_TAX.taxCode,

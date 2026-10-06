@@ -8,7 +8,6 @@
 import { Link } from '@/lib/i18n/routing';
 import { sourcesUi, relFor } from '@/lib/concierge/sourcesUi';
 import type { SourceCard } from '@/lib/concierge/sources';
-import { bookLabel } from '@/lib/activities/uiLabels';
 
 export interface SourceHints { agenda: boolean; live: boolean; }
 
@@ -49,9 +48,6 @@ export default function ConciergeSources({ cards, hints, locale, dark = false, o
               {c.external
                 ? <a href={c.href} className="csrc-card" target="_blank" rel={relFor(c.kind, true)}>{body}</a>
                 : <Link href={c.href} className="csrc-card" onClick={onNavigate}>{body}</Link>}
-              {/* An experience with its own page: the partner booking link is the secondary action (sponsored, new tab). */}
-              {c.kind === 'activity' && !c.external && c.bookHref && /^https:\/\//i.test(c.bookHref)
-                ? <a href={c.bookHref} className="csrc-book" target="_blank" rel={relFor('activity', true)}>{bookLabel(locale)} ↗</a> : null}
             </li>
           );
         })}
@@ -76,7 +72,6 @@ export default function ConciergeSources({ cards, hints, locale, dark = false, o
         .csrc-official{border-color:#2f6b2f;color:#2f6b2f}
         .csrc-name{font-family:var(--disp,'Playfair Display',serif);font-size:15.5px;line-height:1.25;color:var(--ink,#1C1710);overflow-wrap:anywhere}
         .csrc-meta{font-family:var(--sans,'Jost',sans-serif);font-size:12px;color:var(--ink-soft,#6E6455)}
-        .csrc-book{display:inline-block;margin:4px 0 0;font-family:var(--sans,'Jost',sans-serif);font-size:12.5px;font-weight:700;color:#123A4A}
         .csrc-links{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
         .csrc-pill{font-family:var(--body,'Lora',serif);font-size:13.5px;padding:6px 12px;border:1px solid var(--line,#DDD2BB);border-radius:999px;background:var(--card,#FBF7EE);color:#8a5b12;font-weight:600}
         .csrc-pill:hover{border-color:#C9A24C;text-decoration:none}

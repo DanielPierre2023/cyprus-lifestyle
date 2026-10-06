@@ -6,7 +6,6 @@ import { isLocale, type Locale } from '@/lib/locales';
 import { breadcrumbJsonLd, ld, pageMetadata } from '@/lib/seo';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import MembershipCheckout from '@/components/MembershipCheckout';
-import { LEGAL_UI } from '@/lib/legal';
 
 export const revalidate = 3600;
 
@@ -35,7 +34,6 @@ export default async function MembershipPage({ params }: { params: Promise<{ loc
   // Same source of truth as app/api/membership/checkout (price + billing interval).
   const priceEur = process.env.MEMBERSHIP_PRICE_EUR || '19';
   const perLabel = process.env.MEMBERSHIP_INTERVAL === 'year' ? conc.perYear : conc.perMonth;
-  const legalUi = LEGAL_UI[l] || LEGAL_UI.en;
   const crumbLd = breadcrumbJsonLd(l, [{ name: t('brand.name'), path: '/' }, { name: t('membership.title'), path: '/membership' }]);
 
   return (
@@ -74,10 +72,6 @@ export default async function MembershipPage({ params }: { params: Promise<{ loc
               restoreBusy: conc.restoreBusy, restoreSent: conc.restoreSent, restoreInvalid: conc.restoreInvalid, restoreError: conc.restoreError,
               confirming: conc.confirming, confirmOk: conc.confirmOk, confirmExpired: conc.confirmExpired, confirmInvalid: conc.confirmInvalid, confirmError: conc.confirmError,
             }} />
-            <p style={{ margin: '14px 0 0', fontSize: 12.5, lineHeight: 1.55, color: '#c9bfa6' }}>
-              {legalUi.membershipNote}{' '}
-              <Link href="/terms" style={{ color: '#E9C978' }}>{legalUi.terms}</Link> · <Link href="/privacy" style={{ color: '#E9C978' }}>{t('footer.privacy')}</Link>
-            </p>
           </div>
         </div>
 

@@ -12,9 +12,6 @@ import { bookingCopy } from '@/lib/booking/copy';
 import { bookingDeps } from '@/lib/booking/runtime';
 import { memberBookings, type MemberBookingView } from '@/lib/booking/account';
 import { logServerError } from '@/lib/monitor.server';
-import { LEGAL_UI } from '@/lib/legal';
-import { cardView, rememberLocale } from '@/lib/member/cardView';
-import MemberCardPanel from '@/components/account/MemberCardPanel';
 import { AccountActions, AccountConfirm, AccountSignIn, type AccountLabels } from '@/components/account/AccountClient';
 
 // Private and personal: never cached, never indexed.
@@ -77,8 +74,6 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
   const bc = bookingCopy(locale);
   let mine: MemberBookingView[] = [];
   try { mine = await memberBookings(bookingDeps(supabaseAdmin()), { id: m.id, email: m.email || null }); } catch (e) { await logServerError('account-bookings', e).catch(() => undefined); }
-  const card = await cardView(supabaseAdmin(), m, locale);      // null for an ended membership (no card) or if the card tables are not there yet
-  await rememberLocale(supabaseAdmin(), m.id, m.locale, locale);
   const state = accountState(m);
   const date = fmt(keyDate(m), l);
   const features = t.raw('membership.concierge.features') as string[];
@@ -112,7 +107,6 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
             </>
           ) : null}
         </div>
-        {card ? <MemberCardPanel {...card} /> : null}
         <section aria-labelledby="acct-requests" style={{ border: '1px solid #e6e0d2', borderRadius: 6, padding: '20px 22px', background: '#fff', marginBottom: 20 }}>
           <div className="kicker" id="acct-requests">{bc.acctTitle}</div>
           <p style={{ margin: '6px 0 10px', fontSize: 14, color: '#6b6555' }}>{bc.acctIntro}</p>
@@ -133,7 +127,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
           )}
         </section>
         <AccountActions labels={labels} locale={locale} hasBilling={!!m.stripe_customer_id} ended={state === 'ended'} />
-        <p style={{ marginTop: 22, fontSize: 13.5 }}><Link href="/privacy" style={{ color: '#8a7a4a' }}>{t('account.privacy')}</Link> · <Link href="/terms" style={{ color: '#8a7a4a' }}>{(LEGAL_UI[locale as Locale] || LEGAL_UI.en).terms}</Link></p>
+        <p style={{ marginTop: 22, fontSize: 13.5 }}><Link href="/privacy" style={{ color: '#8a7a4a' }}>{t('account.privacy')}</Link></p>
       </div>
     </div>
   );

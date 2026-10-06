@@ -11,7 +11,7 @@
 import { NextRequest, after } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { runConcierge, type ChatMessage } from '@/lib/concierge/brain';
-import { resolveChannelLocale } from '@/lib/concierge/localeMemory';
+import { detectLocaleFull } from '@/lib/concierge/localeGuess';
 import { appendChannelLinks } from '@/lib/concierge/channelLinks';
 import { verifyMetaSignature } from '@/lib/auth/webhookSignature';
 import { rateLimitKey } from '@/lib/ratelimit';
@@ -88,20 +88,16 @@ async function handleTextMessage(phoneId: string, token: string, msg: WaMessage)
   // Load memory + dedupe Meta's retries by message id.
   let history: ChatMessage[] = [];
   let turns = 0;
-  let rememberedLocale: string | null = null; let rememberedAt: string | null = null;
   try {
-    const { data } = await sb.from('concierge_wa_threads').select('messages,last_msg_id,turns,locale,updated_at').eq('wa_id', wa).maybeSingle();
+    const { data } = await sb.from('concierge_wa_threads').select('messages,last_msg_id,turns').eq('wa_id', wa).maybeSingle();
     if (data) {
-      rememberedLocale = typeof data.locale === 'string' ? data.locale : null; rememberedAt = typeof data.updated_at === 'string' ? data.updated_at : null;
       if (data.last_msg_id === msg.id) return; // already handled this exact message
       if (Array.isArray(data.messages)) history = data.messages as ChatMessage[];
       turns = Number(data.turns) || 0;
     }
   } catch { /* no memory available — answer statelessly */ }
 
-  // Language: this message when it is clearly identifiable; a short / ambiguous one ("ja bitte") keeps the sender's last confident language.
-  const lang = resolveChannelLocale({ text, remembered: rememberedLocale, rememberedAt });
-  const locale = lang.locale;
+  const locale = detectLocaleFull(text); // script first, then a Latin-script guess (de/pl/ro), else en
   const convo: ChatMessage[] = [...history, { role: 'user', content: text }];
 
   let reply = '';
@@ -120,7 +116,7 @@ async function handleTextMessage(phoneId: string, token: string, msg: WaMessage)
   const nextMessages = [...convo, { role: 'assistant' as const, content: reply }].slice(-12);
   try {
     await sb.from('concierge_wa_threads').upsert({
-      wa_id: wa, locale: lang.persist, messages: nextMessages, last_msg_id: msg.id, turns: turns + 1, updated_at: new Date().toISOString(),
+      wa_id: wa, locale, messages: nextMessages, last_msg_id: msg.id, turns: turns + 1, updated_at: new Date().toISOString(),
     });
   } catch { /* memory write is best-effort */ }
 }
