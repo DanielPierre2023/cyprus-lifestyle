@@ -35,6 +35,6 @@ export function judge(input: { report: VoiceReport; overlap?: OverlapReport | nu
   }
   let factsOk = true;
   if (facts && !facts.ok) { factsOk = false; reasons.push(...facts.reasons); }
-  const needsExpansion = report.issues.some((i) => i.key === 'thin');
+  const needsExpansion = false;   // length follows the facts; nothing is ever padded
   return { ok: voiceOk && originalOk && factsOk, voiceOk, needsExpansion, reasons };
 }

@@ -9,7 +9,7 @@
 //    Consequence: the loop can never make an article worse or less true; at worst it returns the input unchanged.
 //  • The best candidate is carried to the next pass (progressive repair), and the loop stops at the first pass that clears the
 //    gate, at maxPasses, or when the time budget is spent (Vercel allows 60 s per request).
-//  • It never lengthens a text to meet a word floor: that would mean inventing. "Thin" is reported, not repaired.
+//  • It never lengthens a text: length follows the facts, and added words would mean invented content (a rewrite more than 30% longer is rejected).
 import { humanizeHtml, humanizeText, type Lang } from '@/lib/antiAi';
 import { parseAiJson } from '@/lib/ai';
 import { deAiScrub } from '@/lib/editorial/craft';
@@ -66,7 +66,7 @@ export async function reviseToStandard(inp: ReviseInput): Promise<ReviseResult> 
   const evaluate = (title: string, body: string) => {
     const report = scoreVoice({ title, body, lang, desk: inp.desk });
     const ov = external ? overlap(inp.source as string, body) : null;
-    const facts = checkFacts(factBase, body, { sameLanguage: true });
+    const facts = checkFacts(factBase, body, { sameLanguage: true, lang });
     return { report, ov, facts, verdict: judge({ report, overlap: ov, facts }) };
   };
 
@@ -102,7 +102,7 @@ export async function reviseToStandard(inp: ReviseInput): Promise<ReviseResult> 
 
     // Guards on the candidate.
     const ratio = candBody.length / Math.max(1, best.body.length);
-    if (ratio < 0.6 || ratio > 1.7) { log.push(`pass ${passes}: rejected, length changed ×${ratio.toFixed(2)}`); continue; }
+    if (ratio < 0.6 || ratio > 1.3) { log.push(`pass ${passes}: rejected, length changed ×${ratio.toFixed(2)}`); continue; }
     if (html && !isHtmlBody(candBody)) { log.push(`pass ${passes}: rejected, HTML structure lost`); continue; }
     const ev = evaluate(candTitle, candBody);
     if (!ev.facts.ok) { log.push(`pass ${passes}: rejected, ${ev.facts.reasons.join('; ')}`); continue; }

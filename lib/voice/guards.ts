@@ -108,8 +108,10 @@ export interface FactsReport {
  * Compare a candidate against the text it was derived from (the previous version or the scraped source).
  * Same-language rewrites only: a translation changes words, so quotation and name checks do not apply there.
  */
-export function checkFacts(source: string, candidate: string, opts: { sameLanguage?: boolean } = {}): FactsReport {
+export function checkFacts(source: string, candidate: string, opts: { sameLanguage?: boolean; lang?: string } = {}): FactsReport {
   const same = opts.sameLanguage !== false;
+  // German capitalises every noun, so "capitalised mid-sentence word" is not a name signal there: figures and quotes are still checked.
+  const namesApply = opts.lang !== 'de';
   const srcNums = new Set(numbersIn(source));
   const candNums = [...new Set(numbersIn(candidate))];
   const invented = candNums.filter((n) => !trivial(n) && !srcNums.has(n));
@@ -125,7 +127,7 @@ export function checkFacts(source: string, candidate: string, opts: { sameLangua
     changedQuotes = quotesIn(candidate).filter((q) => !hay.includes(normalizeForCompare(q)));
     const srcNames = namesIn(source);
     const srcLow = hay;
-    newNames = [...namesIn(candidate)].filter((nm) => !srcNames.has(nm) && !srcLow.includes(nm));
+    if (namesApply) newNames = [...namesIn(candidate)].filter((nm) => !srcNames.has(nm) && !srcLow.includes(nm));
   }
   const reasons: string[] = [];
   if (invented.length) reasons.push(`new figures not in the source: ${invented.slice(0, 5).join(', ')}`);

@@ -13,6 +13,7 @@ import CoverImage from '@/components/CoverImage';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import { sanitizeArticleHtml } from '@/lib/sanitizeHtml';
 import AskConcierge from '@/components/AskConcierge';
+import { splitForConcierge } from '@/lib/articleSplit';
 
 // Culture / events articles get an "In our Agenda" block linking to the real events.
 const CULTURE_CATS = ['culture', 'arts', 'events', 'event', 'music', 'festival', 'entertainment', 'nightlife', 'agenda'];
@@ -182,7 +183,20 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
 
         <div className="article wrap">
           <div className="rule-orn lead-orn"><span className="diamond" /></div>
-          <div className="prose" dangerouslySetInnerHTML={{ __html: sanitizeArticleHtml(localizeHtml(a.content, l)) }} />
+          {(() => {
+            // The concierge appears inside the text as well as at the end, on every article (scraped, written, interview, review).
+            const html = sanitizeArticleHtml(localizeHtml(a.content, l));
+            const parts = splitForConcierge(html);
+            return parts ? (
+              <>
+                <div className="prose" dangerouslySetInnerHTML={{ __html: parts.head }} />
+                <AskConcierge inline question={ask.q(a.title)} heading={ask.heading} label={ask.label} />
+                <div className="prose" dangerouslySetInnerHTML={{ __html: parts.tail }} />
+              </>
+            ) : (
+              <div className="prose" dangerouslySetInnerHTML={{ __html: html }} />
+            );
+          })()}
 
           {a.tags?.length ? (
             <div className="tags">

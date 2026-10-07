@@ -51,10 +51,10 @@ const dirty = scoreVoice({ body: 'As an AI language model, I hope this helps. Ne
 ok('a machine signature fails it', !judge({ report: dirty }).voiceOk && dirty.score > MAX_SCORE);
 const jo = judge({ report: clean, overlap: { ratio: 0.4, longestRun: 30, shared: 4, total: 10 } });
 ok('copying the source fails the gate', !jo.ok && jo.reasons.length === 2);
-ok('thin is flagged, not failed', judge({ report: scoreVoice({ body: cleanText, lang: 'en', desk: 'property_legal' }) }).needsExpansion);
+ok('length follows the facts: a short clean piece passes and is never marked for expansion', (() => { const j = judge({ report: scoreVoice({ body: cleanText, lang: 'en', desk: 'property_legal' }) }); return j.voiceOk && !j.needsExpansion; })());
 
 // ── desks ───────────────────────────────────────────────────────────────────────────────
-eq('every desk has a spec', DESKS.every((d) => !!DESK_SPEC[d].brief && DESK_SPEC[d].minWords < DESK_SPEC[d].targetWords), true);
+eq('every desk has a spec', DESKS.every((d) => !!DESK_SPEC[d].brief && DESK_SPEC[d].minWords <= DESK_SPEC[d].targetWords), true);
 eq('news for world and cyprus', [deskFor({ category: 'world' }), deskFor({ category: 'cyprus' })], ['news', 'news']);
 eq('evergreen guides route to explainer desks', [deskFor({ category: 'living', evergreen: true }), deskFor({ category: 'business', evergreen: true }), deskFor({ category: 'property', evergreen: true })], ['relocation_guide', 'property_legal', 'property_legal']);
 eq('franchise beats category', [deskFor({ category: 'culture', franchise: 'at-the-table' }), deskFor({ category: 'business', franchise: 'tastemakers' }), deskFor({ category: 'table' })], ['food', 'interview', 'food']);

@@ -108,8 +108,8 @@ export function qualityIssues(body: string, lang: Lang, desk: Desk): Issue[] {
   const words = wordCountOf(text);
   const spec = DESK_SPEC[desk];
   const out: Issue[] = [];
-  if (words < spec.minWords) out.push({ key: 'thin', label: `Thin for the ${spec.label} desk (${words} words, floor ${spec.minWords})`, severity: 'medium', detail: String(words) });
-  else if (words < spec.targetWords * 0.7) out.push({ key: 'below_target', label: `Short for the ${spec.label} desk (${words} words, target ${spec.targetWords})`, severity: 'low', detail: String(words) });
+  // Length follows the facts: only an extremely short piece is mentioned, and never repaired by adding words.
+  if (words < spec.minWords) out.push({ key: 'thin', label: `Very short (${words} words): fine if that is all the facts support`, severity: 'low', detail: String(words) });
   const straight = (text.match(/"/g) || []).length;
   if (straight >= 2) out.push({ key: 'straight_quotes', label: 'Straight quotation marks instead of typographic ones', severity: 'low', detail: String(straight) });
   if (lang === 'ar' && /[\u0600-\u06FF]\s?[,;?]/.test(text)) out.push({ key: 'latin_punctuation', label: 'Latin comma, semicolon or question mark in Arabic text', severity: 'low' });
