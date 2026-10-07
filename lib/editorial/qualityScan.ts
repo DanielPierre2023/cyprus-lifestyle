@@ -10,7 +10,9 @@
 //   (a) untranslated — the edition is empty, or still serving the English copy;
 //   (b) AI-tell — how much the local draft reads as machine output (scoreAiTells).
 // ============================================================================
-import { scoreAiTells, type Lang } from '@/lib/antiAi';
+import type { Lang } from '@/lib/antiAi';
+import { scoreVoice } from '@/lib/voice/score';
+import { deskFor } from '@/lib/voice/desks';
 
 // The seven editions Cyprus Lifestyle publishes.
 export const LANGS = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'] as const;
@@ -26,7 +28,7 @@ export const WORST_CAP = 50;
 
 // Every column the scan needs: identity + status + each edition's title and body.
 export const SCAN_COLS = [
-  'id', 'slug', 'status', 'source_lang', 'published_at', 'created_at',
+  'id', 'slug', 'status', 'source_lang', 'published_at', 'created_at', 'category', 'franchise', 'kind', 'author_name',
   ...LANGS.map((l) => `title_${l}`),
   ...LANGS.map((l) => `content_${l}`),
 ].join(', ');
@@ -124,14 +126,17 @@ export function scanPosts(posts: RawPost[]): ScanResult {
     const slug = str(p.slug);
 
     for (const l of LANGS) {
-      if (l === src) continue; // only editions that should be translations of the source
+      // The source edition is scored too: that is where most machine patterns are born, and every translation inherits them.
+      void src;
       const stripped = stripHtml(p[`content_${l}`]);
       // Untranslated: nothing there, or (for a non-English edition) byte-identical
       // to the English body — i.e. English is being served in its place.
       const untranslated =
         stripped === '' || (l !== 'en' && enStripped !== '' && stripped === enStripped);
 
-      const r = scoreAiTells({ title: str(p[`title_${l}`]), content: stripped, lang: l as Lang });
+      // One scorer for the whole site (lib/voice): words, sentence shape, layout and per-language tells, on the body as published.
+      const desk = deskFor({ category: str(p.category) || null, franchise: str(p.franchise) || null, kind: str(p.kind) || null, evergreen: p.author_name === 'The Cyprus Lifestyle Desk' });
+      const r = scoreVoice({ title: str(p[`title_${l}`]), body: str(p[`content_${l}`]), lang: l as Lang, desk });
       const title = str(p[`title_${l}`]) || str(p.title_en) || slug || '(untitled)';
 
       const sum = perLang[l];

@@ -1,0 +1,55 @@
+// lib/voice/score.ts — ONE judge for every path.
+//
+// Until now the scraped pipeline judged with its own measure (measureHumanness, 100 = human), the admin Quality page with
+// scoreAiTells (0 = clean), and the AI editor with a third. An article could pass one and fail another, which is why "medium"
+// pieces were live. scoreVoice is the single scorer: it takes the existing per-language scorer (lib/antiAi.ts, unchanged),
+// adds the data-driven language tells (lib/voice/data), the shape checks (lib/voice/structure.ts), and returns one report.
+// Lower is better: 0 = clean. Weights match scoreAiTells (high 40, medium 7, low 3; diminishing after the first hit).
+import { scoreAiTells, burstiness, type AiTell, type AiTellReport, type Lang } from '@/lib/antiAi';
+import { stripHtml } from '@/lib/editorial/craft';
+import { dataTells } from '@/lib/voice/tells';
+import { shapeTells, layoutTells, qualityIssues, wordCountOf, type Issue } from '@/lib/voice/structure';
+import { type Desk } from '@/lib/voice/desks';
+
+const WEIGHT = { high: 40, medium: 7, low: 3 } as const;
+const LANGS: Lang[] = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'];
+export const asLang = (l: string | null | undefined): Lang => (LANGS.includes(l as Lang) ? (l as Lang) : 'en');
+
+export interface VoiceReport {
+  score: number;
+  level: AiTellReport['level'];
+  tells: AiTell[];
+  issues: Issue[];
+  metrics: { words: number; paragraphs: number; sentenceCV: number; paraCV: number };
+  /** The scorer that has existed since the first version, kept for before/after comparison. */
+  legacyScore: number;
+}
+
+export function scoreVoice(input: { title?: string; body: string; lang: string; desk: Desk }): VoiceReport {
+  const lang = asLang(input.lang);
+  const raw = String(input.body || '');
+  const plain = stripHtml(raw);
+  const base = scoreAiTells({ title: input.title, content: plain, lang });
+
+  // Additive detectors. A key already reported by the base scorer is never counted twice.
+  const seen = new Set(base.tells.map((t) => t.key));
+  const extra: AiTell[] = [];
+  for (const t of [...dataTells(plain, lang), ...shapeTells(raw, lang), ...layoutTells(raw, lang, wordCountOf(plain))]) {
+    if (seen.has(t.key)) continue;
+    seen.add(t.key);
+    extra.push(t);
+  }
+  let score = base.score;
+  for (const t of extra) score += WEIGHT[t.severity] * Math.min(t.count, 5) * (t.count > 1 ? 0.7 : 1);
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  const tells = [...base.tells, ...extra].sort((a, b) => WEIGHT[b.severity] - WEIGHT[a.severity] || b.count - a.count);
+  const level: VoiceReport['level'] = score === 0 ? 'clean' : score <= 15 ? 'low' : score <= 40 ? 'medium' : 'high';
+  const b = base.burstiness ?? burstiness(plain);
+  const paragraphs = plain.split(/\n\s*\n+/).filter((p) => p.trim()).length;
+  return {
+    score, level, tells, issues: qualityIssues(raw, lang, input.desk),
+    metrics: { words: wordCountOf(plain), paragraphs, sentenceCV: b.sentenceCV, paraCV: b.paraCV },
+    legacyScore: base.score,
+  };
+}
