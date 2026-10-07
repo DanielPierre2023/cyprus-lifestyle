@@ -1,0 +1,24 @@
+import { parityOf, LENGTH_FACTOR, LANGS, type PLang } from '@/lib/voice/parity';
+import { ok, eq, report } from './_harness';
+const sentence = 'The scheme costs a great deal and covers many products from the first of the year. ';
+const body = (words: number, extra = '') => `<p>${(sentence + 'Households save money on bread and milk every week of the year. ').repeat(Math.ceil(words / 24)).split(/\s+/).slice(0, words).join(' ')} ${extra}</p>`;
+const set = (n: number, over: Partial<Record<PLang, string>> = {}) => Object.fromEntries(LANGS.map((l) => [l, over[l] ?? body(Math.round(n * LENGTH_FACTOR[l]), '€70 million 12 products 2026')])) as Record<PLang, string>;
+
+ok('seven consistent editions pass', parityOf(set(300)).ok);
+const halfEl = parityOf(set(300, { el: body(130, '€70 million 12 products 2026') }));
+ok('a Greek edition at half length is named', !halfEl.ok && halfEl.editions.find((e) => e.lang === 'el')!.status === 'short');
+ok('the other editions are not blamed', halfEl.editions.filter((e) => e.lang !== 'el').every((e) => e.status === 'ok'));
+const shortEn = parityOf(set(300, { en: body(120, '€70 million 12 products 2026') }));
+ok('English can be the outlier too (no source edition is trusted)', shortEn.editions.find((e) => e.lang === 'en')!.status === 'short');
+const arNormal = parityOf(set(300));
+ok('Arabic running 16% shorter than English is normal', arNormal.editions.find((e) => e.lang === 'ar')!.status === 'ok');
+const empty = parityOf(set(300, { de: '' }));
+ok('an empty edition is reported', empty.editions.find((e) => e.lang === 'de')!.status === 'missing' && !empty.ok);
+const same = set(300); same.pl = same.en;
+ok('an untranslated edition is reported', parityOf(same).editions.find((e) => e.lang === 'pl')!.status === 'untranslated');
+const drop = set(300, { ro: body(Math.round(300 * 1.03), 'nothing here') });
+ok('a dropped figure is reported', parityOf(drop).problems.some((p) => p.startsWith('ro: missing figures')));
+const inv = set(300, { ru: body(Math.round(300 * 0.85), '€70 million 12 products 2026 and 8888 extra') });
+ok('an invented figure is reported', parityOf(inv).problems.some((p) => p.startsWith('ru: figures found nowhere else')));
+eq('nothing at all is not ok', parityOf({}).ok, false);
+report('voice.parity');

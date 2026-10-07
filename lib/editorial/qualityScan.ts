@@ -13,6 +13,7 @@
 import type { Lang } from '@/lib/antiAi';
 import { scoreVoice } from '@/lib/voice/score';
 import { deskFor } from '@/lib/voice/desks';
+import { parityOf, type PLang } from '@/lib/voice/parity';
 
 // The seven editions Cyprus Lifestyle publishes.
 export const LANGS = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'] as const;
@@ -124,6 +125,8 @@ export function scanPosts(posts: RawPost[]): ScanResult {
     const enStripped = stripHtml(p.content_en);
     const id = p.id == null ? '' : String(p.id);
     const slug = str(p.slug);
+    // Do the seven editions say the same thing? (length, figures; the outlier is named whichever language it is)
+    const parity = parityOf(Object.fromEntries(LANGS.map((x) => [x, str(p[`content_${x}`])])) as Partial<Record<PLang, string>>);
 
     for (const l of LANGS) {
       // The source edition is scored too: that is where most machine patterns are born, and every translation inherits them.
@@ -152,7 +155,16 @@ export function scanPosts(posts: RawPost[]): ScanResult {
         if (r.level === 'high' || r.level === 'medium') sum.flagged += 1;
       }
       const tells = r.tells.slice(0, 4).map((t) => ({ key: t.key, label: t.label, severity: t.severity, count: t.count }));
-      editions.push({ id, slug, title, lang: l, untranslated, score: r.score, level: r.level, tells });
+      // Parity problems of THIS edition rank it for repair: a lost half of the text matters more than a stock phrase.
+      const pe = parity.editions.find((e) => e.lang === l);
+      let score = r.score, level: Level = r.level;
+      const pp = parity.problems.filter((x) => x.startsWith(`${l}:`));
+      if (pe && pe.status !== 'ok' && !untranslated) {
+        tells.unshift({ key: `parity_${pe.status}`, label: pp[0] || `Edition differs from the others (${pe.status})`, severity: 'high', count: 1 });
+        score = Math.min(100, score + 25);
+        level = 'high';
+      }
+      editions.push({ id, slug, title, lang: l, untranslated, score, level, tells });
     }
   }
 
