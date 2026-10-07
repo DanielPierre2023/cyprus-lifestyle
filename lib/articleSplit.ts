@@ -1,8 +1,10 @@
 // lib/articleSplit.ts — where the in-article concierge prompt goes. Pure, unit-tested.
 // Rule: after the third paragraph, but only in an article of five or more paragraphs (a short piece keeps just the closing box),
-// and never inside a quote, a list or a table that is still open at that point.
-const OPEN = /<(blockquote|ul|ol|table|figure|details)\b/gi;
-const CLOSE = /<\/(blockquote|ul|ol|table|figure|details)\s*>/gi;
+// and only at a point where NO container is still open (a quote, list, table, figure, or one of our own cards such as the
+// specialist card <aside>): cutting inside a card would break its layout and its styling.
+const CONTAINERS = 'blockquote|ul|ol|table|figure|details|aside|div|section|article|header|footer|nav|form|dl|pre';
+const OPEN = new RegExp(`<(?:${CONTAINERS})\\b[^>]*>`, 'gi');
+const CLOSE = new RegExp(`</(?:${CONTAINERS})\\s*>`, 'gi');
 const count = (re: RegExp, s: string) => (s.match(re) || []).length;
 
 export function splitForConcierge(html: string, after = 3, minParagraphs = 5): { head: string; tail: string } | null {
