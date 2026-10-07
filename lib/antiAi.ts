@@ -342,6 +342,14 @@ export function humanizeText(s: string, lang: Lang): string {
   return scrubLexicon(stripDashes(s), lang).trim();
 }
 
+function isShoutedSegment(text: string): boolean {
+  const words = text.match(/[\p{L}][\p{L}'’-]*/gu) || [];
+  const long = words.filter((w) => w.length >= 2);
+  if (long.length < 3) return /[\p{Lu}]{4,}/u.test(text) && long.length > 0 && long.every((w) => w === w.toUpperCase());
+  const caps = long.filter((w) => w === w.toUpperCase() && w !== w.toLowerCase());
+  return caps.length / long.length >= 0.6;
+}
+
 // HTML-preserving humanizer — transforms only text nodes, never tags (from TT).
 export function humanizeHtml(html: string, lang: Lang): string {
   if (!html) return html;
@@ -351,7 +359,9 @@ export function humanizeHtml(html: string, lang: Lang): string {
     const trail = (seg.match(/\s*$/) || [''])[0];
     let core = seg.slice(lead.length, seg.length - trail.length);
     if (!core) return seg;
-    if (/[\p{Lu}]{4,}/u.test(core)) core = deShoutTitle(core);
+    // De-shout only a segment that is genuinely shouted (most of its words in capitals). A single acronym such as GESY, GHS or GP
+    // inside normal prose must stay as written; the title de-shouter lowercased them and capitalised the word after a colon.
+    if (isShoutedSegment(core)) core = deShoutTitle(core);
     core = stripDashes(core);
     core = scrubLexicon(core, lang);
     return lead + core + trail;

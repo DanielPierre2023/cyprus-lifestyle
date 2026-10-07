@@ -24,7 +24,7 @@ export default function RepairActions({ id, locale }: { id: string; locale: stri
       });
       const d = await r.json();
       if (d.ok) {
-        setMsg(d.changed ? `✓ ${d.before}→${d.after}` : `✓ clean (${d.after})`);
+        setMsg(d.changed ? `✓ ${d.before}→${d.after}` : `${d.note || 'No safe improvement found.'} (${d.after})`);
         setTimeout(() => location.reload(), 1000);
       } else { setMsg(d.error || 'Failed'); setBusy(''); }
     } catch (e) { setMsg((e as Error).message); setBusy(''); }

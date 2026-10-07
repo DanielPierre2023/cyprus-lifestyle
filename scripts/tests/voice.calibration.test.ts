@@ -33,4 +33,17 @@ for (const l of ['en', 'de', 'el', 'pl', 'ro', 'ru', 'ar'] as const) {
   ok(`${l}: neutral text scores zero`, quiet.score === 0);
 }
 ok('concierge persona carries the manner block, grounding intact', conciergeSystem('en').includes(CONCIERGE_MANNER) && conciergeSystem('en').includes('GROUNDING'));
+import { parseState, due, DEFAULT_DAILY_CAP } from '@/lib/voice/work';
+const t0 = new Date('2026-10-07T10:00:00Z');
+ok('the background worker is off until switched on (it spends API money)', parseState(undefined).enabled === false && parseState({}).dailyCap === DEFAULT_DAILY_CAP);
+ok('it can be switched on', parseState({ enabled: true }).enabled === true);
+ok('due when fresh and on', due(parseState({ enabled: true }), t0));
+ok('not due again within 9 minutes of a run', !due(parseState({ enabled: true, lastRunAt: new Date(t0.getTime() - 5 * 60_000).toISOString() }), t0));
+ok('due after the gap', due(parseState({ enabled: true, lastRunAt: new Date(t0.getTime() - 10 * 60_000).toISOString() }), t0));
+ok('idle (all clean) waits', !due(parseState({ enabled: true, idleUntil: new Date(t0.getTime() + 60_000).toISOString() }), t0));
+ok('daily cap stops it', !due(parseState({ enabled: true, day: '2026-10-07', usedToday: 120 }), t0));
+import { humanizeHtml } from '@/lib/antiAi';
+const prose = '<p>Cyprus runs GESY (also written GHS). Choose a personal doctor (GP). The appeal is speed: faster procedures. VAT and the EU apply.</p>';
+ok('regression: acronyms and the word after a colon are left alone in body text', humanizeHtml(prose, 'en') === prose);
+ok('a really shouted segment is still calmed', !humanizeHtml('<p>MINISTER ANNOUNCES NEW TAX PLAN FOR ISLAND</p>', 'en').includes('MINISTER'));
 report('voice.calibration');

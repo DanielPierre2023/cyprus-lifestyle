@@ -17,7 +17,7 @@ import { deskFor, type Desk } from '@/lib/voice/desks';
 import { scoreVoice, asLang } from '@/lib/voice/score';
 import { reviseToStandard, type CallModel, type ReviseResult } from '@/lib/voice/revise';
 import { MAX_SCORE } from '@/lib/voice/gate';
-import { STATE_KEY, parseState, withDay, canRun, chooseNext, recordRun, unitKey, type Unit, type VoiceState } from '@/lib/voice/work';
+import { STATE_KEY, IDLE_RECHECK_MS, parseState, withDay, canRun, chooseNext, recordRun, due, unitKey, type Unit, type VoiceState } from '@/lib/voice/work';
 
 export const EVERGREEN_AUTHOR = 'The Cyprus Lifestyle Desk';
 type Row = Record<string, unknown>;
@@ -42,6 +42,13 @@ export async function loadPublished(sb: SupabaseClient, limit = 400): Promise<Ro
   const { data, error } = await sb.from('blog_posts').select(COLS).eq('status', 'published').order('published_at', { ascending: false }).limit(limit);
   if (error) throw new Error(error.message);
   return (data || []) as unknown as Row[];
+}
+
+/** One article by id, any status (drafts included): used when an editor asks for a specific edition. */
+export async function loadOne(sb: SupabaseClient, id: string): Promise<Row[]> {
+  const { data, error } = await sb.from('blog_posts').select(COLS).eq('id', id).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? [data as unknown as Row] : [];
 }
 
 export function unitsOf(rows: Row[]): Unit[] {
@@ -70,7 +77,7 @@ export const maxTokensFor = (body: string, lang: string): number => {
 };
 
 export const modelCaller = (lang: string, body: string): CallModel => async (system, user) => {
-  const r = await callClaude({ systemInstruction: system, userMessage: user, model: CLAUDE_SONNET, jsonMode: true, maxTokens: maxTokensFor(body, lang), timeoutMs: 50_000, fn: 'voice-revise' });
+  const r = await callClaude({ systemInstruction: system, userMessage: user, model: CLAUDE_SONNET, jsonMode: true, maxTokens: maxTokensFor(body, lang), timeoutMs: 35_000, fn: 'voice-revise' });
   return { text: r.text, error: r.error };
 };
 
@@ -89,9 +96,13 @@ export async function runVoiceOnce(sb: SupabaseClient, opts: RunOptions = {}): P
   const gate = canRun(state, now, !!opts.force || explicit || !!opts.dry);
   if (!gate.ok) return { ran: false, reason: gate.reason };
 
-  const rows = await loadPublished(sb);
+  const rows = explicit ? await loadOne(sb, String(opts.id)) : await loadPublished(sb);
   const units = unitsOf(rows);
   const unit = explicit ? units.find((u) => u.id === opts.id && u.lang === opts.lang) || null : chooseNext(units, state, now);
+  if (!unit && !explicit && !opts.dry) {
+    // Everything passes (or has used its attempts): look again in half an hour, not on every tick.
+    await saveState(sb, { ...state, idleUntil: new Date(now.getTime() + IDLE_RECHECK_MS).toISOString() });
+  }
   if (!unit) return { ran: false, reason: explicit ? 'That edition was not found or has no text.' : 'Nothing to repair: every edition passes, or has used its attempts.' };
   const row = rows.find((r) => String(r.id) === unit.id) as Row;
   const body = String(row[`content_${unit.lang}`] || '');
@@ -105,7 +116,7 @@ export async function runVoiceOnce(sb: SupabaseClient, opts: RunOptions = {}): P
   }
 
   const make = opts.callModel || modelCaller;
-  const res: ReviseResult = await reviseToStandard({ title, body, lang, desk: unit.desk, callModel: make(unit.lang, body), maxPasses: 2, budgetMs: 45_000 });
+  const res: ReviseResult = await reviseToStandard({ title, body, lang, desk: unit.desk, callModel: make(unit.lang, body), maxPasses: 2, budgetMs: 38_000 });
   const improved = res.changed && res.after.score < res.before.score && res.facts?.ok !== false;
   let saved = false;
   if (improved) {
@@ -124,3 +135,14 @@ export async function runVoiceOnce(sb: SupabaseClient, opts: RunOptions = {}): P
 }
 
 export { unitKey };
+
+/** Called by the background worker on every tick: one cheap row read, and a repair only when one is due. Never throws. */
+export async function voiceTick(sb: SupabaseClient, now: Date = new Date()): Promise<RunSummary | null> {
+  try {
+    if (!due(await loadState(sb), now)) return null;
+    return await runVoiceOnce(sb, { now });
+  } catch { return null; }
+}
+export async function voiceDue(sb: SupabaseClient, now: Date = new Date()): Promise<boolean> {
+  try { return due(await loadState(sb), now); } catch { return false; }
+}

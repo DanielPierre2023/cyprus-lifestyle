@@ -12,7 +12,7 @@ import type { Desk } from '@/lib/voice/desks';
 export const STATE_KEY = 'voice_engine';
 export const MAX_ATTEMPTS = 3;
 export const RETRY_AFTER_MS = 2 * 3600_000;
-export const DEFAULT_DAILY_CAP = 60;
+export const DEFAULT_DAILY_CAP = 120;
 export const RECENT_KEEP = 30;
 
 export interface Attempt { n: number; last: string; ok: boolean; score: number }
@@ -20,6 +20,8 @@ export interface RecentRun { at: string; id: string; slug: string; lang: string;
 export interface VoiceState {
   enabled: boolean; dailyCap: number; day: string; usedToday: number;
   attempts: Record<string, Attempt>; recent: RecentRun[];
+  idleUntil: string;   // when nothing needed repair, look again after this time (ISO)
+  lastRunAt: string;   // last time a repair was attempted (ISO)
 }
 export interface Unit { id: string; slug: string; lang: string; isSource: boolean; score: number; high: boolean; ok: boolean; desk: Desk; words: number }
 
@@ -30,11 +32,13 @@ export function parseState(raw: unknown): VoiceState {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const cap = Number(o.dailyCap);
   return {
-    enabled: o.enabled === true,
+    enabled: o.enabled === true,   // off until you switch it on at /api/admin/voice?on=1 (it spends API money)
     dailyCap: Number.isFinite(cap) && cap >= 0 && cap <= 1000 ? Math.floor(cap) : DEFAULT_DAILY_CAP,
     day: typeof o.day === 'string' ? o.day : '',
     usedToday: Number.isFinite(Number(o.usedToday)) ? Math.max(0, Math.floor(Number(o.usedToday))) : 0,
     attempts: o.attempts && typeof o.attempts === 'object' ? (o.attempts as Record<string, Attempt>) : {},
+    idleUntil: typeof o.idleUntil === 'string' ? o.idleUntil : '',
+    lastRunAt: typeof o.lastRunAt === 'string' ? o.lastRunAt : '',
     recent: Array.isArray(o.recent) ? (o.recent as RecentRun[]).slice(0, RECENT_KEEP) : [],
   };
 }
@@ -43,6 +47,18 @@ export function parseState(raw: unknown): VoiceState {
 export function withDay(s: VoiceState, now: Date): VoiceState {
   const d = dayKey(now);
   return s.day === d ? s : { ...s, day: d, usedToday: 0 };
+}
+
+export const MIN_GAP_MS = 9 * 60_000;
+export const IDLE_RECHECK_MS = 30 * 60_000;
+
+/** Cheap check used by the background tick: is there any reason to look at the articles right now? */
+export function due(s: VoiceState, now: Date): boolean {
+  const st = withDay(s, now);
+  if (!st.enabled || st.usedToday >= st.dailyCap) return false;
+  if (st.idleUntil && now.getTime() < Date.parse(st.idleUntil)) return false;
+  if (st.lastRunAt && now.getTime() - Date.parse(st.lastRunAt) < MIN_GAP_MS) return false;
+  return true;
 }
 
 export function canRun(s: VoiceState, now: Date, force = false): { ok: boolean; reason?: string } {
@@ -74,7 +90,7 @@ export function recordRun(s: VoiceState, u: Unit, r: { ok: boolean; before: numb
   const prev = st.attempts[key];
   const attempts = { ...st.attempts, [key]: { n: (prev?.n || 0) + 1, last: now.toISOString(), ok: r.ok, score: r.after } };
   const run: RecentRun = { at: now.toISOString(), id: u.id, slug: u.slug, lang: u.lang, before: r.before, after: r.after, ok: r.ok, changed: r.changed, note: r.note.slice(0, 160) };
-  return { ...st, usedToday: st.usedToday + (paid ? 1 : 0), attempts, recent: [run, ...st.recent].slice(0, RECENT_KEEP) };
+  return { ...st, usedToday: st.usedToday + (paid ? 1 : 0), attempts, lastRunAt: now.toISOString(), idleUntil: '', recent: [run, ...st.recent].slice(0, RECENT_KEEP) };
 }
 
 /** Editions that were tried the maximum number of times and still fail: they need a human editor. */
