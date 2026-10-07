@@ -9,6 +9,7 @@ import { voiceData } from '@/lib/voice/data';
 import { DESK_SPEC, type Desk } from '@/lib/voice/desks';
 import type { AiTell } from '@/lib/antiAi';
 import type { Issue } from '@/lib/voice/structure';
+import { reportageBlock } from '@/lib/voice/reportage';
 
 export const INTEGRITY: string[] = [
   'Keep EVERY fact, name, figure, date, price and quotation exactly as in the text you are given. Change wording and architecture, never substance.',
@@ -51,6 +52,10 @@ export function voiceSystem(o: { lang: Lang; desk: Desk; pass?: number }): strin
     '',
     'CRAFT LAWS (every language):',
     ...CRAFT_LAWS.map((x) => `• ${x}`),
+    '',
+    reportageBlock(o.desk),
+    '',
+    'WHEN REWRITING: you may recast a flat list of facts into a narrative with an opening image and a thread, but only with the facts present in the text you are given; add nothing.',
     '',
     `THIS DESK, ${desk.label.toUpperCase()}: ${desk.brief}`,
     `ENDING: ${desk.ending}`,

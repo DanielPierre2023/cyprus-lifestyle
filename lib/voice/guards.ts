@@ -136,3 +136,17 @@ export function checkFacts(source: string, candidate: string, opts: { sameLangua
   if (newNames.length >= 4) reasons.push(`new proper names not in the source: ${newNames.slice(0, 5).join(', ')}`);
   return { ok: reasons.length === 0, invented, droppedRatio, droppedSample: dropped.slice(0, 6), changedQuotes, newNames, reasons };
 }
+
+/**
+ * Originality check that treats quotation honestly: a short quotation inside quotation marks is allowed (attributed, verbatim),
+ * so quoted spans are removed from BOTH texts before shingles are compared. The words that were quoted are counted separately.
+ * Use this for scraped articles; a quotation of more than `maxQuotedWords` words in total is reported by the caller.
+ */
+export function overlapProse(source: string, candidate: string): OverlapReport & { quotedWords: number } {
+  // A quotation here is a passage of eight or more words inside quotation marks; shorter ones are titles and names.
+  const re = /[“"„«]([^”"“»]{1,500})[”"“»]/g;
+  const isQuote = (m: string) => m.replace(/^[“"„«]|[”"“»]$/g, '').trim().split(/\s+/).length >= 8;
+  const cut = (t: string) => String(t || '').replace(re, (m) => (isQuote(m) ? ' ' : m));
+  const quoted = (String(candidate || '').match(re) || []).filter(isQuote).join(' ').split(/\s+/).filter(Boolean).length;
+  return { ...overlap(cut(source), cut(candidate)), quotedWords: quoted };
+}

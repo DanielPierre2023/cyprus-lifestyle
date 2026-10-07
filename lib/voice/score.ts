@@ -15,6 +15,15 @@ const WEIGHT = { high: 40, medium: 7, low: 3 } as const;
 const LANGS: Lang[] = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'];
 export const asLang = (l: string | null | undefined): Lang => (LANGS.includes(l as Lang) ? (l as Lang) : 'en');
 
+/**
+ * Titles of works, events and venues in quotation marks ("Glacier Kaleidoscope", „Tides in the Body") are names, not prose:
+ * the vocabulary detectors (English leaking into another language, "kaleidoscope" as a metaphor) must not fire on them.
+ * Quoted spans of up to seven words are replaced by a neutral token for the lexical detectors only.
+ */
+export function maskTitles(text: string): string {
+  return String(text || '').replace(/[“"„«]([^”"“»\n]{1,80})[”"“»]/g, (m, inner: string) => (inner.trim().split(/\s+/).length <= 7 ? '§' : m));
+}
+
 export interface VoiceReport {
   score: number;
   level: AiTellReport['level'];
@@ -29,12 +38,13 @@ export function scoreVoice(input: { title?: string; body: string; lang: string; 
   const lang = asLang(input.lang);
   const raw = String(input.body || '');
   const plain = stripHtml(raw);
-  const base = scoreAiTells({ title: input.title, content: plain, lang });
+  const lexical = maskTitles(plain);
+  const base = scoreAiTells({ title: input.title, content: lexical, lang });
 
   // Additive detectors. A key already reported by the base scorer is never counted twice.
   const seen = new Set(base.tells.map((t) => t.key));
   const extra: AiTell[] = [];
-  for (const t of [...dataTells(plain, lang), ...shapeTells(raw, lang), ...layoutTells(raw, lang, wordCountOf(plain))]) {
+  for (const t of [...dataTells(lexical, lang), ...shapeTells(raw, lang), ...layoutTells(raw, lang, wordCountOf(plain))]) {
     if (seen.has(t.key)) continue;
     seen.add(t.key);
     extra.push(t);

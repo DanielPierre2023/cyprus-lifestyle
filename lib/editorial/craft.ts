@@ -15,6 +15,7 @@
 //                           slips.
 // ============================================================================
 
+import { reportageBlock } from '@/lib/voice/reportage';
 import { scoreAiTells } from '@/lib/antiAi';
 import { langFromName, promptTellList, nativeRegisterRules } from '@/lib/antiAiLang';
 
@@ -155,7 +156,7 @@ export function antiAiRules(language = 'English'): string {
 
 // The full craft block appended to a draft/polish system prompt.
 export function craftBlock(franchise?: string | null, kind?: string | null, language = 'English'): string {
-  return [formatFor(franchise, kind), '', HOUSE_STYLE, '', antiAiRules(language)].join('\n');
+  return [formatFor(franchise, kind), '', HOUSE_STYLE, '', reportageBlock(), '', antiAiRules(language)].join('\n');
 }
 
 // ── Deterministic scrubber — guarantees the mechanical tells are gone ────────────

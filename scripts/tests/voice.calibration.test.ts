@@ -51,4 +51,7 @@ const deSrc = 'Das Gesundheitssystem zahlt 2,65 % des Bruttogehalts. Die Versorg
 const deNew = 'Das Gesundheitssystem zahlt 2,65 % des Bruttogehalts. Die Versorgung der Einwohner ist breit, die Police bleibt daneben, der Sektor wächst, der Staat zahlt.';
 ok('German nouns are not mistaken for new names', checkFacts(deSrc, deNew, { sameLanguage: true, lang: 'de' }).ok);
 ok('German still catches an invented figure', !checkFacts(deSrc, deNew + ' Kosten 19 €.', { sameLanguage: true, lang: 'de' }).ok);
+import { maskTitles } from '@/lib/voice/score';
+ok('titles in quotation marks are masked for the vocabulary detectors', maskTitles('A urmat „Glacier Kaleidoscope” și "The Well".') === 'A urmat § și §.');
+ok('a long quotation is not masked', maskTitles('El a spus „aceasta este o propoziție lungă care nu este un titlu deloc”.').includes('propoziție'));
 report('voice.calibration');

@@ -2,6 +2,7 @@
 // The pipeline machinery is ported from Transilvania Times; the PROMPTS are
 // written new for a Cyprus luxury title (TT's Romanian-newsroom prompts don't
 // transfer). Voice is drawn from the House Book (docs/EDITORIAL-CONCEPT.md).
+import { reportageBlock } from '@/lib/voice/reportage';
 
 export type EditorKey = 'cyprus' | 'business' | 'property' | 'culture' | 'escapes' | 'table' | 'world';
 
@@ -56,7 +57,9 @@ export function draftSystemPrompt(editor: EditorKey, wordTarget: number): string
     ``,
     `You are ${DESK_BRIEF[editor]}`,
     ``,
-    `TASK: From the source material provided, write an ORIGINAL Cyprus Lifestyle article in ENGLISH. Do not copy the source's wording or structure — re-report it in our voice, keep every verifiable fact, and frame it for a Cyprus audience. Target about ${wordTarget} words.`,
+    `TASK: From the source material provided, write an ORIGINAL Cyprus Lifestyle article in ENGLISH. Do not copy the source's wording or structure — re-report it in our voice, keep every verifiable fact, and frame it for a Cyprus audience. Length follows the facts in the material: there is NO minimum and no target, and you must never pad (every sentence needs a source in the material); never exceed about ${wordTarget} words.`,
+    ``,
+    reportageBlock(),
     ``,
     `Return ONLY a JSON object with these keys:`,
     `{`,
