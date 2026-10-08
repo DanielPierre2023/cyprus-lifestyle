@@ -13,9 +13,9 @@ import { eq, ok, report } from './_harness';
 
 const SITE = 'https://cypruslifestyle.eu';
 
-// ── 1. kb_docs are trusted but ATTRIBUTED; no "unverified" wording anywhere a guest or the model reads ──
+// ── 1. kb_docs are background knowledge: used in the concierge's own words, never named, linked or shown as a source; no "unverified" wording anywhere a guest or the model reads ──
 const kb = kbDocHit({ id: 'u1', title: 'Hidden villages of Troodos', description: 'A guide', url: 'https://mycypruslife.com/troodos', source: 'mycypruslife', lang: 'en' }, 'en', 0.6) as SourceHit;
-eq('kb doc carries the site name', kb.sourceName, 'My Cyprus Life');
+eq('kb doc carries the site name internally (admin only; never shown, see the next checks)', kb.sourceName, 'My Cyprus Life');
 ok('kb caveat forbids naming the site and quoting', !kb.caveats[0].includes('My Cyprus Life') && kb.caveats[0].includes('never name') && kb.caveats[0].includes('own words'));
 ok('no "unverified"/"not verified" in kb caveat', !/unverified|not verified/i.test(kb.caveats.join(' ')));
 for (const l of SOURCE_LOCALES) ok(`label third_party (${l}) is not a warning`, !/unverif|not verified|nicht gepr|neweryfik|neverific|не проверен|لم نتحقق|δεν έχει επαληθ/i.test(LABEL_TEXT.third_party[l]));
@@ -55,7 +55,7 @@ ok('no line links the unpublished listing', !lines.join('\n').includes('listed-o
 ok('event links to locale-aware /agenda/<slug>', lines.some((l) => l.includes(`${SITE}/de/agenda/jazz-night`)));
 ok('agenda shortcut on an events question', lines.some((l) => l.endsWith(`${SITE}/de/agenda`)));
 ok('article links to locale-aware /article/<slug>', lines.some((l) => l.includes(`${SITE}/de/article/troodos-guide`)));
-ok('kb doc links to ORIGINAL url with site name', lines.some((l) => l.includes('My Cyprus Life') && l.endsWith('https://mycypruslife.com/troodos')));
+ok('a kb doc is never linked or named in a channel line (no "via …", no outside address)', !lines.some((l) => /My Cyprus Life|mycypruslife|\(via|\(über|\(μέσω/i.test(l)) && !lines.some((l) => l.includes('Hidden villages')));
 ok('webcam → /live', lines.some((l) => l.endsWith(`${SITE}/de/live`)));
 ok('line cap respected', lines.length <= MAX_LINES);
 eq('English has no locale prefix', buildChannelLines({ ...base, sources: [art], sourceNotes: undefined }, 'en', SITE)[1], `Troodos guide: ${SITE}/article/troodos-guide`);
@@ -80,7 +80,7 @@ eq('en stays en', detectLocaleFull('Where can I rent a car at the airport?'), 'e
 const wa = readFileSync('app/api/whatsapp/route.ts', 'utf8'); const tg = readFileSync('app/api/telegram/route.ts', 'utf8');
 // 5.3: the routes call resolveChannelLocale (lib/concierge/localeMemory.ts), which wraps detectLocaleFull and adds the per-sender memory.
 ok('whatsapp + telegram resolve the language with detectLocaleFull + memory', wa.includes('resolveChannelLocale({ text,') && tg.includes('resolveChannelLocale({ text: query') && !/detectLocale\(/.test(wa + tg));
-ok('whatsapp + telegram share the channel link builder', wa.includes('appendChannelLinks') && tg.includes('appendChannelLinks'));
+ok('whatsapp + telegram share the channel link builder (composeChannelReply = answer + lines through the link policy)', wa.includes('composeChannelReply') && tg.includes('composeChannelReply'));
 
 // ── 6. static KB must not be crowded out by scraped-page vectors ──
 const UUIDS = Array.from({ length: 30 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`);

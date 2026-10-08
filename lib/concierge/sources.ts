@@ -21,6 +21,7 @@
 // ============================================================================
 import type { Locale } from '@/lib/locales';
 import { isActivitySlug } from '@/lib/activities/browse';
+import { scrubSourceNames } from '@/lib/concierge/linkPolicy';
 
 export const SOURCE_LOCALES: readonly Locale[] = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'];
 export const isSourceLocale = (l: string): l is Locale => (SOURCE_LOCALES as readonly string[]).includes(l);
@@ -308,11 +309,12 @@ const KB_SOURCE_NAME: Record<string, string> = {
   cyprusdevelopers: 'Cyprus Developers', mycyprustravel: 'My Cyprus Travel',
 };
 export function kbDocHit(r: Row, locale: string, score = 0.5): SourceHit | null {
-  const id = str(r.id); const title = safeText(r.title, 140); if (!id || !title) return null;
+  // The scraped pages carry their own site's name ("… - My Cyprus Life", "(source: …)"): cut it, so the model never sees a name to repeat.
+  const id = str(r.id); const title = scrubSourceNames(safeText(r.title, 140)); if (!id || !title) return null;
   const lang = str(r.lang) || 'en'; const url = str(r.url);
   const src = KB_SOURCE_NAME[str(r.source)] || safeText(r.source, 40) || 'external site';
   return {
-    kind: 'kb_doc', id, title, snippet: safeText(r.description || r.body, 300),
+    kind: 'kb_doc', id, title, snippet: scrubSourceNames(safeText(r.description || r.body, 300)),
     href: /^https:\/\//i.test(url) ? url : null, external: true, label: 'third_party',
     lang, fellBack: lang !== locale, score,
     sourceName: src,

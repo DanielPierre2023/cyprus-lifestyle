@@ -16,6 +16,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { callClaude, CLAUDE_HAIKU } from '@/lib/ai';
 import { conciergeSystem, assembleContext, groundingBlock, detectLocale, CONCIERGE_MODEL, type ConciergeContext } from '@/lib/concierge/brain';
 import { logConciergeTurn } from '@/lib/concierge/analytics';
+import { applyLinkPolicy } from '@/lib/concierge/linkPolicy';
 import { deskFor, signatureFor } from '@/lib/signatures';
 import { brandedEmail, sendEmail } from '@/lib/email';
 import { isLocale, type Locale } from '@/lib/locales';
@@ -104,7 +105,9 @@ export async function composeReply(
   // desk with nothing. The real error is returned, never swallowed.
   let lastError = '';
   for (const model of [CONCIERGE_MODEL, CLAUDE_HAIKU]) {
-    const { text, error } = await callClaude({ systemInstruction: system, userMessage, model, maxTokens: 1400, fn: 'mail-compose' });
+    const { text: rawText, error } = await callClaude({ systemInstruction: system, userMessage, model, maxTokens: 1400, fn: 'mail-compose' });
+    // the draft speaks as Cyprus Lifestyle too: no other site named or linked, GetYourGuide links ours (lib/concierge/linkPolicy.ts)
+    const text = applyLinkPolicy(rawText || '', { campaign: 'cl-concierge' }).text;
     if (!error && text.trim()) {
       // Log the email turn's coverage (item 02) so inbound questions feed the same
       // answer-coverage rate and unanswered backlog as the web chat. Compose only —

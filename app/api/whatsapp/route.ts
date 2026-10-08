@@ -11,8 +11,8 @@
 import { NextRequest, after } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { runConcierge, type ChatMessage } from '@/lib/concierge/brain';
-import { detectLocaleFull } from '@/lib/concierge/localeGuess';
-import { appendChannelLinks } from '@/lib/concierge/channelLinks';
+import { resolveChannelLocale, settleLocale, localeFromPhone } from '@/lib/concierge/localeMemory';
+import { composeChannelReply } from '@/lib/concierge/channelLinks';
 import { verifyMetaSignature } from '@/lib/auth/webhookSignature';
 import { rateLimitKey } from '@/lib/ratelimit';
 import { publicAiCeilingDeny } from '@/lib/spendGuard';
@@ -88,23 +88,31 @@ async function handleTextMessage(phoneId: string, token: string, msg: WaMessage)
   // Load memory + dedupe Meta's retries by message id.
   let history: ChatMessage[] = [];
   let turns = 0;
+  let rememberedLocale: string | null = null; let rememberedAt: string | null = null;
   try {
-    const { data } = await sb.from('concierge_wa_threads').select('messages,last_msg_id,turns').eq('wa_id', wa).maybeSingle();
+    const { data } = await sb.from('concierge_wa_threads').select('messages,last_msg_id,turns,locale,updated_at').eq('wa_id', wa).maybeSingle();
     if (data) {
       if (data.last_msg_id === msg.id) return; // already handled this exact message
       if (Array.isArray(data.messages)) history = data.messages as ChatMessage[];
       turns = Number(data.turns) || 0;
+      rememberedLocale = typeof data.locale === 'string' ? data.locale : null; rememberedAt = typeof data.updated_at === 'string' ? data.updated_at : null;
     }
   } catch { /* no memory available — answer statelessly */ }
 
-  const locale = detectLocaleFull(text); // script first, then a Latin-script guess (de/pl/ro), else en
+  // Language: this message when it is clearly identifiable; a short / ambiguous one ("ja bitte", "salut") keeps the sender's last
+  // confident language; a brand-new sender falls back to the country of the phone number, then English.
+  const lang = resolveChannelLocale({ text, remembered: rememberedLocale, rememberedAt, hint: localeFromPhone(wa) });
+  let locale: string = lang.locale;
+  let persistLocale: string | null = lang.persist;
   const convo: ChatMessage[] = [...history, { role: 'user', content: text }];
 
   let reply = '';
   try {
     const { ctx, text: answer } = await runConcierge(convo, locale, { matchLanguage: true });
-    reply = answer || fallbackNote(locale);
-    reply = appendChannelLinks(reply, ctx, locale, SITE);
+    // The reply is long enough to tell its language reliably; when we only guessed, links and memory follow the reply.
+    const settled = settleLocale(lang, answer);
+    locale = settled.locale; persistLocale = settled.persist;
+    reply = composeChannelReply(answer || fallbackNote(locale), ctx, locale, SITE);
   } catch (e) {
     console.error('[whatsapp] brain', (e as Error).message);
     reply = fallbackNote(locale);
@@ -116,7 +124,7 @@ async function handleTextMessage(phoneId: string, token: string, msg: WaMessage)
   const nextMessages = [...convo, { role: 'assistant' as const, content: reply }].slice(-12);
   try {
     await sb.from('concierge_wa_threads').upsert({
-      wa_id: wa, locale, messages: nextMessages, last_msg_id: msg.id, turns: turns + 1, updated_at: new Date().toISOString(),
+      wa_id: wa, locale: persistLocale, messages: nextMessages, last_msg_id: msg.id, turns: turns + 1, updated_at: new Date().toISOString(),
     });
   } catch { /* memory write is best-effort */ }
 }

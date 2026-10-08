@@ -85,4 +85,36 @@ export function resolveChannelLocale(i: ResolveInput): ResolveResult {
   return { locale: 'en', confident: false, source: 'default', persist: null };
 }
 
+/**
+ * After the model has answered: its reply is long enough to tell the language reliably, a two-word message is not.
+ * When the language is only a guess, a hint, the default or a remembered "en" (the old code stored "en" for every message it
+ * could not identify, so a remembered English carries little weight) and the reply is confidently in another language, the
+ * reply's language wins — it is what the guest reads, so it is the language the guide links, their labels and the memory
+ * should use. A confident message, or a remembered non-English language, is never overruled by a single reply.
+ */
+export function settleLocale(lang: ResolveResult, answer: string): { locale: Locale; persist: Locale | null } {
+  if (lang.confident || (lang.source === 'memory' && lang.locale !== 'en')) return { locale: lang.locale, persist: lang.persist };
+  const a = detectWithConfidence(answer);
+  return a.confident ? { locale: a.locale, persist: a.locale } : { locale: lang.locale, persist: lang.persist };
+}
+
+/**
+ * A weak prior from the sender's WhatsApp number (it starts with the country calling code): a Romanian number whose first
+ * message is "salut" is far more likely to want Romanian than English. Used only as the `hint` of resolveChannelLocale, i.e.
+ * when nothing is remembered and the message itself is inconclusive. Cyprus (+357), the UK and others give no hint.
+ */
+const CALLING_CODES: [string, Locale][] = [
+  ['40', 'ro'], ['373', 'ro'], ['49', 'de'], ['43', 'de'], ['41', 'de'], ['423', 'de'], ['48', 'pl'], ['30', 'el'],
+  ['7', 'ru'], ['375', 'ru'],
+  ['20', 'ar'], ['961', 'ar'], ['962', 'ar'], ['963', 'ar'], ['964', 'ar'], ['965', 'ar'], ['966', 'ar'], ['968', 'ar'],
+  ['970', 'ar'], ['971', 'ar'], ['973', 'ar'], ['974', 'ar'],
+];
+export function localeFromPhone(waId: string | null | undefined): Locale | null {
+  const d = String(waId || '').replace(/\D/g, '');
+  if (!d || d.startsWith('357')) return null;
+  let best: [string, Locale] | null = null;
+  for (const c of CALLING_CODES) if (d.startsWith(c[0]) && (!best || c[0].length > best[0].length)) best = c;
+  return best ? best[1] : null;
+}
+
 export const SUPPORTED_LOCALES = LOCALES;

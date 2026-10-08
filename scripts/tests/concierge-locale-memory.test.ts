@@ -46,8 +46,8 @@ eq('three-turn conversation', (() => {
 // wiring
 import { readFileSync } from 'node:fs';
 const wa = readFileSync('app/api/whatsapp/route.ts', 'utf8'); const tg = readFileSync('app/api/telegram/route.ts', 'utf8');
-ok('whatsapp reads + persists the remembered locale', wa.includes('resolveChannelLocale') && wa.includes('locale,updated_at') && wa.includes('locale: lang.persist'));
-ok('telegram reads + persists the remembered locale (UI language as hint)', tg.includes('resolveChannelLocale') && tg.includes('hint: uiLocale') && tg.includes('locale: lang.persist'));
+ok('whatsapp reads + persists the remembered locale', wa.includes('resolveChannelLocale') && wa.includes('locale,updated_at') && wa.includes('locale: persistLocale') && wa.includes('let persistLocale: string | null = lang.persist'));
+ok('telegram reads + persists the remembered locale (UI language as hint)', tg.includes('resolveChannelLocale') && tg.includes('hint: uiLocale') && tg.includes('locale: persistLocale') && tg.includes('let persistLocale: string | null = lang.persist'));
 const chat = readFileSync('components/ConciergeChat.tsx', 'utf8'); const route = readFileSync('app/api/concierge/chat/route.ts', 'utf8');
 ok('website chat sends the page locale and the route uses it (unchanged)', chat.includes('locale') && /locale:\s*locale|locale,/.test(chat) && route.includes("body.locale"));
 

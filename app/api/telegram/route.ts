@@ -9,8 +9,8 @@
 import { NextRequest, after } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { runConcierge, type ChatMessage } from '@/lib/concierge/brain';
-import { detectLocaleFull } from '@/lib/concierge/localeGuess';
-import { appendChannelLinks } from '@/lib/concierge/channelLinks';
+import { resolveChannelLocale, settleLocale } from '@/lib/concierge/localeMemory';
+import { composeChannelReply } from '@/lib/concierge/channelLinks';
 import { safeEqual } from '@/lib/auth/secretMatch';
 import { rateLimitKey } from '@/lib/ratelimit';
 import { publicAiCeilingDeny } from '@/lib/spendGuard';
@@ -109,19 +109,27 @@ async function handleTextMessage(token: string, chatId: string, raw: string, uiL
 
   // Load memory.
   let history: ChatMessage[] = [];
+  let rememberedLocale: string | null = null; let rememberedAt: string | null = null;
   try {
-    const { data } = await sb.from('concierge_tg_threads').select('messages').eq('chat_id', chatId).maybeSingle();
+    const { data } = await sb.from('concierge_tg_threads').select('messages,locale,updated_at').eq('chat_id', chatId).maybeSingle();
     if (data && Array.isArray(data.messages)) history = data.messages as ChatMessage[];
+    if (data) { rememberedLocale = typeof data.locale === 'string' ? data.locale : null; rememberedAt = typeof data.updated_at === 'string' ? data.updated_at : null; }
   } catch { /* no memory available — answer statelessly */ }
 
-  const locale = detectLocaleFull(query); // script first, then a Latin-script guess (de/pl/ro), else en
+  // Language: this message when clearly identifiable; a short / ambiguous one keeps the chat's last confident language;
+  // a brand-new chat falls back to the Telegram UI language, then English.
+  const lang = resolveChannelLocale({ text: query, remembered: rememberedLocale, rememberedAt, hint: uiLocale });
+  let locale: string = lang.locale;
+  let persistLocale: string | null = lang.persist;
   const convo: ChatMessage[] = [...history, { role: 'user', content: query }];
 
   let reply = '';
   try {
     const { ctx, text: answer } = await runConcierge(convo, locale, { matchLanguage: true });
-    reply = answer || fallbackNote(locale);
-    reply = appendChannelLinks(reply, ctx, locale, SITE);
+    // The reply is long enough to tell its language reliably; when we only guessed, links and memory follow the reply.
+    const settled = settleLocale(lang, answer);
+    locale = settled.locale; persistLocale = settled.persist;
+    reply = composeChannelReply(answer || fallbackNote(locale), ctx, locale, SITE);
   } catch (e) {
     console.error('[telegram] brain', (e as Error).message);
     reply = fallbackNote(locale);
@@ -133,7 +141,7 @@ async function handleTextMessage(token: string, chatId: string, raw: string, uiL
   const nextMessages = [...convo, { role: 'assistant' as const, content: reply }].slice(-10);
   try {
     await sb.from('concierge_tg_threads').upsert({
-      chat_id: chatId, locale, messages: nextMessages, updated_at: new Date().toISOString(),
+      chat_id: chatId, locale: persistLocale, messages: nextMessages, updated_at: new Date().toISOString(),
     });
   } catch { /* memory write is best-effort */ }
 }

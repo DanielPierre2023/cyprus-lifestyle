@@ -38,7 +38,6 @@ export default function ConciergeSources({ cards, hints, locale, dark = false, o
               </span>
               <span className="csrc-name">{c.title}{c.external ? ' ↗' : ''}</span>
               {meta ? <span className="csrc-meta">{meta}</span> : null}
-              {c.kind === 'kb_doc' && c.href ? <span className="csrc-meta">{ui.readOriginal}</span> : null}
             </>
           );
           const key = `${c.kind}:${c.id}`;

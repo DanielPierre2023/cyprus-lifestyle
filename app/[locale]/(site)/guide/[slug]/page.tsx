@@ -6,6 +6,7 @@ import { isLocale, type Locale } from '@/lib/locales';
 import { QA_INDEX, ALL_INTENTS, liveResources, guideHref } from '@/lib/knowledge/qa';
 import { localizedIntent, localizedDomain } from '@/lib/knowledge/qa.i18n';
 import { breadcrumbJsonLd, faqJsonLd, ld, pageMetadata } from '@/lib/seo';
+import { isOfficialAuthorityUrl } from '@/lib/concierge/linkPolicy';
 
 export const revalidate = 86400;
 
@@ -103,9 +104,9 @@ export default async function GuidePage({ params }: { params: Promise<{ locale: 
           </section>
         ) : null}
 
-        {/* Official source citation — shown when the answer is sourced from an
-            external authority (e.g. the government business portal). */}
-        {hit.item.source ? (
+        {/* Official source citation — only a government / EU authority page ("confirm the exact figures here").
+            Tourism boards, newspapers and portals are background we re-express, never a source we show. */}
+        {hit.item.source && isOfficialAuthorityUrl(hit.item.source) ? (
           <p className="gd-source" style={{ fontSize: 13, opacity: .7, margin: '4px 0 8px' }}>
             {SOURCE_LABEL[l] || SOURCE_LABEL.en}:{' '}
             <a href={hit.item.source} target="_blank" rel="noopener noreferrer nofollow">
