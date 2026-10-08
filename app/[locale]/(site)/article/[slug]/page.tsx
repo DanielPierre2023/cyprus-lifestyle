@@ -206,11 +206,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
             </div>
           ) : null}
 
-          {a.source_url ? (
-            <p className="source">
-              {t('common.source')}: <a href={a.source_url} target="_blank" rel="noopener nofollow">{a.source_url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}</a>
-            </p>
-          ) : null}
+          {/* No source line: every article is our own production. The source URL stays in the database for the originality check only. */}
 
           <AskConcierge question={ask.q(a.title)} heading={ask.heading} label={ask.label} />
         </div>

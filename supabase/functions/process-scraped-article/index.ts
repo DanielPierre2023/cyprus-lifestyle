@@ -2,16 +2,16 @@
 //
 // ============================================================================
 // CYPRUS LIFESTYLE — AI EDITORIAL DESK  (faithful port of TT's engine,
-// extended to FOUR NATIVELY-COMPOSED languages: EN · EL · RO · AR)
+// SEVEN NATIVELY-COMPOSED languages: EN · EL · RO · AR · DE · PL · RU)
 // ============================================================================
 //
 // Turns one scraped_articles row (source may be English, Arabic, French,
-// German, Romanian or Greek) into a publish-grade FOUR-LANGUAGE article.
+// German, Romanian or Greek) into a publish-grade SEVEN-LANGUAGE article.
 //
 // KEY PRINCIPLE (per Daniel): nothing is ever a literal translation. Desk 1
 // atomises the source into a shared ENGLISH fact digest; then each edition is
 // COMPOSED NATIVELY from those facts by its own writing desk — English re-reports
-// the story, Greek/Romanian/Arabic are each written by a native-language desk
+// the story, Greek/Romanian/Arabic/German/Polish/Russian are each written by a native-language desk
 // that thinks in that language from the first word. An English source is never
 // "translated" to English; it is re-reported. Every edition passes the SAME
 // gates independently: anti-plagiarism vs the original source, the AI-tell +
@@ -23,14 +23,14 @@
 //   2. Desk 1 (Gemini) — classify category/district/editor, detect source
 //      language, atomise facts into English telegrams
 //   3. Archetype — evidence-density → article type → length budget
-//   4. Desk 2 — for EN, EL, RO, AR: compose NATIVELY from the facts (GPT-4o for
+//   4. Desk 2 — for EN, EL, RO, AR, DE, PL, RU: compose NATIVELY from the facts (GPT-4o for
 //      the English base, Sonnet for the native-language desks, GPT-4o fallback),
 //      with fabrication ban, anti-hallucination, anti-plagiarism, anti-padding,
 //      native-language rules, title craft and the humanising constraints
 //   5. Per edition: sanitize + AI-tell scrub, plagiarism gate vs source,
 //      humanness-enforcement loop (measure → Sonnet revision → re-measure)
 //   6. Cover (Unsplash, grounded to Cyprus), author lookup
-//   7. Atomic commit via commit_scraper_blog_post (4-lang) + generation_logs
+//   7. Atomic commit via commit_scraper_blog_post (7-lang) + generation_logs
 //
 // AUTH: admin-only, fails closed. Self-contained — pastes into the dashboard.
 // SECRETS: CLAUDE_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, UNSPLASH_ACCESS_KEY.
@@ -69,7 +69,7 @@ const USE_GPT_FALLBACK = (Deno.env.get("USE_GPT_FALLBACK") || "false").toLowerCa
 
 // P1 — quality gates. Tunable via secrets; sensible defaults baked in.
 const HUMANNESS_TARGET = Number(Deno.env.get("HUMANNESS_TARGET") || "82"); // loop until >= this
-// 2 passes keeps four parallel editions safely under the edge wall-clock kill;
+// 2 passes keeps seven parallel editions safely under the edge wall-clock kill;
 // raise via secret only if your Supabase tier allows longer function runs.
 const HUMANNESS_MAX_PASSES = Number(Deno.env.get("HUMANNESS_MAX_PASSES") || "2");
 const OVERLAP_MAX = Number(Deno.env.get("OVERLAP_MAX") || "0.12"); // reject an edition above this
@@ -83,7 +83,7 @@ const PLAGIARISM_API_KEY = Deno.env.get("PLAGIARISM_API_KEY") || "";
 
 const CALL_TIMEOUT_MS = 90000; // structured-output composition of a full article can be slow
 // Kept UNDER Supabase's ~200s edge-function wall-clock kill (TT documents this).
-// The four editions compose in parallel, so wall-clock ≈ one edition's time, not 4×.
+// The seven editions compose in parallel, so wall-clock ≈ one edition's time, not 7×.
 const TOTAL_SOFT_LIMIT_MS = 180000;
 const BATCH_MAX = 3;
 
@@ -101,12 +101,11 @@ const RELEVANCE_GATE = (Deno.env.get("RELEVANCE_GATE") || "on").toLowerCase() !=
 
 // ── taxonomy (Cyprus) ────────────────────────────────────────────────────────
 type Lang = "en" | "el" | "ro" | "ar" | "de" | "pl" | "ru";
-// CORE editions are required: English is the anchor, EL/RO/AR must succeed or the
-// article is held back. EXTRA editions (German/Polish/Russian) are best-effort —
-// composed to the same native standard, but a failure never blocks an article; the
-// edition is simply written null and the site falls back to English for it.
-const CORE_LANGS: Lang[] = ["en", "el", "ro", "ar"];
-const EXTRA_LANGS: Lang[] = ["de", "pl", "ru"];
+// ALL SEVEN editions are required, each composed natively and held to the same gates. English is the anchor; a missing
+// or failed edition of any language (including German, Polish and Russian) holds the article back instead of shipping it
+// half-finished with English standing in. EXTRA_LANGS stays as an empty list so older code paths keep compiling.
+const CORE_LANGS: Lang[] = ["en", "el", "ro", "ar", "de", "pl", "ru"];
+const EXTRA_LANGS: Lang[] = [];
 const LANGS: Lang[] = [...CORE_LANGS, ...EXTRA_LANGS];
 const LANG_NAME: Record<Lang, string> = {
   en: "English", el: "Greek", ro: "Romanian", ar: "Arabic",
@@ -780,17 +779,17 @@ const NATIVE_RULES: Record<Lang, string> = {
 - NO summary closer ("is part of a broader effort", "represents a significant shift", "reflects a commitment to"). End on a concrete fact.
 - NO booster adverbs on plain facts ("successfully completed", "significantly improved").
 - BANNED VOCABULARY: delve, landscape, robust, comprehensive, leverage, harness, seamless, foster, streamline, empower, spearhead, underscore, pivotal, tapestry, beacon, nestled, vibrant, thriving, boasts, showcases, game-changer, paradigm, ecosystem, synergy, holistic. Never smuggle a variant back ("delves into", "harnessing").
-- ATTRIBUTION: said, told reporters, wrote, confirmed, announced, added, explained, warned. Banned as ornament: emphasized, highlighted, underscored, stressed.
+- SPEECH VERBS, only for people who speak inside the story: said, confirmed, announced, added, explained, warned. Banned as ornament: emphasized, highlighted, underscored, stressed. NEVER "according to", "reported by" or "told [a publication]", and never name an outlet, agency or report: the facts are our own reporting.
 - English news prose is short and direct. "The mayor blocked the permit" beats the passive. Avoid stacking prepositional phrases on the sentence tail.`,
   el: `NATIVE GREEK (γράψε ΑΠΕΥΘΕΙΑΣ στα ελληνικά, όχι μετάφραση) — think in Greek from the first word:
 - No calques from English structure. Use natural Greek journalistic syntax and word order.
-- Attribution verbs: «δήλωσε», «είπε», «ανέφερε», «σύμφωνα με», «όπως μετέδωσε». BANNED as AI tics: «τόνισε», «υπογράμμισε», «επεσήμανε» used repeatedly. Never the same verb twice in a row.
+- Speech verbs, only for people who speak inside the story: «δήλωσε», «είπε», «ανέφερε». NEVER «σύμφωνα με», «όπως μετέδωσε/αναφέρει/γράφει» and never an outlet, agency or report as the origin of a fact. BANNED as AI tics: «τόνισε», «υπογράμμισε», «επεσήμανε» used repeatedly. Never the same verb twice in a row.
 - BANNED packaging words (all inflections): «καθοριστικός/κομβικός ρόλος», «αποτελεί απόδειξη», «ένα ευρύ φάσμα», «στη σύγχρονη εποχή», «σηματοδοτεί», «ολιστικός». Replace with the concrete term or the number.
 - Sentence-case headlines (only first word + proper nouns capitalised). Correct monotonic accents (τόνοι) throughout. Numerals with the euro sign (€). No Latin em/en dashes — use commas or full stops.
 - Read it aloud in your head: if it sounds like English dressed in Greek words, rewrite it. Greek press has its own rhythm.`,
   ro: `NATIVE ROMANIAN (scrie DIRECT în română, nu traducere) — gândești în română de la primul cuvânt:
 - Fără calchii din engleză: "stă ca un testament" → "dovedește"; "peisajul politic" → "scena politică"; "a naviga complexitățile" → "a gestiona"; "în era digitală" → "astăzi".
-- Verbe de atribuire: "a declarat", "a spus", "a transmis", "a precizat", "potrivit", "conform". INTERZIS ca tic AI: "a subliniat", "a evidențiat", "a accentuat", "a ținut să menționeze". Niciodată același verb de două ori la rând.
+- Verbe de vorbire, doar pentru persoanele care vorbesc în poveste: "a declarat", "a spus", "a transmis", "a precizat". NICIODATĂ "potrivit", "conform" (ca sursă), "relatează" și niciun nume de publicație, agenție sau raport ca origine a unui fapt. INTERZIS ca tic AI: "a subliniat", "a evidențiat", "a accentuat", "a ținut să menționeze". Niciodată același verb de două ori la rând.
 - Cuvinte-ambalaj INTERZISE (toate formele): crucial, esențial, vital, semnificativ, remarcabil, considerabil, rezilient, paradigmă, ecosistem, sinergie. Folosește adjectivul precis sau cifra.
 - "Pe măsură ce" maximum o dată. "Acest/Această/Aceste" ca început de propoziție maximum de două ori.
 - Diacritice corecte peste tot (ă, â, î, ș, ț). Numerale: "12 milioane de euro", "47 de contracte". Titluri în sentence case. Fără em/en dash — folosește virgule sau puncte.
@@ -798,25 +797,25 @@ const NATIVE_RULES: Record<Lang, string> = {
   ar:
     `NATIVE ARABIC — modern standard Arabic (اكتب مباشرةً بالعربية الفصحى، وليست ترجمة) for a right-to-left edition:
 - Think in Arabic from the first word; do not mirror English clause order. Use natural MSA journalistic syntax.
-- Attribution: «قال»، «صرّح»، «أوضح»، «وفقًا لـ»، «بحسب». Avoid the repetitive AI tic of «أكّد»/«شدّد» on every attribution. Never the same verb twice in a row.
+- Speech verbs, only for people who speak inside the story: «قال»، «صرّح»، «أوضح». NEVER «وفقًا لـ»، «بحسب تقرير/صحيفة/موقع»، «نقلًا عن» and never an outlet, agency or report as the origin of a fact. Avoid the repetitive AI tic of «أكّد»/«شدّد» on every attribution. Never the same verb twice in a row.
 - BANNED AI packaging: «شهادة على»، «نسيج غني من»، «حجر الزاوية»، «في عالم سريع التغير»، «تجربة سلسة»، «الغوص في». Replace with the concrete word or the figure.
 - Keep proper nouns and figures exact; render numbers clearly (٪ or %, €). Correct hamza and taa marbuta. NO Latin em/en dashes — use the Arabic comma (،) or a full stop.
 - Read it in your head: if it reads like English rendered word-for-word into Arabic, rewrite it into natural press Arabic.`,
   de: `NATIVE GERMAN (schreibe DIREKT auf Deutsch, keine Übersetzung) — denke von Anfang an auf Deutsch:
 - Keine Anglizismus-Lehnübersetzungen, kein englischer Satzbau. Nutze natürliche deutsche Pressesprache und Wortstellung; das Verb steht, wo es hingehört.
-- Attribuierung: „sagte", „erklärte", „teilte mit", „bestätigte", „kündigte an", „laut", „so". VERBOTEN als KI-Tick: „betonte", „unterstrich", „hob hervor" in jedem Satz. Nie zweimal dasselbe Verb hintereinander.
+- Sprechverben, nur für Personen, die in der Geschichte sprechen: „sagte", „erklärte", „teilte mit", „bestätigte", „kündigte an". NIE „laut …", „… zufolge", „nach Angaben", „wie … berichtet" und nie ein Medium, eine Agentur oder ein Bericht als Herkunft einer Tatsache. VERBOTEN als KI-Tick: „betonte", „unterstrich", „hob hervor" in jedem Satz. Nie zweimal dasselbe Verb hintereinander.
 - VERBOTENE Verpackungswörter: „spielt eine entscheidende Rolle", „ist ein Zeugnis für", „im Herzen von", „eine breite Palette von", „nahtlos", „ganzheitlich", „wegweisend", „Ökosystem". Nimm das konkrete Wort oder die Zahl.
 - Überschriften folgen normaler deutscher Groß-/Kleinschreibung (Substantive groß), aber KEIN englisches Title Case. Zahlen mit dem Euro-Zeichen (€), deutsche Anführungszeichen („…"). KEINE Geviert-/Halbgeviertstriche — Kommas oder Punkte.
 - Lies es innerlich laut: klingt es wie „Englisch in deutschen Wörtern", schreib es um. Deutsche Presse hat ihren eigenen Rhythmus.`,
   pl: `NATIVE POLISH (pisz BEZPOŚREDNIO po polsku, nie tłumacz) — myśl po polsku od pierwszego słowa:
 - Bez kalek z angielskiego i bez angielskiej składni. Naturalny polski szyk zdania i styl prasowy.
-- Czasowniki przytoczeń: „powiedział", „oświadczył", „przekazał", „potwierdził", „zapowiedział", „według", „jak podaje". ZAKAZANE jako tik AI: „podkreślił", „zaznaczył", „zwrócił uwagę" w każdym zdaniu. Nigdy tego samego czasownika dwa razy z rzędu.
+- Czasowniki mowy, tylko dla osób, które mówią w tekście: „powiedział", „oświadczył", „przekazał", „potwierdził", „zapowiedział". NIGDY „według …", „jak podaje …", „jak informuje …" ani żadnego medium, agencji czy raportu jako źródła faktu. ZAKAZANE jako tik AI: „podkreślił", „zaznaczył", „zwrócił uwagę" w każdym zdaniu. Nigdy tego samego czasownika dwa razy z rzędu.
 - ZAKAZANE słowa-opakowania (wszystkie formy): „odgrywa kluczową rolę", „stanowi świadectwo", „w sercu", „szeroki wachlarz", „bezproblemowy", „holistyczny", „ekosystem". Użyj konkretnego słowa lub liczby.
 - Tytuły zapisuj normalną polską pisownią (bez Wielkich Liter W Każdym Słowie). Liczby z symbolem euro (€), polskie cudzysłowy („…"). Bez myślników em/en — przecinki lub kropki. Poprawne znaki: ą, ć, ę, ł, ń, ó, ś, ź, ż.
 - Przeczytaj w myślach na głos: jeśli brzmi jak „angielski ubrany w polskie słowa", napisz to od nowa.`,
   ru: `NATIVE RUSSIAN (пиши СРАЗУ по-русски, не перевод) — думай по-русски с первого слова:
 - Без калек с английского и без английского синтаксиса. Естественный русский порядок слов и газетный стиль.
-- Глаголы атрибуции: «сказал», «заявил», «сообщил», «подтвердил», «объявил», «по данным», «как сообщает». ЗАПРЕЩЕНО как ИИ-тик: «подчеркнул», «отметил», «акцентировал» в каждом предложении. Никогда один и тот же глагол дважды подряд.
+- Глаголы речи, только для людей, которые говорят внутри истории: «сказал», «заявил», «подтвердил», «объявил». НИКОГДА «по данным», «по информации», «согласно», «как сообщает» и никакого издания, агентства или отчёта как источника факта. ЗАПРЕЩЕНО как ИИ-тик: «подчеркнул», «отметил», «акцентировал» в каждом предложении. Никогда один и тот же глагол дважды подряд.
 - ЗАПРЕЩЁННЫЕ слова-обёртки (во всех формах): «играет ключевую роль», «является свидетельством», «в самом сердце», «широкий спектр», «бесшовный», «холистический», «экосистема». Бери конкретное слово или цифру.
 - Заголовки — обычной строчной записью (без Заглавных Букв В Каждом Слове). Числа со знаком евро (€), русские кавычки-«ёлочки». Тире используй по правилам русского языка; букву «ё» ставь там, где она нужна.
 - Прочитай про себя вслух: если звучит как «английский в русских словах», перепиши. У русской прессы свой ритм.`,
@@ -2663,7 +2662,7 @@ async function fetchUnsplashImage(
 }
 
 // ============================================================================
-// processOne — 4-language native composition lifecycle
+// processOne — 7-language native composition lifecycle
 // ============================================================================
 interface ScrapedRow {
   id: string;
@@ -2757,7 +2756,7 @@ async function processOne(
       };
     }
 
-    // Desk 2 — compose all four editions natively, in parallel
+    // Desk 2 — compose all seven editions natively, in parallel
     const composed = await Promise.all(
       LANGS.map((l) => composeNatively(l, title, enrich.research, category, editor, articleType, arch)),
     );
@@ -2797,7 +2796,7 @@ async function processOne(
     }
 
     // retry any failed non-English edition once (parallel), else fall back to EN
-    const retryLangs = (["el", "ro", "ar"] as Lang[]).filter((l) => !byLang[l].ok);
+    const retryLangs = LANGS.filter((l) => l !== "en" && !byLang[l].ok);
     if (retryLangs.length && (Date.now() - t0) < TOTAL_SOFT_LIMIT_MS - 60000) {
       const retried = await Promise.all(
         retryLangs.map((l) =>
@@ -2811,11 +2810,11 @@ async function processOne(
 
     // No silent English fallback. If a non-English edition still failed after the
     // retry, DO NOT copy the English text into it — that is exactly what produced
-    // the "all four editions in English" bug, and it hid the real failure. Abort
+    // the "all editions in English" bug, and it hid the real failure. Abort
     // loudly with the exact per-language reason (e.g. the Sonnet/GPT-4o API error)
     // and leave the item in the queue for a clean retry, so we never again ship
     // English disguised as a translation.
-    const failedLangs = (["el", "ro", "ar"] as Lang[]).filter((l) => !byLang[l].ok);
+    const failedLangs = LANGS.filter((l) => l !== "en" && !byLang[l].ok);
     if (failedLangs.length) {
       for (const l of failedLangs) log[`desk2b_${l}_ok`] = false;
       const detail = scrubModelNames(
@@ -2855,7 +2854,7 @@ async function processOne(
       if (nt) byLang.en.title = nt;
     }
 
-    // Per-edition finishing, run in PARALLEL so four editions don't stack their
+    // Per-edition finishing, run in PARALLEL so seven editions don't stack their
     // revision passes back-to-back (keeps a single article safely within the edge
     // runtime). Each edition: (P1-4) plagiarism gate vs the source — rewrite to
     // shed borrowed wording, re-check, and FAIL the edition if it still echoes the
@@ -2915,8 +2914,7 @@ async function processOne(
 
     // P1-4 abort — if any edition failed the plagiarism gate, refuse the whole
     // article (loud + logged) rather than commit a partial or borrowed edition.
-    // Only the CORE editions can abort; a best-effort extra that fails the gate is
-    // dropped to null below (never committed borrowed, never blocks the article).
+    // Every edition can abort: none is optional, and none is ever committed borrowed.
     const plagFailed = CORE_LANGS.filter((l) => !byLang[l].ok);
     if (plagFailed.length) {
       const detail = plagFailed
@@ -2951,14 +2949,13 @@ async function processOne(
       cover = await fetchUnsplashImage(q, category, district);
     }
 
-    // commit (atomic, 4-lang)
+    // commit (atomic, 7-lang)
     const publishNow = autoPublish === true;
     const nowIso = new Date().toISOString();
     const slug = generateSlug(byLang.en.title);
     const f = (l: Lang, k: keyof LangBundle) => byLang[l][k] as string;
-    // Best-effort editions: write the value only if the edition succeeded, else
-    // null — so a failed extra edition never ships English text disguised as a
-    // translation; the site falls back to English for a null column.
+    // All seven editions have succeeded at this point (any failure aborted above); g() keeps the null-guard as a last line of
+    // defence so English text can never be written into another language's column.
     const g = (l: Lang, k: keyof LangBundle) => (byLang[l].ok ? (byLang[l][k] as string) : null);
     const gt = (l: Lang) => (byLang[l].ok ? byLang[l].tags : null);
     const blogPayload: Record<string, unknown> = {
@@ -3105,7 +3102,7 @@ async function processOne(
       }
     }
     const providers =
-      `en=${byLang.en.provider} el=${byLang.el.provider} ro=${byLang.ro.provider} ar=${byLang.ar.provider}`;
+      LANGS.map((l) => `${l}=${byLang[l].provider}`).join(" ");
     // If every edition wrote via gpt4o, Sonnet is not running — the article will
     // read flat because the Sonnet humanising pass never happened. Flag it in the
     // log's error_msg (harmless on an ok row) so it is visible without digging.
@@ -3120,7 +3117,7 @@ async function processOne(
     console.log(
       `[writer] DONE ${row.id} → ${postId} | providers ${providers} | sonnet: ${
         sonnetDown || "ok"
-      } | EN ${byLang.en.wc}w h${byLang.en.humanness} EL ${byLang.el.humanness} RO ${byLang.ro.humanness} AR ${byLang.ar.humanness} | ${
+      } | EN ${byLang.en.wc}w humanness ${LANGS.map((l) => `${l.toUpperCase()} ${byLang[l].humanness}`).join(" ")} | ${
         ((Date.now() - t0) / 1000).toFixed(1)
       }s`,
     );
@@ -3139,7 +3136,7 @@ async function processOne(
         } — a manual polish pass would help.`,
       );
     }
-    // Note any best-effort extra edition that could not be produced (site falls back to English).
+    // Extra editions are no longer optional; this list is empty and kept only so older log fields stay valid.
     const extraMissing = EXTRA_LANGS.filter((l) => !byLang[l].ok);
     if (extraMissing.length) {
       warns.push(
