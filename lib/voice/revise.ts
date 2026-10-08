@@ -1,5 +1,5 @@
 // lib/voice/revise.ts — the loop: judge, rewrite what fails, judge again, keep the best honest version.
-// Pure apart from the injected model call (so it is unit-tested with a fake model; the route passes callClaude).
+// Pure apart from the injected model call (so it is unit-tested with a fake model; the runner passes callAI).
 //
 // Design decisions and their consequences:
 //  • Mechanical clean first (dashes, known phrases): free, deterministic, and often enough for the surface tells, so the
@@ -20,7 +20,8 @@ import { voiceSystem, reviseUser } from '@/lib/voice/prompt';
 import type { Desk } from '@/lib/voice/desks';
 
 export interface ModelReply { text?: string; error?: string }
-export type CallModel = (system: string, user: string) => Promise<ModelReply>;
+/** `pass` is the number of the rewrite pass (1 = first): a later pass is a harder case and may think harder. */
+export type CallModel = (system: string, user: string, pass?: number) => Promise<ModelReply>;
 
 export interface ReviseInput {
   title: string; body: string; lang: string; desk: Desk;
@@ -92,6 +93,7 @@ export async function reviseToStandard(inp: ReviseInput): Promise<ReviseResult> 
         title: best.title, body: best.body, tells: best.report.tells, issues: best.report.issues, pass: passes,
         notes: tooClose(best.ov) ? [`Your wording is too close to the source article (${Math.round((best.ov?.ratio ?? 0) * 100)}% shared five-word runs, longest copied run ${best.ov?.longestRun} words). Re-report every paragraph in entirely new sentences and a new order of presentation; keep only the facts.`] : [],
       }),
+      passes,
     );
     if (reply.error || !reply.text) { log.push(`pass ${passes}: model error ${reply.error || 'empty reply'}`); break; }
     const parsed = parseAiJson<{ title?: string; body?: string; body_html?: string; content_html?: string }>(reply.text);

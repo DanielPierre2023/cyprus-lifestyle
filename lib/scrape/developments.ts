@@ -8,7 +8,8 @@
 // 60s cron. Phases 2/3 reuse scrape_sources with a different category.
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { callClaude, CLAUDE_HAIKU, parseAiJson } from '@/lib/ai';
+import { callAI, parseAiJson } from '@/lib/ai';
+import { numbersIn } from '@/lib/voice/guards';
 import { fetchText, stripHtml, sha256, abs, robotsAllows } from '@/lib/scrape/http';
 // Re-export the shared primitives some callers/tests import from here.
 export { sha256, stripHtml, robotsForbids } from '@/lib/scrape/http';
@@ -85,14 +86,22 @@ export function buildExtractionPrompt(developer: string, hintDistrict: string | 
 
 export async function extractProjects(pageText: string, developer: string, hintDistrict: string | null): Promise<RawProject[]> {
   if (pageText.trim().length < 80) return [];
-  const { text, error } = await callClaude({
+  const { text, error } = await callAI({
     systemInstruction: buildExtractionPrompt(developer, hintDistrict),
     userMessage: `WEBSITE TEXT:\n"""${pageText.slice(0, 14000)}"""`,
-    model: CLAUDE_HAIKU, jsonMode: true, maxTokens: 2200, fn: 'scrape-developments',
+    task: 'extract', jsonMode: true, expectTokens: 2200, background: true, fn: 'scrape-developments',
   });
   if (error) throw new Error(error);
   const parsed = parseAiJson<{ projects?: RawProject[] }>(text);
-  return Array.isArray(parsed.projects) ? parsed.projects : [];
+  const projects = Array.isArray(parsed.projects) ? parsed.projects : [];
+  // A price is published only if the page itself states it ("1.2 million" and "250k" count): the model may not invent one.
+  const stated = numbersIn(pageText).map(Number).filter((n) => Number.isFinite(n));
+  const grounded = (v: unknown): boolean => { const n = normalizePrice(v); return n === null || stated.some((x) => x === n || Math.round(x * 1_000) === n || Math.round(x * 1_000_000) === n); };
+  for (const p of projects) {
+    if (!grounded(p.price_from)) p.price_from = null;
+    if (!grounded(p.price_to)) p.price_to = null;
+  }
+  return projects;
 }
 
 // One cheap batched call to localise the short summaries into the other 6 editions
@@ -100,10 +109,10 @@ export async function extractProjects(pageText: string, developer: string, hintD
 async function translateSummaries(summaries: string[]): Promise<Record<string, string[]> | null> {
   const clean = summaries.map((s) => (s || '').trim());
   if (!clean.some(Boolean)) return null;
-  const { text, error } = await callClaude({
+  const { text, error } = await callAI({
     systemInstruction: `Translate each English sentence into Greek (el), Romanian (ro), Arabic (ar), German (de), Polish (pl) and Russian (ru). Keep proper nouns and figures. Return JSON {"el":[...],"ro":[...],"ar":[...],"de":[...],"pl":[...],"ru":[...]} with arrays the SAME length and order as the input.`,
     userMessage: JSON.stringify(clean),
-    model: CLAUDE_HAIKU, jsonMode: true, maxTokens: 2600, fn: 'scrape-translate',
+    task: 'translate', jsonMode: true, expectTokens: 2600, background: true, fn: 'scrape-translate',
   });
   if (error) return null;
   const j = parseAiJson<Record<string, string[]>>(text);

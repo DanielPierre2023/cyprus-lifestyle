@@ -3,7 +3,7 @@
 //   approve → create a pipeline piece (blog_posts, commissioned) from the idea and link
 //             it. When autonomy is 'auto-draft', the writing is handed to the dedicated
 //             /api/editorial/draft route IN THE BACKGROUND (via after()), so this request
-//             returns fast and the full Sonnet draft runs in its own 60s function instead
+//             returns fast and the full draft runs in its own 60s function instead
 //             of timing out inline.
 //   reject  → mark the idea rejected (with an optional reason).
 //   assign  → set assigned_to and mark it assigned.

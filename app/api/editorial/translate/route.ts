@@ -34,9 +34,9 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
   if (!srcBody.trim()) return { ok: false, error: `The source edition (${source}) has no body yet — draft the piece before translating.` };
 
   // Rendering decision, per FRANCHISE. The long-form interview franchise is
-  // re-reported by a native staff writer (transcreation, Sonnet); every other
-  // franchise is faithfully translated + humanised (Haiku). `?transcreate=1|0`
-  // overrides per call.
+  // re-reported by a native staff writer (transcreation, written at a higher
+  // effort); every other franchise is faithfully translated and then cleaned
+  // by the deterministic pass. `?transcreate=1|0` overrides per call.
   const explicit = parseTranscreateFlag(req.nextUrl.searchParams.get('transcreate'));
   const franchise = typeof p.franchise === 'string' ? p.franchise : '';
   const wantTranscreate = shouldTranscreate(franchise, explicit);
@@ -79,7 +79,7 @@ async function run(req: NextRequest): Promise<Record<string, unknown>> {
   const havePkg = !packageIsEmpty(sourcePkg);
 
   // Per-edition body renderer. When transcreation is on for this piece, re-report
-  // each edition natively (Sonnet); if a transcreation fails, fall back to faithful
+  // each edition natively; if a transcreation fails, fall back to faithful
   // translation so no edition is ever left empty.
   async function renderBody(locale: string) {
     let base;

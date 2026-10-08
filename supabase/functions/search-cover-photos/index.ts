@@ -17,7 +17,7 @@
 //        writer (which hot-links urls.regular) — no storage bucket required.
 //
 // Admin-gated (the Unsplash key is quota'd). Env: UNSPLASH_ACCESS_KEY,
-// SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GEMINI_API_KEY (for the brief).
+// SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY (for the brief; without it the deterministic fallback brief is used).
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -71,8 +71,8 @@ async function requireAdmin(req: Request): Promise<Response | null> {
 
 // ── Grounded visual brief (inlined; self-contained) ──────────────────────────
 // Turns an article into a Cyprus-grounded Unsplash query + AI photo prompt so a
-// subject like "parliament" resolves to the CYPRIOT one (Nicosia). Gemini is
-// timeout-guarded with a deterministic fallback.
+// subject like "parliament" resolves to the CYPRIOT one (Nicosia). The model call
+// is timeout-guarded with a deterministic fallback.
 interface VisualBrief {
   unsplash_query: string;
   photo_prompt: string;
@@ -139,12 +139,27 @@ function _vbFallback(
     place,
   };
 }
+// Best-effort spend row for the brief (Luna prices per 1M tokens: 0.10 in, 0.50 out), with the house markup. Never blocks or fails the search.
+async function logBriefSpend(usage: { input_tokens?: number; output_tokens?: number } | undefined, model: string): Promise<void> {
+  try {
+    if (!usage) return;
+    const inTok = Number(usage.input_tokens) || 0, outTok = Number(usage.output_tokens) || 0;
+    const markup = Number(Deno.env.get("COST_MARKUP_PCT") ?? "25");
+    const base = (inTok * 0.1 + outTok * 0.5) / 1_000_000;
+    const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    await sb.from("ai_spend_log").insert({
+      provider: "llm", model: "llm", function_name: "cover-brief", units: inTok + outTok, unit_kind: "tokens",
+      usd: +(base * (1 + (Number.isFinite(markup) ? markup : 25) / 100)).toFixed(6), caller: "search-cover-photos",
+      meta: { in: inTok, out: outTok, base_usd: +base.toFixed(6), markup_pct: markup, model_tier: model ? "luna" : "" },
+    });
+  } catch { /* telemetry */ }
+}
 async function buildVisualBrief(
   input: { title: string; summary?: string; category?: string; county?: string | null },
 ): Promise<VisualBrief> {
   const place = _vbPlace(input.county);
   const fallback = _vbFallback(input, place);
-  const apiKey = Deno.env.get("GEMINI_API_KEY");
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) return fallback;
   const sys =
     `You are the photo editor of Cyprus Lifestyle, an English-language magazine covering Cyprus. For the given article output a STRICT JSON object used to pick or generate an accurate COVER IMAGE.
@@ -157,20 +172,22 @@ Output ONLY this JSON object (no prose):
     input.county || "national"
   }\nTitle: ${input.title}\nSummary: ${(input.summary || "").substring(0, 500)}`;
   try {
-    const call = fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: sys }] },
-          contents: [{ role: "user", parts: [{ text: user }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 500, responseMimeType: "application/json" },
-        }),
-      },
-    ).then((r) => r.json()).catch(() => null);
-    const data = await Promise.race([call, new Promise<null>((res) => setTimeout(() => res(null), 7000))]);
-    const text = (data?.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+    const model = Deno.env.get("OPENAI_MODEL_LUNA") || "gpt-6-luna";
+    // A short, low-effort call with a hard 7-second limit: the brief is a nicety, the deterministic fallback is always there.
+    const call = fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model, instructions: sys, input: user, store: false,
+        max_output_tokens: 1600, reasoning: { effort: "low" }, text: { format: { type: "json_object" } },
+      }),
+      signal: AbortSignal.timeout(7000),
+    }).then((r) => r.json()).catch(() => null);
+    const data = await call;
+    const text = (data?.output || []).filter((o: { type?: string }) => o?.type === "message")
+      .flatMap((o: { content?: Array<{ type?: string; text?: string }> }) => o.content || [])
+      .filter((c: { type?: string }) => c?.type === "output_text").map((c: { text?: string }) => c.text || "").join("").trim();
+    void logBriefSpend(data?.usage, model);
     if (!text) return fallback;
     const p = JSON.parse(text);
     const query = _vbClean(String(p.unsplash_query || ""));

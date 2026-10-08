@@ -13,7 +13,8 @@
 // ============================================================================
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { callClaude, CLAUDE_HAIKU } from '@/lib/ai';
+import { callAI } from '@/lib/ai';
+import { fieldTells } from '@/lib/journalism/fields';
 import { humanizeText, type Lang } from '@/lib/antiAi';
 import { LOCALES, LOCALE_NAME, type Locale } from '@/lib/locales';
 import { isOwnedImage } from '@/lib/images';
@@ -132,17 +133,20 @@ async function generate(platform: SocialPlatform, facts: ArticleFacts): Promise<
     `You are the senior editor of Cyprus Lifestyle, an international high-end magazine about Cyprus (think Vogue, Condé Nast Traveller, Monocle), writing its ${platform} caption in ${LOCALE_NAME[facts.locale]}.`,
     `Place: ${where}.`,
     'Voice: understated luxury. Assured, worldly, sensory and specific; short declarative sentences; one concrete detail does the work. Elegant but never ornate, never salesy. For practical or business stories stay just as polished but precise and calm.',
-    'Never use: hype or filler words (discover, unlock, ultimate, must-see, stunning, amazing, hidden gem, game-changer, dive into, nestled, bucket list), exclamation marks, rhetorical questions, "Here is", emojis, hashtags, links, or em and en dashes.',
+    `Never use: hype or filler words (discover, unlock, ultimate, must-see, stunning, amazing, hidden gem, game-changer, dive into, nestled, bucket list), exclamation marks, rhetorical questions, "Here is", emojis, hashtags, links${facts.locale === 'ru' ? '' : ', or em and en dashes'}.`,
     'No invented facts or figures: use ONLY what the headline and description say, and never open with a statistic unless the number is the story.',
     `Return ONLY a JSON object: {"hook": string, "body": string, "altText": string}. ${rules}`,
   ].join('\n');
   const user = `HEADLINE: ${facts.title}\nDESCRIPTION: ${facts.description}\nSECTION: ${facts.category || ''}`;
-  const { text, error } = await callClaude({ systemInstruction: system, userMessage: user, model: CLAUDE_HAIKU, maxTokens: 500, jsonMode: true, fn: 'social-copy', timeoutMs: 40_000 });
+  const { text, error } = await callAI({ systemInstruction: system, userMessage: user, task: 'short', jsonMode: true, expectTokens: 500, fn: 'social-copy', timeoutMs: 40_000 });
   if (error || !text) return null;
   const g = parseGenerated(text);
   if (!g) return null;
   const lang = facts.locale as Lang;
-  return { hook: g.hook ? humanizeText(g.hook, lang) : '', body: g.body ? humanizeText(g.body, lang) : '', altText: g.altText };
+  const out = { hook: g.hook ? humanizeText(g.hook, lang) : '', body: g.body ? humanizeText(g.body, lang) : '', altText: g.altText };
+  // The same standard as the short fields of an article: a brochure opener, a named source, shouting or an emoji sends the post to the plain fallback.
+  const bad = fieldTells({ title: out.hook, excerpt: out.body }, lang).some((t) => ['f_cta', 'source_attribution', 'title_caps', 'emoji'].includes(t.key));
+  return bad ? null : out;
 }
 
 export async function composePost(platform: SocialPlatform, facts: ArticleFacts): Promise<BuiltPost> {

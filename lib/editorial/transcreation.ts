@@ -1,7 +1,7 @@
 // lib/editorial/transcreation.ts
 // ============================================================================
 // Which franchises are RE-REPORTED into the other six editions as a native staff
-// writer (transcreation, Sonnet) rather than faithfully translated (Haiku).
+// writer (transcreation, a higher reasoning effort) rather than faithfully translated.
 //
 // We roll transcreation out franchise by franchise. It starts with the long-form
 // INTERVIEW franchise, where native rhythm matters most and the piece count is

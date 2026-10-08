@@ -10,14 +10,15 @@
 //  • Time: one edition per call, with a 45 s budget inside Vercel's 60 s.
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { callClaude, CLAUDE_SONNET } from '@/lib/ai';
+import { callAI } from '@/lib/ai';
+import { costUsd, modelIds } from '@/lib/journalism/models';
 import { auditLog } from '@/lib/audit';
 import { LOCALES } from '@/lib/locales';
 import { deskFor, type Desk } from '@/lib/voice/desks';
 import { scoreVoice, asLang } from '@/lib/voice/score';
 import { reviseToStandard, type CallModel, type ReviseResult } from '@/lib/voice/revise';
 import { MAX_SCORE } from '@/lib/voice/gate';
-import { STATE_KEY, IDLE_RECHECK_MS, parseState, withDay, canRun, chooseNext, recordRun, due, unitKey, type Unit, type VoiceState } from '@/lib/voice/work';
+import { STATE_KEY, IDLE_RECHECK_MS, parseState, withDay, canRun, chooseNext, recordRun, due, unitKey, visibleTokensFor, trip, type Unit, type VoiceState } from '@/lib/voice/work';
 
 export const EVERGREEN_AUTHOR = 'The Cyprus Lifestyle Desk';
 type Row = Record<string, unknown>;
@@ -70,18 +71,19 @@ export function unitsOf(rows: Row[]): Unit[] {
   return out;
 }
 
-/** Expected max output tokens for rewriting a body (non-Latin scripts cost more tokens per character). */
-export const maxTokensFor = (body: string, lang: string): number => {
-  const perToken = ['ar', 'el', 'ru'].includes(lang) ? 2 : ['ro', 'pl', 'de'].includes(lang) ? 3 : 3.8;
-  return Math.min(12_000, Math.ceil((body.length / perToken) * 1.5) + 600);
-};
+export { visibleTokensFor };
 
-export const modelCaller = (lang: string, body: string): CallModel => async (system, user) => {
-  const r = await callClaude({ systemInstruction: system, userMessage: user, model: CLAUDE_SONNET, jsonMode: true, maxTokens: maxTokensFor(body, lang), timeoutMs: 35_000, fn: 'voice-revise' });
+/**
+ * The model call of one rewrite. `attempt` is how often this edition has been tried before, plus one: the first try thinks at "high",
+ * the second at "xhigh", the third at "max" (the routing table's rewrite row). A route has 60 seconds, so the effort is lowered to what
+ * the time allows (medium at most) unless AI_APP_BUDGET_MS gives the call longer; the order of escalation is kept either way.
+ */
+export const modelCaller = (lang: string, body: string, attempt = 1): CallModel => async (system, user, pass = 1) => {
+  const r = await callAI({ systemInstruction: system, userMessage: user, task: 'rewrite', attempt: Math.max(attempt, pass), jsonMode: true, expectTokens: visibleTokensFor(body, lang), timeoutMs: 45_000, fn: 'voice-revise' });
   return { text: r.text, error: r.error };
 };
 
-export interface RunOptions { id?: string; lang?: string; dry?: boolean; force?: boolean; now?: Date; callModel?: (lang: string, body: string) => CallModel }
+export interface RunOptions { id?: string; lang?: string; dry?: boolean; force?: boolean; now?: Date; callModel?: (lang: string, body: string, attempt?: number) => CallModel }
 export interface RunSummary {
   ran: boolean; reason?: string;
   slug?: string; lang?: string; desk?: Desk;
@@ -111,12 +113,14 @@ export async function runVoiceOnce(sb: SupabaseClient, opts: RunOptions = {}): P
 
   if (opts.dry) {
     const rep = scoreVoice({ title, body, lang, desk: unit.desk });
-    const approxIn = 4200 + body.length / 3, approxOut = body.length / 3;
-    return { ran: false, reason: 'dry run', slug: unit.slug, lang: unit.lang, desk: unit.desk, before: rep.score, estimateUsd: +(((approxIn * 3 + approxOut * 15) / 1e6) * 1.25).toFixed(3), log: rep.tells.slice(0, 8).map((t) => `${t.severity}: ${t.label}${t.count > 1 ? ` ×${t.count}` : ''}`) };
+    const approxIn = 4200 + body.length / 3, approxOut = visibleTokensFor(body, unit.lang) + 6_000;   // the text plus the thinking
+    const raw = costUsd(modelIds(process.env).luna, { inputTokens: approxIn, cachedTokens: 0, outputTokens: approxOut, reasoningTokens: 0 }, process.env);
+    return { ran: false, reason: 'dry run', slug: unit.slug, lang: unit.lang, desk: unit.desk, before: rep.score, estimateUsd: +(raw * 1.25).toFixed(4), log: rep.tells.slice(0, 8).map((t) => `${t.severity}: ${t.label}${t.count > 1 ? ` ×${t.count}` : ''}`) };
   }
 
   const make = opts.callModel || modelCaller;
-  const res: ReviseResult = await reviseToStandard({ title, body, lang, desk: unit.desk, callModel: make(unit.lang, body), maxPasses: 2, budgetMs: 38_000 });
+  const attempt = (state.attempts[unitKey(unit.id, unit.lang)]?.n || 0) + 1;
+  const res: ReviseResult = await reviseToStandard({ title, body, lang, desk: unit.desk, callModel: make(unit.lang, body, attempt), maxPasses: 1, budgetMs: 38_000 });
   const improved = res.changed && res.after.score < res.before.score && res.facts?.ok !== false;
   let saved = false;
   if (improved) {
@@ -129,7 +133,7 @@ export async function runVoiceOnce(sb: SupabaseClient, opts: RunOptions = {}): P
     } else res.log.push(`save failed: ${error.message}`);
   }
   const paid = res.passes > 0;
-  state = recordRun(state, unit, { ok: res.verdict.voiceOk, before: res.before.score, after: res.after.score, changed: saved, note: res.log[res.log.length - 1] || '' }, now, paid);
+  state = trip(recordRun(state, unit, { ok: res.verdict.voiceOk, before: res.before.score, after: res.after.score, changed: saved, note: res.log[res.log.length - 1] || '' }, now, paid), now);
   await saveState(sb, state);
   return { ran: true, slug: unit.slug, lang: unit.lang, desk: unit.desk, before: res.before.score, after: res.after.score, changed: res.changed, saved, ok: res.verdict.voiceOk, log: res.log };
 }

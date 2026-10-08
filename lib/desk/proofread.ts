@@ -1,16 +1,17 @@
 // Cyprus Lifestyle — light AI proofreading pass for the inflected editions.
 // The deterministic humanizer (lib/antiAi) can't catch every inflected AI-tell in
 // EL/AR/DE/PL/RU (no reliable public stemmer for these), so this pass runs ONLY
-// when the deterministic result still reads "medium+" on the AI-tell score, sends
-// just that text to a cheap Haiku call to neutralise the flagged phrasing
-// (preserving meaning, facts and HTML structure), re-humanises the result, and
-// keeps whichever version scores cleaner. Cost is bounded: clean/low text never
-// triggers a call.
+// when the deterministic result still reads "medium+" on the AI-tell score. It sends
+// that text to the sub-editor with the concrete findings (each tell with the passage
+// where it sits), re-humanises the result, and keeps it only if it reads cleaner AND
+// every figure and quotation of the original is still there. Cost is bounded: clean/low
+// text never triggers a call.
 import 'server-only';
-import { callClaude, CLAUDE_HAIKU } from '@/lib/ai';
+import { callAI, parseAiJson } from '@/lib/ai';
+import { editorialSystem, editorialFixes, editorialUser } from '@/lib/journalism/editorial';
+import { tokensForChars } from '@/lib/journalism/models';
+import { checkFacts } from '@/lib/voice/guards';
 import { humanizeHtml, humanizeText, scoreAiTells, type Lang } from '@/lib/antiAi';
-import { LOCALE_NAME } from '@/lib/locales';
-import { promptTellList, nativeRegisterRules } from '@/lib/antiAiLang';
 
 // The inflected editions where the deterministic net alone leaves residual AI-tells
 // and a targeted model pass earns its keep. EN/RO have full deterministic coverage
@@ -36,27 +37,23 @@ export async function proofread(opts: { text: string; lang: Lang; isHtml: boolea
   if (before.score < THRESHOLD || !AI_PROOFREAD_LANGS.includes(lang)) {
     return { text: first, changed: false, scoreBefore: before.score, scoreAfter: before.score };
   }
-  // 2) targeted AI rewrite of only the flagged tells
-  const tells = before.tells.map((t) => t.label).filter(Boolean).slice(0, 8).join('; ');
-  const rtl = lang === 'ar' ? ' The text is Arabic (right-to-left); return natural Modern Standard Arabic and do not add dir/lang attributes.' : '';
-  const system = [
-    `You are a meticulous ${LOCALE_NAME[lang]} copy editor for Cyprus Lifestyle, a luxury Cyprus magazine.`,
-    `Rewrite the ${isHtml ? 'HTML' : 'text'} below to remove machine/AI-sounding phrasing while keeping the meaning, facts, names, numbers and tone exactly.`,
-    isHtml ? `Preserve the HTML structure EXACTLY — same tags, attributes and order; change only the human-readable text between tags.` : `Return plain text only.`,
-    `Neutralise these tells in particular (including inflected forms): ${tells}.`,
-    `Also avoid the usual ${LOCALE_NAME[lang]} AI phrasing: ${promptTellList(lang)}.`,
-    nativeRegisterRules(lang),
-    `No em/en dashes. Headings stay sentence case. Keep it natural, editorial ${LOCALE_NAME[lang]}; do not add or remove information.${rtl}`,
-    `Return ONLY the rewritten ${isHtml ? 'HTML' : 'text'} — no code fences, no preamble, no notes.`,
-  ].join('\n');
-
-  const { text, error } = await callClaude({
-    systemInstruction: system, userMessage: first, model: CLAUDE_HAIKU,
-    temperature: 0.4, maxTokens: isHtml ? 6000 : 500, fn: `proofread-${lang}`,
+  // 2) the sub-editor works from the findings (the tell, how often, the passage), not from a list of forbidden words
+  const system = editorialSystem(lang, editorialFixes(before.tells.slice(0, 16))).replace('article (HTML)', isHtml ? 'article (HTML)' : 'text (plain text, no HTML)');
+  const r = await callAI({
+    systemInstruction: system, userMessage: editorialUser(lang, first), task: 'edit', complexity: 'complex', jsonMode: true,
+    expectTokens: Math.ceil(tokensForChars(first.length, lang) * 1.2) + 300, fn: `proofread-${lang}`,
   });
-  if (error || !text) return { text: first, changed: false, scoreBefore: before.score, scoreAfter: before.score };
+  if (r.error || !r.text) return { text: first, changed: false, scoreBefore: before.score, scoreAfter: before.score };
+  const j = parseAiJson<{ content_html?: string; content?: string }>(r.text);
+  const raw = stripFences(String(j.content_html ?? j.content ?? ''));
+  if (!raw) return { text: first, changed: false, scoreBefore: before.score, scoreAfter: before.score };
 
-  const cleaned = isHtml ? humanizeHtml(stripFences(text), lang) : humanizeText(stripFences(text), lang);
+  const cleaned = isHtml ? humanizeHtml(raw, lang) : humanizeText(raw, lang);
+  const ratio = cleaned.length / Math.max(1, first.length);
+  // An edit keeps the length and the facts: a rewrite that is much shorter or longer, or moved a figure or a quotation, is thrown away.
+  if (ratio < 0.7 || ratio > 1.35 || !checkFacts(plain(first, isHtml), plain(cleaned, isHtml), { sameLanguage: true, lang }).ok) {
+    return { text: first, changed: false, scoreBefore: before.score, scoreAfter: before.score };
+  }
   const after = scoreAiTells({ title: opts.title, content: plain(cleaned, isHtml), lang });
   // Keep the rewrite only if it actually reads cleaner (guards against a bad rewrite).
   if (cleaned && after.score <= before.score) {

@@ -82,18 +82,22 @@ export function deShoutTitle(title: string): string {
   return recased.replace(/\s{2,}/g, ' ').trim();
 }
 
-// Dash normalization — language-neutral, idempotent (verbatim from TT).
-export function stripDashes(s: string): string {
+// Dash normalization — idempotent (from TT). The house rule is "no dash as a pause mark": a comma replaces it (the Arabic comma in
+// Arabic). RUSSIAN is the exception the language itself makes: the dash (тире) is required punctuation there ("Лимасол — второй по
+// величине город", "роль — это"), so a Russian text keeps its dash and only has the entities decoded and a typed " -- " set properly.
+export function stripDashes(s: string, lang?: Lang): string {
   if (!s) return s;
   let r = s
     .replace(/&mdash;|&#8212;|&#x2014;/gi, '—')
     .replace(/&ndash;|&#8211;|&#x2013;/gi, '–')
     .replace(/&#8213;|&#x2015;/gi, '—');
+  if (lang === 'ru') return r.replace(/\s+--\s+/g, ' — ');
+  const sep = lang === 'ar' ? '، ' : ', ';
   r = r.replace(/(\d)\s*[–—]\s*(\d)/g, '$1-$2');
-  r = r.replace(/\s+[–—]\s+/g, ', ');
-  r = r.replace(/\s+--\s+/g, ', ');
-  r = r.replace(/—/g, ', ').replace(/–/g, '-');
-  r = r.replace(/\s+,/g, ',').replace(/,\s*,/g, ',').replace(/[ \t]{2,}/g, ' ');
+  r = r.replace(/\s+[–—]\s+/g, sep);
+  r = r.replace(/\s+--\s+/g, sep);
+  r = r.replace(/—/g, sep).replace(/–/g, '-');
+  r = r.replace(/\s+([,،])/g, '$1').replace(/([,،])\s*\1/g, '$1').replace(/[ \t]{2,}/g, ' ');
   return r;
 }
 
@@ -339,7 +343,7 @@ export function scrubLexicon(s: string, lang: Lang): string {
 
 export function humanizeText(s: string, lang: Lang): string {
   if (!s) return s;
-  return scrubLexicon(stripDashes(s), lang).trim();
+  return scrubLexicon(stripDashes(s, lang), lang).trim();
 }
 
 function isShoutedSegment(text: string): boolean {
@@ -362,7 +366,7 @@ export function humanizeHtml(html: string, lang: Lang): string {
     // De-shout only a segment that is genuinely shouted (most of its words in capitals). A single acronym such as GESY, GHS or GP
     // inside normal prose must stay as written; the title de-shouter lowercased them and capitalised the word after a colon.
     if (isShoutedSegment(core)) core = deShoutTitle(core);
-    core = stripDashes(core);
+    core = stripDashes(core, lang);
     core = scrubLexicon(core, lang);
     return lead + core + trail;
   }).join('');
@@ -375,7 +379,8 @@ const WEIGHT = { high: 40, medium: 7, low: 3 } as const;
 
 function bodyDefs(lang: Lang): Array<{ key: string; label: string; severity: 'high' | 'medium' | 'low'; re: RegExp }> {
   const common = [
-    { key: 'em_dash', label: 'Em/en dash (—, –)', severity: 'medium' as const, re: /[–—]|&mdash;|&ndash;/g },
+    // Russian needs its dash (тире) as punctuation, so it is not a tell there; a typed " -- " still is.
+    ...(lang === 'ru' ? [] : [{ key: 'em_dash', label: 'Em/en dash (—, –)', severity: 'medium' as const, re: /[–—]|&mdash;|&ndash;/g }]),
     { key: 'double_hyphen', label: 'Double hyphen as a dash ( -- )', severity: 'medium' as const, re: /\s--\s/g },
     { key: 'emoji', label: 'Emoji in body text', severity: 'low' as const, re: /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu },
   ];

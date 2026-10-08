@@ -8,6 +8,7 @@ import type { Lang, AiTell } from '@/lib/antiAi';
 import { normalizeFor, prepare } from '@/lib/antiAiLang';
 import { voiceData } from '@/lib/voice/data';
 import { attributionSpecs } from '@/lib/voice/attribution';
+import { phraseSpecs, headlineSpec } from '@/lib/journalism/phrases';
 import type { TellSpec } from '@/lib/voice/types';
 
 const L = String.raw`\p{L}\p{M}\p{N}`;
@@ -31,7 +32,7 @@ export function compiledTells(lang: Lang): { spec: TellSpec; re: RegExp }[] {
   let v = CACHE.get(lang);
   if (!v) {
     v = [];
-    for (const spec of [...voiceData(lang).tells, ...attributionSpecs(lang)]) {
+    for (const spec of [...voiceData(lang).tells, ...attributionSpecs(lang), ...phraseSpecs(lang)]) {
       const re = compileTell(spec, lang);
       if (re) v.push({ spec, re });
     }
@@ -42,7 +43,7 @@ export function compiledTells(lang: Lang): { spec: TellSpec; re: RegExp }[] {
 
 /** Specs that failed to compile (used by the unit tests: this list must stay empty). */
 export function tellCompileErrors(lang: Lang): string[] {
-  return [...voiceData(lang).tells, ...attributionSpecs(lang)].filter((t) => !compileTell(t, lang)).map((t) => t.key);
+  return [...voiceData(lang).tells, ...attributionSpecs(lang), ...phraseSpecs(lang), headlineSpec(lang)].filter((t) => !compileTell(t, lang)).map((t) => t.key);
 }
 
 function sampleAt(view: string, idx: number, len: number): string {
@@ -64,4 +65,16 @@ export function dataTells(content: string, lang: Lang): AiTell[] {
     out.push({ key: spec.key, label: spec.label, severity: spec.severity, count, sample: m ? sampleAt(view.length === text.length ? view : text, m.index, m[0].length) : '' });
   }
   return out;
+}
+
+/** A formulaic headline ("what you need to know", "why this matters" …) in any of the seven languages. */
+export function titleTells(title: string, lang: Lang): AiTell[] {
+  const t = String(title || '').trim();
+  if (!t) return [];
+  const spec = headlineSpec(lang);
+  const re = compileTell(spec, lang);
+  if (!re) return [];
+  const { text } = prepare(t, lang);
+  const hits = text.match(new RegExp(re.source, re.flags));
+  return hits ? [{ key: spec.key, label: spec.label, severity: spec.severity, count: hits.length, sample: t.slice(0, 80) }] : [];
 }

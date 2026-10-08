@@ -4,14 +4,15 @@
 // unit-testable). The I/O half lives in lib/spendGuard.ts.
 //
 //   • Kill switch   AI_KILL_SWITCH=1  → every guarded model call is refused immediately.
-//   • Daily cap     AI_DAILY_BUDGET_USD    (default 40)   — spend since 00:00 UTC.
-//   • Monthly cap   AI_MONTHLY_BUDGET_USD  (default 400)  — spend since the 1st, 00:00 UTC.
+//   • Daily cap     AI_DAILY_BUDGET_USD    (default 6)    — spend since 00:00 UTC.
+//   • Monthly cap   AI_MONTHLY_BUDGET_USD  (default 60)   — spend since the 1st, 00:00 UTC. Matches the $60 organisation spend limit on the OpenAI account;
+//                     the log includes the 25% markup, so this stops a little before OpenAI would.
 //   A budget of 0 means "no cap" for that window. Spend is the sum of ai_spend_log.usd
 //   (which already includes the COST_MARKUP_PCT markup).
 // ============================================================================
 
-export const DEFAULT_DAILY_USD = 40;
-export const DEFAULT_MONTHLY_USD = 400;
+export const DEFAULT_DAILY_USD = 6;
+export const DEFAULT_MONTHLY_USD = 60;
 
 export interface Budgets { dailyUsd: number; monthlyUsd: number }
 

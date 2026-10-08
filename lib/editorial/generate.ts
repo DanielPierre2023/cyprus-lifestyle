@@ -11,7 +11,9 @@
 // the concierge enrichment routes.
 // ============================================================================
 import 'server-only';
-import { callClaude, CLAUDE_SONNET, CLAUDE_HAIKU, parseAiJson } from '@/lib/ai';
+import { callAI, budgetClock, parseAiJson } from '@/lib/ai';
+import { tokensForChars } from '@/lib/journalism/models';
+import { checkFacts } from '@/lib/voice/guards';
 import { retrieveKnowledge, compactForConcierge } from '@/lib/knowledge/qa';
 import {
   dossierPrompt, draftPrompt, translatePrompt,
@@ -54,6 +56,19 @@ function toLang(locale?: string | null): Lang {
   return (HUMANISER_LANGS.has(l) ? l : 'en') as Lang;
 }
 
+// What a translation or a rewrite must not do: add a figure, lose most of them or (same language) change a quotation.
+function factProblems(source: string, out: string, lang: string, sameLanguage: boolean): string[] {
+  const f = checkFacts(stripHtml(source), stripHtml(out), { sameLanguage, lang });
+  const list: string[] = [];
+  if (f.invented.length) list.push(`figures that are not in the source: ${f.invented.slice(0, 6).join(', ')}`);
+  if (f.droppedRatio > 0.2) list.push(`figures missing: ${f.droppedSample.join(', ')}`);
+  if (sameLanguage && f.changedQuotes.length) list.push(`${f.changedQuotes.length} quotation(s) changed`);
+  return list;
+}
+const correctionNote = (problems: string[]) => `\n\nCORRECTION: your previous version had these problems: ${problems.join('; ')}. Do it again; keep every figure and quotation of the source exactly once as it stands there.`;
+// Visible tokens of a body in a language, for sizing the reply.
+const bodyTokens = (text: string, lang: string, factor = 1.2) => Math.ceil(tokensForChars(text.length, lang) * factor) + 400;
+
 // Does a body carry HTML markup (vs markdown/plain)? Picks humanizeHtml vs humanizeText.
 function isHtmlBody(s: string): boolean {
   return /<\/?(?:p|div|h[1-6]|ul|ol|li|a|strong|em|b|i|br|blockquote|figure|img|span|section|article)\b/i.test(String(s || ''));
@@ -89,13 +104,12 @@ export async function generateDossier(subject: PipelineSubject): Promise<Dossier
     `Prepare the interview dossier for "${subject.name}" now.`,
   ].filter((x) => x !== null).join('\n').trim();
 
-  const r = await callClaude({
+  const r = await callAI({
     systemInstruction: dossierPrompt(subject),
     userMessage,
-    model: CLAUDE_SONNET,
+    task: 'plan',
     jsonMode: true,
-    maxTokens: 2400,
-    timeoutMs: 60_000,
+    expectTokens: 2400,
     fn: 'editorial-dossier',
   });
   if (r.error || !r.text) return { briefing: '', questions: [], error: r.error || 'No response from the model.' };
@@ -124,16 +138,15 @@ export interface DraftResult {
 
 export async function draftPiece(input: DraftInput): Promise<DraftResult> {
   if (!input || !input.subject?.name) return { title: '', bodyMd: '', error: 'A subject with a name is required.' };
-  const r = await callClaude({
+  const r = await callAI({
     // The base commission prompt PLUS the House Book: this franchise's redactional
-    // format, the craft standard, and the anti-AI-detection rules.
+    // format, the craft standard and the prose standard.
     systemInstruction: draftPrompt(input.kind, input.franchise, input.notes || '', input.subject)
       + '\n\n' + craftBlock(input.franchise, input.kind, 'English'),
     userMessage: `Write the ${input.kind} for "${input.subject.name}" now.`,
-    model: CLAUDE_SONNET,
+    task: 'write', complexity: 'complex',
     jsonMode: true,
-    maxTokens: 4096,
-    timeoutMs: 90_000,
+    expectTokens: 4500,
     fn: 'editorial-draft',
   });
   if (r.error || !r.text) return { title: '', bodyMd: '', error: r.error || 'No response from the model.' };
@@ -160,7 +173,7 @@ export interface TranslateResult {
 }
 
 // bodyMd is the source body (markdown or HTML — the prompt preserves whatever format
-// it receives). CLAUDE_HAIKU keeps the seven-edition loop fast and cheap.
+// it receives). A translation that adds a figure or loses most of them is asked for once more and otherwise refused.
 export async function translatePiece(
   title: string,
   bodyMd: string,
@@ -169,28 +182,36 @@ export async function translatePiece(
   const body0 = String(bodyMd || '');
   if (!body0.trim()) return { title: '', body: '', error: 'Nothing to translate (empty body).' };
   const langName = isLocale(targetLocale) ? LOCALE_NAMES[targetLocale] : targetLocale;
-  const r = await callClaude({
-    // Translate faithfully, but render it as a native journalist would AND keep the
-    // anti-AI rules in the target language (so no edition reads as machine-made).
-    systemInstruction: translatePrompt(targetLocale) + '\n\n' + antiAiRules(langName),
-    userMessage: `TITLE:\n${String(title || '').trim()}\n\nBODY:\n${body0}`,
-    model: CLAUDE_HAIKU,
-    jsonMode: true,
-    maxTokens: 4096,
-    timeoutMs: 90_000,
-    fn: 'editorial-translate',
-  });
-  if (r.error || !r.text) return { title: '', body: '', error: r.error || 'No response from the model.' };
-
-  const j = parseAiJson<{ title?: string; body?: string }>(r.text);
-  // Humanise the output in the TARGET language (per-language lexicon + fillers), then
-  // score what remains so callers can see how machine-made the edition still reads.
   const lang = toLang(targetLocale);
-  const outTitle = humaniseTitle(typeof j.title === 'string' ? j.title.trim() : '', lang);
-  const outBody = humaniseBody(typeof j.body === 'string' ? j.body.trim() : '', lang);
-  if (!outBody) return { title: outTitle, body: '', error: 'Could not parse a translation from the model response.' };
-  const sc = scoreAiTells({ title: outTitle, content: stripHtml(outBody), lang });
-  return { title: outTitle, body: outBody, score: sc.score, level: sc.level, tells: sc.tells };
+  const clock = budgetClock();
+  let problems: string[] = [];
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    if (attempt === 2 && !clock.canRetry()) break;
+    const r = await callAI({
+      // Translate faithfully, but render it as a native journalist would AND keep the
+      // prose standard in the target language (so no edition reads as machine-made).
+      systemInstruction: translatePrompt(targetLocale) + '\n\n' + antiAiRules(langName) + (attempt > 1 ? correctionNote(problems) : ''),
+      userMessage: `TITLE:\n${String(title || '').trim()}\n\nBODY:\n${body0}`,
+      task: 'translate', complexity: attempt === 1 ? 'routine' : 'complex',
+      jsonMode: true,
+      expectTokens: bodyTokens(body0, lang),
+      timeoutMs: clock.callBudget(),
+      fn: 'editorial-translate',
+    });
+    if (r.error || !r.text) return { title: '', body: '', error: r.error || 'No response from the model.' };
+
+    const j = parseAiJson<{ title?: string; body?: string }>(r.text);
+    // Humanise the output in the TARGET language (per-language lexicon + fillers), then
+    // score what remains so callers can see how machine-made the edition still reads.
+    const outTitle = humaniseTitle(typeof j.title === 'string' ? j.title.trim() : '', lang);
+    const outBody = humaniseBody(typeof j.body === 'string' ? j.body.trim() : '', lang);
+    if (!outBody) return { title: outTitle, body: '', error: 'Could not parse a translation from the model response.' };
+    problems = factProblems(body0, outBody, targetLocale, false);
+    if (problems.length) continue;
+    const sc = scoreAiTells({ title: outTitle, content: stripHtml(outBody), lang });
+    return { title: outTitle, body: outBody, score: sc.score, level: sc.level, tells: sc.tells };
+  }
+  return { title: '', body: '', error: `The translation changed the figures (${problems.join('; ')}); nothing was saved.` };
 }
 
 // ── 3b. transcreate: re-report an edition natively (kills translationese) ─────────
@@ -198,7 +219,7 @@ export async function translatePiece(
 // non-English editions. Instead of translating, it re-reports the piece AS A NATIVE
 // writer of the target language: every fact and the section structure are kept, but
 // the prose is rebuilt in that language's own rhythm, so no edition reads as an
-// English calque. CLAUDE_SONNET (not Haiku) because this is a craft pass, not a
+// English calque. It runs as a writing task (more thinking than a translation), because it is a craft pass, not a
 // mechanical render. Additive by design — the translate route can adopt it in place
 // of, or after, translatePiece without any other change.
 export interface TranscreateResult {
@@ -218,24 +239,32 @@ export async function transcreatePiece(
   if (!body0.trim()) return { title: '', body: '', error: 'Nothing to transcreate (empty body).' };
   const langName = isLocale(targetLocale) ? LOCALE_NAMES[targetLocale] : targetLocale;
   const lang = toLang(targetLocale);
-  const r = await callClaude({
-    // Re-report natively; transcreateSystem embeds antiAiRules (+ the burstiness block).
-    systemInstruction: transcreateSystem(langName),
-    userMessage: `TITLE:\n${String(title || '').trim()}\n\nBODY:\n${body0}`,
-    model: CLAUDE_SONNET,
-    jsonMode: true,
-    maxTokens: 4096,
-    timeoutMs: 90_000,
-    fn: 'editorial-transcreate',
-  });
-  if (r.error || !r.text) return { title: '', body: '', error: r.error || 'No response from the model.' };
+  const clock = budgetClock();
+  let problems: string[] = [];
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    if (attempt === 2 && !clock.canRetry()) break;
+    const r = await callAI({
+      // Re-report natively; transcreateSystem embeds antiAiRules (the prose standard).
+      systemInstruction: transcreateSystem(langName) + (attempt > 1 ? correctionNote(problems) : ''),
+      userMessage: `TITLE:\n${String(title || '').trim()}\n\nBODY:\n${body0}`,
+      task: 'write', complexity: 'complex',
+      jsonMode: true,
+      expectTokens: bodyTokens(body0, lang, 1.3),
+      timeoutMs: clock.callBudget(),
+      fn: 'editorial-transcreate',
+    });
+    if (r.error || !r.text) return { title: '', body: '', error: r.error || 'No response from the model.' };
 
-  const j = parseAiJson<{ title?: string; body?: string }>(r.text);
-  const outTitle = humaniseTitle(typeof j.title === 'string' ? j.title.trim() : '', lang);
-  const outBody = humaniseBody(typeof j.body === 'string' ? j.body.trim() : '', lang);
-  if (!outBody) return { title: outTitle, body: '', error: 'Could not parse a transcreation from the model response.' };
-  const sc = scoreAiTells({ title: outTitle, content: stripHtml(outBody), lang });
-  return { title: outTitle, body: outBody, score: sc.score, level: sc.level };
+    const j = parseAiJson<{ title?: string; body?: string }>(r.text);
+    const outTitle = humaniseTitle(typeof j.title === 'string' ? j.title.trim() : '', lang);
+    const outBody = humaniseBody(typeof j.body === 'string' ? j.body.trim() : '', lang);
+    if (!outBody) return { title: outTitle, body: '', error: 'Could not parse a transcreation from the model response.' };
+    problems = factProblems(body0, outBody, targetLocale, false);
+    if (problems.length) continue;
+    const sc = scoreAiTells({ title: outTitle, content: stripHtml(outBody), lang });
+    return { title: outTitle, body: outBody, score: sc.score, level: sc.level };
+  }
+  return { title: '', body: '', error: `The transcreation changed the figures (${problems.join('; ')}); nothing was saved.` };
 }
 
 // ── 4. polish: elevate an existing draft to the standard + strip every AI tell ───
@@ -265,23 +294,25 @@ export async function polishPiece(
   const langName = isLocale(locale) ? LOCALE_NAMES[locale] : 'English';
   const tellsBefore = lintAiTells(`${title}\n${body0}`, locale);
 
-  const r = await callClaude({
+  const lang = toLang(locale);
+  const r = await callAI({
     systemInstruction: polishSystem(franchise, kind, tellsBefore, langName),
     userMessage: `TITLE:\n${String(title || '').trim()}\n\nBODY:\n${body0}`,
-    model: CLAUDE_SONNET,
+    task: 'edit', complexity: 'complex',
     jsonMode: true,
-    maxTokens: 4096,
-    timeoutMs: 90_000,
+    expectTokens: bodyTokens(body0, lang),
     fn: 'editorial-polish',
   });
   if (r.error || !r.text) return { title: '', bodyMd: '', tellsBefore, tellsAfter: tellsBefore, error: r.error || 'No response from the model.' };
 
   const j = parseAiJson<{ title?: string; body_md?: string }>(r.text);
   // Humanise the rewrite for the given locale, then recompute the tells and the score.
-  const lang = toLang(locale);
   const outTitle = humaniseTitle(typeof j.title === 'string' && j.title.trim() ? j.title.trim() : title, lang);
   const outBody = humaniseBody(typeof j.body_md === 'string' ? j.body_md.trim() : '', lang);
   if (!outBody) return { title: outTitle, bodyMd: '', tellsBefore, tellsAfter: tellsBefore, error: 'Could not parse the polished body from the model response.' };
+  // An edit changes wording, never facts: a figure or quotation that moved means the rewrite is thrown away.
+  const kept = factProblems(body0, outBody, locale, true);
+  if (kept.length) return { title: '', bodyMd: '', tellsBefore, tellsAfter: tellsBefore, error: `The edit changed the facts (${kept.join('; ')}); the original was kept.` };
   const tellsAfter = lintAiTells(`${outTitle}\n${outBody}`, locale);
   const sc = scoreAiTells({ title: outTitle, content: stripHtml(outBody), lang });
   return { title: outTitle, bodyMd: outBody, tellsBefore, tellsAfter, score: sc.score, level: sc.level };
@@ -290,7 +321,7 @@ export async function polishPiece(
 // ── 5. package: the SEO + editorial package for one edition ───────────────────────
 // From a finished title + body, produce the standfirst (excerpt), the card/search
 // summary, the SEO title + meta description, tags, and FAQ — in the source language.
-// Haiku keeps it cheap; every text field is de-AI-scrubbed and length-clamped, and a
+// A short-copy task (medium effort); every text field is de-AI-scrubbed and length-clamped, and a
 // deterministic fallback guarantees no field is ever left empty.
 export interface PackageInput {
   title: string;
@@ -323,16 +354,15 @@ export async function packagePiece(input: PackageInput): Promise<PackageResult> 
   const locale = input.locale && isLocale(input.locale) ? input.locale : 'en';
   const langName = isLocale(locale) ? LOCALE_NAMES[locale] : 'English';
 
-  const r = await callClaude({
+  const r = await callAI({
     systemInstruction: packageSystem({
       langName, category: input.category ?? null, place: input.place ?? null,
       franchise: input.franchise ?? null, kind: input.kind ?? null,
     }) + '\n\n' + antiAiRules(langName),
     userMessage: packageUser(title, body),
-    model: CLAUDE_HAIKU,
+    task: 'short',
     jsonMode: true,
-    maxTokens: 1200,
-    timeoutMs: 45_000,
+    expectTokens: 1200,
     fn: 'editorial-package',
   });
   if (r.error || !r.text) {
@@ -345,28 +375,21 @@ export async function packagePiece(input: PackageInput): Promise<PackageResult> 
 
 // ── 6. translate the package into a target edition ───────────────────────────────
 // Translates/localises an existing package (from the source language) into a target
-// locale, enforcing the SEO length budgets in that language. Any field the model
-// leaves empty falls back to the source value (better than blank).
+// locale, enforcing the SEO length budgets in that language. A field the model leaves
+// empty stays empty: it is never filled with the source language.
 export async function translatePackage(pkg: PackageFields, targetLocale: string): Promise<PackageResult> {
   const langName = isLocale(targetLocale) ? LOCALE_NAMES[targetLocale] : targetLocale;
-  const r = await callClaude({
+  const empty: PackageFields = { seoTitle: '', seoDescription: '', excerpt: '', summary: '', tags: [], faq: [] };
+  const r = await callAI({
     systemInstruction: translatePackageSystem(langName) + '\n\n' + antiAiRules(langName),
     userMessage: translatePackageUser(pkg),
-    model: CLAUDE_HAIKU,
+    task: 'translate',
     jsonMode: true,
-    maxTokens: 1200,
-    timeoutMs: 45_000,
+    expectTokens: 1200,
     fn: 'editorial-translate-package',
   });
-  if (r.error || !r.text) return { ...pkg, error: r.error || 'No response from the model.' };
-  const t = scrubClampPackage(coercePackage(parseAiJson(r.text)));
-  // Per-field fallback to the source package so a partial translation is never blank.
-  return {
-    seoTitle: t.seoTitle || pkg.seoTitle,
-    seoDescription: t.seoDescription || pkg.seoDescription,
-    excerpt: t.excerpt || pkg.excerpt,
-    summary: t.summary || pkg.summary,
-    tags: t.tags.length ? t.tags : pkg.tags,
-    faq: t.faq.length ? t.faq : pkg.faq,
-  };
+  // Nothing comes back in the source language's place: a package that could not be translated is empty (the caller stores nothing).
+  if (r.error || !r.text) return { ...empty, error: r.error || 'No response from the model.' };
+  // Fields the model left empty stay empty. The older code filled them with the source package, which put English into the other editions.
+  return scrubClampPackage(coercePackage(parseAiJson(r.text)));
 }

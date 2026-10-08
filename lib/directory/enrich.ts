@@ -33,7 +33,7 @@
 // the two never collide. Owner-verified rows are never touched.
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { callClaude, CLAUDE_HAIKU } from '@/lib/ai';
+import { callAI } from '@/lib/ai';
 import { humanizeText, scoreAiTells, type Lang } from '@/lib/antiAi';
 import { translateText } from '@/lib/translate';
 import { LOCALES, type Locale } from '@/lib/locales';
@@ -277,16 +277,17 @@ export interface GenerateResult {
  */
 export async function generateDescription(
   row: EnrichRow,
-  opts: { model?: string } = {},
+  _opts: { model?: string } = {},   // kept for callers; the routing table (task 'short') picks the model and the effort
 ): Promise<GenerateResult> {
   const facts = groundingFacts(row);
   if (!facts.name) return { ok: false, reason: 'no name to ground on' };
   const { system, user } = buildDescriptionPrompt(facts);
-  const { text, error, usd } = await callClaude({
+  const { text, error, usd } = await callAI({
     systemInstruction: system,
     userMessage: user,
-    model: opts.model || CLAUDE_HAIKU,
-    maxTokens: 400,
+    task: 'short',
+    expectTokens: 400,
+    background: true,
     fn: 'directory-enrich',
   });
   if (error) return { ok: false, reason: `model error: ${error}`, usd };
@@ -303,13 +304,13 @@ export async function translateSummary(
   targets: Locale[] = LOCALES.filter((l) => l !== 'en'),
 ): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
-  for (const l of targets) {
-    if (l === 'en') continue;
+  // The locales are independent: translated side by side, so a row takes one call's time, not six.
+  await Promise.all(targets.filter((l) => l !== 'en').map(async (l) => {
     try {
       const t = await translateText(english, 'en', l, 'description');
       if (t && t.trim() && !isStubText(t)) out[`summary_${l}`] = t.trim();
     } catch { /* leave empty → English fallback */ }
-  }
+  }));
   return out;
 }
 
@@ -422,7 +423,7 @@ export interface EnrichOptions {
   concurrency?: number;
   /** Also translate the generated English into the six other editions. Default false. */
   translate?: boolean;
-  /** Override the model (default: Haiku — cheap + sufficient for a short blurb). */
+  /** Ignored: the routing table picks model and effort (task 'short'). Kept so older callers compile. */
   model?: string;
   /** How far to scan for candidates. Default 30000. */
   maxScan?: number;

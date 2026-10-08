@@ -9,7 +9,8 @@
 // http helpers; content-hash change-detection keeps the daily rotation cheap.
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { callClaude, CLAUDE_HAIKU, parseAiJson } from '@/lib/ai';
+import { callAI, parseAiJson } from '@/lib/ai';
+import { checkFacts } from '@/lib/voice/guards';
 import { fetchText, stripHtml, sha256, robotsAllows } from '@/lib/scrape/http';
 
 // Curated from the official URLs ALREADY cited in our knowledge base — validated,
@@ -43,7 +44,7 @@ export async function seedRegulationSources(sb: SupabaseClient): Promise<number>
 // Compare old vs new official-page text and describe, precisely and soberly, what
 // materially changed for a business owner / buyer / newcomer. No speculation.
 export async function summarizeRegChange(name: string, oldText: string, newText: string): Promise<{ title: string; summary: string; severity: string }> {
-  const { text, error } = await callClaude({
+  const { text, error } = await callAI({
     systemInstruction: [
       `You compare two versions of an official Republic of Cyprus government page ("${name}") and report what MATERIALLY changed for someone doing business, buying property, employing staff, or moving to Cyprus.`,
       `Focus on substance: figures (rates, thresholds, fees, minimum wage), rules, required documents, procedures, deadlines, eligibility. IGNORE navigation, menus, cookie notices, boilerplate and re-wording that doesn't change meaning.`,
@@ -52,10 +53,13 @@ export async function summarizeRegChange(name: string, oldText: string, newText:
       `Return JSON {"title": "<=8 words", "summary": "2-4 sentences, concrete, cite the changed figure/rule", "severity": "info|minor|major"}.`,
     ].join('\n'),
     userMessage: `PREVIOUS VERSION:\n"""${oldText.slice(0, 7000)}"""\n\nNEW VERSION:\n"""${newText.slice(0, 7000)}"""`,
-    model: CLAUDE_HAIKU, jsonMode: true, maxTokens: 700, fn: 'regulation-diff',
+    task: 'extract', complexity: 'demanding', jsonMode: true, expectTokens: 700, background: true, fn: 'regulation-diff',
   });
   if (error) return { title: `${name} changed`, summary: 'The official page changed; automatic summary unavailable — please review the source.', severity: 'minor' };
   const j = parseAiJson<{ title?: string; summary?: string; severity?: string }>(text);
+  // A rate, threshold or fee in the summary must be on one of the two pages: a figure the model made up is worse than no summary.
+  const invented = checkFacts(`${oldText}\n${newText}`, String(j.summary || ''), { sameLanguage: false }).invented;
+  if (invented.length) return { title: String(j.title || `${name} changed`).slice(0, 120), summary: 'The official page changed; the automatic summary could not be verified against the page text, so please review the source.', severity: 'minor' };
   const severity = SEVERITIES.includes(String(j.severity)) ? String(j.severity) : 'minor';
   return {
     title: (j.title || `${name} changed`).slice(0, 120),

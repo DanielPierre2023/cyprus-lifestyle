@@ -5,7 +5,7 @@
 // planner turns the digest into the "LIVE RESEARCH" block of the ideation prompt.
 //
 // Reads TAVILY_API_KEY. Returns '' whenever it is unavailable or errors, so the
-// planner degrades cleanly (Anthropic web_search, then season + directory only).
+// planner degrades cleanly (the model's own web search, then season + directory only).
 // Server-only. Never throws.
 // ============================================================================
 import 'server-only';

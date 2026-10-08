@@ -20,17 +20,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { countStubs, enrichStubs } from '@/lib/directory/enrich';
+import { costUsd, modelIds } from '@/lib/journalism/models';
 import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap; raise to 300 on Vercel Pro for bigger batches
 
-// Rough per-row spend for the English blurb (Haiku): ~550 in + ~130 out tokens.
-// in $1.0 / out $5.0 per 1M tok, + the 25% COST_MARKUP_PCT the ai layer applies.
-// Actuals are logged to ai_spend_log; this is only a planning estimate.
-const USD_PER_ROW_EN = +(((550 * 1.0 + 130 * 5.0) / 1_000_000) * 1.25).toFixed(6);
-// Translation (opt-in) adds six faithful translations via Sonnet (pricier); ~6x.
-const USD_PER_ROW_TRANSLATED = +(USD_PER_ROW_EN + 6 * ((320 * 3.0 + 130 * 15.0) / 1_000_000) * 1.25).toFixed(6);
+// Rough per-row spend: the English blurb is ~600 tokens in and ~150 out plus ~1,500 of thinking, priced from the same table the
+// model client uses, + the 25% COST_MARKUP_PCT the ai layer applies. Actuals are logged to ai_spend_log; this is only a planning estimate.
+const rowUsd = (inTok: number, outTok: number) => costUsd(modelIds(process.env).luna, { inputTokens: inTok, cachedTokens: 0, outputTokens: outTok, reasoningTokens: 0 }, process.env) * 1.25;
+const USD_PER_ROW_EN = +rowUsd(600, 1_650).toFixed(6);
+// Translation (opt-in) adds six faithful translations of a short text (each ~400 in, ~1,500 out); ~6x.
+const USD_PER_ROW_TRANSLATED = +(USD_PER_ROW_EN + 6 * rowUsd(400, 1_500)).toFixed(6);
 
 async function authed(req: NextRequest): Promise<boolean> {
   if (await isAdmin()) return true;
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
   // Bound per-call work so it never trips the serverless timeout. Translation is ~6x
   // the model calls per row, so the ceiling is lower when it is on.
   const translate = body.translate === true;
-  const hardMax = translate ? 15 : 40;
+  const hardMax = translate ? 8 : 20;   // a reasoning model needs seconds per row, and the route has 60
   const limit = Math.min(Math.max(1, Number(body.limit) || 10), hardMax);
   const concurrency = Math.min(Math.max(1, Number(body.concurrency) || 4), 8);
   const model = typeof body.model === 'string' && body.model ? body.model : undefined;

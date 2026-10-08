@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   const source = String(body.source || '');
   const target = String(body.target || '');
   if (!isLocale(source) || !isLocale(target)) {
-    return NextResponse.json({ ok: false, error: 'source/target must be en|el|ro|ar' }, { status: 400 });
+    return NextResponse.json({ ok: false, error: 'source/target must be one of en, el, ro, ar, de, pl, ru' }, { status: 400 });
   }
   if (typeof body.html === 'string') {
     const r = await translateHtml(body.html, source, target);
@@ -25,7 +25,8 @@ export async function POST(req: NextRequest) {
   }
   if (typeof body.text === 'string') {
     const out = await translateText(body.text, source, target, body.kind || 'text');
-    return NextResponse.json({ ok: true, text: out });
+    // An empty answer means the translation could not be made (never the source text standing in for it).
+    return NextResponse.json(out ? { ok: true, text: out } : { ok: false, text: '', error: 'translation failed' }, { status: out ? 200 : 502 });
   }
   return NextResponse.json({ ok: false, error: 'html or text required' }, { status: 400 });
 }

@@ -8,6 +8,7 @@
 //    piece cannot loop forever or burn the budget; after the third failure it is left for a human (the admin report lists it).
 //  • the source edition of a piece is repaired before its translations, and the worst scores first.
 import type { Desk } from '@/lib/voice/desks';
+import { tokensForChars } from '@/lib/journalism/models';
 
 export const STATE_KEY = 'voice_engine';
 export const MAX_ATTEMPTS = 3;
@@ -97,3 +98,27 @@ export function recordRun(s: VoiceState, u: Unit, r: { ok: boolean; before: numb
 export function stuck(s: VoiceState): string[] {
   return Object.entries(s.attempts).filter(([, a]) => a.n >= MAX_ATTEMPTS && !a.ok).map(([k]) => k);
 }
+
+/**
+ * The visible output a rewrite of this body needs, in tokens. Reasoning models think before they write and bill that thinking as
+ * output; the model client (lib/journalism/openai.ts) adds the reserve for the chosen effort on top of this figure, so it is the size
+ * of the TEXT only. (The first live runs on the earlier provider budgeted 1.5x the text, the model spent all of it on thinking and
+ * returned nothing.) Non-Latin scripts cost more tokens per character.
+ */
+export const visibleTokensFor = (body: string, lang: string): number => Math.min(16_000, Math.ceil(tokensForChars(body.length, lang) * 1.3) + 300);
+
+/**
+ * Circuit breaker: when the last BREAKER_N runs all failed at the model (empty reply, error, timeout) and saved nothing,
+ * stop for BREAKER_PAUSE_MS instead of paying for the same failure every ten minutes. A human sees it in the report.
+ */
+export const BREAKER_N = 3;
+export const BREAKER_PAUSE_MS = 6 * 3600_000;
+const MODEL_FAILURE = /model error|empty|abort|timeout|timed out|no answer after|out of time|incomplete|refused|unparseable|budget|overloaded|rate limit|quota|spend limit|credit|not configured/i;
+export function trip(s: VoiceState, now: Date): VoiceState {
+  const last = s.recent.slice(0, BREAKER_N);
+  if (last.length === BREAKER_N && last.every((r) => !r.changed && !r.ok && MODEL_FAILURE.test(r.note))) {
+    return { ...s, idleUntil: new Date(now.getTime() + BREAKER_PAUSE_MS).toISOString() };
+  }
+  return s;
+}
+

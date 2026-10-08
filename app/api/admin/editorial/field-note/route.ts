@@ -2,7 +2,7 @@
 // Log an editor's VISIT / INTERVIEW / STORY and, optionally, have the AI editor redact
 // a house-voice piece from the notes. Drafting is handed to the dedicated
 // /api/editorial/draft route IN THE BACKGROUND (via after()) so this request returns
-// fast and the full Sonnet draft runs in its own 60s function.
+// fast and the full draft runs in its own 60s function.
 // Body: { kind, subjectListingId?, subjectName?, place?, visitedOn?, rating?, notes,
 //         quotes?, media?[], sectionKey?, subcategoryKey?, franchise?, author?, autoDraft? }
 import { NextRequest, NextResponse } from 'next/server';

@@ -4,7 +4,8 @@
 import 'server-only';
 import crypto from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { callClaude, CLAUDE_HAIKU } from '@/lib/ai';
+import { callAI } from '@/lib/ai';
+import { dashRule } from '@/lib/journalism/languages';
 import { humanizeText, type Lang } from '@/lib/antiAi';
 import { LOCALE_NAME, type Locale } from '@/lib/locales';
 
@@ -31,10 +32,10 @@ export async function generateCopy(post: PostForSocial, platform: Platform): Pro
   const system = [
     `You write social copy for Cyprus Lifestyle, a luxury Cyprus magazine, in ${LOCALE_NAME[post.locale]}.`,
     `Platform: ${platform}. ${limits[platform]}`,
-    `Assured, worldly, warm; no AI filler, no em/en dashes. Do not include the URL (it is added separately). Return ONLY the caption text.`,
+    `Assured, worldly, warm; no AI filler; ${dashRule(post.locale as Lang)}. Do not include the URL (it is added separately). Return ONLY the caption text.`,
   ].join('\n');
   const user = `HEADLINE: ${post.title}\nSTANDFIRST: ${post.excerpt}`;
-  const { text } = await callClaude({ systemInstruction: system, userMessage: user, model: CLAUDE_HAIKU, temperature: 0.7, maxTokens: 300, fn: 'social-copy' });
+  const { text } = await callAI({ systemInstruction: system, userMessage: user, task: 'short', expectTokens: 300, fn: 'social-copy' });
   return humanizeText((text || post.title).trim(), post.locale as Lang);
 }
 

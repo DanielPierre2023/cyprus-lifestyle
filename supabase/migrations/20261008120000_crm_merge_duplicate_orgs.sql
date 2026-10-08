@@ -1,3 +1,4 @@
+-- allow-destructive: drops only its own temporary working table public._crm_merge_members (created and dropped inside the same transaction)
 -- =============================================================================
 -- CYPRUS LIFESTYLE — Merge duplicate organisations in public.crm_orgs
 -- Apply in the Supabase Dashboard → SQL Editor. Runs in ONE transaction;

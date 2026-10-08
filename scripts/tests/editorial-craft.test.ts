@@ -19,10 +19,10 @@ ok('default fallback is a feature', /AT THE TABLE/.test(formatFor(null, null)));
 
 // ── House style + anti-AI rules ──────────────────────────────────────────────────
 ok('house style names the standard', /New York Times|Vogue|Washington Post/.test(HOUSE_STYLE));
-ok('anti-AI bans the em dash', /em dash|—/.test(antiAiRules()));
+ok('the standard bans the dash as a pause mark', /em or en dash/.test(antiAiRules()));
 ok('anti-AI (English) sets British English', /British English/.test(antiAiRules('English')));
 ok('anti-AI (Greek) targets Greek natively', /GREEK/.test(antiAiRules('Greek')) && /Greek/.test(antiAiRules('Greek')));
-ok('craftBlock combines format + style + anti-AI', (() => { const b = craftBlock('tastemakers', 'interview'); return /TASTEMAKERS/.test(b) && /CRAFT STANDARD/.test(b) && /UNDETECTABLY/.test(b); })());
+ok('craftBlock combines format + style + anti-AI', (() => { const b = craftBlock('tastemakers', 'interview'); return /TASTEMAKERS/.test(b) && /CRAFT STANDARD/.test(b) && /THE STANDARD FOR THIS ENGLISH PIECE/.test(b) && !/UNDETECT/i.test(b); })());
 ok('there are many curated AI tells', AI_TELLS.length >= 30);
 
 // ── Deterministic scrubber ───────────────────────────────────────────────────────

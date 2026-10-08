@@ -123,7 +123,7 @@ ok('antiAiRules(Russian (Русский)) resolves the language name', antiAiRul
 ok('antiAiRules(English) is unchanged: English list present', antiAiRules('English').includes('delve into') && antiAiRules('English').includes('British English'));
 ok('antiAiRules(Arabic) carries native register rules', /NATIVE REGISTER \(Arabic\)/.test(antiAiRules('Arabic')) && antiAiRules('Arabic').includes('يتم'));
 ok('antiAiRules forbids any production statement on the article', /no statement about how it was produced/.test(antiAiRules('Polish')));
-ok('antiAiRules keeps the burstiness block', antiAiRules('Greek').includes('burstiness'));
+ok('antiAiRules carries the prose standard (rhythm follows meaning, no quota)', antiAiRules('Greek').includes('follow the meaning') && !/burstiness/i.test(antiAiRules('Greek')));
 for (const [code, name] of [['de', 'German'], ['el', 'Greek'], ['pl', 'Polish'], ['ro', 'Romanian'], ['ru', 'Russian'], ['ar', 'Arabic']] as const) {
   const tp = translatePrompt(code);
   ok(`translatePrompt(${code}) demands native register and lists the stock phrases`, tp.includes('NATIVE REGISTER') && tp.includes(promptTells(code)[0]) && tp.includes(name));

@@ -7,14 +7,14 @@
 // directory's own candidate businesses — generate fresh, non-redundant article
 // ideas with accurate research briefs, and queue them for the editor to approve.
 //
-// SENSE → IDEATE (Sonnet + web_search) → DEDUP (title hash + pgvector) → PLAN → QUEUE.
+// SENSE → IDEATE (model + live web search) → DEDUP (title hash + pgvector) → PLAN → QUEUE.
 // Degrades gracefully: a model/parse/search failure on one section is logged and the
 // run moves on. Never throws. Suggest-only — it writes ideas as 'suggested'; drafting
 // happens later, on approval (respecting the autonomy setting).
 // ============================================================================
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { callClaude, CLAUDE_SONNET, parseAiJson } from '@/lib/ai';
+import { callAI, appBudgetMs, parseAiJson } from '@/lib/ai';
 import { embedText } from '@/lib/concierge/embed';
 import { topReaderDemand } from '@/lib/concierge/analytics';
 import { getSection } from '@/lib/editorial/taxonomy';
@@ -98,27 +98,27 @@ async function processSection(
   const wantWeb = opts.webSearch == null ? settings.webSearch : !!opts.webSearch;
 
   // Live web research: PREFER Tavily (a search API built for grounding) when
-  // TAVILY_API_KEY is set; else fall back to Anthropic's built-in web_search tool.
+  // TAVILY_API_KEY is set; else fall back to the model's built-in web search tool.
   let digest = '';
   if (wantWeb) { try { digest = await researchWeb(researchQueriesFor(section, monthIndex)); } catch { digest = ''; } }
-  const webSource: 'tavily' | 'anthropic' | 'none' = digest ? 'tavily' : (wantWeb ? 'anthropic' : 'none');
+  const webSource: 'tavily' | 'search' | 'none' = digest ? 'tavily' : (wantWeb ? 'search' : 'none');
 
-  // One ideation attempt. `useTool` turns on Anthropic web_search; `webText` is the
+  // One ideation attempt. `useTool` turns on the model's web search; `webText` is the
   // research block (Tavily digest, or the directive that tells the tool to search).
   async function ideate(useTool: boolean, webText: string) {
     const signals: PlannerSignals = { seasonal: seasonalNote(monthIndex), web: webText, demand, candidates };
     const userMessage = ideatePrompt({ section: section!, departmentName: gap.department_name, monthIndex, count: want, signals, existingTitles: existing });
-    return callClaude({
-      systemInstruction: plannerSystem(), userMessage, model: CLAUDE_SONNET, jsonMode: true,
-      webSearch: useTool, maxSearches: 4, maxTokens: 3600,
-      timeoutMs: Math.min(70_000, Math.max(20_000, budgetLeftMs() - 5_000)), fn: 'editorial-planner',
+    return callAI({
+      systemInstruction: plannerSystem(), userMessage, task: 'plan', jsonMode: true,
+      webSearch: useTool, expectTokens: 3600,
+      timeoutMs: Math.min(appBudgetMs(), Math.max(20_000, budgetLeftMs() - 5_000)), fn: 'editorial-planner',
     });
   }
 
-  // Attempt 1: Tavily digest (no Anthropic tool), or the Anthropic tool if no digest,
+  // Attempt 1: Tavily digest (no search tool), or the model's search tool if no digest,
   // or plain. If web was wanted but yields nothing usable, retry ONCE fully offline so
   // a section is never silently skipped.
-  const useTool = webSource === 'anthropic';
+  const useTool = webSource === 'search';
   const firstText = digest || (useTool ? '(Use web search now to find what is genuinely happening, new or of interest for this section in the Republic of Cyprus this month, then propose. Treat findings as leads to verify.)' : '');
   let r = await ideate(useTool, firstText);
   let parsed = r.text ? coerceIdeas(parseAiJson(r.text)) : [];

@@ -11,6 +11,9 @@
 //   • RESUMABLE   — the pending list is recomputed from stored hashes on every run, in a fixed order (events,
 //     articles, experiences); a run that hit the budget simply leaves `remaining > 0` and the next run continues.
 //   • ?dry=1 reports what WOULD be embedded (+ token estimate) and makes NO paid call.
+//   • ORPHAN CLEANUP — before embedding, vectors whose source item is no longer published / active (or no longer exists)
+//     are deleted: batched, time-boxed, idempotent, logged under `prune` in the response (lib/concierge/orphans.ts).
+//     ?prune=0 skips the step, ?prune=force lifts the "never delete more than half of a source" guard; ?dry=1 only reports.
 //   • kb_docs: the ~816 scraped pages already have vectors in kb_embeddings (match_kb_docs reads them) — they are
 //     NOT embedded a second time here. The response only reports how many published pages still lack a vector.
 import { NextRequest, NextResponse } from 'next/server';
@@ -22,6 +25,7 @@ import {
   articleDoc, eventDoc, activityDoc, planEmbeds, chunk, tokensOf, orderPending, canStartBatch, callTimeout,
   parseEmbedParams, EMBED_BATCH_SIZE, type EmbedDoc,
 } from '@/lib/concierge/embedSources';
+import { parsePruneParams, planOrphans, pruneOrphans, type PruneParams, type StoredKey, type VectorSource } from '@/lib/concierge/orphans';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -69,20 +73,43 @@ async function kbDocsMissing(): Promise<number | null> {
 
 const bySource = (list: EmbedDoc[]) => ({ article: list.filter((d) => d.source === 'article').length, event: list.filter((d) => d.source === 'event').length, activity: list.filter((d) => d.source === 'activity').length });
 
-async function run(t0: number, force: boolean, dry: boolean, limit: number | null): Promise<Record<string, unknown>> {
+/** The orphan step: stored vectors with no live source item. Never throws; a failure is reported, not fatal. */
+async function pruneStep(stored: StoredKey[], docs: EmbedDoc[], dry: boolean, prune: PruneParams, t0: number): Promise<Record<string, unknown>> {
+  if (!prune.enabled) return { enabled: false };
+  try {
+    const plan = planOrphans(stored, new Set(docs.map((d) => `${d.source}:${d.ref}`)), { mass: prune.mass });
+    const found = plan.orphans.article.length + plan.orphans.event.length + plan.orphans.activity.length;
+    if (dry) return { enabled: true, dry: true, found, wouldDeleteBySource: { article: plan.orphans.article.length, event: plan.orphans.event.length, activity: plan.orphans.activity.length }, skipped: plan.skipped, stored: plan.stored };
+    const sb = supabaseAdmin();
+    const r = await pruneOrphans(plan, {
+      now: () => Date.now(),
+      deleteRefs: async (source: VectorSource, refs: string[]) => {
+        const { error } = await sb.from('concierge_embeddings').delete().eq('source', source).in('ref', refs);
+        return error ? error.message : null;
+      },
+    }, t0);
+    if (r.deleted || r.skipped.length || r.error) console.log('[embed-sources] prune', JSON.stringify({ deleted: r.deleted, bySource: r.bySource, skipped: r.skipped, stoppedBy: r.stoppedBy, error: r.error }));
+    return { enabled: true, ...r };
+  } catch (e) {
+    return { enabled: true, error: (e as Error).message };
+  }
+}
+
+async function run(t0: number, force: boolean, dry: boolean, limit: number | null, prune: PruneParams): Promise<Record<string, unknown>> {
   const sb = supabaseAdmin();
+  // Stored vector keys are read BEFORE the live rows: a vector embedded by an overlapping run in between is then never mistaken for an orphan.
+  const existing = new Map<string, string>();
+  const stored: StoredKey[] = [];
+  const ex = await pageAll((a, b) => sb.from('concierge_embeddings').select('source,ref,content_hash').order('source').order('ref').range(a, b));
+  if (ex.error) return { ok: false, error: `${ex.error} (has migration 20261006110000_concierge_sources.sql been run?)` };
+  for (const r of ex.rows) { stored.push({ source: String(r.source), ref: String(r.ref) }); if (!force) existing.set(`${r.source}:${r.ref}`, String(r.content_hash || '')); }
   const { docs, error } = await loadDocs();
   if (error) return { ok: false, error };
-  const existing = new Map<string, string>();
-  if (!force) {
-    const ex = await pageAll((a, b) => sb.from('concierge_embeddings').select('source,ref,content_hash').order('source').order('ref').range(a, b));
-    if (ex.error) return { ok: false, error: `${ex.error} (has migration 20261006110000_concierge_sources.sql been run?)` };
-    for (const r of ex.rows) existing.set(`${r.source}:${r.ref}`, String(r.content_hash || ''));
-  }
+  const pruned = await pruneStep(stored, docs, dry, prune, t0);
   const pending = orderPending(planEmbeds(docs, existing, force));
   const kbMissing = await kbDocsMissing();
-  if (dry) return { ok: true, dry: true, model: EMBED_MODEL, total: bySource(docs), changed: bySource(pending), approxTokens: tokensOf(pending), kbDocsMissingVectors: kbMissing, note: 'dry run: no embedding call was made' };
-  if (pending.length === 0) return { ok: true, model: EMBED_MODEL, total: docs.length, changed: 0, embedded: 0, remaining: 0, done: true, kbDocsMissingVectors: kbMissing, elapsedMs: Date.now() - t0, note: 'Nothing new to embed.' };
+  if (dry) return { ok: true, dry: true, model: EMBED_MODEL, total: bySource(docs), changed: bySource(pending), approxTokens: tokensOf(pending), kbDocsMissingVectors: kbMissing, prune: pruned, note: 'dry run: no embedding call and no delete was made' };
+  if (pending.length === 0) return { ok: true, model: EMBED_MODEL, total: docs.length, changed: 0, embedded: 0, remaining: 0, done: true, kbDocsMissingVectors: kbMissing, prune: pruned, elapsedMs: Date.now() - t0, note: 'Nothing new to embed.' };
   if (!hasEmbeddings()) return { ok: false, error: 'OPENAI_API_KEY not configured' };
 
   const todo = limit ? pending.slice(0, limit) : pending;
@@ -105,7 +132,7 @@ async function run(t0: number, force: boolean, dry: boolean, limit: number | nul
   const remaining = Math.max(0, pending.length - embedded);
   return {
     ok: true, model: EMBED_MODEL, total: docs.length, changed: pending.length, attempted, embedded, failed, remaining,
-    done: remaining === 0, stoppedBy, kbDocsMissingVectors: kbMissing, elapsedMs: Date.now() - t0,
+    done: remaining === 0, stoppedBy, kbDocsMissingVectors: kbMissing, prune: pruned, elapsedMs: Date.now() - t0,
     note: remaining === 0 ? 'Sources fully embedded.' : stoppedBy === 'failure' ? 'An embedding call failed (key/quota?) — the rest stays pending for the next run.' : 'Time budget reached — the next run continues with the rest.',
   };
 }
@@ -118,7 +145,7 @@ async function handle(req: NextRequest) {
   }
   const p = parseEmbedParams(req.nextUrl.searchParams);
   try {
-    const out = await run(t0, p.force, p.dry, p.limit);
+    const out = await run(t0, p.force, p.dry, p.limit, parsePruneParams(req.nextUrl.searchParams));
     return NextResponse.json(out, { status: out.ok === false && /OPENAI_API_KEY/.test(String(out.error)) ? 503 : 200 });
   } catch (e) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });

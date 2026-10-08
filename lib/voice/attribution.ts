@@ -46,11 +46,24 @@ const META: Record<Lang, string[]> = {
   ar: ['لم أجد', 'وجدت', 'تحققت', 'لم أتمكن', 'تختلف المصادر', 'المصادر (?:تقول|تختلف|لا|تذكر)', 'لم يتسن (?:التأكد|التحقق)', 'لا يمكن التأكد'],
 };
 
-/** Detectors for "the piece names its sources" in one language. All three are high: a published piece must never carry them. */
+// The magazine contacted no one for a piece it re-reports: it never writes that someone spoke to it ("told Cyprus Lifestyle", "in an
+// interview with us", "we asked the ministry"). Only phrases that claim contact are listed; a bare "us" inside a quotation is not.
+const OWN_CONTACT: Record<Lang, string[]> = {
+  en: ['(?:told|said to|spoke to|speaking to|speaking with) (?:cyprus lifestyle|this (?:paper|publication|magazine|newspaper|outlet))', '(?:in|during) an? (?:exclusive )?(?:interview|conversation|chat|statement) (?:with|to) (?:cyprus lifestyle|us)', '(?:consulted|contacted|interviewed) by (?:us|cyprus lifestyle)', 'we (?:spoke|talked|reached out|contacted|asked|interviewed)', 'our (?:own )?(?:reporter|correspondent) (?:spoke|asked|contacted|learned|learnt|found)'],
+  de: ['(?:sagte|erklärte|teilte|berichtete|erzählte)(?: [\\p{L}-]+){0,3} (?:gegenüber )?(?:cyprus lifestyle|uns|dieser (?:zeitung|redaktion|publikation|zeitschrift))', 'im (?:gespräch|interview) mit (?:cyprus lifestyle|uns|dieser (?:zeitung|redaktion))', 'gegenüber (?:cyprus lifestyle|dieser (?:zeitung|redaktion|publikation|zeitschrift))', 'wir (?:sprachen|fragten|kontaktierten|befragten)'],
+  pl: ['(?:powiedział|powiedziała|przekazał|przekazała|oświadczył|oświadczyła|poinformował|poinformowała|wyjaśnił|wyjaśniła)(?: [\\p{L}-]+){0,3} (?:naszej redakcji|redakcji|nam|cyprus lifestyle)', 'w (?:rozmowie|wywiadzie) (?:z|dla) (?:nami|nas|cyprus lifestyle|naszą redakcją)', '(?:skontaktowaliśmy się|zapytaliśmy|rozmawialiśmy)'],
+  ro: ['(?:a declarat|a spus|a transmis|a precizat|a explicat)(?: [\\p{L}-]+){0,3} (?:nouă|redacției noastre|pentru cyprus lifestyle|cyprus lifestyle)', 'într-un interviu acordat (?:nouă|cyprus lifestyle)', 'în discuția cu (?:noi|cyprus lifestyle)', 'am (?:discutat|vorbit|contactat|întrebat)'],
+  ru: ['(?:сказал|сказала|заявил|заявила|рассказал|рассказала|сообщил|сообщила|пояснил|пояснила)(?: [\\p{L}-]+){0,3} (?:нам|редакции|cyprus lifestyle)', 'в (?:беседе|разговоре|интервью) (?:с нами|нам|cyprus lifestyle)', 'мы (?:связались|спросили|поговорили|побеседовали)'],
+  el: ['(?:είπε|δήλωσε|ανέφερε|μίλησε|εξήγησε)(?: [\\p{L}-]+){0,3} (?:στο cyprus lifestyle|στη σύνταξή μας|σε εμάς)', 'σε συνέντευξη (?:στο cyprus lifestyle|σε εμάς)', 'επικοινωνήσαμε', 'ρωτήσαμε'],
+  ar: ['قال(?:ت)?(?: [\\p{L}-]+){0,3} (?:لنا|لصحيفتنا|لمجلتنا|لكيبروس لايفستايل)', 'في (?:حديث|مقابلة|حوار) (?:معنا|مع كيبروس لايفستايل)', 'تواصلنا مع', 'سألنا'],
+};
+
+/** Detectors for "the piece names its sources" in one language. All are high: a published piece must never carry them. */
 export function attributionSpecs(lang: Lang): TellSpec[] {
   return [
     { key: 'source_outlet', label: 'Names a publication, agency or reference work as the origin of a fact (the piece must stand as the magazine\'s own reporting)', severity: 'high', kind: 'word', alts: [...OUTLETS_LATIN, ...(OUTLETS_LOCAL[lang] || [])] },
     { key: 'source_attribution', label: 'Cites its source ("according to…", "reported by…"): state the fact in the magazine\'s own voice', severity: 'high', kind: 'word', alts: ATTRIBUTION[lang] },
+    { key: 'source_own_contact', label: 'Says someone spoke to the magazine ("told Cyprus Lifestyle", "in an interview with us", "we asked"): the magazine contacted no one', severity: 'high', kind: 'word', alts: OWN_CONTACT[lang] },
     { key: 'source_meta', label: 'The writer talks about the research ("I found", "the sources differ"): write the verified result, leave the rest out', severity: 'high', kind: 'word', alts: META[lang] },
   ];
 }

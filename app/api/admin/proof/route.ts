@@ -1,6 +1,6 @@
 // Admin/editor proof tool.
 //   default: deterministic AI-tell score + a humanized version (instant, no cost)
-//   { ai: true }: also run the Greek/Arabic AI proofread pass (Haiku), returning
+//   { ai: true }: also run the Greek/Arabic AI proofread pass, returning
 //   the cleaned text and before/after scores.
 // Body: { title, content, lang, html?, ai? }
 import { NextRequest, NextResponse } from 'next/server';

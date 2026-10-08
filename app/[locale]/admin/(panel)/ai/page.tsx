@@ -39,7 +39,7 @@ export default function AiTab() {
     // Invoke the Supabase Edge Function directly (the admin's session JWT authorises it).
     // This runs the AI desk on Supabase — where the model keys live and the runtime is
     // long enough — instead of the Vercel route, which has no keys and a 60s limit.
-    setBusy(id); setMsg('Composing four editions natively — this takes a minute or two…');
+    setBusy(id); setMsg('Composing seven editions natively and checking each against the facts — this takes two to three minutes…');
     try {
       const { data, error } = await sb.functions.invoke('process-scraped-article', { body: { scraped_article_id: id } });
       const d = data as any;
@@ -48,7 +48,8 @@ export default function AiTab() {
         const r = d.reason || 'unknown';
         setMsg(/off-topic/i.test(r) ? 'Skipped — ' + r : 'Generation failed — ' + r);
       }
-      else if (d && d.quality_warning) setMsg('Article drafted, but ⚠ ' + d.quality_warning);
+      else if (d && d.status === 'published') setMsg('Article published.' + (d.quality_warning ? ' Notes: ' + d.quality_warning : ''));
+      else if (d && d.quality_warning) setMsg('Article saved as a draft, but ⚠ ' + d.quality_warning);
       else setMsg('Article drafted. See it in Articles (status: draft).');
     } catch (e) {
       setMsg('Generation error: ' + (e as Error).message);
@@ -206,11 +207,11 @@ export default function AiTab() {
       </div>
       {report ? (
         <pre style={{ background: '#0B0E11', color: '#E4D2AC', padding: 12, borderRadius: 4, fontSize: 12, overflowX: 'auto', margin: '0 0 14px', whiteSpace: 'pre-wrap' }}>
-{`AI service:       ${report.ok ? 'reachable' : 'NOT reachable'}
-primary writer:   ${report.writer_primary?.usable ? 'ok' : 'FAIL'} (${report.writer_primary?.prefill ?? ''})
-fallback writer:  ${report.writer_fallback?.usable ? 'ok' : 'FAIL'}
-research helper:  ${report.research ?? ''}
-keys present:     ${Object.entries(report.keys_present || {}).map(([k, v]) => `${k}=${v ? 'yes' : 'NO'}`).join('  ')}`}
+{`AI service:        ${report.ok ? 'reachable' : 'NOT reachable'}
+structured output: ${report.writer_primary?.usable ? 'ok' : 'FAIL'} (${report.writer_primary?.structured_output ?? ''})
+plain JSON mode:   ${report.writer_fallback?.usable ? 'ok' : 'FAIL'} (${report.writer_fallback?.prefill ?? ''})
+budget:            ${report.budget ? `today $${report.budget.spent_today_usd ?? '?'} of $${report.budget.daily_limit_usd} · month $${report.budget.spent_month_usd ?? '?'} of $${report.budget.monthly_limit_usd}${report.budget.paused ? ' · PAUSED: ' + report.budget.paused : ''}` : ''}
+keys present:      ${Object.entries(report.keys_present || {}).map(([k, v]) => `${k}=${v ? 'yes' : 'NO'}`).join('  ')}`}
         </pre>
       ) : null}
 
@@ -338,7 +339,7 @@ keys present:     ${Object.entries(report.keys_present || {}).map(([k, v]) => `$
 
       <h1 style={{ fontSize: 20, marginTop: 22 }}>Recent desk runs</h1>
       <table className="adm-t">
-        <thead><tr><th>When</th><th>Editor</th><th>Status</th><th>ms</th><th>Humanness (EN)</th></tr></thead>
+        <thead><tr><th>When</th><th>Editor</th><th>Status</th><th>ms</th><th>Style (EN, 100 = clean)</th></tr></thead>
         <tbody>
           {logs.map((l) => (
             <tr key={l.id}>

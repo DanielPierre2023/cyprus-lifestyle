@@ -11,7 +11,7 @@
 // an event is only added if the article states a real name AND a real future date.
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { callClaude, CLAUDE_HAIKU, parseAiJson } from '@/lib/ai';
+import { callAI, parseAiJson } from '@/lib/ai';
 import { slugify, canonDistrict } from '@/lib/scrape/developments';
 
 export const CULTURE_CATEGORIES = ['culture', 'arts', 'events', 'event', 'music', 'festival', 'entertainment', 'nightlife'];
@@ -60,7 +60,7 @@ export function normalizeEvent(e: RawEvent): { name: string; starts_at: string; 
 
 async function extractEventsFromArticle(title: string, body: string): Promise<RawEvent[]> {
   if (body.trim().length < 120) return [];
-  const { text, error } = await callClaude({
+  const { text, error } = await callAI({
     systemInstruction: [
       `Extract concrete, DATED, upcoming events described in this Cyprus culture article. Only events with a REAL specific date (a day, or a clear date range) AND a name. Skip anything vague, past, or recurring-without-a-date.`,
       `Republic of Cyprus (south) only. Never invent a date, venue or price — leave a field null if the article doesn't state it.`,
@@ -68,7 +68,7 @@ async function extractEventsFromArticle(title: string, body: string): Promise<Ra
       `Return {"events":[ ... ]}, at most 8. If there are no concrete dated events, return {"events":[]}.`,
     ].join('\n'),
     userMessage: `TITLE: ${title}\n\nARTICLE:\n"""${body.slice(0, 9000)}"""`,
-    model: CLAUDE_HAIKU, jsonMode: true, maxTokens: 1500, fn: 'events-from-article',
+    task: 'extract', jsonMode: true, expectTokens: 1500, background: true, fn: 'events-from-article',
   });
   if (error) throw new Error(error);
   const parsed = parseAiJson<{ events?: RawEvent[] }>(text);

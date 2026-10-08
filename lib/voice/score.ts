@@ -7,13 +7,17 @@
 // Lower is better: 0 = clean. Weights match scoreAiTells (high 40, medium 7, low 3; diminishing after the first hit).
 import { scoreAiTells, burstiness, type AiTell, type AiTellReport, type Lang } from '@/lib/antiAi';
 import { stripHtml } from '@/lib/editorial/craft';
-import { dataTells } from '@/lib/voice/tells';
-import { shapeTells, layoutTells, qualityIssues, wordCountOf, type Issue } from '@/lib/voice/structure';
+import { dataTells, titleTells } from '@/lib/voice/tells';
+import { shapeTells, layoutTells, qualityIssues, paragraphsOf, wordCountOf, type Issue } from '@/lib/voice/structure';
 import { type Desk } from '@/lib/voice/desks';
+import { craftTells } from '@/lib/journalism/craftTells';
 
 const WEIGHT = { high: 40, medium: 7, low: 3 } as const;
 const LANGS: Lang[] = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'];
 export const asLang = (l: string | null | undefined): Lang => (LANGS.includes(l as Lang) ? (l as Lang) : 'en');
+
+/** Desks whose writer may speak as "I" or "we" (columns, reviews, interviews). Everywhere else the magazine reports and does not appear in the text. */
+const FIRST_PERSON_DESKS: ReadonlySet<Desk> = new Set<Desk>(['review', 'interview', 'people', 'food', 'culture', 'travel', 'fashion_lifestyle']);
 
 /**
  * Titles of works, events and venues in quotation marks ("Glacier Kaleidoscope", „Tides in the Body") are names, not prose:
@@ -34,7 +38,7 @@ export interface VoiceReport {
   legacyScore: number;
 }
 
-export function scoreVoice(input: { title?: string; body: string; lang: string; desk: Desk }): VoiceReport {
+export function scoreVoice(input: { title?: string; body: string; lang: string; desk: Desk; allowFirstPerson?: boolean }): VoiceReport {
   const lang = asLang(input.lang);
   const raw = String(input.body || '');
   const plain = stripHtml(raw);
@@ -44,7 +48,8 @@ export function scoreVoice(input: { title?: string; body: string; lang: string; 
   // Additive detectors. A key already reported by the base scorer is never counted twice.
   const seen = new Set(base.tells.map((t) => t.key));
   const extra: AiTell[] = [];
-  for (const t of [...dataTells(lexical, lang), ...shapeTells(raw, lang), ...layoutTells(raw, lang, wordCountOf(plain))]) {
+  const craft = craftTells({ paragraphs: paragraphsOf(raw), lang, allowFirstPerson: input.allowFirstPerson ?? FIRST_PERSON_DESKS.has(input.desk), dateLeadLow: input.desk === 'events' });
+  for (const t of [...dataTells(lexical, lang), ...titleTells(input.title || '', lang), ...shapeTells(raw, lang), ...layoutTells(raw, lang, wordCountOf(plain)), ...craft]) {
     if (seen.has(t.key)) continue;
     seen.add(t.key);
     extra.push(t);

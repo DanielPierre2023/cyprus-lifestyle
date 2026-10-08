@@ -8,16 +8,18 @@
 //   1. FRANCHISE FORMAT   — the exact redactional architecture per column (an
 //                           interview is built differently from a review or a profile).
 //   2. HOUSE STYLE        — the craft standard: NYT / Vogue / Washington Post level.
-//   3. ANTI-AI            — the rules that make it undetectable as AI, in every
-//                           language (no em dashes, none of the tell-tale phrases,
-//                           varied human rhythm) — plus a deterministic scrubber that
-//                           guarantees the mechanical tells are gone even if the model
-//                           slips.
+//   3. THE STANDARD       — plain words in every language (none of the stock phrases a
+//                           careful editor strikes, no dash as a pause mark, a native
+//                           register), and prose whose rhythm follows its meaning —
+//                           plus a deterministic scrubber that guarantees the
+//                           mechanical tells are gone even if the model slips. It
+//                           never asks for tricks aimed at a detector.
 // ============================================================================
 
 import { reportageBlock } from '@/lib/voice/reportage';
 import { scoreAiTells } from '@/lib/antiAi';
 import { langFromName, promptTellList, nativeRegisterRules } from '@/lib/antiAiLang';
+import { dashRule } from '@/lib/journalism/languages';
 
 // ── 1. Per-franchise redactional format ─────────────────────────────────────────
 // Keyed by franchise key (see lib/editorial/pipeline.ts FRANCHISES). Each is the
@@ -93,14 +95,14 @@ export function formatFor(franchise?: string | null, kind?: string | null): stri
 // ── 2. House style — the craft standard ─────────────────────────────────────────
 export const HOUSE_STYLE =
   'CRAFT STANDARD — write to the level of the New York Times, Vogue and the Washington Post. ' +
-  'Reported, specific and stylish, with a clear point of view and not a wasted word. Show, do not tell. ' +
+  'Reported, specific and stylish, not a wasted word. Show, do not tell. ' +
   'Lead with the concrete: real names, real numbers, sensory detail, the exact thing observed — not adjectives ' +
-  'about it. Every claim is earned; every quote is verbatim from the material and never invented. Have an ' +
-  'opinion and let it show with taste. Write for an intelligent reader who has been everywhere; do not explain ' +
-  'the obvious, do not sell, do not gush.';
+  'about it. Every claim is earned; every quote is verbatim from the material and never invented. Where the piece ' +
+  'calls for a verdict (a review, a column), give it, earned and with taste; never invent a view. Write for an ' +
+  'intelligent reader who has been everywhere; do not explain the obvious, do not sell, do not gush.';
 
-// ── 3. Anti-AI — undetectable, human, in every language ─────────────────────────
-// The phrases a detector (and a good editor) reads as machine-written. Curated to
+// ── 3. The standard — plain words in every language ───────────────────────────────
+// The phrases a careful editor strikes as stock or machine-written. Curated to
 // avoid false positives on ordinary journalism.
 export const AI_TELLS: string[] = [
   'in the world of', 'when it comes to', "it's worth noting", 'it is worth noting', 'needless to say',
@@ -118,33 +120,33 @@ export const AI_TELLS: string[] = [
   'underscore', 'pivotal', 'in an era', 'testament', 'showcase', 'stands out', 'evolving landscape',
 ];
 
-// ── Structural anti-AI — human "burstiness" ──────────────────────────────────────
-// Deliberately uneven architecture is the single hardest thing for a model to fake,
-// so we spell it out. Exported so the transcreation pass can reuse it and so it can
-// be unit-tested. The prose is itself bursty, to model the instruction.
-export const BURSTINESS: string = [
-  '• Structure with human burstiness. Make paragraph lengths deliberately UNEVEN: some paragraphs a single short sentence, others a full, winding block. Never put two adjacent paragraphs of similar length next to each other.',
-  '• Spread sentence length wide on purpose. Set very short sentences (three to five words) hard against long ones (thirty words or more). Some land in two words. Others run on, gathering clauses, doubling back, holding the reader until the thought is fully spent.',
-  '• Keep the rhythm unpredictable. No uniform cadence, no metronome of medium-length sentences, no paragraph built to the same shape as the one before it. If a pattern starts to form, break it.',
+// ── The prose standard — what a careful sub-editor looks for ───────────────────────
+// An intention, not a quota: a writer's prompt that carries numbers ("three sentences under eight words") makes a model produce the
+// theatre it is meant to avoid. The numbers live in the measurement of the finished text (lib/voice, lib/journalism/craftTells) and
+// reach the editor as concrete findings with the passages. Exported so the transcreation pass reuses it and it can be unit-tested.
+export const PROSE_STANDARD: string = [
+  '• Let sentence length follow the meaning: a short sentence where one hard fact should land, a longer one where context has to be held together. No formula, no mechanical alternation, no fragment added for effect, no filler to lengthen a sentence.',
+  '• Let paragraph length follow the logic of the piece, not a pattern; neighbouring paragraphs open differently (a person, a figure, the place, the decision, a quotation).',
+  '• Live verbs ("decided", not "made the decision to"). Plain speech verbs for people who speak in the piece, varied by construction (speaker first, attribution last, no attribution where the speaker is obvious), never the ornamental ones ("stressed", "emphasised", "highlighted").',
+  '• No scaffolding: no "firstly / secondly / finally", no "not only … but also", no trailing participle clauses (", highlighting …").',
 ].join('\n');
 
-// The instruction block that makes the model write undetectably. Language-agnostic
-// (the same rules hold in every edition); `language` names the target for translations.
+// The instruction block for the standard of the piece. Language-agnostic (the same rules hold in every edition); `language` names the
+// target for translations. Never asks for tricks aimed at a detector: no fake roughness, no invented personality, no engineered rhythm.
 export function antiAiRules(language = 'English'): string {
   const tellLang = langFromName(language);
+  const dash = dashRule(tellLang || 'en');
   return [
-    `WRITE UNDETECTABLY AS A HUMAN ${language.toUpperCase()} STAFF WRITER — this is non-negotiable:`,
-    '• NEVER use an em dash (—) or a spaced en dash used as one. Use commas, full stops, semicolons or parentheses instead.',
+    `THE STANDARD FOR THIS ${language.toUpperCase()} PIECE — non-negotiable:`,
+    `• ${dash.charAt(0).toUpperCase()}${dash.slice(1)}: use commas, full stops, semicolons, colons or parentheses${tellLang === 'ar' ? ' (the Arabic comma ،)' : ''}.`,
     (tellLang && tellLang !== 'en'
       ? `• NEVER use these ${language} phrases or their close, inflected variants (and never a literal ${language} rendering of the English ones, such as "nestled in the heart of", "a testament to", "plays a crucial role"): ` + promptTellList(tellLang) + '.'
       : '• NEVER use these phrases or their close variants: ' + AI_TELLS.slice(0, 40).join('; ') + '.'),
-    '• Vary sentence length and rhythm hard: mix short, blunt sentences with longer ones. Do not start consecutive sentences the same way, and avoid participial openers ("Nestled…", "Boasting…", "Perched…").',
-    BURSTINESS,
-    '• No habitual tricolons (lists of three), no "not only X but also Y", no "isn’t just X, it’s Y", no rhetorical questions as filler.',
-    '• Do NOT end with a summary that restates the piece. End on an image, a line of dialogue, or a forward look.',
+    PROSE_STANDARD,
+    '• No habitual lists of three, no "isn’t just X, it’s Y", no rhetorical questions as filler.',
+    '• Do NOT end with a summary that restates the piece or a forecast. End on the hardest concrete fact, an image or a quotation.',
     '• Cut hype adjectives (vibrant, bustling, stunning, breathtaking, iconic, elevated, curated, seamless). Replace them with the specific thing.',
-    '• Use contractions where the register allows. Let the prose breathe like a person wrote it: an occasional short fragment, a dry aside, a real opinion.',
-    '• Keep every proper noun, number, date and quote exactly as given. Invent nothing.',
+    '• Keep every proper noun, number, date and quote exactly as given. Invent nothing: no scene, no mood, no opinion that the material does not give.',
     (language === 'English'
       ? '• Write in British English spelling and Cyprus usage.'
       : `• Write idiomatic, publication-grade ${language} as a native journalist would — never a translated-sounding or machine-sounding rendering, and avoid ${language}’s own AI/marketing clichés.`),
@@ -213,12 +215,12 @@ export function stripHtml(input: string): string {
 export function polishSystem(franchise?: string | null, kind?: string | null, tells: string[] = [], language = 'English'): string {
   return [
     `You are the executive editor of Cyprus Lifestyle, editing a ${language} piece to the highest publishable standard.`,
-    'Rewrite the article below so it reads as if written by a top human staff writer and is undetectable as AI. ' +
-      'Sharpen the prose, fix any flat or generic passages, and make the rhythm human. Keep EVERY fact, name, ' +
-      'number, date and quotation exactly as they are — change wording and structure, never the facts.',
+    'Edit the article below so that it reads as carefully edited professional journalism. ' +
+      'Sharpen the prose and fix any flat or generic passage. You edit for quality, never to defeat detectors: no tricks, no deliberate roughness, no invented personality. ' +
+      'Keep EVERY fact, name, number, date and quotation exactly as they are — change wording and structure, never the facts.',
     '',
     craftBlock(franchise, kind, language),
-    tells.length ? `\nThese AI tells were detected and MUST be gone from your version: ${tells.join('; ')}.` : '',
+    tells.length ? `\nFOUND IN THIS TEXT (each of these must be gone from your version): ${tells.join('; ')}.` : '',
     '',
     'Return ONLY JSON: {"title":"<the headline>","body_md":"<the edited article body, in the SAME format you received it — markdown or HTML>"}.',
   ].join('\n');
@@ -229,7 +231,7 @@ export function polishSystem(franchise?: string | null, kind?: string | null, te
 // piece AS A NATIVE writer of the target language, keeping every fact and the section
 // structure but rebuilding the prose in that language's own rhythm. Pure; the model
 // call lives in generate.ts (transcreatePiece). Reuses antiAiRules (which carries the
-// BURSTINESS directive) so the output obeys the same anti-AI contract.
+// prose standard) so the output obeys the same contract.
 export function transcreateSystem(language = 'English'): string {
   const L = language.toUpperCase();
   return [

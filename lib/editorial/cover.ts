@@ -78,7 +78,7 @@ function cap(str: string): string {
 
 // A Cyprus-grounded, guard-railed prompt for the AI illustrator. Deterministic
 // (no model call) so it is testable; aiCover prefers the edge function's grounded
-// Gemini brief when available and falls back to this.
+// visual brief when available and falls back to this.
 export function aiPrompt(input: CoverInput): string {
   const place = input.county && input.county.toLowerCase() !== 'national'
     ? `${cap(input.county)}, Cyprus`

@@ -64,6 +64,8 @@ ok('isDesk', isDesk('news') && !isDesk('sport'));
 const sys = voiceSystem({ lang: 'en', desk: 'food' });
 ok('the brief carries integrity, craft laws and the desk', INTEGRITY.every((x) => sys.includes(x)) && CRAFT_LAWS.every((x) => sys.includes(x)) && sys.includes(DESK_SPEC.food.brief) && sys.includes('"title"'));
 ok('the brief forbids enumerations and conclusions', /NO enumerations/.test(sys) && /NO conclusion/.test(sys));
+ok('the brief carries no rhythm quota and no promise of undetectability', !/at least (three|two|four)|under 8|over 25|standard deviation|verbless fragment|undetect/i.test(sys) && /follow the meaning/.test(sys));
+ok('the brief edits for quality, never to defeat detectors', /never to defeat detectors/.test(sys));
 const usr = reviseUser({ title: 'T', body: '<p>b</p>', tells: dirty.tells, pass: 1, notes: ['too close'] });
 ok('the user message lists what was found and the text', usr.includes('FOUND IN THIS TEXT') && usr.includes('too close') && usr.includes('<p>b</p>') && usr.includes('full rewrite'));
 ok('later passes are targeted', reviseUser({ title: 'T', body: 'b', tells: [], pass: 2 }).includes('Change only the passages'));
