@@ -21,7 +21,7 @@ export interface DeskSpec { label: string; minWords: number; targetWords: number
 export const DESK_SPEC: Record<Desk, DeskSpec> = {
   news: {
     label: 'News (Cyprus and the world)', minWords: 100, targetWords: 100,
-    brief: 'Wire discipline with a magazine pulse. The first sentence carries the news itself: who did what, where, with which number. Then the reason it matters on this island, then the context a reader lacks, then what happens next. Attribute every claim to a named source and rotate the attribution verbs. A flat, precise lead beats a clever one.',
+    brief: 'Wire discipline with a magazine pulse. The first sentence carries the news itself: who did what, where, with which number. Then the reason it matters on this island, then the context a reader lacks, then what happens next. Name the people and institutions who act or speak in the story (the minister said, the council approved), but never the outlet, agency or report the facts came from: the piece stands as our own reporting. Rotate the verbs. A flat, precise lead beats a clever one.',
     ending: 'End on the next dated step or the hardest remaining fact, never on a moral.',
   },
   business: {
@@ -31,7 +31,7 @@ export const DESK_SPEC: Record<Desk, DeskSpec> = {
   },
   economy: {
     label: 'Economy and markets', minWords: 100, targetWords: 100,
-    brief: 'Analytical, sourced, sceptical. State the data point, its source and date, the comparison (against last year, against the euro-area figure), then the reading and its limits. Distinguish what is measured from what is forecast. Charts in words: one comparison per paragraph.',
+    brief: 'Analytical, sourced, sceptical. State the data point and its date (never the outlet or consultancy it came from), the comparison (against last year, against the euro-area figure), then the reading and its limits. Distinguish what is measured from what is forecast. Charts in words: one comparison per paragraph.',
     ending: 'End on what would change the reading, as a testable condition.',
   },
   property_legal: {

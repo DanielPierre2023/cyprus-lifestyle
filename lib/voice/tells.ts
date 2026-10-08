@@ -7,6 +7,7 @@
 import type { Lang, AiTell } from '@/lib/antiAi';
 import { normalizeFor, prepare } from '@/lib/antiAiLang';
 import { voiceData } from '@/lib/voice/data';
+import { attributionSpecs } from '@/lib/voice/attribution';
 import type { TellSpec } from '@/lib/voice/types';
 
 const L = String.raw`\p{L}\p{M}\p{N}`;
@@ -30,7 +31,7 @@ export function compiledTells(lang: Lang): { spec: TellSpec; re: RegExp }[] {
   let v = CACHE.get(lang);
   if (!v) {
     v = [];
-    for (const spec of voiceData(lang).tells) {
+    for (const spec of [...voiceData(lang).tells, ...attributionSpecs(lang)]) {
       const re = compileTell(spec, lang);
       if (re) v.push({ spec, re });
     }
@@ -41,7 +42,7 @@ export function compiledTells(lang: Lang): { spec: TellSpec; re: RegExp }[] {
 
 /** Specs that failed to compile (used by the unit tests: this list must stay empty). */
 export function tellCompileErrors(lang: Lang): string[] {
-  return voiceData(lang).tells.filter((t) => !compileTell(t, lang)).map((t) => t.key);
+  return [...voiceData(lang).tells, ...attributionSpecs(lang)].filter((t) => !compileTell(t, lang)).map((t) => t.key);
 }
 
 function sampleAt(view: string, idx: number, len: number): string {

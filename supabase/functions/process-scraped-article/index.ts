@@ -690,20 +690,20 @@ const RULES = `ABSOLUTE RULES FOR NYT/WaPo-GRADE JOURNALISM:
 FORMAT: return the body as clean semantic HTML — <p>, and <h2>/<h3>/<blockquote>/<ul><li> only where a long piece needs them. No <h1>, no inline styles, no images.`;
 
 const CL_STANDARDS =
-  `CYPRUS LIFESTYLE STANDARDS: we re-report, never republish — every fact is our own sentence. We attribute to the original source of record ("according to the Cyprus Mail", "per the finance ministry"), never to ourselves. We write for an international, moneyed, well-travelled Cyprus audience. Restraint over hype; one exact figure beats three adjectives.`;
+  `CYPRUS LIFESTYLE STANDARDS: we re-report, never republish — every fact is our own sentence. The piece stands as OUR OWN reporting, like every article in a real magazine: we never name the outlet, agency, consultancy, reviewer or report a fact came from ("according to the Cyprus Mail", "reported by Reuters", "PwC says", "sources say" are all banned in every language), and the writer never talks about the research ("I found", "could not be confirmed"). People and institutions appear only as actors in the story (the minister said, the council approved), never as a citation of where we read it. We write for an international, moneyed, well-travelled Cyprus audience. Restraint over hype; one exact figure beats three adjectives.`;
 
 const FABRICATION_HARD_STOP = `============================================
 FABRICATION HARD STOP — READ FIRST, OBEY ABSOLUTELY
 ============================================
 You will NOT invent quotes. You will NOT invent sources. This overrides every other instruction.
 ATTRIBUTION vs FABRICATION: naming the institution behind a finding is correct ("inspectors found the firm lacked a permit"). Putting invented words in a mouth is a firing offence ("'we found it,' a spokesperson said").
-RULES: (1) Count the direct quotes in the source; your article has AT MOST that many. (2) If a source is not directly quoted, attribute without quotation marks. (3) Placeholder attributions ("a representative", "an official", "sources said") are fabrication — never pair them with quotation marks unless the exact words are in the source. (4) Before any pair of quotation marks: are these EXACT WORDS in the source, attributed to a NAMED person or institution? No → rewrite without quotation marks.`;
+RULES: (1) Count the direct quotes in the source; your article has AT MOST that many. (2) If a statement is not a verbatim quotation, paraphrase it without quotation marks and attribute it to the NAMED person or institution who made it, never to a publication. (3) Placeholder attributions ("a representative", "an official", "sources said") are fabrication — never pair them with quotation marks unless the exact words are in the source. (4) Before any pair of quotation marks: are these EXACT WORDS in the source, attributed to a NAMED person or institution? No → rewrite without quotation marks.`;
 
 const ANTI_HALLUCINATION =
   `ANTI-HALLUCINATION — HARDEST RULE: write ONLY facts present in the FACTS list, the verified background, or the title. NEVER invent named witnesses, direct quotes, institutional responses, statistics, geographic claims, causal explanations, or "next steps" that the source did not establish. Before each sentence, point silently to the source fact behind it; if you cannot, cut the sentence. If short of target after honestly developing every fact, submit the shorter article. Do not invent.`;
 
 const ANTI_PADDING =
-  `ANTI-PADDING — word count is earned by facts, never recycled. Deepen existing paragraphs (more attribution, named consequence, precedent) rather than adding speculation. Every paragraph carries a specific fact. Cut any paragraph of AI hand-wringing ("officials warn", "the region continues to adapt", "the future will likely..."). If the material supports only a short article, write the honest shorter length.`;
+  `ANTI-PADDING — word count is earned by facts, never recycled. Deepen existing paragraphs (named consequence, precedent, exact figures) rather than adding speculation. Every paragraph carries a specific fact. Cut any paragraph of AI hand-wringing ("officials warn", "the region continues to adapt", "the future will likely..."). If the material supports only a short article, write the honest shorter length.`;
 
 const LOCAL_AUDIENCE_CY =
   `LOCAL AUDIENCE DISCIPLINE — the reader knows Cyprus: the districts (Nicosia, Limassol, Larnaca, Famagusta, Paphos, Kyrenia), that Limassol is the business and marina city, Akamas the wild peninsula near Paphos, Troodos the mountains, the CSE the Cyprus Stock Exchange, Commandaria the historic wine. Do not over-explain what a well-travelled Cyprus reader knows. Do add light context for non-Cyprus entities (a foreign fund, a Gulf vehicle, an EU mechanism). Never invent local colour the source did not provide.`;
@@ -712,15 +712,15 @@ const ZERO_COPY =
   `ANTI-PLAGIARISM (MANDATORY — VIOLATION = ARTICLE REJECTED): the brief may contain a full source article. Reproduce NOTHING from it. Zero copied or synonym-swapped sentences; zero paragraph structure from the source; zero of its phrases, transitions or lede. METHOD: extract only atomic facts (who/what/when/where/why), forget the source's wording and order, and write from the facts as if learned in a 30-second briefing, choosing a NEW angle. TEST: placed next to the source, no sentence resembles it and no run of 5+ words repeats. This applies even when your language is the SAME as the source's.`;
 
 const FABRICATION_BAN =
-  `FABRICATION BAN: Cyprus Lifestyle contacted no one for this article. Never write "sources told Cyprus Lifestyle", "in an interview with Cyprus Lifestyle", "experts consulted by us", or attribute anything to us. Never invent quotes or the names of analysts/experts not in the source. Correct attribution is "according to reports by [original source]" or "per public statements by X". If the exact source is unknown, "according to press reports". Write ONLY what the brief supports.`;
+  `FABRICATION BAN: Cyprus Lifestyle contacted no one for this article. Never write "sources told Cyprus Lifestyle", "in an interview with Cyprus Lifestyle", "experts consulted by us", or attribute anything to us. Never invent quotes or the names of analysts/experts not in the source. Do not cite reports, press or outlets at all: state each verified fact in our own voice, and attribute only statements to the named person or institution that made them (the minister said, the company announced). Write ONLY what the brief supports.`;
 
 const MASTER_HUMANIZING = `MASTER HUMANISING CONSTRAINTS (apply in every language):
 - PLAGIARISM: never reuse more than 3 consecutive words from the source; re-conceptualise every fact in your own structure.
 - SENTENCE RHYTHM (AI fingerprint #1): include several sentences under 8 words AND several over 25; never two consecutive sentences within 5 words of each other in length; at least one verbless fragment. Do NOT alternate mechanically short→long→short — that regularity IS the AI signature.
 - PARAGRAPH STRUCTURE: no two consecutive paragraphs begin the same way; include at least one 1-2 sentence paragraph AND one of 5+ sentences; alternate fact-dense with interpretive.
-- ATTRIBUTION VARIETY: never the same attribution verb twice in a row; at most twice per article "according to"/its equivalent; vary placement.
+- NO SOURCE CITATIONS: never name the outlet, agency, consultancy, reviewer or report a fact came from; never write "according to", "reported by", "sources say" or their equivalents in any language; never write about the research. Speech verbs for people who speak in the story: vary them, never the same verb twice in a row.
 - STRUCTURAL BANS: three-item lists max once; ban "not only… but also" and negative parallelism ("it's not X, it's Y"); ban symmetric "on one hand… on the other" unless it carries a real sourced counter-argument; ban discourse-marker openers (Moreover/Furthermore/Notably/Indeed/Ultimately and their equivalents). EM/EN DASH BAN: zero em/en dashes anywhere — use commas, full stops or parentheses.
-- CLOSER BAN: end on the last attributed fact (a number, a decision, a named position). Never end on a prediction without a named source, a rhetorical question, a "raises questions about", a restated summary, or a community-reaction placeholder.
+- CLOSER BAN: end on the last concrete fact (a number, a date, a decision, a named position). Never end on a prediction, a rhetorical question, a "raises questions about", a restated summary, or a community-reaction placeholder.
 - CONCRETENESS: use the specialist's precise term; once chosen, keep it — do not synonym-cycle.
 - HUMAN DISFLUENCY (small doses): at least one parenthetical aside a journalist would insert; at least one callback to an earlier fact.
 - META-COMMENTARY BAN: never describe the article ("this piece explores", "in this article"). The editor signature and register are instructions about method, never phrases to print.`;
@@ -746,17 +746,17 @@ const PROOF_CRAFT =
 
 // P1-5 — the anti-detector rewrite instruction (used by the humanness loop).
 const PERPLEXITY_CRAFT =
-  `vary sentence length hard (some under 8 words, some over 25; never two similar-length sentences in a row; allow one verbless fragment); vary how each paragraph opens; KEEP the concrete, specific, slightly unexpected details already in the text rather than smoothing them into generic phrasing; use at most one "according to"-type attribution and delete any repeated hedge; remove discourse-marker openers (Moreover / Furthermore / Notably / Indeed / Ultimately and their equivalents in this language); no summary or "raises questions" closer — end on a concrete fact.`;
+  `vary sentence length hard (some under 8 words, some over 25; never two similar-length sentences in a row; allow one verbless fragment); vary how each paragraph opens; KEEP the concrete, specific, slightly unexpected details already in the text rather than smoothing them into generic phrasing; use no "according to"-type attribution and name no outlet or report; delete any repeated hedge; remove discourse-marker openers (Moreover / Furthermore / Notably / Indeed / Ultimately and their equivalents in this language); no summary or "raises questions" closer — end on a concrete fact.`;
 
 const CATEGORY_DEPTH: Record<string, string> = {
   cyprus:
-    "DEPTH: name every actor and institution; quantify the stakes; explain the consequence for the island; at least one attributed position; reference the timeline.",
+    "DEPTH: name every actor and institution; quantify the stakes; explain the consequence for the island; at least one named position (who holds it, in what role); reference the timeline.",
   business:
     "DEPTH: specific figures (€, revenue, market cap, growth %); name companies, funds, executives and titles; market impact in numbers; institutional reaction (CSE, finance ministry, Central Bank).",
   property:
     "DEPTH: name the development, district, architect/developer, price band per m², yield or residency angle; honest appraisal over sales copy; comparable schemes for context.",
   relocation:
-    "DEPTH: name the exact scheme, permit or status and the authority; the concrete numbers (thresholds, timelines, fees, tax rates, holding periods) and the eligibility conditions; what it means in practice for a mover; note when a rule changed and the source.",
+    "DEPTH: name the exact scheme, permit or status and the authority; the concrete numbers (thresholds, timelines, fees, tax rates, holding periods) and the eligibility conditions; what it means in practice for a mover; note when a rule changed and from which date.",
   agenda:
     "DEPTH: name the event, venue, town and dates precisely; the times, ticket price and how to book/attend; who is performing or exhibiting; one line on why it is worth going.",
   people:
@@ -770,7 +770,7 @@ const CATEGORY_DEPTH: Record<string, string> = {
   world:
     "DEPTH: read the region through a Cyprus lens (Greece, the Levant, the Gulf, the EU); name the actors and the mechanism; state plainly why it matters to Cyprus.",
   news:
-    "DEPTH: name every actor and institution, quantify the stakes, give at least one attributed position, explain the consequence concretely.",
+    "DEPTH: name every actor and institution, quantify the stakes, give at least one named position (who holds it, in what role), explain the consequence concretely.",
 };
 
 // ── per-language NATIVE composition rules (the quality core) ──────────────────
@@ -1199,6 +1199,19 @@ function htmlParagraphs(html: string): string[] {
   return flat ? [flat] : [];
 }
 
+// SOURCE TALK: a published piece never names where its facts came from (outlet, agency, consultancy, reviewer, encyclopaedia),
+// never writes "according to" / "reported by" or their equivalents, and the writer never talks about the research.
+// People and institutions acting or speaking inside the story are fine. Mirrors lib/voice/attribution.ts in the app.
+const SOURCE_TALK_RE = new RegExp(
+  [
+    "cyprus mail|in-cyprus|philenews|stockwatch|financial mirror|cyprus times|reuters|associated press|\\bthe ap\\b|bloomberg|financial times|the guardian|the telegraph|new york times|washington post|wall street journal|\\bbbc\\b|\\bcnn\\b|al jazeera|euronews|forbes|time out|decanter|wikipedia|\\bpwc\\b|deloitte|kpmg|kpler|breakingviews|lonely planet|tripadvisor|welcome magazine",
+    "according to|as (?:reported|stated|cited) (?:by|in)|reported (?:by|in)|(?:was|were|has been|had been) reported|(?:media|press|newspaper) reports?|press release",
+    "\\bi (?:found|could not|couldn'?t|read|checked|verified|looked|searched)\\b|\\bwe (?:found|could not|checked|verified)\\b|sources (?:say|differ|disagree|agree)|(?:could|can) not be (?:verified|confirmed)",
+    "laut (?:dem|der|den|des|einer|einem|angaben|berichten|medien|presse)|nach angaben|zufolge|według(?! (?:stanu|wzrostu|wieku))|jak (?:podaje|informuje|pisze|donosi)|potrivit|conform(?! (?:legii|cu|prevederilor))|relatează|по данным|по информации|согласно(?! (?:закон|правил|договор))|как (?:сообщает|пишет|сообщили)|со ссылкой на|σύμφωνα με|όπως (?:αναφέρει|ανέφερε|γράφει|μεταδίδει)|ρόιτερς|βικιπαίδεια|وفقا ل|وفقًا ل|نقلا عن|كما ذكرت|كما أفادت|رويترز|ويكيبيديا",
+  ].join("|"),
+  "gi",
+);
+
 // AI-tell / humanness scorer (multi-language)
 interface HumannessReport {
   score: number;
@@ -1330,6 +1343,11 @@ function measureHumanness(html: string, lang: Lang): HumannessReport {
   if ((text.match(/[—–]/g) || []).length > 0) {
     flags.push("EM_DASH");
     score -= 8;
+  }
+  const sourceTalk = (text.match(SOURCE_TALK_RE) || []).length;
+  if (sourceTalk > 0) {
+    flags.push(`SOURCE_TALK:${sourceTalk}`);
+    score -= 30;
   }
   return { score: Math.max(0, Math.min(100, score)), flags };
 }
@@ -1939,6 +1957,10 @@ function buildHumannessRevisionPrompt(flags: string[]): string {
       out.push(
         "SPECULATIVE_ENDING: cut speculation from the ending; close on the last verifiable fact or attributed statement.",
       );
+    } else if (f.startsWith("SOURCE_TALK")) {
+      out.push(
+        "SOURCE_TALK: remove every mention of where the facts came from (outlets, agencies, consultancies, reviewers, reports, 'according to', 'reported by', 'sources say', and any talk about research). State the fact in the magazine's own voice. People and institutions may still act and speak inside the story.",
+      );
     } else if (f.startsWith("AI_VOCAB")) {
       out.push("AI_VOCAB: replace AI-signature vocabulary with concrete, plain words in this language.");
     } else if (f.startsWith("EM_DASH")) {
@@ -2126,6 +2148,8 @@ async function expandToDepth(
   editor: EditorKey,
   budgetMs: number,
 ): Promise<void> {
+  // DISABLED on purpose: length follows the verified facts. Deepening to a word floor is what made the model pad and invent.
+  if (true) return;
   if (!b.ok || budgetMs < 25000 || b.wc >= arch.minWords) return;
   const target = Math.min(arch.minWords + 150, Math.round(arch.minWords * 1.4));
   const system = `You are a senior editor at ${deskBrief(editor)}, deepening a ${
@@ -2297,7 +2321,7 @@ function getArchetypeBudget(t: string): ArchetypeBudget {
         tokenBudget: 7000,
         label: "news",
         hint:
-          "ARCHETYPE: news article. Natural length 350-900 words. Inverted pyramid; two or more attributed sources where the material supports it.",
+          "ARCHETYPE: news article. Natural length 350-900 words. Inverted pyramid; the facts confirmed in more than one place in the research, no outlet or report named.",
       };
   }
 }

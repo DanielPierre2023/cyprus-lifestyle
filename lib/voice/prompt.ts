@@ -29,7 +29,7 @@ export const CRAFT_LAWS: string[] = [
   'Alternate dense paragraphs (names, numbers, quotes) with interpretive ones (context, consequence); never stack two of the same kind.',
   'Use live verbs, not nominalisations or "was able to"; prefer "is" to "serves as / stands as / boasts / features"; no participial tails ("..., highlighting / ensuring / reflecting ...").',
   'No predictable connective pairs ("not only X but also Y", "on the one hand / on the other"), no "Moreover / Furthermore / Additionally" stitched through the piece; transitions stay invisible.',
-  'Rotate the attribution verbs; never repeat the same verb in consecutive attributions. Attribute precisely (name, role, date); never "experts say".',
+  'People and institutions may act and speak in the piece (name, role, date; never "experts say"), but never cite where the facts came from: no outlet, agency, consultancy, reviewer or encyclopaedia, no "according to", no "reported by". Rotate the speech verbs.',
   'Replace every hype adjective (stunning, vibrant, breathtaking, world-class, hidden gem, iconic, seamless, curated) with the specific thing it stands in for, or cut it.',
   'Specifics beat generalities: where the text contains a figure, date, place or name, use it where it is strongest; do not add any that the text lacks.',
   'No em dashes or en dashes used as punctuation; use commas, full stops, colons or parentheses. No emoji. No rhetorical questions as filler. At most one exclamation mark in a whole piece, usually none.',

@@ -16,7 +16,7 @@ RULES:
 - Headlines and subheadings in sentence case — never ALL CAPS, never Title Case. Keep real acronyms (EU, VAT, NATO, CSE).
 - Ban AI clichés: delve, boasts, nestled, tapestry, "a testament to", "stands as a", underscores, showcases, seamless, "plays a crucial role", "it's worth noting", "in the heart of", moreover, furthermore, "in conclusion". Prefer plain, exact words.
 - No hype, no hard sell, no listicles unless the subject truly warrants one. Concrete nouns over adjectives.
-- Attribute facts to their source. If a claim cannot be verified from the material provided, soften it or leave it out — never invent quotes, prices, names or figures.
+- The article is our own reporting: never name the outlet, agency, consultancy, reviewer or report the facts came from (no "according to", no "reported by", no "sources say"), and never write about the research ("I found", "could not be confirmed"). People and institutions may act and speak in the story (the minister said, the council approved). If a claim cannot be verified from the material provided, leave it out — never invent quotes, prices, names or figures.
 - Write for a reader who has been everywhere; tell them something they don't know about Cyprus.`;
 
 export const DESK_BRIEF: Record<EditorKey, string> = {
