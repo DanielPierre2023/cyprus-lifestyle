@@ -39,7 +39,7 @@ The code is written to keep working (and log) if a migration has not been run ye
 ## 3. New environment variables (all documented in `.env.example`)
 
 `ENRICH_DISABLE_QUERY_KEY` · `WHATSAPP_APP_SECRET` (required) · `TELEGRAM_SECRET_TOKEN` (required) ·
-`AI_DAILY_BUDGET_USD` (default 40) · `AI_MONTHLY_BUDGET_USD` (default 400) · `AI_KILL_SWITCH` ·
+`AI_DAILY_BUDGET_USD` (default 6) · `AI_MONTHLY_BUDGET_USD` (default 60) · `AI_KILL_SWITCH` ·
 `AI_PUBLIC_DAILY_CALLS` (default 6000) · `AI_PUBLIC_DAILY_TTS` (default 600). `0` = no cap.
 **Check the defaults against your real monthly AI spend before deploying** — when a cap is reached, the editorial
 desk and the concierge stop answering until the next window (or until you raise the cap).
@@ -64,7 +64,7 @@ desk and the concierge stop answering until the next window (or until you raise 
 
 * Existing members whose stored browser id is shorter than 32 characters (only possible from an old fallback) must use "email me a link" once.
 * Restoring moves the membership to the browser that confirms; the previous browser loses member status.
-* The spend cap counts what is logged in `ai_spend_log` (desk, editorial, translation, social). Concierge/voice are protected by the call ceilings, not dollars. The Supabase edge function `process-scraped-article` is guarded at its Next entry points (admin/cron), not inside the function itself.
+* The spend cap counts what is logged in `ai_spend_log` (desk, editorial, translation, social). Concierge/voice are protected by the call ceilings, not dollars. The Supabase edge functions `process-scraped-article` and `ai-editorial` check the same budget and kill switch inside the function (before the first model call) and write every call to `ai_spend_log` themselves.
 * Refunds/disputes are logged, not yet acted on. Cancelled advertisers still keep benefits (de-provisioning, VAT/invoices, Customer Portal are Phase 1).
 * `fulfil_ad_order()` still auto-sets "verified" at payment (SQL function change needs your live definition — Phase 1).
 * Fresh-environment rebuild is still impossible from the repo (missing `directory_listings` migration) — Phase 1.

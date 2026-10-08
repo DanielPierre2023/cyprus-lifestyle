@@ -15,7 +15,7 @@
 | `/api/admin/voice` | report: how many editions pass, the 15 worst, recent runs |
 | `/api/admin/voice?dry=1` | free: score, tells and cost estimate of the next edition |
 | `/api/admin/voice?dry=1&id=…&lang=en` | the same for a chosen edition |
-| `/api/admin/voice?run=1&id=…&lang=en` | repair that one edition now (one model call, ≈ US$0.03–0.09) |
+| `/api/admin/voice?run=1&id=…&lang=en` | repair that one edition now (one to three model calls on OpenAI gpt-6-luna, a few cents at most; the exact amount is in the AI spend log) |
 | `?on=1` / `?off=1` | switch the background worker on / off (default OFF) |
 | `?cap=40` | editions per day (default 60) |
 

@@ -1,6 +1,6 @@
 # Example scheduled run for the generic scraper.
 # Copy to .github/workflows/scraper.yml in a repo that holds tools/scraper, and add
-# repo secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (+ CLAUDE_API_KEY if used).
+# repo secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (+ OPENAI_API_KEY if used).
 name: cl-scraper
 
 on:
@@ -28,7 +28,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           python scrape.py --site "${{ github.event.inputs.site || 'cyprusatlas' }}" \
             --query "${{ github.event.inputs.query || '' }}" \

@@ -36,7 +36,7 @@ import unicodedata
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
-import requests  # our own Supabase / Anthropic APIs only
+import requests  # our own Supabase / OpenAI APIs only
 
 try:
     import yaml
@@ -205,8 +205,14 @@ def _price(o: dict):
 
 
 # ── AI fallback (optional) ───────────────────────────────────────────────────
+def _ai_model() -> str:
+    """gpt-6-luna unless OPENAI_MODEL_LUNA names another; gpt-5.5 is never used (house rule)."""
+    m = (os.environ.get("OPENAI_MODEL_LUNA") or "").strip()
+    return m if m and not re.search(r"gpt-5\.5", m, re.I) else "gpt-6-luna"
+
+
 def ai_fill(name: str, body: str, target: str) -> dict:
-    key = os.environ.get("CLAUDE_API_KEY")
+    key = os.environ.get("OPENAI_API_KEY")
     if not key or len(body) < 80:
         return {}
     if target == "events":
@@ -221,13 +227,21 @@ def ai_fill(name: str, body: str, target: str) -> dict:
                '"dev_status":"planning|under-construction|ready|sold-out"|null,"completion":str|null}. '
                'Only facts present; EUR integers for prices; never invent.')
     try:
-        r = requests.post("https://api.anthropic.com/v1/messages",
-                          headers={"content-type": "application/json", "anthropic-version": "2023-06-01", "x-api-key": key},
-                          json={"model": os.environ.get("SONNET_MODEL", "claude-haiku-4-5-20251001"), "max_tokens": 600,
-                                "system": "Extract ONLY facts present in the text; return ONLY the JSON. " + ask,
-                                "messages": [{"role": "user", "content": f"SUBJECT: {name}\n\nTEXT:\n{body[:8000]}"}]},
-                          timeout=45)
-        txt = "".join(b.get("text", "") for b in r.json().get("content", []) if b.get("type") == "text")
+        # Responses API, JSON mode. Reasoning tokens count against max_output_tokens, so the cap leaves room for them.
+        r = requests.post("https://api.openai.com/v1/responses",
+                          headers={"content-type": "application/json", "authorization": f"Bearer {key}"},
+                          json={"model": _ai_model(),
+                                "instructions": "Extract ONLY facts present in the text; return ONLY the JSON object. " + ask,
+                                "input": f"SUBJECT: {name}\n\nTEXT:\n{body[:8000]}",
+                                "reasoning": {"effort": "medium"},
+                                "max_output_tokens": 9000,
+                                "text": {"format": {"type": "json_object"}}},
+                          timeout=90)
+        data = r.json()
+        if data.get("status") != "completed":
+            return {}
+        txt = "".join(c.get("text", "") for o in data.get("output", []) if o.get("type") == "message"
+                      for c in o.get("content", []) if c.get("type") == "output_text")
         return json.loads(re.sub(r"^```json\s*|\s*```$", "", txt.strip()))
     except Exception:
         return {}

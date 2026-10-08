@@ -6,7 +6,7 @@
   * **Facebook:** a hook line, a short description, 3 relevant hashtags, and the article link (Facebook builds the preview card from the page's own tags).
   * **Instagram:** a hook (first 125 characters are what readers see), a short keyword-rich description, "link in bio" in the article's language, 5 hashtags, **alt text**, and a 4:5 picture (the article's own cover, smart-cropped; the branded text card if the cover is not ours).
 * Language = the language the article was written in (English if that edition has no headline). Sponsored articles carry a "Sponsored" label in that language.
-* Written by AI (Claude Haiku, a fraction of a cent per post). If the AI budget/kill-switch is off the post still goes out with the headline and description.
+* Written by AI (OpenAI gpt-6-luna, a fraction of a cent per post). If the AI budget/kill-switch is off the post still goes out with the headline and description.
 * Calm by design: at most **8 Facebook / 4 Instagram posts a day**, at least **30 minutes apart**, only articles **less than 36 hours old** (editable in Admin → Social). Temporary Meta errors are retried (10 min, 20, 40 …, 5 tries); token/permission errors stop and show in red.
 * An article marked **"skip_facebook"** is never posted. Switch the whole thing off with the **Auto-post** tick in Admin → Social.
 

@@ -1,26 +1,30 @@
 # Cyprus Lifestyle — Architecture
 
-One Next.js app on **Vercel** + a **Supabase** Postgres database. The AI newsroom
-runs as Next.js API routes driven by Vercel Cron (not Supabase Edge Functions),
-so there is a single repo and a single deploy, and Supabase is used only as the
-database (managed in the SQL Editor — no CLI). The pipeline, schema and admin are
-a faithful port of Transilvania Times, extended to four languages.
+One Next.js app on **Vercel** + a **Supabase** Postgres database. The article desk
+(`process-scraped-article`), the Editorial Studio (`ai-editorial`) and the cover-photo
+brief (`search-cover-photos`) run as Supabase Edge Functions, because they need more
+than the 60 seconds a Vercel route has; everything else is a Next.js API route driven
+by Vercel Cron or pg_cron. All text is written by OpenAI (`gpt-6-luna`, routed by
+`lib/journalism/models.ts`). The two journalism edge functions are GENERATED from
+`scripts/edge/*.src.ts` and the shared modules in `lib/journalism` and `lib/voice`
+(`node scripts/build-edge-journalism.mjs`; a test fails if they are out of date).
 
 ## Data flow
 ```
 rss_sources ──▶ [cron/scrape] ──▶ scraped_articles (status=scraped)
                                         │  de-duped, prose-cleaned
                                         ▼
-                             [cron/process]  (per-article lock via rewrite_jobs)
-                                        │  desk 1: draft EN  ─ Claude Sonnet
-                                        │  desk 2b: translate → EL · RO · AR (structure-preserving)
-                                        │  anti-AI humanizer + AI-tell score
-                                        ▼
-                    commit_scraper_blog_post(RPC) ──▶ blog_posts (draft, 4 languages)
+                             [cron/process] ─▶ edge function process-scraped-article
+                                        │  fact core (one call) → relevance gate (Cyprus in the story)
+                                        │  SEVEN native editions EN·EL·RO·AR·DE·PL·RU, each from the core
+                                        │  originality gate → sub-editor driven by the voice engine's findings
+                                        │  short fields (title, excerpt, SEO) → fact check per language → repair
+                                        ▼  publish bar: all seven pass, else saved as a draft with the reasons
+                    commit_scraper_blog_post(RPC) ──▶ blog_posts (7 languages)
                                         │                └▶ writeback to scraped_articles
                      human approves in /admin  ──▶ status=published
                                         ▼
-      web (en/el/ro/ar, RTL for ar) · [cron/social] · [cron/newsletter-weekly]
+      web (en/el/ro/ar/de/pl/ru, RTL for ar) · [cron/social] · [cron/newsletter-weekly]
 
       every model call ─▶ ai_spend_log      every desk run ─▶ generation_logs
 ```

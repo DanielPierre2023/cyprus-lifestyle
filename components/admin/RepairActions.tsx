@@ -2,7 +2,7 @@
 import { useState } from 'react';
 
 // One-click repair for a single edition, from the /admin/quality worst-offenders
-// table. "Clean" runs the language-aware humaniser + proofread (or a Sonnet polish
+// table. "Clean" runs the language-aware humaniser + proofread (or an editorial polish
 // for source editions); "Rewrite" re-reports the edition natively from the source
 // (for translations that read poorly however much they're cleaned). Admin
 // session-gated route; reloads on success so the score updates.

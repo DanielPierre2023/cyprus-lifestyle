@@ -34,7 +34,7 @@ export default function PlannerControls({ settings }: { settings: Settings }) {
         if (d.ideasCreated === 0) { const e = results.find((x) => x.error); if (e?.error) m += ` — ${e.error}`; }
         if (results.some((x) => x.webFallback)) m += ' · web search unavailable, used offline research';
         else if (results.some((x) => x.webSource === 'tavily')) m += ' · researched via Tavily';
-        else if (results.some((x) => x.webSource === 'anthropic')) m += ' · researched via Anthropic web search';
+        else if (results.some((x) => x.webSource === 'search')) m += ' · researched via live web search';
         setMsg(m);
         if (!dryRun && d.ideasCreated) setTimeout(() => location.reload(), 1200);
       } else setMsg(d.error || 'Planner failed.');

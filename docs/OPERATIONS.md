@@ -5,9 +5,11 @@
 |---|---|---|
 | Daily job: queues the day's background work, prepares the Friday newsletter drafts, reconciles members, runs the health check | Vercel cron `/api/cron/tick` (vercel.json) | daily 06:00 UTC |
 | `cl-worker`: background queue, approved newsletters, Facebook/Instagram posts, health check | Supabase pg_cron → `/api/cron/worker` | every 3 min |
-| `cl-process`: AI desk (only acts if "AI processor" is ON) | Supabase pg_cron → `/api/cron/process` | every 15 min |
+| `cl-process`: AI desk (only acts if "AI processor" is ON). The route only wakes the edge function `process-scraped-article`, which does the work in the background (seven languages, checks, up to about three minutes per article) | Supabase pg_cron → `/api/cron/process` → edge function | every 15 min |
 | `cyprus-scrape-rss`: RSS scraper (only acts if "RSS scraper" is ON) | Supabase pg_cron → edge function | every 3 h |
 | `enrich-slow-all`: slow directory enrichment | Supabase pg_cron → edge function | daily 03:00 |
+
+**Throughput of the AI desk.** One run takes the oldest unprocessed article and finishes it completely (fact core, seven native editions, sub-editing, fact check, publish bar). A second article is started in the same run only if the first one finished early, so plan for about **one article per run**: four per hour at the 15-minute rhythm. More is possible by shortening the schedule (for example every 5 minutes); the per-article claim (`scraped` → `rewriting`) means two runs never take the same article. The cost per article is visible in Admin → AI (spend log) after the first runs; see `docs/TEXTPRODUKTION-OPENAI.md`.
 
 ## One-time repair/installation of the Supabase jobs
 1. Supabase → SQL Editor → run `supabase/migrations/20261005170000_ops_cron_health.sql`.

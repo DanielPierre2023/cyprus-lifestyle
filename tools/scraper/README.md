@@ -5,7 +5,7 @@ and writes the results as **drafts** (with provenance) into your Supabase, ready
 to review in the admin. Add a new source by adding a profile — no code changes.
 
 Where a site is tidy, the profile's CSS selectors + schema.org JSON-LD do the
-work; where it isn't, an optional AI pass (`ai_fallback: true` + `CLAUDE_API_KEY`)
+work; where it isn't, an optional AI pass (`ai_fallback: true` + `OPENAI_API_KEY`)
 fills the gaps. A field the page doesn't show is left null — never invented.
 
 ## Destinations (`target:` in a profile)
@@ -57,4 +57,4 @@ concierge, directory pages, map and articles like anything else.
 ## Scheduled runs (optional)
 `ci-example.yml` runs a chosen site on a schedule / on demand via GitHub Actions —
 copy it to `.github/workflows/`, set repo secrets `SUPABASE_URL` and
-`SUPABASE_SERVICE_ROLE_KEY` (and `CLAUDE_API_KEY` if a profile uses AI).
+`SUPABASE_SERVICE_ROLE_KEY` (and `OPENAI_API_KEY` if a profile uses AI).
