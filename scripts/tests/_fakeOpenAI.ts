@@ -1,6 +1,8 @@
 // A scripted OpenAI for the tests of the app's text functions: install it, call the function under test, read what was asked.
 // The real lib/ai.ts + lib/journalism/openai.ts (+ openaiStream.ts) run unchanged; only the network is replaced.
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { requestProblem, rejection, rulesViolations } from './_openaiRules';
+
 export interface FakeCall {
   system: string;
   /** The message to answer: the whole input when it is a string, otherwise the content of the last user message. */
@@ -56,6 +58,10 @@ export function installFakeOpenAI(reply: (c: FakeCall, n: number) => FakeReply) 
     // Embeddings are not part of the scripted conversation: answer "no" so retrieval falls back to keywords.
     if (String(url).includes('/v1/embeddings')) return new Response(JSON.stringify({ error: { message: 'embeddings are not scripted in this test' } }), { status: 500, headers: { 'content-type': 'application/json' } });
     const body = JSON.parse(init.body);
+    // The live API refuses some requests (plain JSON mode without the word "JSON" in the input, a schema that breaks the strict rules, …).
+    // The double refuses them the same way, and restore() fails the test, so such a request can never pass unnoticed again.
+    const problem = requestProblem(body);
+    if (problem) { rulesViolations.push(`${fnLabel(body)}: ${problem}`); return new Response(JSON.stringify(rejection(problem).body), { status: 400, headers: { 'content-type': 'application/json' } }); }
     const c: FakeCall = { system: String(body.instructions || ''), user: userOf(body.input), input: body.input, model: body.model, effort: body.reasoning?.effort, tools: body.tools, format: body.text?.format, cacheKey: body.prompt_cache_key, stream: body.stream === true, body };
     calls.push(c);
     const r = reply(c, calls.length);
@@ -67,5 +73,12 @@ export function installFakeOpenAI(reply: (c: FakeCall, n: number) => FakeReply) 
     if ('stream' in r) return new Response(chunkedBody(sseText(r.stream), r.chunkBytes), { status: 200, headers: { 'content-type': 'text/event-stream' } });
     return new Response(JSON.stringify(r.body), { status: r.status, headers: { 'content-type': 'application/json' } });
   };
-  return { calls, restore: () => { g.fetch = original; } };
+  return {
+    calls,
+    restore: () => {
+      g.fetch = original;
+      if (rulesViolations.length) { const v = rulesViolations.splice(0).join(' | '); throw new Error(`the live OpenAI API would have refused: ${v}`); }
+    },
+  };
 }
+const fnLabel = (body: any): string => `${body?.text?.format?.type ?? 'plain'} request (${String(body?.instructions ?? '').slice(0, 50).replace(/\s+/g, ' ')}…)`;

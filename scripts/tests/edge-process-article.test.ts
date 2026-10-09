@@ -5,6 +5,7 @@ import { runAssess } from '@/lib/journalism/assessService';
 import { FIXTURES } from './fixtures/antiAi-langs';
 import { LANG_NAME, LANGS, type Lang } from '@/lib/journalism/languages';
 import { eq, ok, report } from './_harness';
+import { requestProblem, rejection, rulesViolations } from './_openaiRules';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const g = globalThis as any;
@@ -105,7 +106,7 @@ g.fetch = async (url: string, init?: any) => {
     const r = runAssess(body);
     return new Response(JSON.stringify(r.json), { status: r.status, headers: { 'content-type': 'application/json' } });
   }
-  if (u.includes('api.openai.com')) { const r = model(JSON.parse(init.body)); return new Response(JSON.stringify(r.body), { status: r.status, headers: { 'content-type': 'application/json' } }); }
+  if (u.includes('api.openai.com')) { const b = JSON.parse(init.body); const problem = requestProblem(b); if (problem) { rulesViolations.push(`${b?.text?.format?.type ?? 'plain'} request: ${problem}`); return new Response(JSON.stringify(rejection(problem).body), { status: 400, headers: { 'content-type': 'application/json' } }); } const r = model(b); return new Response(JSON.stringify(r.body), { status: r.status, headers: { 'content-type': 'application/json' } }); }
   if (u.includes('api.unsplash.com')) { unsplashQueries.push(decodeURIComponent((u.split('query=')[1] || '').split('&')[0])); return new Response(JSON.stringify({ results: [{ urls: { regular: 'https://img.test/cover.jpg' } }] }), { status: 200 }); }
   if (u.includes('/api/revalidate')) { revalidated.push(JSON.parse(init.body)); return new Response('{}', { status: 200 }); }
   throw new Error(`unexpected fetch ${u}`);
@@ -430,6 +431,7 @@ async function main() {
     await processOne(b.client as any, b.w.row, true);
     ok('AI_MAX_EFFORT caps every call', calls.every((c) => c.body.reasoning.effort === 'low'));
   }
+  eq('the live OpenAI API would have accepted every request this suite sent (JSON word in the input, strict schemas)', rulesViolations, []);
   report('edge-process-article');
 }
 main().catch((e) => { console.error(e); process.exit(1); });

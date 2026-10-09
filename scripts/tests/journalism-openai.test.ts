@@ -4,7 +4,7 @@ import {
   effortForBudget, maxEffortOf, isBlockedModel, LONG_CONTEXT_TOKENS, REASONING_RESERVE, MAX_OUTPUT_CAP, DEFAULT_MODEL_IDS, PRICES, type Effort,
 } from '@/lib/journalism/models';
 import {
-  buildRequestBody, parseResponse, classifyError, waitFromHeaders, callOpenAI, parseJsonLoose, type LlmResult, type UsageEvent,
+  buildRequestBody, ensureJsonInInput, parseResponse, classifyError, waitFromHeaders, callOpenAI, parseJsonLoose, type LlmResult, type UsageEvent,
 } from '@/lib/journalism/openai';
 import { eq, ok, report } from './_harness';
 
@@ -101,8 +101,16 @@ eq('Arabic, Greek and Russian need about twice the tokens of English', tokensFor
   ok('no temperature (reasoning models reject it)', !('temperature' in b) && !('max_tokens' in b));
   const j = buildRequestBody({ model: 'm', system: 'S', user: 'U', json: 'object' }) as Record<string, any>;
   eq('JSON mode', j.text, { format: { type: 'json_object' } });
-  ok('the word JSON is added when the prompt lacks it', /json/i.test(j.instructions));
-  eq('no duplicate JSON instruction when present', (buildRequestBody({ model: 'm', system: 'Return JSON.', user: 'U', json: 'object' }) as Record<string, any>).instructions, 'Return JSON.');
+  // OpenAI refuses plain JSON mode unless the word "JSON" is in the INPUT messages: the instructions do not count (seen on the live API).
+  ok('JSON mode: the word JSON is added to the input when the input lacks it', /json/i.test(j.input) && j.input.startsWith('U') && j.instructions === 'S');
+  const onlyInstructions = buildRequestBody({ model: 'm', system: 'Return JSON.', user: 'U', json: 'object' }) as Record<string, any>;
+  ok('JSON in the instructions alone is not enough: the input still gets the word', /json/i.test(onlyInstructions.input) && onlyInstructions.instructions === 'Return JSON.');
+  eq('no duplicate hint when the input names JSON itself', (buildRequestBody({ model: 'm', system: 'S', user: 'Answer as JSON: {"a":1}', json: 'object' }) as Record<string, any>).input, 'Answer as JSON: {"a":1}');
+  const turns = buildRequestBody({ model: 'm', system: 'S', user: 'now', history: [{ role: 'user', content: 'before' }, { role: 'assistant', content: 'answer' }], json: 'object' }) as Record<string, any>;
+  ok('a conversation: the hint goes to the last message, the earlier ones stay as they are', turns.input.length === 3 && turns.input[0].content === 'before' && turns.input[1].content === 'answer' && /json/i.test(turns.input[2].content) && turns.input[2].content.startsWith('now'));
+  eq('a conversation that already names JSON earlier is left alone', ((buildRequestBody({ model: 'm', system: 'S', user: 'now', history: [{ role: 'user', content: 'give json' }], json: 'object' }) as Record<string, any>).input as { content: string }[]).map((m) => m.content), ['give json', 'now']);
+  ok('structured output (strict schema) does not need the word', (buildRequestBody({ model: 'm', system: 'S', user: 'U', json: { name: 'a', schema: { type: 'object' } } }) as Record<string, any>).input === 'U');
+  ok('ensureJsonInInput does not change what it was given', (() => { const arr = [{ role: 'user', content: 'x' }]; ensureJsonInInput(arr); return arr[0].content === 'x'; })());
   const s = buildRequestBody({ model: 'm', system: 'S', user: 'U', json: { name: 'core', schema: { type: 'object' } }, cacheKey: 'k1' }) as Record<string, any>;
   eq('strict structured output', s.text, { format: { type: 'json_schema', name: 'core', strict: true, schema: { type: 'object' } } });
   eq('prompt cache key', s.prompt_cache_key, 'k1');
@@ -221,6 +229,7 @@ async function main() {
     const fx = scripted([{ status: 400, body: err("Invalid schema for response_format 'core': nope") }, { body: completed('{"a":1}') }]);
     const res = await callOpenAI({ ...REQ, json: { name: 'core', schema: { type: 'object' } } }, base(fx));
     eq('schema refused: falls back to JSON mode and succeeds', [res.ok, fx.sent[0].text.format.type, fx.sent[1].text.format.type], [true, 'json_schema', 'json_object']);
+    ok('and the fall-back names JSON in the INPUT (the live API refuses plain JSON mode otherwise)', /json/i.test(String(fx.sent[1].input)) && !/json/i.test(String(fx.sent[0].input)));
   }
   {
     const fx = scripted([{ status: 400, body: err("Unsupported value: 'reasoning.effort' does not support 'xhigh'") }, { body: completed('{"a":1}') }]);

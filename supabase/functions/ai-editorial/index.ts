@@ -3025,12 +3025,23 @@ var searchFee = (env) => {
   const v = Number(env?.OPENAI_WEB_SEARCH_USD);
   return Number.isFinite(v) && v >= 0 && env?.OPENAI_WEB_SEARCH_USD !== void 0 && env.OPENAI_WEB_SEARCH_USD !== "" ? v : DEFAULT_WEB_SEARCH_USD;
 };
+var JSON_HINT = "\n\nRespond with a single JSON object and nothing else.";
+var textOfInput = (input) => typeof input === "string" ? input : Array.isArray(input) ? input.map((m) => typeof m?.content === "string" ? m.content : "").join("\n") : "";
+function ensureJsonInInput(input) {
+  if (/json/i.test(textOfInput(input))) return input;
+  if (typeof input === "string") return input + JSON_HINT;
+  if (Array.isArray(input) && input.length) {
+    const copy = input.map((m) => ({ ...m }));
+    const last = copy[copy.length - 1];
+    last.content = `${typeof last.content === "string" ? last.content : ""}${JSON_HINT}`;
+    return copy;
+  }
+  return input;
+}
 function buildRequestBody(req) {
   const effort = req.effort ?? null;
   const cap = Math.min(MAX_OUTPUT_CAP, req.maxOutputTokens ?? outputCap(req.expectTokens ?? 3e3, effort ?? "medium"));
-  let system = req.system;
-  if (req.json === "object" && !/json/i.test(`${req.system}
-${req.user}`)) system += "\n\nRespond with a single JSON object and nothing else.";
+  const system = req.system;
   const body = {
     model: req.model,
     instructions: system,
@@ -3045,8 +3056,10 @@ ${req.user}`)) system += "\n\nRespond with a single JSON object and nothing else
 ${req.user}`)) body.instructions = `${system}
 
 Return a single JSON object and nothing else.`;
-  } else if (req.json === "object") body.text = { format: { type: "json_object" } };
-  else if (req.json) body.text = { format: { type: "json_schema", name: req.json.name, strict: true, schema: req.json.schema } };
+  } else if (req.json === "object") {
+    body.text = { format: { type: "json_object" } };
+    body.input = ensureJsonInInput(body.input);
+  } else if (req.json) body.text = { format: { type: "json_schema", name: req.json.name, strict: true, schema: req.json.schema } };
   if (req.cacheKey) body.prompt_cache_key = req.cacheKey;
   if (req.serviceTier === "flex") body.service_tier = "flex";
   return body;
@@ -3212,9 +3225,7 @@ async function callOpenAI(req, deps) {
       if (c.kind === "schema" && !schemaDowngraded && body.text && body.text.format?.type === "json_schema") {
         schemaDowngraded = true;
         body.text = { format: { type: "json_object" } };
-        if (!/json/i.test(String(body.instructions))) body.instructions = `${body.instructions}
-
-Respond with a single JSON object and nothing else.`;
+        body.input = ensureJsonInInput(body.input);
         continue;
       }
       if (c.kind === "bad_request" && body.reasoning && /reasoning|effort/i.test(c.message)) {

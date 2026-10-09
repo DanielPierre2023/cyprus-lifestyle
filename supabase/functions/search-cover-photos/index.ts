@@ -170,7 +170,8 @@ Output ONLY this JSON object (no prose):
 {"unsplash_query":"3-6 ENGLISH words for a stock-photo search that returns a RELEVANT REAL photo; include the country/city/landmark when the subject is a named place, building, institution, road or event (e.g. \\"Cyprus House Representatives Nicosia\\", \\"Limassol marina old town\\"); concrete photographable nouns, no punctuation","photo_prompt":"40-70 word ENGLISH prompt for a PHOTOREALISTIC editorial photo of the scene, grounded in ${place}; describe setting, light, composition; must NOT contain text, logos, watermarks or recognizable real individuals' faces","prefer_real":true if a REAL stock photo is more appropriate/credible (named places, institutions, events, factual news) — false only for abstract/illustrative/opinion pieces,"alt_text":"one concise ENGLISH sentence describing the intended image"}`;
   const user = `Category: ${input.category || "cyprus"}\nDistrict: ${
     input.county || "national"
-  }\nTitle: ${input.title}\nSummary: ${(input.summary || "").substring(0, 500)}`;
+  }\nTitle: ${input.title}\nSummary: ${(input.summary || "").substring(0, 500)}\n\nAnswer with the JSON object described above.`;
+  // (OpenAI refuses plain JSON mode unless the word JSON is in the INPUT message; the instructions alone do not count.)
   try {
     const model = Deno.env.get("OPENAI_MODEL_LUNA") || "gpt-6-luna";
     // A short, low-effort call with a hard 7-second limit: the brief is a nicety, the deterministic fallback is always there.

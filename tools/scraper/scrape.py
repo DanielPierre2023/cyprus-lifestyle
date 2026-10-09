@@ -232,7 +232,8 @@ def ai_fill(name: str, body: str, target: str) -> dict:
                           headers={"content-type": "application/json", "authorization": f"Bearer {key}"},
                           json={"model": _ai_model(),
                                 "instructions": "Extract ONLY facts present in the text; return ONLY the JSON object. " + ask,
-                                "input": f"SUBJECT: {name}\n\nTEXT:\n{body[:8000]}",
+                                # JSON mode: OpenAI refuses it unless the word JSON is in the INPUT (the instructions alone do not count)
+                                "input": f"SUBJECT: {name}\n\nTEXT:\n{body[:8000]}\n\nReturn the JSON object only.",
                                 "reasoning": {"effort": "medium"},
                                 "max_output_tokens": 9000,
                                 "text": {"format": {"type": "json_object"}}},

@@ -2,6 +2,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
+/** The part of a probe's detail that adds something: a probe reports "ok (998ms)" or "FAIL: reason" and the line already says ok or FAIL. */
+function detail(s: unknown): string {
+  return String(s ?? '').replace(/^(?:ok|FAIL):?\s*/i, '').replace(/^\((.*)\)$/, '$1');
+}
+
 /** Why the concierge self-test failed, in one short line without model names or keys. */
 function conciergeFailure(c: any): string {
   const chat = c?.chat || {};
@@ -219,13 +224,14 @@ export default function AiTab() {
       </div>
       {report ? (
         <pre style={{ background: '#0B0E11', color: '#E4D2AC', padding: 12, borderRadius: 4, fontSize: 12, overflowX: 'auto', margin: '0 0 14px', whiteSpace: 'pre-wrap' }}>
-{`AI service:        ${report.ok ? 'reachable' : 'NOT reachable'}
-structured output: ${report.writer_primary?.usable ? 'ok' : 'FAIL'} (${report.writer_primary?.structured_output ?? ''})
-plain JSON mode:   ${report.writer_fallback?.usable ? 'ok' : 'FAIL'} (${report.writer_fallback?.prefill ?? ''})
-style check:       ${report.style_check ? (report.style_check.usable ? 'ok' : 'FAIL') + ' (' + (report.style_check.detail ?? '') + ')' : 'n/a'}
+{`AI service:        ${report.writer_primary?.usable || report.writer_fallback?.usable ? 'reachable' : 'NOT reachable'}
+structured output: ${report.writer_primary?.usable ? 'ok' : 'FAIL'} (${detail(report.writer_primary?.structured_output)})
+plain JSON mode:   ${report.writer_fallback?.usable ? 'ok' : 'FAIL'} (${detail(report.writer_fallback?.prefill)})
+style check:       ${report.style_check ? (report.style_check.usable ? 'ok' : 'FAIL') + ' (' + detail(report.style_check.detail) + ')' : 'n/a'}
 concierge chat:    ${report.concierge ? (report.concierge.ok ? 'ok (first word after ' + ((report.concierge.chat?.first_word_ms ?? 0) / 1000).toFixed(1) + ' s, answer complete after ' + ((report.concierge.chat?.total_ms ?? 0) / 1000).toFixed(1) + ' s)' : 'FAIL (' + conciergeFailure(report.concierge) + ')') : 'n/a'}
 budget:            ${report.budget ? `today $${report.budget.spent_today_usd ?? '?'} of $${report.budget.daily_limit_usd} · month $${report.budget.spent_month_usd ?? '?'} of $${report.budget.monthly_limit_usd}${report.budget.paused ? ' · PAUSED: ' + report.budget.paused : ''}` : ''}
-keys present:      ${Object.entries(report.keys_present || {}).map(([k, v]) => `${k}=${v ? 'yes' : 'NO'}`).join('  ')}`}
+keys present:      ${Object.entries(report.keys_present || {}).map(([k, v]) => `${k}=${v ? 'yes' : 'NO'}`).join('  ')}
+overall:           ${report.ok && (report.concierge ? report.concierge.ok : true) ? 'ready' : 'NOT ready'}${report.verdict ? ' · ' + report.verdict : ''}`}
         </pre>
       ) : null}
 

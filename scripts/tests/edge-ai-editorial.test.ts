@@ -4,6 +4,7 @@
 import { handle, budgetDeny, scrubModelNames } from '../edge/ai-editorial.src';
 import { responsesBody } from './_fakeOpenAI';
 import { eq, ok, report } from './_harness';
+import { requestProblem, rejection, rulesViolations } from './_openaiRules';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const g = globalThis as any;
@@ -51,6 +52,8 @@ g.fetch = async (url: string, init?: any) => {
   const u = String(url);
   if (u.includes('api.openai.com')) {
     const body = JSON.parse(init.body);
+    const problem = requestProblem(body);
+    if (problem) { rulesViolations.push(`${body?.text?.format?.type ?? 'plain'} request: ${problem}`); return new Response(JSON.stringify(rejection(problem).body), { status: 400, headers: { 'content-type': 'application/json' } }); }
     const kind = classify(String(body.instructions || ''));
     calls.push({ kind, body });
     counts[kind] = (counts[kind] || 0) + 1;
@@ -244,6 +247,7 @@ async function main() {
     ok('an empty article is an error, never an empty success', d.status === 502 && /came back empty/.test(d.json.error));
   }
 
+  eq('the live OpenAI API would have accepted every request this suite sent (JSON word in the input, strict schemas)', rulesViolations, []);
   report('edge-ai-editorial');
 }
 main().catch((e) => { console.error(e); process.exit(1); });

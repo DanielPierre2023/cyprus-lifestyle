@@ -94,12 +94,31 @@ export const DEFAULT_WEB_SEARCH_USD = 0.01;
 const searchFee = (env: EnvLike | undefined) => { const v = Number(env?.OPENAI_WEB_SEARCH_USD); return Number.isFinite(v) && v >= 0 && env?.OPENAI_WEB_SEARCH_USD !== undefined && env.OPENAI_WEB_SEARCH_USD !== '' ? v : DEFAULT_WEB_SEARCH_USD; };
 
 // ── request ───────────────────────────────────────────────────────────────────
+const JSON_HINT = '\n\nRespond with a single JSON object and nothing else.';
+const textOfInput = (input: unknown): string =>
+  typeof input === 'string' ? input : Array.isArray(input) ? input.map((m) => (typeof (m as { content?: unknown })?.content === 'string' ? (m as { content: string }).content : '')).join('\n') : '';
+
+/**
+ * OpenAI's plain JSON mode (text.format = json_object) is refused with a 400 unless the word "JSON" appears in the INPUT messages: the instructions
+ * do NOT count (seen on the live API, October 2026: "Response input messages must contain the word 'json' in some form…" although the instructions
+ * said "JSON"). This adds a short hint to the last message when the input does not name JSON itself, and leaves the input alone otherwise.
+ */
+export function ensureJsonInInput(input: unknown): unknown {
+  if (/json/i.test(textOfInput(input))) return input;
+  if (typeof input === 'string') return input + JSON_HINT;
+  if (Array.isArray(input) && input.length) {
+    const copy = input.map((m) => ({ ...(m as object) })) as { content?: unknown }[];
+    const last = copy[copy.length - 1];
+    last.content = `${typeof last.content === 'string' ? last.content : ''}${JSON_HINT}`;
+    return copy;
+  }
+  return input;
+}
+
 export function buildRequestBody(req: LlmRequest): Record<string, unknown> {
   const effort = req.effort ?? null;
   const cap = Math.min(MAX_OUTPUT_CAP, req.maxOutputTokens ?? outputCap(req.expectTokens ?? 3_000, effort ?? 'medium'));
-  let system = req.system;
-  // JSON mode insists the word "JSON" appears in the prompt.
-  if (req.json === 'object' && !/json/i.test(`${req.system}\n${req.user}`)) system += '\n\nRespond with a single JSON object and nothing else.';
+  const system = req.system;
   const body: Record<string, unknown> = {
     model: req.model,
     instructions: system,
@@ -112,7 +131,7 @@ export function buildRequestBody(req: LlmRequest): Record<string, unknown> {
     body.tools = [{ type: 'web_search' }];
     // Web search and a forced output format are not documented together: ask for JSON in words and parse it loosely.
     if (req.json && !/json/i.test(`${req.system}\n${req.user}`)) body.instructions = `${system}\n\nReturn a single JSON object and nothing else.`;
-  } else if (req.json === 'object') body.text = { format: { type: 'json_object' } };
+  } else if (req.json === 'object') { body.text = { format: { type: 'json_object' } }; body.input = ensureJsonInInput(body.input); }
   else if (req.json) body.text = { format: { type: 'json_schema', name: req.json.name, strict: true, schema: req.json.schema } };
   if (req.cacheKey) body.prompt_cache_key = req.cacheKey;
   if (req.serviceTier === 'flex') body.service_tier = 'flex';
@@ -263,7 +282,7 @@ export async function callOpenAI(req: LlmRequest, deps: LlmDeps): Promise<LlmRes
       }
       if (c.kind === 'schema' && !schemaDowngraded && body.text && (body.text as { format?: { type?: string } }).format?.type === 'json_schema') {
         schemaDowngraded = true; body.text = { format: { type: 'json_object' } };
-        if (!/json/i.test(String(body.instructions))) body.instructions = `${body.instructions}\n\nRespond with a single JSON object and nothing else.`;
+        body.input = ensureJsonInInput(body.input); // plain JSON mode wants the word in the input, not only in the instructions
         continue;
       }
       if (c.kind === 'bad_request' && body.reasoning && /reasoning|effort/i.test(c.message)) {
