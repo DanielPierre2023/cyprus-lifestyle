@@ -9,7 +9,7 @@ export const FUNCTIONS = [
     name: 'process-scraped-article',
     src: 'scripts/edge/process-scraped-article.src.ts',
     out: 'supabase/functions/process-scraped-article/index.ts',
-    secrets: 'OPENAI_API_KEY (required), UNSPLASH_ACCESS_KEY (cover pictures, optional).',
+    secrets: 'OPENAI_API_KEY (required), SITE_URL and ENRICH_SECRET (required: the style check runs on the website), UNSPLASH_ACCESS_KEY (cover pictures, optional).',
   },
   {
     name: 'ai-editorial',

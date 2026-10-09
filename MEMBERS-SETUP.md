@@ -97,9 +97,8 @@ set is complete. Their env vars, all optional with graceful fallback:
 
 | Variable | Feature | Fallback if absent |
 |---|---|---|
-| `CLAUDE_API_KEY` | Streaming replies | falls back to the Supabase **edge** concierge (which holds its own key) |
-| `OPENAI_API_KEY` | Hybrid vector recall | falls back to keyword retrieval |
-| `SONNET_MODEL`, `CLAUDE_HAIKU` | Model overrides | sensible defaults in code |
+| `OPENAI_API_KEY` | The concierge's replies (streamed) and hybrid vector recall | without it the concierge cannot answer (vector recall alone falls back to keyword retrieval) |
+| `OPENAI_MODEL_LUNA` | Model override | default `gpt-6-luna` |
 | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` | WhatsApp channel | route simply stays idle |
 
 **To backfill vector embeddings** (feeds hybrid search) after deploy, call once:

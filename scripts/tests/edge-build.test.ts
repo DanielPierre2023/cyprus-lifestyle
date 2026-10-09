@@ -49,6 +49,12 @@ async function main() {
     ok(`${fn.name}: no leftover of the earlier model vendors in the code paths (Claude, Gemini)`, !/api\.anthropic\.com|generativelanguage\.googleapis|CLAUDE_API_KEY|GEMINI_API_KEY|SONNET_MODEL/.test(committed));
     ok(`${fn.name}: no external AI-detector hook (the desk improves the journalism, it does not chase a detector)`, !/originality\.ai|gptzero|AI_DETECTOR/i.test(committed));
 
+    if (fn.name === 'process-scraped-article') {
+      ok(`${fn.name}: carries no voice engine (a Supabase edge function may use only 2 s of computing per call; the style check runs on the website)`, !/scoreVoice|compiledTells|dataTells|assessEdition/.test(committed));
+      ok(`${fn.name}: stays small (${committed.length} characters; with the engine it was 556,000)`, committed.length < 320_000);
+    }
+    if (fn.name === 'ai-editorial') ok(`${fn.name}: stays below ${520_000} characters (it embeds the English judge only)`, committed.length < 520_000);
+
     // ── the generated file loads and answers ────────────────────────────────────────────────────────────────────────────
     g.__edgeHandler = undefined;
     const code = await buildEdgeFunction({ root, name: fn.name, plugins: [urlStubs], banner: false });

@@ -1,6 +1,8 @@
 // lib/journalism/assess.ts — the judge of a finished edition: the app's voice engine and its publish bar, behind one function.
-// The Supabase edge function embeds this module (with the whole scorer) when it is built, so the desk that writes an article and the
-// worker that later checks it use the SAME judge: an article cannot pass in one place and fail in the other.
+// One judge for every place: the voice worker and the admin tools call it directly, the article desk (a Supabase edge function) asks the
+// website for it (app/api/desk/assess, lib/journalism/assessService.ts), and the Editorial Studio embeds it for English. So an article
+// cannot pass in one place and fail in the other. The edge function does NOT carry it for the article desk: it may use only two seconds
+// of computing per call and the engine needs more for one article in seven languages.
 //
 // Not "pure" in the sense of the rest of lib/journalism (it imports the voice engine), which is why the pipeline receives it as a
 // dependency instead of importing it.

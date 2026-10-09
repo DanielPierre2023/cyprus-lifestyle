@@ -3034,7 +3034,7 @@ ${req.user}`)) system += "\n\nRespond with a single JSON object and nothing else
   const body = {
     model: req.model,
     instructions: system,
-    input: req.user,
+    input: req.history && req.history.length ? [...req.history.map((t) => ({ role: t.role, content: t.content })), { role: "user", content: req.user }] : req.user,
     max_output_tokens: cap,
     store: false
   };

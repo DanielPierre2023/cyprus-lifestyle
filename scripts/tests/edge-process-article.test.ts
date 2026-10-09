@@ -1,6 +1,7 @@
 // The Supabase edge function end to end, from its source, with a scripted model and an in-memory database: no network, no key, no money.
 // The deterministic parts are the real ones (clean-up, voice engine, originality gate, publish bar); only the model and the database are faked.
-import { processOne, handle, budgetDeny, isSourceContentRealProse, isTitleGeneric, scrubModelNames, releaseStaleClaims } from '../edge/process-scraped-article.src';
+import { processOne, handle, budgetDeny, isSourceContentRealProse, isTitleGeneric, scrubModelNames, releaseStaleClaims, keepAlive } from '../edge/process-scraped-article.src';
+import { runAssess } from '@/lib/journalism/assessService';
 import { FIXTURES } from './fixtures/antiAi-langs';
 import { LANG_NAME, LANGS, type Lang } from '@/lib/journalism/languages';
 import { eq, ok, report } from './_harness';
@@ -10,7 +11,7 @@ const g = globalThis as any;
 
 // ── the environment ─────────────────────────────────────────────────────────────────────────────────────────────────────
 let ENVV: Record<string, string> = {};
-const resetEnv = (over: Record<string, string> = {}) => { ENVV = { SUPABASE_URL: 'https://db.test', SUPABASE_SERVICE_ROLE_KEY: 'service-key', OPENAI_API_KEY: 'sk-test-key-123456', UNSPLASH_ACCESS_KEY: 'u-key', ...over }; };
+const resetEnv = (over: Record<string, string> = {}) => { ENVV = { SUPABASE_URL: 'https://db.test', SUPABASE_SERVICE_ROLE_KEY: 'service-key', OPENAI_API_KEY: 'sk-test-key-123456', UNSPLASH_ACCESS_KEY: 'u-key', SITE_URL: 'https://site.test', ENRICH_SECRET: 'enrich-secret', ...over }; };
 g.Deno = { env: { get: (k: string) => ENVV[k] } };
 
 // ── a fixture story: Latchi harbour (the "human" paragraph of each language, which the real voice engine passes) ──────────
@@ -87,10 +88,23 @@ function model(body: any): { status: number; body: unknown } {
     default: return { status: 500, body: { error: { message: `unscripted call: ${String(body.instructions).slice(0, 60)}` } } };
   }
 }
+const ALL: Lang[] = [...LANGS];
 let revalidated: any[] = [];
 let unsplashQueries: string[] = [];
+// The website's style check (app/api/desk/assess): the real judge, in process. `assessMode` lets a test take the website down or change the secret.
+let assessCalls: Array<{ lang: string; key: string }> = [];
+let assessMode: 'up' | 'down' | { downAfter: number } = 'up';
 g.fetch = async (url: string, init?: any) => {
   const u = String(url);
+  if (u === 'https://site.test/api/desk/assess') {
+    const key = String(init?.headers?.['x-enrich-key'] ?? '');
+    const body = JSON.parse(init.body);
+    assessCalls.push({ lang: body.lang, key });
+    if (assessMode === 'down' || (typeof assessMode === 'object' && assessCalls.length > assessMode.downAfter)) return new Response('unavailable', { status: 503 });
+    if (key !== 'enrich-secret') return new Response('{"ok":false}', { status: 401 });
+    const r = runAssess(body);
+    return new Response(JSON.stringify(r.json), { status: r.status, headers: { 'content-type': 'application/json' } });
+  }
   if (u.includes('api.openai.com')) { const r = model(JSON.parse(init.body)); return new Response(JSON.stringify(r.body), { status: r.status, headers: { 'content-type': 'application/json' } }); }
   if (u.includes('api.unsplash.com')) { unsplashQueries.push(decodeURIComponent((u.split('query=')[1] || '').split('&')[0])); return new Response(JSON.stringify({ results: [{ urls: { regular: 'https://img.test/cover.jpg' } }] }), { status: 200 }); }
   if (u.includes('/api/revalidate')) { revalidated.push(JSON.parse(init.body)); return new Response('{}', { status: 200 }); }
@@ -163,7 +177,7 @@ function makeWorld(over: { status?: string; content?: string; logsHaveMeta?: boo
   currentHandler = handler;
   return { w, client: CLIENT };
 }
-const reset = (s: Script = {}, envOver: Record<string, string> = {}) => { calls = []; counts = {}; script = s; revalidated = []; unsplashQueries = []; resetEnv(envOver); };
+const reset = (s: Script = {}, envOver: Record<string, string> = {}) => { calls = []; counts = {}; script = s; revalidated = []; unsplashQueries = []; assessCalls = []; assessMode = 'up'; resetEnv(envOver); };
 
 async function main() {
   // ── the happy path: seven editions, all checks pass, auto-publish ─────────────────────────────────────────────────────
@@ -309,6 +323,16 @@ async function main() {
     reset({ openaiStatus: () => ({ status: 401, body: { error: { message: 'Incorrect API key provided: sk-test-key-123456.' } } }) }); makeWorld();
     const bad = await (await call({ action: 'selftest' })).json();
     ok('a refused key shows as not reachable, without the key', bad.ok === false && !/sk-test/.test(JSON.stringify(bad)));
+    reset(); makeWorld();
+    const st2 = await (await call({ action: 'selftest' })).json();
+    ok('the self-test also checks the style check on the website (configured, reachable, secret accepted)', st2.ok === true && st2.style_check.usable === true && /ok \(/.test(st2.style_check.detail) && st2.keys_present.site_url === true && st2.keys_present.style_check_secret === true);
+    reset(); assessMode = 'down'; makeWorld();
+    const st3 = await (await call({ action: 'selftest' })).json();
+    ok('website down: the self-test is red and its verdict names the style check', st3.ok === false && st3.style_check.usable === false && /style check/.test(st3.verdict) && /HTTP 503/.test(st3.style_check.detail));
+    reset({}, { ENRICH_SECRET: '' }); makeWorld();
+    const st4 = await (await call({ action: 'selftest' })).json();
+    ok('secret missing: red, and it says which secret', st4.ok === false && /ENRICH_SECRET/.test(st4.style_check.detail) && st4.keys_present.style_check_secret === false);
+    ok('the self-test never shows the secret or the site address', !/enrich-secret|site\.test/.test(JSON.stringify(st2) + JSON.stringify(st3)));
 
     reset(); const b = makeWorld();
     const one = await (await call({ scraped_article_id: 'row-1', auto_publish: true })).json();
@@ -325,6 +349,56 @@ async function main() {
     const none = await (await call({ source: 'cron' })).json();
     ok('with less time left than one article needs, the batch leaves the queue alone', none.processed === 0 && e.w.row.status === 'scraped' && calls.length === 0);
     void w; void c;
+  }
+
+  // ── the style check runs on the website: the edge function carries no voice engine (Supabase allows 2 s of computing per call) ─────────
+  {
+    reset(); const { w, client } = makeWorld();
+    const c0 = process.cpuUsage();
+    const out = await processOne(client as any, w.row, true);
+    const cpuMs = (() => { const d = process.cpuUsage(c0); return (d.user + d.system) / 1000; })();
+    ok('the article is composed and judged', out.ok && assessCalls.length >= 8);
+    ok('every edition went to the website for its style check, in its own language, with the shared secret', ALL.every((l) => assessCalls.some((c) => c.lang === l)) && assessCalls.every((c) => c.key === 'enrich-secret'));
+    // The judge itself ran in this same process (the fake website), so its time is taken out of the measurement.
+    ok(`the edge function's own computing is far below the platform's 2 s (measured with the judge included: ${cpuMs.toFixed(0)} ms)`, cpuMs < 4_500);
+
+    reset({}, { ENRICH_SECRET: '' }); let x = makeWorld();
+    const unconf = await processOne(x.client as any, x.w.row, true);
+    ok('without ENRICH_SECRET nothing is started: queued, the batch stops, no model call, the article is not claimed', !unconf.ok && unconf.status === 'queued' && unconf.stop === true && /ENRICH_SECRET/.test(String(unconf.reason)) && calls.length === 0 && x.w.row.status === 'scraped');
+    reset({}, { SITE_URL: '' }); x = makeWorld();
+    const nourl = await processOne(x.client as any, x.w.row, true);
+    ok('without SITE_URL the same', !nourl.ok && nourl.stop === true && /SITE_URL/.test(String(nourl.reason)) && calls.length === 0);
+
+    reset({}, { ENRICH_SECRET: 'another-secret' }); x = makeWorld();
+    const wrong = await processOne(x.client as any, x.w.row, true);
+    ok('a secret that the website does not accept: refused before any model money is spent, with the way to fix it', !wrong.ok && wrong.stop === true && /differs between Supabase and the website/.test(String(wrong.reason)) && calls.length === 0 && assessCalls.length === 1 && x.w.row.status === 'scraped');
+
+    reset(); assessMode = 'down'; x = makeWorld();
+    const t0 = Date.now();
+    const down = await processOne(x.client as any, x.w.row, true);
+    ok('the website is down: the article stays queued, no model call, a clear reason', !down.ok && down.status === 'queued' && down.stop === true && /style check unavailable/.test(String(down.reason)) && calls.length === 0 && x.w.row.status === 'scraped');
+    ok('(it tried three times with short pauses, not for minutes)', assessCalls.length === 3 && Date.now() - t0 < 6_000);
+
+    // the website answers at first and then goes away: the editions that cannot be judged are never published
+    reset(); assessMode = { downAfter: 1 }; x = makeWorld();
+    const mid = await processOne(x.client as any, x.w.row, true);
+    ok('the website goes away during the run: the article is saved as a draft, not published, with the reason', mid.ok && mid.status === 'draft' && x.w.commits.length === 1 && x.w.commits[0].p_blog_payload.status === 'draft' && /style check not completed/.test(String(mid.quality_warning)));
+    ok('an edition that could not be judged is logged as unscored (null) and as the worst humanness, never as a perfect one', x.w.logs[0].en_humanness === 0 && x.w.logs[0].meta.style.en === null);
+  }
+
+  // ── the long answer stays alive (the gateway cuts a silent request after 150 s) ─────────────────────────────────────────────
+  {
+    const res = keepAlive(async () => { await new Promise((r) => setTimeout(r, 90)); return { ok: true, status: 'published' }; }, 20);
+    const raw = await res.text();
+    ok('spaces first, then the JSON: nothing but white space precedes it', /^ +\{/.test(raw) && raw.trim() === '{"ok":true,"status":"published"}');
+    eq('status 200 and a JSON content type', [res.status, res.headers.get('content-type')], [200, 'application/json']);
+    eq('a client that reads JSON gets the object, as before', JSON.parse(raw), { ok: true, status: 'published' });
+    const bad = await keepAlive(async () => { throw new Error('claude-sonnet-5 failed with sk-abcdef123456'); }, 20).json();
+    ok('a failure inside the run is an ordinary JSON failure, without vendor or key names', bad.ok === false && !/claude|sonnet|sk-/.test(bad.error));
+    reset(); const y = makeWorld();
+    const r = await handle(new Request('https://f.test/', { method: 'POST', headers: { authorization: 'Bearer service-key', 'content-type': 'application/json' }, body: JSON.stringify({ scraped_article_id: 'row-1', auto_publish: true }) }));
+    const j = await r.json();
+    ok('"Generate" in the admin gets its answer through the same stream', r.status === 200 && j.ok === true && j.status === 'published' && y.w.commits.length === 1);
   }
 
   // ── a run that the platform stopped does not leave its article stuck ───────────────────────────────────────────────────

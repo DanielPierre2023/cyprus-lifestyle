@@ -21,7 +21,7 @@ export const LEGAL = {
   /** VAT number — intentionally NOT published (owner decision). Set to publish it in the Legal Notice. */
   vatNumber: process.env.NEXT_PUBLIC_LEGAL_VAT_NUMBER || '',
   /** Date the four legal texts were last revised (ISO). Bump it whenever a text changes. */
-  updated: '2026-10-06',
+  updated: '2026-10-09',
 } as const;
 
 export const MEMBERSHIP_PRICE_EUR = '19';

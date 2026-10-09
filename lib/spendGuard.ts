@@ -6,8 +6,9 @@
 //                           Used by lib/ai.ts and by the routes that front the Supabase edge
 //                           functions (which log into the SAME ai_spend_log table).
 //   publicAiCeilingDeny() → a GLOBAL daily ceiling on calls to the public, anonymous
-//                           endpoints (concierge chat/voice) — they are exposed to abuse and
-//                           their provider cost is not tracked in ai_spend_log.
+//                           endpoints (concierge chat/voice) — they are exposed to abuse.
+//                           The chat's model calls are logged in ai_spend_log (and so
+//                           count toward the budget above); the read-aloud voice is not.
 //
 // Failure policy: the kill switch always blocks. If the spend read itself fails we fail OPEN
 // (and log once) — a broken monitor must not take the site down — but never silently.

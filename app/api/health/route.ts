@@ -80,9 +80,9 @@ export async function GET(req: Request) {
     {
       key: 'concierge',
       label: 'Concierge chatbot',
-      ready: has(env.CLAUDE_API_KEY),
-      needs: ['CLAUDE_API_KEY'],
-      unlocks: 'The AI concierge can actually answer. Without this it shows an error.',
+      ready: has(env.OPENAI_API_KEY),
+      needs: ['OPENAI_API_KEY'],
+      unlocks: 'The AI concierge (web chat, Ask box, WhatsApp, Telegram, mail drafts) can actually answer. Without this it shows an error.',
     },
     {
       key: 'semantic_search',

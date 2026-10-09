@@ -1,20 +1,12 @@
-// The text desk runs on OpenAI only (owner's instruction: "nothing from Claude any more, it is too expensive"). This is a ratchet over
-// the source tree: a file that reaches for another model vendor fails the build unless it is on the short list of jobs that have not
-// been moved yet. The list only ever gets shorter; the delivery that moves the concierge and the mail assistant empties it.
+// Every text job runs on OpenAI only (owner's instruction: "nothing from Claude any more, it is too expensive"): the article desk, the
+// concierge, the mail assistant, the directory sorting. This is a ratchet over the source tree: a file that reaches for another model
+// vendor fails the build. The list of jobs that had not been moved yet is empty now and is gone.
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { eq, ok, report } from './_harness';
 
 const ROOT = process.cwd();
 const TOKENS = /callClaude|callGemini|CLAUDE_API_KEY|CLAUDE_HAIKU|CLAUDE_SONNET|api\.anthropic\.com|generativelanguage\.googleapis|GEMINI_API_KEY|SONNET_MODEL|HAIKU_MODEL/;
-
-/** Jobs that still use another vendor. Remove an entry when its file is moved over; never add one. */
-const NOT_MOVED_YET = [
-  'app/api/concierge/normalize-directory/route.ts', 'app/api/concierge/proactive/route.ts', 'app/api/concierge/route.ts', 'app/api/concierge/selftest/route.ts',
-  'app/api/health/route.ts', 'lib/ai.ts',
-  'lib/concierge/brain.ts', 'lib/concierge/eval.ts', 'lib/concierge/memory.ts', 'lib/concierge/rerank.ts', 'lib/concierge/understand.ts',
-  'lib/mail/assist.ts', 'supabase/functions/concierge/index.ts',
-];
 
 const SCAN = ['app', 'lib', 'components', 'scripts', 'supabase/functions', 'tools'];
 const EXT = /\.(?:ts|tsx|mjs|js|py|ya?ml)$/;
@@ -32,10 +24,17 @@ const files = SCAN.flatMap((d) => walk(join(ROOT, d))).map((p) => relative(ROOT,
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
 
 const offenders = files.filter((f) => TOKENS.test(read(f)));
-const unexpected = offenders.filter((f) => !NOT_MOVED_YET.includes(f));
-eq('no file outside the short list reaches for another model vendor', unexpected, []);
-const stale = NOT_MOVED_YET.filter((f) => !offenders.includes(f));
-eq('the short list names only files that still need it (remove a moved file from the list)', stale, []);
+eq('no file reaches for another model vendor', offenders, []);
+
+// ── the configuration names no other vendor either ───────────────────────────────────────────────────────────────────────
+ok('.env.example asks for no key of another model vendor', !/CLAUDE|ANTHROPIC|GEMINI|SONNET|HAIKU/i.test(read('.env.example')));
+
+// ── the concierge, the mail assistant and the sorting of the directory go through the one door (lib/ai.ts) ──────────────
+for (const f of ['lib/concierge/chatModel.ts', 'lib/concierge/understand.ts', 'lib/concierge/rerank.ts', 'lib/concierge/memory.ts', 'lib/concierge/eval.ts', 'lib/mail/assist.ts', 'app/api/concierge/proactive/route.ts', 'app/api/concierge/normalize-directory/route.ts', 'app/api/concierge/selftest/route.ts']) {
+  const t = read(f);
+  ok(`${f} calls the model through lib/ai.ts`, /from '@\/lib\/ai'/.test(t) || /from '@\/lib\/concierge\/chatModel'/.test(t));
+  ok(`${f} makes no direct request to a model API`, !/fetch\(\s*['"`]https?:\/\/api\./.test(t));
+}
 
 // ── the article desk and the studio call OpenAI and nothing else ─────────────────────────────────────────────────────────
 for (const f of ['supabase/functions/process-scraped-article/index.ts', 'supabase/functions/ai-editorial/index.ts', 'supabase/functions/search-cover-photos/index.ts']) {

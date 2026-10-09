@@ -182,7 +182,7 @@
         {
           "h": "Serviciile care prelucrează date pentru noi",
           "p": [
-            "Ne bazăm pe un număr restrâns de procesatori de încredere, fiecare obligat printr-un acord de prelucrare a datelor: Supabase (baza de date și autentificarea), Vercel (găzduire și statistici fără cookie-uri), Resend (email tranzacțional), Stripe (plăți) și OpenAI și Anthropic (care alimentează concierge-ul multilingv). Aceștia prelucrează datele doar la instrucțiunile noastre și doar în măsura necesară pentru furnizarea serviciului lor."
+            "Ne bazăm pe un număr restrâns de procesatori de încredere, fiecare obligat printr-un acord de prelucrare a datelor: Supabase (baza de date și autentificarea), Vercel (găzduire și statistici fără cookie-uri), Resend (email tranzacțional), Stripe (plăți) și OpenAI (care alimentează concierge-ul multilingv). Aceștia prelucrează datele doar la instrucțiunile noastre și doar în măsura necesară pentru furnizarea serviciului lor."
           ]
         },
         {

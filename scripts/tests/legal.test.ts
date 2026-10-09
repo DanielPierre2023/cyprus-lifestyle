@@ -4,6 +4,7 @@ import { LOCALES } from '@/lib/locales';
 import { LEGAL, legalTokens } from '@/lib/legal/config';
 import { LEGAL_DOCS, LEGAL_PATHS, LEGAL_UI, getLegalDoc, legalUpdatedLabel } from '@/lib/legal';
 import { LEGAL_KINDS } from '@/lib/legal/types';
+import { readFileSync } from 'node:fs';
 import { eq, ok, report } from './_harness';
 
 const textOf = (kind: (typeof LEGAL_KINDS)[number], loc: (typeof LOCALES)[number]) => {
@@ -44,7 +45,11 @@ for (const kind of LEGAL_KINDS) {
 // Required facts, in every locale.
 for (const loc of LOCALES) {
   const priv = textOf('privacy', loc), terms = textOf('terms', loc), cook = textOf('cookies', loc), note = textOf('notice', loc);
-  for (const p of ['Supabase', 'Vercel', 'Stripe', 'Resend', 'Anthropic', 'OpenAI', 'Meta', 'Google', 'GetYourGuide']) ok(`privacy/${loc}: names ${p}`, priv.includes(p));
+  for (const p of ['Supabase', 'Vercel', 'Stripe', 'Resend', 'OpenAI', 'Meta', 'Google', 'GetYourGuide']) ok(`privacy/${loc}: names ${p}`, priv.includes(p));
+  // Every text job runs on OpenAI and nothing is sent to another model vendor, so no other vendor is named as a recipient.
+  ok(`privacy/${loc}: names no other model vendor`, !/Anthropic|Claude|Gemini/.test(priv));
+  const openAiItem = (getLegalDoc('privacy', loc).sections.flatMap((s) => s.li || []).find((x) => x.startsWith('OpenAI:')) || '');
+  ok(`privacy/${loc}: the OpenAI entry covers the concierge conversations, search vectors and read-aloud speech`, openAiItem.length > 200 && /embeddings/i.test(openAiItem) && /Telegram|تيليغرام/.test(openAiItem));
   ok(`privacy/${loc}: Commissioner contact`, priv.includes('commissioner@dataprotection.gov.cy') && priv.includes('+357 22 818 456'));
   ok(`privacy/${loc}: 125(I)/2018`, priv.includes('125(I)/2018'));
   ok(`privacy/${loc}: retention 90 / 30 / 14 / 60 / 72`, ['90', '30', '14', '60', '72'].every((n) => priv.includes(n)));
@@ -59,6 +64,21 @@ for (const loc of LOCALES) {
   ok(`notice/${loc}: company + reg + town`, note.includes('ADD Individual Solutions Ltd') && note.includes('HE 439793') && note.includes('Pyla'));
   ok(`notice/${loc}: ODR 20 July 2025 stated`, note.includes('2025') && note.includes('ODR'));
   ok(`ui/${loc}: labels`, Object.values(LEGAL_UI[loc]).every((v) => v.trim().length > 1) && legalUpdatedLabel(loc).includes('2026'));
+}
+
+// The processors paragraph of the site's own texts (messages/*.json) says the same.
+for (const loc of LOCALES) {
+  const raw = readFileSync(`messages/${loc}.json`, 'utf8');
+  ok(`messages/${loc}: the processors text names OpenAI and no other model vendor`, raw.includes('OpenAI') && !/Anthropic|Gemini/.test(raw));
+}
+ok('the legal texts carry a revision date on or after the change of AI provider', LEGAL.updated >= '2026-10-09');
+
+// The Record of Processing Activities (register migration) is in line with the notice.
+{
+  const sql = readFileSync('supabase/migrations/20261011090000_privacy_register_openai.sql', 'utf8');
+  ok('register: the concierge and the mailroom rows are updated by id', /where id = 'concierge'/.test(sql) && /where id = 'mailroom'/.test(sql));
+  ok('register: OpenAI is the named recipient and no other model vendor', /OpenAI/.test(sql.replace(/--.*$/gm, '')) && !/Anthropic|Gemini/.test(sql.replace(/--.*$/gm, '')));
+  ok('register: additive (updates only, nothing dropped or deleted)', !/\b(drop|delete|truncate)\b/i.test(sql.replace(/--.*$/gm, '')));
 }
 
 // Owner decision: no street address of the company and no VAT number anywhere.

@@ -182,7 +182,7 @@
         {
           "h": "Die Dienste, die Daten für uns verarbeiten",
           "p": [
-            "Wir setzen auf eine kleine Zahl renommierter Auftragsverarbeiter, die jeweils durch einen Auftragsverarbeitungsvertrag gebunden sind: Supabase (Datenbank und Authentifizierung), Vercel (Hosting und cookielose Statistiken), Resend (transaktionale E-Mails), Stripe (Zahlungen) sowie OpenAI und Anthropic (die den mehrsprachigen Concierge betreiben). Sie verarbeiten Daten ausschließlich nach unseren Weisungen und nur soweit für ihre Leistung erforderlich."
+            "Wir setzen auf eine kleine Zahl renommierter Auftragsverarbeiter, die jeweils durch einen Auftragsverarbeitungsvertrag gebunden sind: Supabase (Datenbank und Authentifizierung), Vercel (Hosting und cookielose Statistiken), Resend (transaktionale E-Mails), Stripe (Zahlungen) sowie OpenAI (das den mehrsprachigen Concierge betreibt). Sie verarbeiten Daten ausschließlich nach unseren Weisungen und nur soweit für ihre Leistung erforderlich."
           ]
         },
         {

@@ -121,7 +121,8 @@ const sources = readFileSync('lib/concierge/sources.ts', 'utf8'); const cs = rea
 ok('whatsapp + telegram send through composeChannelReply, never the bare appender', wa.includes('composeChannelReply(') && tg.includes('composeChannelReply(') && !/[^e]appendChannelLinks\(/.test(wa + tg));
 ok('both settle the language on the reply and remember it', wa.includes('settleLocale(lang, answer)') && tg.includes('settleLocale(lang, answer)') && wa.includes('locale: persistLocale') && tg.includes('locale: persistLocale'));
 ok('whatsapp uses the phone number as the prior, telegram its UI language', wa.includes('hint: localeFromPhone(wa)') && tg.includes('hint: uiLocale'));
-ok('the web stream and both non-streaming answers go through the policy', brain.includes('new LinkPolicyStream(') && brain.includes('guard.push(') && brain.includes('guard.flush()') && (brain.match(/applyLinkPolicy\(extractText\(data\)/g) || []).length === 2);
+const chatModel = readFileSync('lib/concierge/chatModel.ts', 'utf8');
+ok('the web stream and the non-streaming answers (WhatsApp, Telegram, Ask box, the fallback) go through the policy', chatModel.includes('new LinkPolicyStream(') && chatModel.includes('guard.push(') && chatModel.includes('guard.flush()') && chatModel.includes("applyLinkPolicy(r.text || ''") && brain.includes('streamAnswer(') && brain.includes('answerOnce(') && !/fetch\(/.test(brain.slice(brain.indexOf('// ── Non-streaming answer'))));
 ok('only government / EU pages are cited from the knowledge base', brain.includes('isOfficialAuthorityUrl(h.item.source)') && guidePage.includes('isOfficialAuthorityUrl(hit.item.source)'));
 ok('scraped titles and snippets are scrubbed', sources.includes('scrubSourceNames(safeText(r.title') && sources.includes('scrubSourceNames(safeText(r.description'));
 ok('no "read the original" link to another site in the sources card', !cs.includes('readOriginal'));

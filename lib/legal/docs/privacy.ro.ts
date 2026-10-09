@@ -23,7 +23,7 @@ export const privacyRo: LegalDoc = {
       'Pentru evidențe contabile și fiscale și răspunsuri către autorități: obligații legale.',
     ] },
     { h: '4. Concierge-ul și prelucrarea automată', p: [
-      'Concierge-ul este un asistent automat al acestui site. Întrebările dumneavoastră sunt trimise unor furnizori de servicii de inteligență artificială (vezi secțiunea 6) pentru a genera răspunsuri și a căuta în articolele, fișele și ghidurile noastre. Oferă informații și sugestii generale; nu este consultanță profesională și nu ia decizii cu efecte juridice sau similar de semnificative asupra dumneavoastră. O cerere de rezervare este tratată întotdeauna de o persoană: proprietarul prelucrează personal cererile din zona de administrare.',
+      'Concierge-ul este un asistent automat al acestui site. Întrebările dumneavoastră sunt trimise furnizorului nostru de servicii de inteligență artificială (vezi secțiunea 6) pentru a genera răspunsuri și a căuta în articolele, fișele și ghidurile noastre. Oferă informații și sugestii generale; nu este consultanță profesională și nu ia decizii cu efecte juridice sau similar de semnificative asupra dumneavoastră. O cerere de rezervare este tratată întotdeauna de o persoană: proprietarul prelucrează personal cererile din zona de administrare.',
       'Pentru membri, concierge-ul poate reține preferințele comunicate, pe toate dispozitivele. Le puteți vedea și șterge singuri (sertarul de memorie din concierge și „forget me” în cont).',
     ] },
     { h: '5. Cine primește datele dumneavoastră', p: ['Transmitem date personale doar cât este necesar, următoarelor categorii de destinatari:'], li: [
@@ -37,9 +37,8 @@ export const privacyRo: LegalDoc = {
       'Vercel: găzduire și livrare; Vercel Web Analytics și Speed Insights numai dacă acceptați analiza.',
       'Stripe (Stripe Payments Europe, Irlanda, și societăți din grup): plăți și abonamente, calculul taxelor și portalul clienților. Pentru unele scopuri (de ex. prevenirea fraudei, obligații de reglementare) Stripe este operator independent, conform propriei politici.',
       'Resend: trimiterea e-mailurilor tranzacționale (linkuri de restaurare, corespondență de rezervare) și a buletinului informativ.',
-      'Anthropic: prelucrarea de către un model lingvistic a conversațiilor cu concierge-ul și ajutor la răspunsurile către solicitări.',
-      'OpenAI: transformarea întrebării într-un vector de căutare (embeddings), citirea cu voce tare (textul răspunsului este trimis pentru a genera sunetul) și ilustrarea conținutului editorial.',
-      'Google: modele lingvistice AI în fluxul editorial și geocodarea adreselor firmelor; nu trimitem intenționat acolo date personale ale vizitatorilor. Playere de webcam de la YouTube (Google) se pot încărca pe pagina Live (vezi Politica privind cookie-urile).',
+      'OpenAI: prelucrarea de către un model lingvistic a conversațiilor cu concierge-ul (pe site, pe WhatsApp și pe Telegram) și ajutor la răspunsurile către solicitări; transformarea întrebării într-un vector de căutare (embeddings); citirea cu voce tare (textul răspunsului este trimis pentru a genera sunetul); precum și pregătirea conținutului editorial (texte, traducere și ilustrare).',
+      'Google: geocodarea adreselor firmelor (nu trimitem intenționat acolo date personale ale vizitatorilor). Playere de webcam de la YouTube (Google) se pot încărca pe pagina Live (vezi Politica privind cookie-urile).',
       'Meta (WhatsApp Business / Graph API): dacă scrieți concierge-ului pe WhatsApp, mesajul și numărul de telefon trec prin Meta; publicăm de asemenea postări editoriale pe paginile noastre de Facebook și Instagram.',
       'Telegram: dacă scrieți concierge-ului pe Telegram, mesajul trece prin Telegram.',
       'Twilio: SMS, unde este folosit pentru verificarea proprietarilor de firme.',

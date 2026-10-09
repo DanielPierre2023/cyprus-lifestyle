@@ -13,8 +13,9 @@
 // for the human follow-up.
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { callClaude, CLAUDE_HAIKU } from '@/lib/ai';
-import { conciergeSystem, assembleContext, groundingBlock, detectLocale, CONCIERGE_MODEL, type ConciergeContext } from '@/lib/concierge/brain';
+import { callAI, budgetClock } from '@/lib/ai';
+import { conciergeSystem, assembleContext, groundingBlock, detectLocale, type ConciergeContext } from '@/lib/concierge/brain';
+import { isFinalFailure } from '@/lib/concierge/chatModel';
 import { logConciergeTurn } from '@/lib/concierge/analytics';
 import { applyLinkPolicy } from '@/lib/concierge/linkPolicy';
 import { deskFor, signatureFor } from '@/lib/signatures';
@@ -69,8 +70,11 @@ async function contactsBlock(ctx: ConciergeContext | null, locale: string): Prom
 // caller can surface the real reason instead of a generic "no draft produced".
 export async function composeReply(
   row: InboundRow,
-  opts: { mode: 'compose' | 'polish'; instruction?: string; locale?: string },
+  opts: { mode: 'compose' | 'polish'; instruction?: string; locale?: string; budgetMs?: number },
 ): Promise<{ body?: string; locale: string; desk: string; grounded: { picks: number; guides: number; articles: number } | null; error?: string }> {
+  // The clock of this run (default: the route's 58 s). It starts before the search for the context, which takes its share of the time.
+  // A caller with less time passes budgetMs: the model then thinks less (effortForBudget) and a second try is not started.
+  const clock = budgetClock(Date.now, opts.budgetMs);
   const guestText = (row.text_body || (row.html_body ? stripHtml(String(row.html_body)) : '') || '').slice(0, 4000);
   const subject = String(row.subject || '').slice(0, 200);
   const instruction = String(opts.instruction || '').slice(0, 4000);
@@ -100,12 +104,16 @@ export async function composeReply(
     ? `The guest wrote:\n"""${guestText || '(no readable body)'}"""\n\nThe concierge's rough draft. Improve wording, grammar, flow and tone, keep the meaning and any specific facts/commitments:\n"""${instruction}"""\n\nReturn the polished final reply.`
     : `The guest wrote:\n"""${guestText || '(no readable body — reply to the subject: ' + subject + ')'}"""\n\nThe concierge's intent / notes for the reply:\n"""${instruction || 'Reply helpfully, accurately and warmly, fully addressing what the guest asked, using the specialists and guidance in the context.'}"""\n\nWrite the full reply now.`;
 
-  // Use the SAME model the live chat uses (CONCIERGE_MODEL honours the SONNET_MODEL
-  // override); fall back to Haiku so a model-id or transient issue can't leave the
-  // desk with nothing. The real error is returned, never swallowed.
+  // Task "mail" (gpt-6-luna, medium: a reply a person will read and send deserves thought, and nobody waits for it in a chat window).
+  // If the first try fails for a reason another try can cure (a slow answer, a busy server), the second thinks less so it fits in
+  // what is left of the route. The real error is returned, never swallowed.
   let lastError = '';
-  for (const model of [CONCIERGE_MODEL, CLAUDE_HAIKU]) {
-    const { text: rawText, error } = await callClaude({ systemInstruction: system, userMessage, model, maxTokens: 1400, fn: 'mail-compose' });
+  for (const tryNo of [1, 2]) {
+    if (tryNo === 2 && !clock.canRetry()) break;
+    const { text: rawText, error, kind } = await callAI({
+      systemInstruction: system, userMessage, task: 'mail', complexity: 'routine', effort: tryNo === 2 ? 'low' : undefined,
+      expectTokens: 1100, timeoutMs: clock.callBudget(), fn: 'mail-compose',
+    });
     // the draft speaks as Cyprus Lifestyle too: no other site named or linked, GetYourGuide links ours (lib/concierge/linkPolicy.ts)
     const text = applyLinkPolicy(rawText || '', { campaign: 'cl-concierge' }).text;
     if (!error && text.trim()) {
@@ -122,6 +130,7 @@ export async function composeReply(
       return { body: text.trim(), locale, desk: desk.name, grounded: grounded(ctx) };
     }
     lastError = error || 'the model returned an empty reply';
+    if (isFinalFailure(kind)) break; // the key, the credit or the request itself is the problem: a second try would fail the same way
   }
   return { locale, desk: desk.name, grounded: grounded(ctx), error: lastError };
 }
@@ -158,11 +167,14 @@ export function autoAckEligible(row: InboundRow): { ok: boolean; reason?: string
 }
 
 // ── Orchestrator — run the moment an inbound email is stored ───────────────────
+/** Time the draft-on-arrival may take: it runs after the webhook's answer but inside the same 60-second function, and the CRM link and the booking match come after it. */
+export const INBOUND_DRAFT_BUDGET_MS = 40_000;
+
 export async function runInboundAssist(row: InboundRow): Promise<void> {
   const sb = supabaseAdmin();
 
-  // 1) Draft-on-arrival: always prepare a suggested reply for the human.
-  const draft = await composeReply(row, { mode: 'compose' }).catch((e) => ({ error: (e as Error).message } as Awaited<ReturnType<typeof composeReply>>));
+  // 1) Draft-on-arrival: always prepare a suggested reply for the human. If it does not finish in time, the admin drafts it with the button.
+  const draft = await composeReply(row, { mode: 'compose', budgetMs: INBOUND_DRAFT_BUDGET_MS }).catch((e) => ({ error: (e as Error).message } as Awaited<ReturnType<typeof composeReply>>));
   if (draft?.body) {
     try { await sb.from('inbound_emails').update({ suggested_reply: draft.body, suggested_at: new Date().toISOString() }).eq('id', row.id); }
     catch { /* the mail is safely stored; a missing suggestion just means the admin drafts by hand */ }

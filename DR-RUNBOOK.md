@@ -19,7 +19,7 @@ Where state lives — and this is the whole reason recovery is fast:
 
 - **Supabase Postgres — the only durable state.** Content, directory, CRM, concierge logs, jobs, everything. Protect *this*.
 - **Vercel — stateless compute.** No data; a redeploy or rollback is lossless. Env vars are configuration, backed up in §3.
-- **External services** (Resend, Stripe, Anthropic/OpenAI, Upstash) hold their own state (emails, payments, rate-limit counters). Payments live in Stripe and are the authoritative financial record — our DB only mirrors them.
+- **External services** (Resend, Stripe, OpenAI, Upstash) hold their own state (emails, payments, rate-limit counters). Payments live in Stripe and are the authoritative financial record — our DB only mirrors them.
 - **Re-derivable** without a backup: search vectors (re-embed), geocodes (re-geocode), scraped knowledge (re-scrape), the CI prelude. Losing these costs time, not data.
 
 ---
@@ -109,7 +109,7 @@ change in Vercel, **redeploy** for it to take effect.
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API → rotate | **Full DB write, RLS bypass** — highest | Immediately on suspicion; else yearly |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → API | Public by design (RLS still applies); rotate only if RLS policy assumed secrecy | Rarely |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe → Developers → API keys / Webhooks | Payments | Immediately on suspicion; else yearly |
-| `CLAUDE_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` | Each provider console | Model spend | On suspicion; rotate yearly; watch spend in Analytics |
+| `OPENAI_API_KEY` | OpenAI dashboard → API keys (then store the new value in Vercel **and** in the Supabase edge-function secrets) | Model spend | On suspicion; rotate yearly; watch spend in Admin → start page (AI spend) |
 | `RESEND_API_KEY`, `RESEND_INBOUND_SECRET`, `RESEND_WEBHOOK_SECRET` | Resend dashboard | Send/receive mail as us | On suspicion; yearly |
 | `CRON_SECRET`, `ENRICH_SECRET`, `BACKFILL_SECRET`, `REVALIDATE_SECRET` | Our own — set any strong random value in Vercel | Trigger our jobs/endpoints | Yearly; after any contractor offboards |
 | `UPSTASH_REDIS_REST_TOKEN` | Upstash console | Rate-limit store | Yearly |

@@ -9,7 +9,7 @@
 | `cyprus-scrape-rss`: RSS scraper (only acts if "RSS scraper" is ON) | Supabase pg_cron → edge function | every 3 h |
 | `enrich-slow-all`: slow directory enrichment | Supabase pg_cron → edge function | daily 03:00 |
 
-**Throughput of the AI desk.** One run takes the oldest unprocessed article and finishes it completely (fact core, seven native editions, sub-editing, fact check, publish bar). A second article is started in the same run only if the first one finished early, so plan for about **one article per run**: four per hour at the 15-minute rhythm. More is possible by shortening the schedule (for example every 5 minutes); the per-article claim (`scraped` → `rewriting`) means two runs never take the same article. The cost per article is visible in Admin → AI (spend log) after the first runs; see `docs/TEXTPRODUKTION-OPENAI.md`.
+**Throughput of the AI desk.** One run takes the oldest unprocessed article and finishes it completely (fact core, seven native editions, sub-editing, fact check, publish bar). A second article is started in the same run only if the first one finished early, so plan for about **one article per run**: four per hour at the 15-minute rhythm. More is possible by shortening the schedule (for example every 5 minutes); the per-article claim (`scraped` → `rewriting`) means two runs never take the same article. The cost per article is visible in Admin → AI (spend log) after the first runs; see `docs/TEXTPRODUKTION-OPENAI.md`. The desk needs the **website to be up**: its style check runs there (`/api/desk/assess`, shared secret `ENRICH_SECRET`; `SITE_URL` and `ENRICH_SECRET` must also be Supabase secrets). If the website does not answer, the desk starts nothing and the article stays queued; Admin → AI → "Run AI health check" shows "style check" in red with the reason.
 
 ## One-time repair/installation of the Supabase jobs
 1. Supabase → SQL Editor → run `supabase/migrations/20261005170000_ops_cron_health.sql`.
@@ -23,6 +23,11 @@
 ## Health checks and alerts
 Admin → **System health** shows every check, the switch ↔ job map and the scheduled jobs. The same checks run every 30 minutes (from the worker, and daily from the Vercel job as a fallback).
 An e-mail goes to `OPS_ALERT_EMAIL` (or `NEWSLETTER_APPROVER_EMAIL`) when the set of red checks changes, again every 12 h while a problem persists, and once when everything is green again.
+
+## AI health checks
+- Admin → AI → **Run AI health check**: the article desk (OpenAI answers in strict and in plain JSON mode, the style check on the website answers, the budget is free) and the concierge chat (a streamed one-word answer; it shows the time to the first word and to the end of the answer).
+- `/api/concierge/selftest` (signed in as admin, or with `?key=<ENRICH_SECRET>`): the same concierge test in detail: the error class when it fails (`auth` key, `billing` credit or budget, `not_found` model id, `timeout`), the effort used, `first_word_ms`, and the embeddings used by the search.
+- `/api/health`: whether the OpenAI key is present on the website (the concierge needs it). The secrets of the Supabase functions (`OPENAI_API_KEY`, `SITE_URL`, `ENRICH_SECRET`) show up under "keys present" in the AI health check.
 
 ## Audit trail
 Row edits made in the admin screens are recorded by database triggers; server actions (newsletter, members, social, …) by `lib/audit.ts`; every other admin API call (AI generation, scraping, translation, mail replies, moderation, privacy erasure, …) by `lib/auditRequest.ts` (who, which endpoint, when — never the request content). See Admin → Audit log.

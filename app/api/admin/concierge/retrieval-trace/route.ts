@@ -8,7 +8,7 @@
 // semantic — plus the LLM understanding and the district it scoped to. This is how we
 // answer "why did it return hotels for a gym query" (and "does semantic cover every
 // category, not just gyms") with evidence instead of assertion. Admin only. Each query
-// costs one embedding + one small Haiku call.
+// costs one embedding + one small model call.
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { retrievalTrace, isConciergeLocale, type RetrievalTrace } from '@/lib/concierge/brain';

@@ -31,7 +31,7 @@ In **Meta for Developers** (developers.facebook.com):
    WHATSAPP_PHONE_NUMBER_ID=<phone number id>
    WHATSAPP_VERIFY_TOKEN=<the secret string you chose>
    ```
-   (`CLAUDE_API_KEY` is already used by the site; the webhook reuses it. Optional:
+   (`OPENAI_API_KEY` is already used by the site; the webhook reuses it. Optional:
    `WHATSAPP_API_VERSION`, default `v21.0`, and `NEXT_PUBLIC_SITE_URL` for link building.)
 5. In the WhatsApp product → **Configuration → Webhook**, set:
    - **Callback URL:** `https://<your-site>/api/whatsapp`  (e.g. `https://cyprus-lifestyle.vercel.app/api/whatsapp`)

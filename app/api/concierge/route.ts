@@ -2,7 +2,7 @@
 // Public "Ask the island" endpoint. Rate-limited, then answered by the SHARED
 // concierge brain (lib/concierge/brain.ts) — the SAME grounded, multilingual core
 // that powers the streaming web chat, Telegram and WhatsApp. One concierge brain,
-// one behaviour on every surface. The model key (CLAUDE_API_KEY) stays server-side.
+// one behaviour on every surface. The model key (OPENAI_API_KEY) stays server-side.
 //
 // Previously this route PROXIED to the `concierge` Supabase edge function (which
 // held its own model key). That function is now deprecated (see
@@ -18,7 +18,7 @@ import { cardsFor, sourceHints } from '@/lib/concierge/sources';
 
 export const runtime = 'nodejs';
 // The brain embeds, retrieves across several legs, reranks, then makes one
-// non-streaming Claude call (60s timeout inside runConcierge). Match the chat
+// non-streaming model call (45s limit inside runConcierge). Match the chat
 // route's budget so the function isn't killed before that call can complete.
 export const maxDuration = 60;
 
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 
   // The brain reuses the model key already on the Next side (the same key the chat,
   // Telegram and WhatsApp concierge use). Without it there is nothing to answer with.
-  if (!process.env.CLAUDE_API_KEY) {
+  if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ ok: false, error: 'The concierge is not configured.' }, { status: 500 });
   }
 

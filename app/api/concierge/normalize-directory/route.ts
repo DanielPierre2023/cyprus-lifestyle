@@ -4,11 +4,11 @@
 // selling and analytics. Classifies with a cheap model in batches (~25 businesses per
 // call, a few calls in parallel), writes canonical_category / canonical_subtype / tags,
 // and marks normalized_at. Re-runnable and chunked — call until "remaining":0. Zero
-// fabrication: it only LABELS businesses you already have. Needs ENRICH_SECRET + a model
-// key; `?redo=1` re-classifies everything.
+// fabrication: it only LABELS businesses you already have. Needs ENRICH_SECRET + the
+// OpenAI key; `?redo=1` re-classifies everything.
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { callClaude, CLAUDE_HAIKU, parseAiJson } from '@/lib/ai';
+import { callAI, parseAiJson } from '@/lib/ai';
 import { classifyPromptList, coerceClassification, mapToCanonical } from '@/lib/directory/taxonomy';
 import { keyGateDeny as denyReason } from '@/lib/auth/keyGate';
 
@@ -35,12 +35,13 @@ const SYSTEM =
   '\nJudge from the name, the raw category, AND what the business says about itself (often the clearest signal). Classify what the business primarily IS or SELLS — never a nearby landmark, street or its clientele (being NEAR a hospital does not make it a hospital). Echo back the exact index i we gave each business. If genuinely unclear, use general-vendor. Keep tags short ' +
   '(e.g. cuisine, speciality, service). Do not invent facts — classify only.';
 
-async function classifyChunk(rows: Row[]): Promise<void> {
+async function classifyChunk(rows: Row[], deadlineAt: number): Promise<void> {
   const sb = supabaseAdmin();
   const lines = rows.map((r, i) => `${i} | ${(r.name_en || '').slice(0, 60)} | ${(r.subtype || r.type || '').slice(0, 40)}${r.category_group ? ' /' + r.category_group : ''} | ${r.district || ''}${r.source_description ? ' | ' + r.source_description.replace(/\s+/g, ' ').slice(0, 160) : ''}`).join('\n');
   let byIndex = new Map<number, ReturnType<typeof coerceClassification>>();
   try {
-    const r = await callClaude({ systemInstruction: SYSTEM, userMessage: `Classify these ${rows.length} businesses:\n${lines}`, model: CLAUDE_HAIKU, jsonMode: true, maxTokens: 1500, timeoutMs: 20_000, fn: 'normalize-directory' });
+    // Task "classify" (gpt-6-luna). A call gets 25 s, or what is left before the route's own limit if that is less.
+    const r = await callAI({ systemInstruction: SYSTEM, userMessage: `Classify these ${rows.length} businesses:\n${lines}`, task: 'classify', jsonMode: true, expectTokens: 1200, timeoutMs: Math.max(8_000, Math.min(25_000, deadlineAt - Date.now())), deadlineAt, fn: 'normalize-directory' });
     if (r.error || !r.text) return; // transient — leave rows unmarked, a later call retries
     const j = parseAiJson<{ results?: { i?: number; category?: string; subtype?: string; tags?: string[] }[] }>(r.text);
     if (!Array.isArray(j.results)) return;
@@ -74,7 +75,8 @@ async function classifyChunk(rows: Row[]): Promise<void> {
 async function run(redo: boolean): Promise<Record<string, unknown>> {
   const sb = supabaseAdmin();
   const started = Date.now();
-  const BUDGET_MS = 50_000;
+  const BUDGET_MS = 50_000;       // no new round of model calls starts after this
+  const ROUTE_LIMIT_MS = 56_000;  // a call started late is given only what is left, so every model call is over before the route is stopped at 60 s
   const SELECT = 'id,name_en,subtype,type,category_group,district,source_description';
   let mapped = 0, llmDone = 0, after = '';
 
@@ -112,7 +114,7 @@ async function run(redo: boolean): Promise<Record<string, unknown>> {
       const slice = llmRows.slice(i, i + CHUNK * CONCURRENCY);
       const chunks: Row[][] = [];
       for (let j = 0; j < slice.length; j += CHUNK) chunks.push(slice.slice(j, j + CHUNK));
-      await Promise.all(chunks.map((c) => classifyChunk(c)));
+      await Promise.all(chunks.map((c) => classifyChunk(c, started + ROUTE_LIMIT_MS)));
       llmDone += slice.length;
     }
   }

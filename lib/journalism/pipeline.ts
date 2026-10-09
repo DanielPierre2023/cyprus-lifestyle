@@ -32,13 +32,18 @@ export interface CallSpec {
 }
 export type LlmFn = (spec: CallSpec) => Promise<LlmResult>;
 
-export interface Assessment { score: number; ok: boolean; high: number; words: number; tells: Finding[] }
+export interface Assessment {
+  score: number; ok: boolean; high: number; words: number; tells: Finding[];
+  /** Set (to the reason) when the style check could not run; the edition is then never published and the sub-editor has nothing to work from. */
+  unavailable?: string;
+}
 export interface AssessCtx { title: string; category: string; articleType: ArticleType }
 
 export interface PipelineDeps {
   llm: LlmFn;
   now: () => number;
-  assess: (html: string, lang: Lang, ctx: AssessCtx) => Assessment;
+  /** The style check. It may run on another machine (the edge function asks the website, see assessClient.ts), hence a promise is fine. */
+  assess: (html: string, lang: Lang, ctx: AssessCtx) => Assessment | Promise<Assessment>;
   sanitize: {
     /** raw model HTML → clean article HTML (sanitised, paragraphs ensured). */
     html: (raw: string, lang: Lang) => string;
@@ -205,6 +210,16 @@ export async function runPipeline(input: { title: string; text: string; hintCate
   await Promise.all(ALL_LANGS.map((l) => finish(l)));
   lap('finish', tFinish);
 
+  // The style check may run on another machine. When it cannot be reached the edition is not published (like a fact check that did not
+  // run) and the sub-editor has no findings to work from.
+  async function judge(html: string, lang: Lang, ctx: AssessCtx): Promise<Assessment> {
+    try { return await deps.assess(html, lang, ctx); } catch (e) {
+      const why = String((e as Error)?.message || e).replace(/\s+/g, ' ').slice(0, 200);
+      log(`[desk] ${lang} style check could not run: ${why}`);
+      return { score: 0, ok: false, high: 0, words: deps.sanitize.words(html), tells: [], unavailable: why };
+    }
+  }
+
   async function llmJson<T = Record<string, unknown>>(spec: CallSpec): Promise<T | null> {
     const r = await llm(spec);
     return r.ok ? parseJsonLoose<T>(r.text) : null;
@@ -236,14 +251,14 @@ export async function runPipeline(input: { title: string; text: string; hintCate
     }
 
     // 4c. the voice engine judges the body; the sub-editor works from the findings, never from a quota
-    let a = deps.assess(ed.content, lang, ctx());
-    for (let pass = 1; pass <= opts.maxEditPasses && !a.ok && left() > min.edit; pass++) {
+    let a = await judge(ed.content, lang, ctx());
+    for (let pass = 1; pass <= opts.maxEditPasses && !a.ok && !a.unavailable && left() > min.edit; pass++) {
       const j = await llmJson({ fn: `edit-${lang}`, task: 'edit', complexity, attempt: pass, system: editorialSystem(lang, editorialFixes(a.tells)), user: editorialUser(lang, ed.content), json: { name: 'edit', schema: EDITORIAL_SCHEMA as unknown as Record<string, unknown> }, expectTokens: editTokens(), deadlineAt: opts.deadlineAt });
       const cand = j ? deps.sanitize.html(asStr(j.content_html), lang) : '';
       if (!cand || cand.length < ed.content.length * 0.7 || cand.length > ed.content.length * 1.35) break;
       if (!deps.factsKept(ed.content, cand, lang)) { log(`[desk] ${lang} edit pass ${pass} dropped: a figure or quotation changed`); break; }
-      const a2 = deps.assess(cand, lang, ctx());
-      if (a2.score >= a.score) break;
+      const a2 = await judge(cand, lang, ctx());
+      if (a2.unavailable || a2.score >= a.score) break;
       ed.content = cand; ed.wc = deps.sanitize.words(cand); a = a2; ed.passes.edit++;
     }
     ed.assessment = a;
@@ -289,7 +304,7 @@ export async function runPipeline(input: { title: string; text: string; hintCate
           ed.content = html; ed.wc = deps.sanitize.words(html);
           if (j && asStr(j.title)) ed.title = deps.sanitize.title(asStr(j.title), lang);
           ed.passes.repair++; repaired = true;
-          ed.assessment = deps.assess(ed.content, lang, ctx());
+          ed.assessment = await judge(ed.content, lang, ctx());
           if (left() > min.check) { const c2 = await runCheck(); if (c2) c = c2; }
         }
       }
@@ -305,7 +320,8 @@ export async function runPipeline(input: { title: string; text: string; hintCate
     const ed = editions[l]; const tag = l.toUpperCase();
     if (!ed.ok) { reasons.push(`${tag}: ${ed.reason}`); continue; }
     const a = ed.assessment;
-    if (a && !a.ok) reasons.push(`${tag}: style score ${a.score}${a.high ? ` with a machine signature (${a.tells.filter((t) => t.severity === 'high').map((t) => t.label).slice(0, 2).join('; ')})` : ''}`);
+    if (a?.unavailable) reasons.push(`${tag}: style check not completed (${a.unavailable})`);
+    else if (a && !a.ok) reasons.push(`${tag}: style score ${a.score}${a.high ? ` with a machine signature (${a.tells.filter((t) => t.severity === 'high').map((t) => t.label).slice(0, 2).join('; ')})` : ''}`);
     else if (a && a.score > 0) warnings.push(`${tag}: style score ${a.score} (within the limit)`);
     const fc = ed.factCheck;
     if (!fc || !fc.ran) reasons.push(`${tag}: fact check not completed${fc?.error ? ` (${fc.error})` : ''}`);

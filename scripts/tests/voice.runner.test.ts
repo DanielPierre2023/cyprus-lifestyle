@@ -1,31 +1,17 @@
 // The first live gate runs paid for four replies that contained no text: the model spent the whole token budget on hidden
-// reasoning. These tests pin the three defences: read the reply properly, leave headroom, stop after repeated model failures.
-import { readClaudeReply, emptyReplyError, rejectsThinkingField } from '@/lib/aiReply';
+// reasoning. These tests pin the defences: leave headroom, stop after repeated model failures. (Reading a reply that has no text,
+// and cutting it off at the token cap, is pinned in journalism-openai.test.ts.)
 import { visibleTokensFor, trip, due, parseState, recordRun, BREAKER_N, BREAKER_PAUSE_MS, type Unit } from '@/lib/voice/work';
 import { eq, ok, report } from './_harness';
 
-// 1. reading a reply
-const thinkingOnly = { content: [{ type: 'thinking', thinking: '...' }], stop_reason: 'max_tokens', usage: { output_tokens: 2010 } };
-const r1 = readClaudeReply(thinkingOnly);
-eq('a thinking-only reply has no text', r1.text, '');
-eq('the stop reason is kept', r1.stop, 'max_tokens');
-eq('the block types are kept', r1.blocks, ['thinking']);
-ok('the empty-reply error names the cause and the cure', /max_tokens/.test(emptyReplyError(r1)) && /thinking/.test(emptyReplyError(r1)) && /raise max_tokens/.test(emptyReplyError(r1)));
-const both = readClaudeReply({ content: [{ type: 'thinking' }, { type: 'text', text: '{"title":"a"}' }, { type: 'text', text: '' }], stop_reason: 'end_turn' });
-eq('text after a reasoning block is found', both.text, '{"title":"a"}');
-eq('garbage input never throws', readClaudeReply(null).text, '');
-eq('missing content is an empty reply', readClaudeReply({}).blocks, []);
-ok('a 400 that mentions thinking is retried without the field', rejectsThinkingField(400, 'thinking: Extra inputs are not permitted'));
-ok('other errors are not retried', !rejectsThinkingField(400, 'max_tokens too large') && !rejectsThinkingField(500, 'thinking overload') && !rejectsThinkingField(400, undefined));
-
-// 2. the size of the text (the model client adds the reserve for the thinking on top of it)
+// 1. the size of the text (the model client adds the reserve for the thinking on top of it)
 const enBody = 'x'.repeat(3571), ruBody = 'x'.repeat(2579);
 ok('the visible budget is sized to the text, not padded with thinking room', visibleTokensFor(enBody, 'en') < 2 * Math.ceil(enBody.length / 3.8) && visibleTokensFor(enBody, 'en') > Math.ceil(enBody.length / 3.8));
 ok('Cyrillic costs more tokens per character than Latin', visibleTokensFor(ruBody, 'ru') > visibleTokensFor('x'.repeat(2579), 'en'));
 ok('an empty body still gets a small budget', visibleTokensFor('', 'en') >= 300);
 eq('a very long body is capped', visibleTokensFor('x'.repeat(200_000), 'ar'), 16_000);
 
-// 3. circuit breaker
+// 2. circuit breaker
 const now = new Date('2026-10-08T15:00:00Z');
 const unit: Unit = { id: 'a', slug: 's', lang: 'en', isSource: true, score: 50, high: true, ok: false, desk: 'news', words: 300 };
 let st = parseState({ enabled: true, dailyCap: 144 });

@@ -17,10 +17,16 @@ import { costUsd, outputCap, isBlockedModel, MAX_OUTPUT_CAP, EFFORT_ORDER, type 
 
 export type JsonSpec = 'object' | { name: string; schema: Record<string, unknown> };
 
+/** One earlier message of a conversation. */
+export interface ChatTurn { role: 'user' | 'assistant'; content: string }
+
 export interface LlmRequest {
   model: string;
   system: string;
+  /** The message to answer (the last one of a conversation). */
   user: string;
+  /** Earlier messages of a conversation, oldest first. They are sent as real messages in front of `user`, so the model sees its own earlier answers as its own. */
+  history?: ChatTurn[];
   effort?: Effort | null;
   maxOutputTokens?: number;
   /** About how many visible tokens the answer will have; sizes max_output_tokens together with the reasoning reserve. */
@@ -77,7 +83,7 @@ export interface LlmResult {
 }
 
 export const ZERO_USAGE: Usage = { inputTokens: 0, cachedTokens: 0, outputTokens: 0, reasoningTokens: 0, cacheWriteTokens: 0 };
-const addUsage = (a: Usage, b: Usage): Usage => ({
+export const addUsage = (a: Usage, b: Usage): Usage => ({
   inputTokens: a.inputTokens + b.inputTokens, cachedTokens: a.cachedTokens + b.cachedTokens,
   outputTokens: a.outputTokens + b.outputTokens, reasoningTokens: a.reasoningTokens + b.reasoningTokens,
   cacheWriteTokens: (a.cacheWriteTokens ?? 0) + (b.cacheWriteTokens ?? 0), serviceTier: b.serviceTier || a.serviceTier,
@@ -97,7 +103,7 @@ export function buildRequestBody(req: LlmRequest): Record<string, unknown> {
   const body: Record<string, unknown> = {
     model: req.model,
     instructions: system,
-    input: req.user,
+    input: req.history && req.history.length ? [...req.history.map((t) => ({ role: t.role, content: t.content })), { role: 'user', content: req.user }] : req.user,
     max_output_tokens: cap,
     store: false,
   };
@@ -193,9 +199,9 @@ export function waitFromHeaders(get: (name: string) => string | null, nowMs: num
   return null;
 }
 
-const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-const isTimeout = (e: unknown) => { const n = (e as { name?: string })?.name; return n === 'TimeoutError' || n === 'AbortError'; };
-const lowerEffort = (e: Effort): Effort | null => { const i = EFFORT_ORDER.indexOf(e); return i > EFFORT_ORDER.indexOf('low') ? EFFORT_ORDER[i - 1] : null; };
+export const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+export const isTimeout = (e: unknown) => { const n = (e as { name?: string })?.name; return n === 'TimeoutError' || n === 'AbortError'; };
+export const lowerEffort = (e: Effort): Effort | null => { const i = EFFORT_ORDER.indexOf(e); return i > EFFORT_ORDER.indexOf('low') ? EFFORT_ORDER[i - 1] : null; };
 
 // ── the call ──────────────────────────────────────────────────────────────────
 export async function callOpenAI(req: LlmRequest, deps: LlmDeps): Promise<LlmResult> {

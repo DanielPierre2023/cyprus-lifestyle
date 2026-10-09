@@ -81,7 +81,7 @@ Everything marked *optional* has a working fallback, so nothing crashes without 
 | Variable | Powers | If missing |
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | The entire app ↔ database | App does not run |
-| `CLAUDE_API_KEY` | The concierge + all AI drafting | Concierge & AI dead |
+| `OPENAI_API_KEY` | **Every AI text job** (model `gpt-6-luna`): the concierge (web chat, Ask box, WhatsApp, Telegram), mail drafts, article desk, translation, directory sorting. Also voice read-aloud and semantic search. The same key goes into Supabase as an edge-function secret (article desk, Editorial Studio) | Concierge & AI dead |
 | `CRON_SECRET` | Daily cron + queue worker: coordinate backfill, scraping, outreach, error/job pruning | Nothing scheduled runs (returns 401) |
 | `RESEND_API_KEY` | **All outbound email:** mail replies, auto-acknowledgements, checkout onboarding, the newsletter, outreach, DSAR notifications | No email is ever sent |
 | `EMAIL_FROM` | The From address on all mail | Falls back to a default address |
@@ -101,9 +101,8 @@ Everything marked *optional* has a working fallback, so nothing crashes without 
 | Variable | Powers | If missing (the fallback) |
 |---|---|---|
 | `GOOGLE_GEOCODING_KEY` (or `GOOGLE_MAPS_KEY` / `PLACES_KEY`) | **Faster** coordinate backfill (item A) | Free **Nominatim** — works, just slower/rate-limited |
-| `OPENAI_API_KEY` | Concierge **voice** (text-to-speech) + **semantic** search recall | Text concierge still works; no voice, keyword-only recall |
 | `OPENAI_EMBED_MODEL`, `OPENAI_TTS_MODEL`, `OPENAI_TTS_VOICE` | Override the voice/embedding models | Built-in defaults |
-| `SONNET_MODEL` | Override the concierge model id | Built-in default |
+| `OPENAI_MODEL_LUNA` | Override the model id if OpenAI renames it (more tuning knobs: `.env.example`) | Built-in default `gpt-6-luna` |
 | `UNSPLASH_ACCESS_KEY` | Auto cover-image picker in the editor | Paste image URLs / branded placeholders |
 | `NEXT_PUBLIC_CARTO_KEY` | Prettier map tiles | Plain OpenStreetMap tiles |
 | `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | Rate limiting shared across server instances | In-memory per-instance limiting (fine at low/medium traffic) |
@@ -111,7 +110,6 @@ Everything marked *optional* has a working fallback, so nothing crashes without 
 | `CONCIERGE_INBOX`, `CONCIERGE_INBOX_LUXURY`, `DIRECTORY_INBOX`, `ADVERTISE_INBOX`, `LUXURY_DESK` | Route each desk's alerts to a specific inbox | Falls back to your `EMAIL_FROM` domain |
 | `NEIGHBOURHOOD_RADIUS_M` | Neighbourhood search radius | Built-in default |
 | `META_*`, `X_*`, `LINKEDIN_*`, `WHATSAPP_*` | Auto-posting to social / WhatsApp replies | Those channels off; the rest works |
-| `GEMINI_API_KEY` | An alternate AI provider (edge functions) | Claude/OpenAI cover it |
 | `ENRICH_SECRET`, `BACKFILL_SECRET`, `REVALIDATE_SECRET` | Protect specific internal admin utility routes | Only those routes are affected |
 
 ### Getting the Google geocoding key (optional)
@@ -122,9 +120,9 @@ on, add Geocoding API; (3) in **Vercel** add `GOOGLE_GEOCODING_KEY` = that key's
 Note: it must be in **Vercel** — the app can't read Supabase's `GOOGLE_PLACES_API_KEY`.
 
 ### Your current status (as of setup)
-Present & working: Supabase trio, `CLAUDE_API_KEY`, `CRON_SECRET`, `RESEND_API_KEY` +
-inbound secret (email tested), Stripe pair, `MEMBERSHIP_PRICE_EUR`, `OPENAI_API_KEY`,
-`SONNET_MODEL`, `EMAIL_FROM`, `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_CARTO_KEY`,
+Present & working: Supabase trio, `OPENAI_API_KEY`, `CRON_SECRET`, `RESEND_API_KEY` +
+inbound secret (email tested), Stripe pair, `MEMBERSHIP_PRICE_EUR`,
+`EMAIL_FROM`, `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_CARTO_KEY`,
 `CONCIERGE_INBOX(_LUXURY)`. Only genuinely useful thing still open: `GOOGLE_GEOCODING_KEY`
 (optional — speeds up coordinate backfill; Nominatim works without it).
 
@@ -160,7 +158,8 @@ inbound secret (email tested), Stripe pair, `MEMBERSHIP_PRICE_EUR`, `OPENAI_API_
   Don't; it's CI-only and harmless (it rolled back).
 - **A migration errors on a fresh DB** — check it applies in the CI job; the prelude must
   run first there. On Supabase, run only the numbered migrations.
-- **Concierge says "no draft"/errors** — check `CLAUDE_API_KEY` and Admin → Analytics →
+- **Concierge says "no draft"/errors** — open `/api/concierge/selftest?key=<ENRICH_SECRET>` (it names the real
+  cause: key, credit, budget, model id, speed), check `OPENAI_API_KEY` and Admin → Analytics →
   System errors for the real message.
 - **Background jobs not progressing** — without pg_cron they only advance on the daily
   tick; enable pg_cron (§1.4) for continuous draining. Check the Background jobs panel for

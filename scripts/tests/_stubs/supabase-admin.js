@@ -10,4 +10,5 @@ const builder = () => {
   };
   return b;
 };
-export const supabaseAdmin = () => ({ from: () => builder(), rpc: async () => ({ data: null, error: null }) });
+// A test that needs to see what was written can set globalThis.__testSupabase = () => client; every other test gets the no-op client.
+export const supabaseAdmin = () => (globalThis.__testSupabase ? globalThis.__testSupabase() : { from: () => builder(), rpc: async () => ({ data: null, error: null }) });

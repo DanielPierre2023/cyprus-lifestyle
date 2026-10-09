@@ -4,7 +4,7 @@
 // ----------------------------------------------------------------------------
 // Retrieval gives us a good candidate SET (semantic + keyword). This decides the
 // ORDER, which is where trust and money live:
-//   • PRECISION — a cheap LLM scores how well each candidate actually matches the
+//   • PRECISION — a cheap, quick model scores how well each candidate actually matches the
 //     request (0 = wrong category, 3 = exact). This removes the "taxi ranked first
 //     for a locksmith query" failure: the taxi scores 0 and drops out.
 //   • COMMERCE — among genuinely relevant results, paying subscribers lead, in the
@@ -13,12 +13,12 @@
 // paying partner can never outrank a clearly better-matched option — which is exactly
 // what keeps the concierge trustworthy enough for a placement to be worth buying.
 //
-// Opt-in via CONCIERGE_RERANK=1 (one cheap Haiku call per turn); on error or when off,
+// Opt-in via CONCIERGE_RERANK=1 (one small model call per turn); on error or when off,
 // it returns the candidates unchanged, so the guest path always degrades cleanly.
 // The pure scoring is unit-tested; only the model call is I/O.
 // ============================================================================
 import 'server-only';
-import { callClaude, CLAUDE_HAIKU, parseAiJson } from '@/lib/ai';
+import { callAI, parseAiJson } from '@/lib/ai';
 
 // The shape the reranker needs — Pick satisfies it structurally, so brain.ts can pass
 // its candidates straight through without any coupling to this module's types.
@@ -85,10 +85,11 @@ export async function rerankCandidates<T extends Rankable>(query: string, cands:
   const tail = cands.slice(topK);
   const list = head.map((c) => `${c.slug} | ${c.name} | ${c.subtype || c.type || '?'} | ${c.district || '?'}`).join('\n');
   try {
-    const r = await callClaude({
+    // Task "helper": gpt-6-luna at "low" (AI_EFFORT_HELPER tunes it); time-boxed, the order stays as retrieved on a miss.
+    const r = await callAI({
       systemInstruction: SYSTEM,
       userMessage: `GUEST REQUEST: ${query.slice(0, 400)}\n\nCANDIDATES (slug | name | category | district):\n${list}`,
-      model: CLAUDE_HAIKU, jsonMode: true, maxTokens: 700, timeoutMs: 4500, fn: 'concierge-rerank',
+      task: 'helper', jsonMode: true, expectTokens: 500, timeoutMs: 7000, fn: 'concierge-rerank',
     });
     if (r.error || !r.text) return cands;
     const j = parseAiJson<{ scores?: { slug?: string; r?: number }[] }>(r.text);

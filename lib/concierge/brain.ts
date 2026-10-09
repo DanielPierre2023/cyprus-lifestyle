@@ -7,15 +7,17 @@
 // listings) — it never invents a place or a price. The web route streams its
 // prose; WhatsApp uses the non-streaming path. Same persona, same grounding.
 //
-// Reuses the model key already on the Next side (CLAUDE_API_KEY) and the KB /
-// directory we built in Phases 0–3. No new dependencies.
+// Reuses the model key already on the Next side (OPENAI_API_KEY) and the KB /
+// directory we built in Phases 0–3. The model conversation itself lives in
+// lib/concierge/chatModel.ts (gpt-6-luna, streamed). No new dependencies.
 // ============================================================================
 import { CONCIERGE_MANNER } from '@/lib/voice/concierge';
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { searchArticles } from '@/lib/queries';
 import type { Locale } from '@/lib/locales';
-import { CLAUDE_SONNET } from '@/lib/ai';
+import { aiRoute } from '@/lib/ai';
+import { answerOnce, streamAnswer, isFinalFailure, ROUTE_BUDGET_MS, FALLBACK_MIN_MS } from '@/lib/concierge/chatModel';
 import { retrieveKnowledge, guideHref, QA_INDEX, type QAHit } from '@/lib/knowledge/qa';
 import { localizedIntent } from '@/lib/knowledge/qa.i18n';
 import { embedText } from '@/lib/concierge/embed';
@@ -31,9 +33,10 @@ import { markLinkable, renderSourcesBlock, cardsFor, sourceHints, type SourceHit
 import { retrieveSources, publishedSet } from '@/lib/concierge/sourcesRetrieve';
 import { supabaseSourceDeps } from '@/lib/concierge/sourcesDeps';
 import { MEMBERSHIP_FACTS } from '@/lib/member/truth';
-import { applyLinkPolicy, LinkPolicyStream, isOfficialAuthorityUrl } from '@/lib/concierge/linkPolicy';
+import { isOfficialAuthorityUrl } from '@/lib/concierge/linkPolicy';
 
-export const CONCIERGE_MODEL = process.env.SONNET_MODEL || CLAUDE_SONNET;
+/** The model the concierge answers with (the routing table's "chat" task; override with OPENAI_MODEL_LUNA). Recorded with every live quality evaluation. */
+export const CONCIERGE_MODEL = aiRoute('chat').model;
 const NEIGHBOURHOOD_RADIUS_M = Number(process.env.NEIGHBOURHOOD_RADIUS_M || 2500);
 // Minimum pgvector cosine similarity (1 − distance) for a semantic directory hit to
 // count. match_directory returns the nearest N regardless of closeness, so without a
@@ -888,33 +891,11 @@ export function latestUserText(messages: ChatMessage[]): string {
   return '';
 }
 
-interface AnthropicMessage { role: Role; content: string; }
-function buildAnthropicBody(system: string, messages: AnthropicMessage[], stream: boolean, maxTokens = 900) {
-  // NOTE: newer Claude models (sonnet-5 / opus-5) REJECT the `temperature` field
-  // with a 400 error, so it is intentionally not sent. Sending it was the second
-  // cause of "the concierge is busy" (the first was a wrong model id in lib/ai.ts).
-  return {
-    model: CONCIERGE_MODEL, max_tokens: maxTokens, system,
-    messages: messages.map((m) => ({ role: m.role, content: m.content })),
-    stream,
-  };
-}
-
-// Read ALL text blocks (sonnet-5/opus-5 may return a non-text block first).
-function extractText(data: unknown): string {
-  const blocks = (data as { content?: { type?: string; text?: string }[] })?.content;
-  if (!Array.isArray(blocks)) return '';
-  return blocks.filter((b) => b?.type === 'text' && b.text).map((b) => b.text).join('').trim();
-}
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-function anthropicHeaders(): Record<string, string> {
-  return { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01', 'x-api-key': process.env.CLAUDE_API_KEY || '' };
-}
-
-// ── Non-streaming answer (WhatsApp, fallback) ─────────────────────────────────
+// ── Non-streaming answer (WhatsApp, Telegram, the Ask box) ─────────────────────
 export async function runConcierge(
   messages: ChatMessage[], locale: string, opts?: { matchLanguage?: boolean },
 ): Promise<{ text: string; ctx: ConciergeContext }> {
+  const t0 = Date.now();
   const loc = isConciergeLocale(locale) ? locale : 'en';
   const history = sanitizeHistory(messages);
   const ctx = await assembleContext(loc, latestUserText(history));
@@ -922,36 +903,9 @@ export async function runConcierge(
   if (opts?.matchLanguage) {
     system += "\n\nThe guest is messaging on WhatsApp. Reply in the SAME language the guest writes in, even if it differs from the default. Keep it warm and concise for a chat message (a few sentences); no markdown headings.";
   }
-  if (!process.env.CLAUDE_API_KEY) return { text: '', ctx };
-  const res = await fetch(ANTHROPIC_URL, {
-    method: 'POST', headers: anthropicHeaders(),
-    body: JSON.stringify(buildAnthropicBody(system, history, false)),
-    signal: AbortSignal.timeout(60_000),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) console.error('[concierge] claude', res.status, JSON.stringify(data).slice(0, 300));
-  const text = applyLinkPolicy(extractText(data), { campaign: 'cl-concierge' }).text;
-  return { text, ctx };
-}
-
-// Resilient fallback: if STREAMING from the Next side is unavailable (a transient
-// error, or an empty stream) we make ONE non-streaming Claude call with the SAME
-// grounded system prompt and history, so the web chat still returns a grounded
-// answer in one piece. This previously called the Supabase edge `concierge`
-// function; that function is now deprecated, so the fallback stays entirely on the
-// Next side (same model key, no re-retrieval) with no external dependency.
-async function directAnswer(system: string, history: ChatMessage[]): Promise<string> {
-  if (!process.env.CLAUDE_API_KEY) return '';
-  try {
-    const res = await fetch(ANTHROPIC_URL, {
-      method: 'POST', headers: anthropicHeaders(),
-      body: JSON.stringify(buildAnthropicBody(system, history, false)),
-      signal: AbortSignal.timeout(60_000),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) { console.error('[concierge] fallback', res.status, JSON.stringify(data).slice(0, 300)); return ''; }
-    return applyLinkPolicy(extractText(data), { campaign: 'cl-concierge' }).text;
-  } catch (e) { console.error('[concierge] fallback', (e as Error).message); return ''; }
+  // The reason a call failed goes to the log (chatModel); a guest gets the channel's own "one moment" note when text is empty.
+  const a = await answerOnce(system, history, { fn: 'concierge-chat', locale: loc, timeoutMs: 45_000, deadlineAt: t0 + ROUTE_BUDGET_MS });
+  return { text: a.text, ctx };
 }
 
 // ── Streaming answer (web) — yields SSE-ready events ──────────────────────────
@@ -963,6 +917,7 @@ export type StreamEvent =
   | { type: 'done' };
 
 export async function* streamConcierge(messages: ChatMessage[], locale: string, memoryBlock = '', memberBlock = ''): AsyncGenerator<StreamEvent> {
+  const t0 = Date.now();
   const loc = isConciergeLocale(locale) ? locale : 'en';
   const history = sanitizeHistory(messages);
   const q = latestUserText(history);
@@ -971,62 +926,26 @@ export async function* streamConcierge(messages: ChatMessage[], locale: string, 
   const system = conciergeSystem(loc) + (memoryBlock || '') + (memberBlock || '') + groundingBlock(ctx, loc);
   yield { type: 'status', label: 'composing' };
 
+  const deadlineAt = t0 + ROUTE_BUDGET_MS;
   let gotText = false;
-  let errDetail = '';
-  // Every delta passes the link policy (no other site named or linked, GetYourGuide links tagged) before it leaves the server.
-  const guard = new LinkPolicyStream({ campaign: 'cl-concierge' });
+  let noSecondTry = false; // the failure is one a second answer cannot cure (key, credit, budget, a refused request)
 
-  // Primary: stream the answer from Claude (needs CLAUDE_API_KEY on the Next side).
-  if (process.env.CLAUDE_API_KEY) {
-    try {
-      const res = await fetch(ANTHROPIC_URL, {
-        method: 'POST', headers: anthropicHeaders(),
-        body: JSON.stringify(buildAnthropicBody(system, history, true)),
-        signal: AbortSignal.timeout(90_000),
-      });
-      if (!res.ok) {
-        errDetail = `claude ${res.status}: ${(await res.text().catch(() => '')).slice(0, 300)}`;
-        console.error('[concierge]', errDetail);
-      }
-      if (res.ok && res.body) {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split('\n');
-          buf = lines.pop() || '';
-          for (const line of lines) {
-            const s = line.trim();
-            if (!s.startsWith('data:')) continue;
-            const payload = s.slice(5).trim();
-            if (!payload || payload === '[DONE]') continue;
-            try {
-              const evt = JSON.parse(payload);
-              if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta' && evt.delta.text) {
-                gotText = true;
-                const out = guard.push(evt.delta.text as string);
-                if (out) yield { type: 'delta', text: out };
-              }
-            } catch { /* keep-alive / partial json */ }
-          }
-        }
-      }
-    } catch (e) { errDetail = (e as Error).message; console.error('[concierge]', errDetail); }
-    const tail = guard.flush();
-    if (tail) yield { type: 'delta', text: tail };
+  // Primary: stream the answer, word by word. Every piece passes the link policy (no other site named or linked, GetYourGuide links tagged)
+  // before it leaves the server (chatModel).
+  for await (const ev of streamAnswer(system, history, { fn: 'concierge-chat', locale: loc, deadlineAt })) {
+    if (ev.type === 'delta') { gotText = true; yield { type: 'delta', text: ev.text }; }
+    else { noSecondTry = isFinalFailure(ev.kind); }
   }
 
-  // Fallback: an error here or an empty stream → one non-streaming Claude call with
-  // the SAME grounded prompt and history, so the web chat still answers in one piece.
-  if (!gotText) {
-    const ans = await directAnswer(system, history);
-    if (ans) { gotText = true; yield { type: 'delta', text: ans }; }
+  // Fallback: nothing at all reached the guest (a transient error, or an empty stream) → ONE answer in one piece with the SAME grounded
+  // prompt and history, if the failure is one another try can cure and the route still has time for it. The first call's reason is in the log.
+  if (!gotText && !noSecondTry && deadlineAt - Date.now() >= FALLBACK_MIN_MS) {
+    const a = await answerOnce(system, history, { fn: 'concierge-chat', locale: loc, timeoutMs: Math.min(35_000, deadlineAt - Date.now() - 2_000), deadlineAt });
+    if (a.text) { gotText = true; yield { type: 'delta', text: a.text }; }
   }
 
-  if (!gotText) yield { type: 'error', error: errDetail || 'unavailable' };
+  // The guest is told only that it did not work (the chat shows its own translated message); the cause is in the server log.
+  if (!gotText) yield { type: 'error', error: 'unavailable' };
   yield { type: 'meta', picks: ctx.picks, guides: ctx.guides, articles: ctx.articles, canRoute: ctx.canRoute, kb: ctx.kb.length, near: !!ctx.near, activities: ctx.activities || [], sourceCards: cardsFor(ctx.sources, loc), sourceHints: sourceHints(ctx.sources, ctx.sourceNotes) };
   yield { type: 'done' };
 }

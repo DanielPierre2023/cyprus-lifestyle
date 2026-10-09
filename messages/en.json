@@ -182,7 +182,7 @@
         {
           "h": "The services that process data for us",
           "p": [
-            "We rely on a small number of reputable processors, each bound by a data-processing agreement: Supabase (database and authentication), Vercel (hosting and cookieless analytics), Resend (transactional email), Stripe (payments), and OpenAI and Anthropic (which power the multilingual concierge). They process data only on our instructions and only as far as needed to provide their service."
+            "We rely on a small number of reputable processors, each bound by a data-processing agreement: Supabase (database and authentication), Vercel (hosting and cookieless analytics), Resend (transactional email), Stripe (payments), and OpenAI (which powers the multilingual concierge). They process data only on our instructions and only as far as needed to provide their service."
           ]
         },
         {

@@ -23,7 +23,7 @@ export const privacyEn: LegalDoc = {
       'To keep accounting and tax records and to respond to authorities: legal obligations.',
     ] },
     { h: '4. The concierge and automated processing', p: [
-      'The concierge is an automated assistant on this website. Your questions are sent to AI service providers (see section 6) to produce answers and to search our articles, listings and guides. The concierge gives general information and suggestions; it is not professional advice and it does not take decisions that have legal or similarly significant effects on you. A booking request is always handled by a person: the owner processes requests personally from the back office.',
+      'The concierge is an automated assistant on this website. Your questions are sent to our AI service provider (see section 6) to produce answers and to search our articles, listings and guides. The concierge gives general information and suggestions; it is not professional advice and it does not take decisions that have legal or similarly significant effects on you. A booking request is always handled by a person: the owner processes requests personally from the back office.',
       'For members, the concierge can remember the preferences you stated, across devices. You can view and erase them yourself (the memory drawer in the concierge and "forget me" in your account).',
     ] },
     { h: '5. Who receives your data', p: ['We share personal data only as needed, with these categories of recipient:'], li: [
@@ -37,9 +37,8 @@ export const privacyEn: LegalDoc = {
       'Vercel: hosting and delivery; Vercel Web Analytics and Speed Insights only if you accept analytics.',
       'Stripe (Stripe Payments Europe, Ireland, and group companies): payments and subscriptions, tax calculation and the customer portal. For some purposes (for example fraud prevention and regulatory duties) Stripe is an independent controller under its own privacy policy.',
       'Resend: sending of transactional e-mail (restore links, booking mail) and the newsletter.',
-      'Anthropic: language-model processing of concierge conversations and of assistance with replies to enquiries.',
-      'OpenAI: converting your question into a search vector (embeddings), read-aloud speech (the text of the answer is sent to produce audio) and illustration of editorial content.',
-      'Google: AI language models used in the editorial workflow and address geocoding for business listings; we do not intentionally send visitors’ personal data to these. Webcam players from YouTube (Google) may load on the live page (see the Cookie Policy).',
+      'OpenAI: language-model processing of concierge conversations (on the website, WhatsApp and Telegram) and of assistance with replies to enquiries; converting your question into a search vector (embeddings); read-aloud speech (the text of the answer is sent to produce audio); and the preparation of editorial content (writing, translation and illustration).',
+      'Google: address geocoding for business listings (we do not intentionally send visitors’ personal data there). Webcam players from YouTube (Google) may load on the live page (see the Cookie Policy).',
       'Meta (WhatsApp Business / Graph API): if you contact the concierge on WhatsApp, the message and your phone number pass through Meta; we also publish editorial posts to our Facebook and Instagram pages.',
       'Telegram: if you contact the concierge on Telegram, the message passes through Telegram.',
       'Twilio: SMS, where used to verify business owners.',

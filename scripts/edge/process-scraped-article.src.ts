@@ -15,7 +15,12 @@
 //   5  the publish bar: auto-publish only when ALL seven editions pass; otherwise the article is saved as a DRAFT with the reasons
 //   6  cover picture, author, one atomic commit (commit_scraper_blog_post), telemetry
 //
-// AUTH: admin-only, fails closed.   SECRETS: OPENAI_API_KEY, UNSPLASH_ACCESS_KEY (cover; optional).
+// AUTH: admin-only, fails closed.   SECRETS: OPENAI_API_KEY · SITE_URL + ENRICH_SECRET (the style check runs on the website, see below) ·
+//   UNSPLASH_ACCESS_KEY (cover; optional).
+// THE STYLE CHECK runs on the website (app/api/desk/assess), not in this function: a Supabase edge function may use only two seconds of
+//   computing per call, and the voice engine needs about 1.9 s for one article in seven languages. This function therefore carries no
+//   engine (about 60 % smaller) and spends about a quarter of a second of computing per article. Before any model money is spent it asks
+//   the website once; if that fails the article stays queued.
 // CALLS: {source:'cron'} batch | {scraped_article_id:uuid} one now | {action:'selftest'} health check | {} batch
 // OPTIONAL SECRETS: AI_DAILY_BUDGET_USD (6) · AI_MONTHLY_BUDGET_USD (60) · AI_KILL_SWITCH · AI_MAX_EFFORT (max) · AI_EFFORT_<TASK> ·
 //   AI_SOL_ENABLED · OPENAI_MODEL_LUNA/SOL/ASTRA · EDGE_SOFT_LIMIT_MS (180000) · OVERLAP_MAX (0.12) · MAX_EDIT_PASSES (2) ·
@@ -23,7 +28,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { runPipeline, ALL_LANGS, type CallSpec, type LlmFn, type PipelineDeps, type PipelineResult, type Edition } from '@/lib/journalism/pipeline';
 import type { LlmResult } from '@/lib/journalism/openai';
-import { assessEdition } from '@/lib/journalism/assess';
+import { remoteAssess, assessConfigError } from '@/lib/journalism/assessClient';
 import { cleanHtml, cleanField, cleanTitle, normalizeTags, countWords, stripTags, generateSlug } from '@/lib/journalism/sanitize';
 import { hasCyprusTerms } from '@/lib/journalism/relevance';
 import { overlapRatio, factsKept, inventedFigures } from '@/lib/journalism/checks';
@@ -50,6 +55,9 @@ const cfg = () => ({
   flex: (Deno.env.get('AI_FLEX_EDGE') || 'off').toLowerCase() === 'on',
   siteUrl: (Deno.env.get('SITE_URL') || '').replace(/\/+$/, ''),
   revalidateSecret: Deno.env.get('REVALIDATE_SECRET') || '',
+  // The style check runs on the website (see lib/journalism/assessClient.ts): this function carries no voice engine, because an edge function
+  // may use only two seconds of computing per call and the engine needs more for one article in seven languages.
+  enrichSecret: Deno.env.get('ENRICH_SECRET') || '',
 });
 const BATCH_MAX = 3;
 
@@ -145,22 +153,35 @@ async function runSelfTest(): Promise<Record<string, unknown>> {
     return { usable: good, ms: Date.now() - t, detail: good ? `ok (${Date.now() - t}ms)` : `FAIL: ${scrubModelNames((r.error || 'unparseable reply').slice(0, 140))}` };
   };
   const [structured, plain] = await Promise.all([probe({ name: 'selftest', schema: tiny as unknown as Record<string, unknown> }), probe('object')]);
+  // the style check on the website: configured, reachable, secret accepted, route deployed
+  const conf = cfg();
+  const missing = assessConfigError(conf.siteUrl, conf.enrichSecret);
+  const style = await (async () => {
+    if (missing) return { usable: false, detail: `not configured: ${missing}` };
+    const t = Date.now();
+    try {
+      const a = await remoteAssess({ siteUrl: conf.siteUrl, secret: conf.enrichSecret, attempts: 1, timeoutMs: 15_000 })('<p>The fishing harbour at Latchi smells of diesel and grilled octopus by half past eleven.</p>', 'en', { title: 'Latchi harbour', category: 'cyprus', articleType: 'news' });
+      return { usable: true, detail: `ok (${Date.now() - t}ms, score ${a.score})` };
+    } catch (e) { return { usable: false, detail: `FAIL: ${scrubModelNames((e as Error).message.slice(0, 160))}` }; }
+  })();
   const deny = await budgetDeny(supabase);
   let spent: { day: number; month: number } | null = null;
   try { const w = windowStarts(new Date()); spent = { day: +(await spendSince(supabase, w.dayIso)).toFixed(2), month: +(await spendSince(supabase, w.monthIso)).toFixed(2) }; } catch { /* meter unavailable */ }
   const b = parseBudgets(ENV);
   const reachable = structured.usable || plain.usable;
   return {
-    ok: reachable && !deny,
+    ok: reachable && !deny && style.usable,
     verdict: !reachable ? 'The AI service is not reachable: articles cannot be composed right now.'
       : deny ? `The AI service works, but the desk is paused: ${deny}`
+      : !style.usable ? `The AI service works, but the style check is not available (${style.detail}): articles stay in the queue.`
       : structured.usable && plain.usable ? 'AI service reachable: full quality.' : 'AI service reachable, one mode degraded: articles still compose.',
+    style_check: style,
     // The keys below keep the shape the admin page already reads.
     writer_primary: { structured_output: structured.detail, prefill: `plain ${plain.detail}`, usable: structured.usable },
     writer_fallback: { structured_output: structured.detail, prefill: plain.detail, usable: plain.usable },
     research: 'not needed (the fact core is read from the source itself)',
     budget: { paused: deny, spent_today_usd: spent?.day ?? null, spent_month_usd: spent?.month ?? null, daily_limit_usd: b.dailyUsd, monthly_limit_usd: b.monthlyUsd },
-    keys_present: { writer_key: !!Deno.env.get('OPENAI_API_KEY'), images_key: !!Deno.env.get('UNSPLASH_ACCESS_KEY') },
+    keys_present: { writer_key: !!Deno.env.get('OPENAI_API_KEY'), images_key: !!Deno.env.get('UNSPLASH_ACCESS_KEY'), site_url: !!conf.siteUrl, style_check_secret: !!conf.enrichSecret },
   };
 }
 
@@ -222,6 +243,8 @@ async function writeLog(supabase: SupaClient, log: Record<string, unknown>): Pro
 }
 /** 0-100, higher is cleaner, from the voice engine's score (0 = clean). Kept in the legacy "humanness" columns so the admin table still shows a trend. */
 const styleScore = (score: number): number => Math.max(0, Math.min(100, Math.round(100 - score * 4)));
+/** The edition's style score, or null when the style check could not run (that is not a perfect score). */
+const styleOf = (a?: { score: number; unavailable?: string }): number | null => (a && !a.unavailable ? a.score : null);
 
 // ── processOne ───────────────────────────────────────────────────────────────────────────────────────────────────────
 interface ScrapedRow {
@@ -272,6 +295,14 @@ export async function processOne(supabase: SupaClient, row: ScrapedRow, autoPubl
   const deny = await budgetDeny(supabase);
   if (deny) return { ok: false, status: 'queued', reason: deny, stop: true };
 
+  // The style check lives on the website. Before any model money is spent: is it configured and does it answer? If not, the article stays queued.
+  const assess = remoteAssess({ siteUrl: settings.siteUrl, secret: settings.enrichSecret, deadlineAt });
+  const notConfigured = assessConfigError(settings.siteUrl, settings.enrichSecret);
+  if (notConfigured) return { ok: false, status: 'queued', reason: `Style check not configured: ${notConfigured}. Add it to the Supabase secrets.`, stop: true };
+  try { await assess('<p>The fishing harbour at Latchi smells of diesel and grilled octopus by half past eleven.</p>', 'en', { title: 'Latchi harbour', category: 'cyprus', articleType: 'news' }); } catch (e) {
+    return { ok: false, status: 'queued', reason: scrubModelNames((e as Error).message), stop: true };
+  }
+
   const sc = isSourceContentRealProse(content);
   if (!sc.ok) {
     await supabase.from('scraped_articles').update({ status: 'failed', error_message: `SOURCE_INVALID: ${sc.reason}` }).eq('id', row.id);
@@ -285,7 +316,7 @@ export async function processOne(supabase: SupaClient, row: ScrapedRow, autoPubl
   try {
     const llm = makeLlm(supabase, deadlineAt, cost);
     const deps: PipelineDeps = {
-      llm, now: Date.now, assess: assessEdition,
+      llm, now: Date.now, assess,
       sanitize: { html: (raw, lang) => cleanHtml(raw, lang), title: (t, lang) => cleanTitle(t, lang), field: (t, lang) => cleanField(t, lang), tags: normalizeTags, words: countWords, text: stripTags },
       overlap: overlapRatio, factsKept, inventedFigures, hasCyprusTerms, deskBrief, titleIsGeneric: isTitleGeneric, log: (m) => console.log(m),
     };
@@ -323,7 +354,7 @@ export async function processOne(supabase: SupaClient, row: ScrapedRow, autoPubl
     const editions = result.editions as Record<Lang, Edition>;
     for (const l of ALL_LANGS) {
       log[`words_${l}`] = editions[l].wc;
-      if (l === 'en' || l === 'el' || l === 'ro' || l === 'ar') { log[`desk2b_${l}_ok`] = editions[l].ok; log[`${l}_humanness`] = styleScore(editions[l].assessment?.score ?? 100); }
+      if (l === 'en' || l === 'el' || l === 'ro' || l === 'ar') { log[`desk2b_${l}_ok`] = editions[l].ok; log[`${l}_humanness`] = styleScore(styleOf(editions[l].assessment) ?? 100); }
     }
     // — an edition that borrows too much of its source is refused; nothing borrowed is ever committed —
     const refused = ALL_LANGS.filter((l) => !editions[l].ok);
@@ -377,7 +408,7 @@ export async function processOne(supabase: SupaClient, row: ScrapedRow, autoPubl
     const meta = {
       type: result.articleType, complexity: result.complexity, flags: core?.flags ?? [], district: core?.district ?? null, facts: core?.confirmed.length ?? 0,
       gate: { publishable: gate.publishable, held, reasons: gate.reasons, warnings: gate.warnings },
-      style: Object.fromEntries(ALL_LANGS.map((l) => [l, editions[l].assessment?.score ?? null])),
+      style: Object.fromEntries(ALL_LANGS.map((l) => [l, styleOf(editions[l].assessment)])),
       overlap: Object.fromEntries(ALL_LANGS.map((l) => [l, +editions[l].overlap.toFixed(3)])),
       factcheck: Object.fromEntries(ALL_LANGS.map((l) => [l, editions[l].factCheck ? { ran: editions[l].factCheck!.ran, pass: editions[l].factCheck!.pass, high: editions[l].factCheck!.high, medium: editions[l].factCheck!.medium, repaired: editions[l].factCheck!.repaired } : null])),
       passes: Object.fromEntries(ALL_LANGS.map((l) => [l, editions[l].passes])),
@@ -385,7 +416,7 @@ export async function processOne(supabase: SupaClient, row: ScrapedRow, autoPubl
       ms: result.ms, calls: cost.calls, cost_usd: +cost.usd.toFixed(4), base_usd: +cost.baseUsd.toFixed(4),
     };
     await writeLog(supabase, fin({ status: 'ok', ...(warns.length ? { error_msg: `${held ? 'held' : 'note'}: ${warns.join(' · ')}`.slice(0, 500) } : {}), meta }));
-    console.log(`[desk] DONE ${row.id} → ${postId} | ${publishNow ? 'published' : 'draft'} | EN ${editions.en.wc}w | style ${ALL_LANGS.map((l) => `${l}:${editions[l].assessment?.score ?? '-'}`).join(' ')} | $${cost.usd.toFixed(3)} in ${cost.calls} calls | ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+    console.log(`[desk] DONE ${row.id} → ${postId} | ${publishNow ? 'published' : 'draft'} | EN ${editions.en.wc}w | style ${ALL_LANGS.map((l) => `${l}:${styleOf(editions[l].assessment) ?? '-'}`).join(' ')} | $${cost.usd.toFixed(3)} in ${cost.calls} calls | ${((Date.now() - t0) / 1000).toFixed(1)}s`);
     return { ok: true, post_id: postId, status: publishNow ? 'published' : 'draft', quality_warning: warns.length ? warns.join(' · ') : undefined, cost_usd: +cost.usd.toFixed(4), ms: result.ms };
   } catch (e) {
     const msg = scrubModelNames((e as Error).message);
@@ -431,7 +462,29 @@ async function dispatchOrRun(wantBackground: boolean, label: string, worker: () 
     EDGE_BG.waitUntil(worker().then((r) => console.log(`[bg:${label}] done ${JSON.stringify(r).slice(0, 160)}`), (e) => console.error(`[bg:${label}] failed: ${(e as Error).message}`)));
     return json({ ok: true, dispatched: true });
   }
-  return json(await worker());
+  return keepAlive(worker);
+}
+
+/**
+ * The answer of a run that takes minutes (the admin's "Generate" button waits for it). The gateway cuts a request that has received no
+ * byte for 150 seconds with a 504, even though the work goes on and finishes: the browser then shows a failure for a run that succeeded.
+ * So the response starts at once (status 200, the reason of a failure is in the body, as before) and a space is sent every 15 seconds;
+ * JSON allows leading white space, so the client reads it exactly as before.
+ */
+export function keepAlive(work: () => Promise<Record<string, unknown>>, everyMs = 15_000): Response {
+  const enc = new TextEncoder();
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      timer = setInterval(() => { try { controller.enqueue(enc.encode(' ')); } catch { /* the client has gone */ } }, everyMs);
+      work().catch((e) => ({ ok: false, error: scrubModelNames((e as Error).message) } as Record<string, unknown>)).then((out) => {
+        clearInterval(timer);
+        try { controller.enqueue(enc.encode(JSON.stringify(out))); controller.close(); } catch { /* the client has gone */ }
+      });
+    },
+    cancel() { if (timer) clearInterval(timer); },
+  });
+  return new Response(stream, { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
 const ROW_COLUMNS = 'id, original_title, original_url, original_content, original_content_full, category, scope, source_word_count, status';

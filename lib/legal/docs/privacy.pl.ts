@@ -23,7 +23,7 @@ export const privacyPl: LegalDoc = {
       'Prowadzenie ksiąg rachunkowych i podatkowych oraz odpowiedzi organom: obowiązki prawne.',
     ] },
     { h: '4. Concierge i zautomatyzowane przetwarzanie', p: [
-      'Concierge to zautomatyzowany asystent w tym serwisie. Twoje pytania są wysyłane do dostawców usług AI (zob. pkt 6), by tworzyć odpowiedzi i przeszukiwać nasze artykuły, wpisy i poradniki. Udziela ogólnych informacji i sugestii; nie jest to porada zawodowa i nie podejmuje decyzji wywołujących wobec Ciebie skutki prawne ani podobnie istotne. Prośbę o rezerwację zawsze obsługuje człowiek: właściciel rozpatruje prośby osobiście w panelu zaplecza.',
+      'Concierge to zautomatyzowany asystent w tym serwisie. Twoje pytania są wysyłane do naszego dostawcy usług AI (zob. pkt 6), by tworzyć odpowiedzi i przeszukiwać nasze artykuły, wpisy i poradniki. Udziela ogólnych informacji i sugestii; nie jest to porada zawodowa i nie podejmuje decyzji wywołujących wobec Ciebie skutki prawne ani podobnie istotne. Prośbę o rezerwację zawsze obsługuje człowiek: właściciel rozpatruje prośby osobiście w panelu zaplecza.',
       'Członkom concierge może pamiętać podane preferencje na różnych urządzeniach. Możesz je sam przeglądać i usuwać (szuflada pamięci w concierge i „forget me” na koncie).',
     ] },
     { h: '5. Odbiorcy danych', p: ['Udostępniamy dane osobowe tylko w niezbędnym zakresie, następującym kategoriom odbiorców:'], li: [
@@ -37,9 +37,8 @@ export const privacyPl: LegalDoc = {
       'Vercel: hosting i dostarczanie; Vercel Web Analytics i Speed Insights tylko po akceptacji analityki.',
       'Stripe (Stripe Payments Europe, Irlandia, i spółki grupy): płatności i subskrypcje, obliczanie podatku, portal klienta. Do niektórych celów (np. zapobieganie oszustwom, obowiązki regulacyjne) Stripe jest odrębnym administratorem według własnej polityki prywatności.',
       'Resend: wysyłka e-maili transakcyjnych (linki przywracające, poczta rezerwacyjna) i newslettera.',
-      'Anthropic: przetwarzanie rozmów concierge przez model językowy i pomoc w odpowiedziach na zapytania.',
-      'OpenAI: zamiana pytania na wektor wyszukiwania (embeddings), czytanie na głos (tekst odpowiedzi jest wysyłany do wygenerowania dźwięku) i ilustrowanie treści redakcyjnych.',
-      'Google: modele językowe AI w pracy redakcyjnej i geokodowanie adresów firm; nie wysyłamy tam celowo danych osobowych odwiedzających. Odtwarzacze kamer internetowych z YouTube (Google) mogą ładować się na stronie Live (zob. Politykę cookies).',
+      'OpenAI: przetwarzanie rozmów concierge przez model językowy (na stronie, w WhatsApp i Telegramie) i pomoc w odpowiedziach na zapytania; zamiana pytania na wektor wyszukiwania (embeddings); czytanie na głos (tekst odpowiedzi jest wysyłany do wygenerowania dźwięku); a także przygotowywanie treści redakcyjnych (teksty, tłumaczenie i ilustrowanie).',
+      'Google: geokodowanie adresów firm (nie wysyłamy tam celowo danych osobowych odwiedzających). Odtwarzacze kamer internetowych z YouTube (Google) mogą ładować się na stronie Live (zob. Politykę cookies).',
       'Meta (WhatsApp Business / Graph API): jeśli piszesz do concierge na WhatsApp, wiadomość i numer telefonu przechodzą przez Metę; publikujemy też posty redakcyjne na naszych stronach na Facebooku i Instagramie.',
       'Telegram: jeśli piszesz do concierge na Telegramie, wiadomość przechodzi przez Telegram.',
       'Twilio: SMS, gdy służą do weryfikacji właścicieli firm.',

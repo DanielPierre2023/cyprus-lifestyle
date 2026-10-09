@@ -17,7 +17,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import {
   assembleContext, conciergeSystem, groundingBlock, CONCIERGE_MODEL, isConciergeLocale,
 } from '@/lib/concierge/brain';
-import { callClaude, parseAiJson, CLAUDE_HAIKU } from '@/lib/ai';
+import { callAI, parseAiJson } from '@/lib/ai';
+import { answerOnce } from '@/lib/concierge/chatModel';
 import { EVAL_SOURCE_ITEMS } from '@/lib/concierge/evalSources';
 
 export interface EvalItem { id: string; locale: string; intent: string; question: string; }
@@ -123,17 +124,12 @@ export async function conciergeAnswer(locale: string, question: string): Promise
   const ctx = await assembleContext(loc, question);
   const grounding = groundingBlock(ctx, loc);
   const system = conciergeSystem(loc) + grounding;
-  const r = await callClaude({
-    systemInstruction: system,
-    userMessage: question,
-    model: CONCIERGE_MODEL,
-    maxTokens: 700,
-    fn: 'eval-answer',
-  });
+  // The same call the live chat makes (model, effort, link policy), so the evaluation measures what guests get.
+  const r = await answerOnce(system, [{ role: 'user', content: question }], { fn: 'eval-answer', locale: loc });
   return { answer: r.text || '', grounding, picks: ctx.picks.length, kb: ctx.kb.length, error: r.error };
 }
 
-// ── LLM judge — cheap Haiku, strict rubric, JSON out. It sees the SAME context the
+// ── LLM judge — small model, strict rubric, JSON out. It sees the SAME context the
 // concierge was allowed to use, so it can tell a grounded answer from a fabricated
 // one (a business/price not in the context is a hallucination). ────────────────
 const JUDGE_SYSTEM =
@@ -155,9 +151,10 @@ export async function judgeAnswer(item: EvalItem, answer: string, grounding: str
     `CONTEXT THE CONCIERGE WAS ALLOWED TO USE:\n${(grounding || '(none)').slice(0, 3000)}`,
     `CONCIERGE ANSWER:\n${(answer || '(empty)').slice(0, 2500)}`,
   ].join('\n\n');
-  const r = await callClaude({
+  // Task "check": judging against a rubric (gpt-6-luna, medium).
+  const r = await callAI({
     systemInstruction: JUDGE_SYSTEM, userMessage: user,
-    model: CLAUDE_HAIKU, jsonMode: true, maxTokens: 300, fn: 'eval-judge',
+    task: 'check', jsonMode: true, expectTokens: 200, fn: 'eval-judge',
   });
   if (r.error) return { grounded: 0, language: 0, helpful: 0, notes: '', error: r.error };
   const j = parseAiJson<{ grounded?: number; language?: number; helpful?: number; notes?: string }>(r.text);

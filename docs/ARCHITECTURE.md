@@ -18,6 +18,7 @@ rss_sources ──▶ [cron/scrape] ──▶ scraped_articles (status=scraped)
                                         │  fact core (one call) → relevance gate (Cyprus in the story)
                                         │  SEVEN native editions EN·EL·RO·AR·DE·PL·RU, each from the core
                                         │  originality gate → sub-editor driven by the voice engine's findings
+                                        │    (the style check itself runs on the website: /api/desk/assess)
                                         │  short fields (title, excerpt, SEO) → fact check per language → repair
                                         ▼  publish bar: all seven pass, else saved as a draft with the reasons
                     commit_scraper_blog_post(RPC) ──▶ blog_posts (7 languages)

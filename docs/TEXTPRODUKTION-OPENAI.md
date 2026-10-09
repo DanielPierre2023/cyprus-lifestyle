@@ -1,37 +1,74 @@
 # Textproduktion auf OpenAI (gpt-6-luna) — Übergabe
 
-Stand: Oktober 2026. Diese Datei beschreibt, was sich geändert hat, in welcher Reihenfolge es eingespielt wird, was es kostet, wie man es abschaltet und was **noch nicht live geprüft** werden konnte.
+Stand: Oktober 2026, nach der **zweiten Lieferung**. Diese Datei beschreibt, was sich geändert hat, in welcher Reihenfolge es eingespielt wird, was es kostet, wie man es abschaltet und was **noch nicht live geprüft** werden konnte. Die Artikel-Seite (Redaktion, Studio, Übersetzung und so weiter) steht in den Abschnitten 1 bis 2b; die Concierge-Seite (Concierge, Mail-Assistent, Aufräumen, Datenschutztexte) in Abschnitt 2c. Beides liegt in **einem** ZIP.
 
 ## 1. Was sich geändert hat
 
-Alles, was Text schreibt, läuft jetzt über **OpenAI, Modell `gpt-6-luna`**. Nichts davon geht mehr an Claude oder Gemini.
+Alles, was Text schreibt oder versteht, läuft jetzt über **OpenAI, Modell `gpt-6-luna`**. Im Code gibt es keinen Aufruf an Claude oder Gemini mehr (ein Test prüft das bei jedem Bauen).
 
 | Bereich | Wo | Zustand |
 |---|---|---|
-| Artikel-Redaktion (Scraper-Artikel → 7 Sprachen) | Edge-Funktion `process-scraped-article` | **neu gebaut** (Faktenkern → 7 eigenständige Fassungen → Redaktion → Faktencheck → Veröffentlichungs-Tor) |
+| Artikel-Redaktion (Scraper-Artikel → 7 Sprachen) | Edge-Funktion `process-scraped-article` | **neu gebaut** (Faktenkern → 7 eigenständige Fassungen → Redaktion → Faktencheck → Veröffentlichungs-Tor); die Qualitätsprüfung holt sie bei der Website ab (`/api/desk/assess`) |
 | Redaktionsstudio (Interview-Fragen, Interview-Artikel, Rezension) | Edge-Funktion `ai-editorial` | **neu gebaut**, mit Zitat- und Zahlenprüfung |
 | Cover-Foto-Brief | Edge-Funktion `search-cover-photos` | von Gemini auf OpenAI umgestellt |
 | Übersetzung, Transcreation, Korrektorat, Social-Posts, Verzeichnis-Anreicherung, Scraper-Helfer (Events/Regelungen/Projekte), Kommentar-Antworten, Ideen-Planer mit Websuche, Voice-Wächter (Umschreiben) | Next.js-App (`lib/…`, `app/api/…`) | auf `callAI` / OpenAI umgestellt |
 | Python-Scraper (`tools/scraper/scrape.py`) | lokal / CI | KI-Fallback auf OpenAI (`OPENAI_API_KEY`) |
-| **Noch auf Claude** | Concierge, Mail-Assistent, Gesundheits-Check | kommt mit der **zweiten Lieferung** |
+| **Concierge** (Chat auf der Website, „Ask the island“-Box, WhatsApp, Telegram) | `lib/concierge/…`, `app/api/concierge/…` | **zweite Lieferung:** der Chat zeigt die Antwort, **während sie geschrieben wird** (Streaming, Satz für Satz); Gedächtnis, Begrüßung, Suchverständnis, Umsortierung und die Qualitätsauswertung laufen mit demselben Modell |
+| **Mail-Assistent** (Entwurf bei Eingang und per Knopf) | `lib/mail/assist.ts` | **zweite Lieferung:** Luna „medium“; ein zweiter Versuch mit weniger Denkaufwand, wenn der erste scheitert |
+| Verzeichnis-Einstufung (Kategorien) | `app/api/concierge/normalize-directory` | **zweite Lieferung** |
+| Gesundheits-Prüfungen | `/api/health`, `/api/concierge/selftest`, Admin → AI | **zweite Lieferung:** prüfen den OpenAI-Schlüssel; der Selbsttest misst die Zeit bis zum ersten Wort des Modells (der Gast sieht jeden Satz, sobald er fertig ist) |
+| Datenschutzerklärung (7 Sprachen), Register der Verarbeitungstätigkeiten | `lib/legal/docs/privacy.*.ts`, `messages/*.json`, Migration `20261011090000_…` | **zweite Lieferung:** OpenAI statt Anthropic und Google (KI) |
 
 **`gpt-5.5` ist im Code gesperrt** (Auftrag: „auf keinen Fall, für nix“). Auch wenn jemand `OPENAI_MODEL_LUNA=gpt-5.5` setzt, wird es ignoriert und `gpt-6-luna` benutzt; der Client sendet die Anfrage nicht einmal ab. **Sol** (`gpt-6.1-sol`) ist standardmäßig aus (`AI_SOL_ENABLED`).
 
 ## 2. Reihenfolge beim Einspielen (wichtig)
 
-1. **Supabase → Edge Functions → Secrets:** `OPENAI_API_KEY` eintragen (Pflicht). Den Schlüssel trägst du selbst ein; er gehört nie in einen Chat.
-2. **Supabase → SQL Editor:** `supabase/migrations/20261010090000_generation_logs_meta.sql` ausführen (legt die Spalte `meta` in `generation_logs` an; ohne sie läuft die Funktion auch, nur ohne Protokoll-Details).
-3. **Supabase → Edge Functions:** drei Funktionen ersetzen. Jeweils den **kompletten Inhalt** der Datei einfügen und deployen:
-   - `process-scraped-article` ← `supabase/functions/process-scraped-article/index.ts` (große Datei, ca. 555 KB, in einem Stück einfügen)
-   - `ai-editorial` ← `supabase/functions/ai-editorial/index.ts` (ca. 465 KB)
-   - `search-cover-photos` ← `supabase/functions/search-cover-photos/index.ts`
-4. **Vercel → Environment Variables:** `OPENAI_API_KEY` (Production) eintragen. `CLAUDE_API_KEY` bleibt noch stehen, bis die zweite Lieferung eingespielt ist (Concierge, Mail).
-5. **ZIP in GitHub hochladen** (Vercel baut danach automatisch).
-6. **Prüfen:** Admin → AI → **„Run AI health check“**. Grün heißt: OpenAI antwortet im strikten und im einfachen JSON-Modus, Budget ist frei.
-7. **Einen Artikel von Hand erzeugen** (Admin → AI → Warteschlange → *Generate*). Dauer: zwei bis drei Minuten. Danach unter Admin → Startseite die Zeile „AI spend · today“ ansehen: das sind die echten Kosten für einen Artikel.
-8. **Erst dann** den automatischen Prozessor an lassen (Admin → AI → „AI processor“) und, wenn gewünscht, den Voice-Wächter einschalten (`supabase/data/voice_engine_on_v2_20261008.sql`, 40 Fassungen pro Tag am Anfang).
+Es gibt **ein** ZIP. Es enthält alles, was auf GitHub noch fehlt: die erste Lieferung in ihrer verbesserten Fassung (Qualitätsprüfung auf der Website, Abschnitt 2a) und die zweite (Concierge, Mail-Assistent, Aufräumen, Datenschutztexte, Abschnitt 2c). Die Artikel-Funktion in Supabase lässt ihre Qualitätsprüfung von der Website machen. Deshalb zuerst die Website, dann die Funktion.
 
-Reihenfolge nicht umdrehen: Die neue Vercel-Route weckt die **neue** Edge-Funktion.
+1. **ZIP in GitHub hochladen** (Vercel baut danach automatisch). GitHub nimmt pro Hochladen höchstens 100 Dateien an: das ZIP hat 78, also reicht ein Durchgang. Die versteckte Datei `.env.example` (nur Dokumentation, nichts läuft damit) nehmen Browser beim Ordner-Hochladen oft nicht mit; sie fehlt auch schon nach der ersten Lieferung. Wer sie auf GitHub haben möchte, lädt sie einzeln hoch; für den Betrieb ist sie unnötig.
+2. **Supabase → Edge Functions → Secrets** prüfen, mit diesen vier Namen (fehlende trägst du selbst ein; Schlüssel gehören nie in einen Chat):
+   - `OPENAI_API_KEY`: Pflicht. Steht er schon (die alte Artikel-Funktion hat ihn gelesen), nichts tun.
+   - `SITE_URL`: die Adresse der Website, zum Beispiel `https://cypruslifestyle.eu`.
+   - `ENRICH_SECRET`: **derselbe Wert wie in Vercel.** Die Edge-Funktionen `enrich-directory` und `events-ingest` lesen ihn schon, er steht also vermutlich da.
+   - `UNSPLASH_ACCESS_KEY`: optional (Cover-Bilder).
+3. **Supabase → SQL Editor:** die Datei `SQL-fuer-Supabase.sql` (liegt neben dem ZIP) enthält beide Teile: ganz einfügen, einmal „Run“. Sie darf wiederholt werden. Es sind dieselben Inhalte wie diese zwei Dateien im ZIP:
+   - `supabase/migrations/20261010090000_generation_logs_meta.sql` (legt die Spalte `meta` in `generation_logs` an; ohne sie läuft die Funktion auch, nur ohne Protokoll-Details). Lief sie schon, passiert nichts.
+   - `supabase/migrations/20261011090000_privacy_register_openai.sql` (trägt OpenAI statt Anthropic im Register der Verarbeitungstätigkeiten ein; ändert nur zwei Zeilen, löscht nichts).
+4. **Supabase → Edge Functions:** Jeweils den **kompletten Inhalt** der Datei einfügen und deployen:
+   - `process-scraped-article` ← `supabase/functions/process-scraped-article/index.ts` (ca. 217 KB). **Pflicht**: diese Fassung trägt die Qualitätsprüfung nicht mehr selbst, sondern holt sie bei der Website ab (sonst riskierst du das Rechenzeit-Limit von 2 Sekunden).
+   - `ai-editorial` ← `supabase/functions/ai-editorial/index.ts` (ca. 465 KB) und `search-cover-photos` ← `supabase/functions/search-cover-photos/index.ts`: nur, wenn du sie aus der ersten Lieferung noch nicht eingefügt hast. Der Code ist derselbe (bei `ai-editorial` kam gegenüber der ersten Lieferung eine einzige Zeile hinzu, die es nicht benutzt).
+5. **Vercel → Environment Variables:** `OPENAI_API_KEY` muss auch dort stehen, weil Übersetzung, Social, Verzeichnis, Scraper-Helfer, Korrektorat, Planer, Concierge und Mail-Assistent in der Website laufen (Vercel sieht die Supabase-Geheimnisse nicht und umgekehrt). Steht er schon (die Concierge-Suche liest ihn dort), musst du nichts tun: `https://cypruslifestyle.eu/api/health` zeigt bei „Semantic search & embeddings“ `ready: true`. `ENRICH_SECRET` steht dort ebenfalls (die Wartungs-Routen brauchen ihn). Die alten Claude-Schlüssel lässt du **stehen**, bis Punkt 9 erledigt ist.
+6. **Prüfen:** Admin → AI → **„Run AI health check“**. Grün heißt: OpenAI antwortet im strikten und im einfachen JSON-Modus, die Qualitätsprüfung auf der Website antwortet („style check: ok“), der **Concierge-Chat antwortet** („concierge chat: ok“, mit der Zeit bis zum ersten Wort), das Budget ist frei. Rot nennt den Grund (zum Beispiel „ENRICH_SECRET differs between Supabase and the website“, „the website has not been updated yet“ oder „billing: …“).
+7. **Einen Artikel von Hand erzeugen** (Admin → AI → Warteschlange → *Generate*). Dauer: zwei bis drei Minuten, die Seite wartet geduldig (Abschnitt 2b). Danach unter Admin → Startseite die Zeile „AI spend · today“ ansehen: das sind die echten Kosten für einen Artikel.
+8. **Erst dann** den automatischen Prozessor an lassen (Admin → AI → „AI processor“) und, wenn gewünscht, den Voice-Wächter einschalten (`supabase/data/voice_engine_on_v2_20261008.sql`, 40 Fassungen pro Tag am Anfang).
+9. **Aufräumen, erst nach grünem Test und ein paar ruhigen Tagen:** siehe Abschnitt 2c, Punkt 3.
+
+Ist die Website noch nicht aktualisiert oder nicht erreichbar, passiert nichts Schlimmes: Die Artikel-Funktion prüft das **vor** dem ersten Modell-Aufruf, lässt den Artikel in der Warteschlange und kostet nichts.
+
+### 2a. Warum die Qualitätsprüfung auf der Website läuft
+
+Supabase erlaubt einer Edge-Funktion nur **2 Sekunden reine Rechenzeit pro Aufruf** (Warten auf das Modell zählt nicht; die Laufzeit ist mit 150 s im Free-Plan und 400 s in den Bezahlplänen großzügig). Die Prüf-Engine (die Erkennungsmuster in sieben Sprachen) braucht für **einen** Artikel etwa 1,9 Sekunden, weil sie bei der ersten Benutzung je Sprache ihre Muster übersetzt. Das hätte Läufe mittendrin abbrechen können (gemessen, nicht auf Supabase live getestet). Darum trägt die Artikel-Funktion die Engine nicht mehr: Sie schickt jede Fassung an `/api/desk/assess`, die Website urteilt mit **derselben** Engine (Vercel hat keine Rechenzeit-Grenze; mit Fluid Compute sind bis zu 300 s Laufzeit möglich), und die Funktion braucht selbst nur etwa eine Viertelsekunde Rechenzeit. Sie ist dadurch auch um 60 % kleiner (217 statt 556 KB).
+
+### 2b. Die „Generate“-Taste und die 150 Sekunden
+
+Das Gateway von Supabase bricht eine Anfrage, die 150 Sekunden lang kein Byte bekommt, mit einem Fehler 504 ab, auch wenn die Arbeit weiterläuft. Die Funktion antwortet deshalb sofort und schickt alle 15 Sekunden ein Leerzeichen, bis das Ergebnis da ist; die Admin-Seite liest das Ergebnis wie bisher. Ein erfolgreicher Lauf wird so nicht mehr als Fehler angezeigt.
+
+## 2c. Was die zweite Lieferung zusätzlich enthält (Concierge, Mail, Aufräumen, Datenschutz)
+
+Das steht im selben ZIP und braucht, über Abschnitt 2 hinaus, nur diese Punkte:
+
+1. **Prüfen:** (a) Admin → AI → „Run AI health check“: die Zeile „concierge chat“ muss „ok“ zeigen. (b) Auf der Website dem Concierge etwas fragen; die Antwort erscheint satzweise. (c) Admin → Mail → bei einer Nachricht „✦ Draft with AI“ drücken. (d) `https://cypruslifestyle.eu/api/health` zeigt beim Concierge `ready: true`. (e) Wer mehr Einzelheiten will: `https://cypruslifestyle.eu/api/concierge/selftest` im Browser öffnen, solange du im Admin angemeldet bist (zeigt unter anderem `first_word_ms`). Rot nennt immer den Grund (Schlüssel, Guthaben, Budget, Modellname, Zeitüberschreitung).
+2. **Datenschutz:** Die Datenschutzerklärung nennt jetzt OpenAI als einzigen KI-Dienstleister (in allen sieben Sprachen), und „zuletzt geändert“ steht auf dem 9. Oktober 2026. Ich bin kein Rechtsanwalt: lass die neuen Absätze 4 und 6 von deiner Rechtsberatung gegenlesen, bevor du dich darauf verlässt.
+3. **Aufräumen, erst nach grünem Test:** in **Vercel** die Variablen `CLAUDE_API_KEY`, `SONNET_MODEL`, `CLAUDE_HAIKU` und `GEMINI_API_KEY` löschen; in **Supabase → Edge Functions → Secrets** dasselbe (`CLAUDE_API_KEY`, `SONNET_MODEL`, `GEMINI_API_KEY`). In Supabase die **Edge-Funktion `concierge` löschen** (wird von nichts mehr aufgerufen; im Code ist sie eine leere Hülle). Bis dahin kannst du jederzeit zum alten Stand zurück (Abschnitt 6).
+
+**Was der Concierge-Chat jetzt macht:** Er schickt die Frage mit dem bisherigen Gespräch (als echte Nachrichten, nicht als Textblock) und mit den gefundenen Betrieben, Ratgebern und Quellen an `gpt-6-luna` und zeigt die Antwort an, während sie geschrieben wird. Jedes Stück Text läuft vor der Anzeige durch die Link-Regeln (keine fremden Seiten genannt oder verlinkt). Scheitert der Strom, bevor das erste Wort da ist, wird erneut versucht; danach folgt **eine** Antwort in einem Stück, wenn die Zeit der Route (55 s) es noch erlaubt. Der Gast sieht nur „es hat nicht geklappt“; der Grund steht im Server-Protokoll (Vercel → Logs, Stichwort `[concierge]`). Ein abgelehnter Schlüssel, fehlendes Guthaben oder das Budget-Limit führen **nicht** zu einem zweiten Versuch (er würde gleich scheitern).
+
+**Was sich für dich sonst ändert:**
+
+- **Kosten des Chats stehen jetzt im Ausgabenprotokoll** (`ai_spend_log`, Stichwort `concierge-chat`) und zählen ins Tageslimit von 6 USD. Vorher war der Chat dort nicht erfasst. Rechnung (keine Messung): ein Gesprächsschritt mit rund 6.000 Eingabe-Token und rund 900 Ausgabe-Token (inklusive Denken auf „low“) kostet etwa **0,1 Cent**, mit Aufschlag 0,13 Cent. Die öffentliche Obergrenze von 6.000 Chat-Anfragen pro Tag (`AI_PUBLIC_DAILY_CALLS`) wären also höchstens rund 8 USD; wer früher bremsen will, setzt dort einen kleineren Wert.
+- **Tempo des Chats einstellen:** `AI_EFFORT_CHAT` (Vercel). Voreinstellung `low`. Wirkt die erste Antwort zu langsam (`first_word_ms` im Selbsttest), `minimal` setzen; das ist schneller und etwas weniger gründlich.
+- **Mail bei Eingang:** der Entwurf bekommt höchstens 40 Sekunden (danach folgen noch Kunden-Verknüpfung und Buchungszuordnung in derselben 60-Sekunden-Funktion). Schafft er es nicht, steht in den Vercel-Logs `[mail-assist] draft-on-arrival failed`, und der Knopf „✦ Draft with AI“ im Admin erzeugt ihn von Hand (dann mit dem vollen Zeitfenster).
+- **Alte Doku:** die Setup-Dateien im Hauptverzeichnis (`CONCIERGE-FIX.md`, `FIX-MOBILE-CONCIERGE.md`, `DEPLOY-increment-3*.md` und weitere) tragen oben einen Hinweis, dass ihre Angaben zu Claude veraltet sind; `RUNBOOK.md`, `DR-RUNBOOK.md`, `MEMBERS-SETUP.md` und die `PHASE-…`-Anleitungen sind korrigiert.
 
 ## 3. Welches Modell mit welchem Denkaufwand („Effort“)
 
@@ -43,17 +80,18 @@ Alles läuft auf Luna. Eine schwerere Aufgabe denkt länger, sie wechselt nicht 
 | Artikel schreiben (je Sprache) und Faktencheck | Routine **medium** · komplex **high** · anspruchsvoll **xhigh** · investigativ **max** |
 | Redaktion, Reparatur nach Faktencheck | medium (anspruchsvoll: high) |
 | Voice-Wächter, Umschreiben | 1. Versuch high, 2. xhigh, ab 3. max |
-| Übersetzung, Extraktion, kurze Texte, Einstufung, Mail-Entwurf | medium (bei komplexen Texten high) |
+| Übersetzung, Extraktion, kurze Texte, Einstufung (auch Verzeichnis), Mail-Entwurf | medium (bei komplexen Texten high) |
 | Ideen-Planer mit Websuche | high |
-| Concierge-Chat und Helfer (zweite Lieferung) | low (der Gast wartet) |
+| Concierge-Chat (gestreamt) und Helfer (Suchverständnis, Umsortierung, Gedächtnis, Begrüßung) | low (der Gast wartet) |
+| Qualitätsurteil der Concierge-Auswertung (Admin, nur auf Knopfdruck) | medium |
 
 **Die Laufzeit begrenzt den Aufwand — das ist ehrlich zu sagen.** Ein Aufruf mit hohem Aufwand dauert Minuten. Deshalb senkt `effortForBudget` den Aufwand automatisch auf das, was die Zeit hergibt:
 
-- **Vercel-Routen (Hobby, 60 s):** praktisch höchstens **medium**. Steuerbar mit `AI_APP_BUDGET_MS` (Standard 48000); mehr Zeit gibt es nur mit Vercel Pro.
+- **Vercel-Routen:** im Code stehen 60 s (`maxDuration`) und ein Zeitfenster von 48 s (`AI_APP_BUDGET_MS`), damit ist praktisch **medium** die Obergrenze. Das ist eine Voreinstellung, keine Grenze der Plattform: Auf deinem Hobby-Plan sind mit **Fluid Compute (bei dir an)** bis zu **300 s** erlaubt. Wer dort mehr Denkaufwand will (zum Beispiel für den Voice-Wächter und den Ideen-Planer), hebt `maxDuration` der betreffenden Routen und `AI_APP_BUDGET_MS` gemeinsam an; das ist nicht Teil dieser Lieferung.
 - **Redaktionsstudio:** 48 s Fenster (`EDITORIAL_DEADLINE_MS`), weil die Vercel-Route nach 55 s aufgibt: medium.
-- **Artikel-Edge-Funktion:** 180 s weiches Limit (`EDGE_SOFT_LIMIT_MS`). Das Schreiben bekommt die Zeit **minus 45 s Reserve** für Redaktion und Faktencheck; ein langes Nachdenken darf die Prüfzeit nie aufbrauchen (ein ungeprüfter Artikel wird nicht veröffentlicht). Praktisch heißt das: `high` ist normal, `xhigh`/`max` nur, wenn das Limit deutlich höher gesetzt wird.
+- **Artikel-Edge-Funktion:** 180 s weiches Limit (`EDGE_SOFT_LIMIT_MS`; dein Supabase-Plan erlaubt 400 s, bei Free wären es nur 150 s). Das Schreiben bekommt die Zeit **minus 45 s Reserve** für Redaktion und Faktencheck; ein langes Nachdenken darf die Prüfzeit nie aufbrauchen (ein ungeprüfter Artikel wird nicht veröffentlicht). Praktisch heißt das: `high` ist normal, `xhigh`/`max` nur, wenn das Limit deutlich höher gesetzt wird.
 
-Wer „Max/Extra“ für anspruchsvolle Stücke wirklich will, braucht entweder Vercel Pro (bis 300 s) oder ein höheres `EDGE_SOFT_LIMIT_MS` (nur sinnvoll, wenn dein Supabase-Plan so lange Laufzeiten erlaubt; die alte Funktion hielt sich unter 200 s). Nach den ersten echten Läufen sieht man in `ai_spend_log.meta` (`effort`, `reasoning`) und in `generation_logs.meta` (`ms`), was tatsächlich gelaufen ist.
+Wer „Max/Extra“ für anspruchsvolle Stücke wirklich will, setzt in Supabase `EDGE_SOFT_LIMIT_MS=300000` (dein Bezahlplan erlaubt 400 s Laufzeit). Das Schreiben bekommt dann die Zeit minus 45 s Reserve, und `xhigh` (100 s nötig) und `max` (160 s) werden für anspruchsvolle und investigative Stücke möglich. Das kostet mehr Zeit und Geld pro Artikel; nur für diese Stücke lohnt es sich. Nach den ersten echten Läufen sieht man in `ai_spend_log.meta` (`effort`, `reasoning`) und in `generation_logs.meta` (`ms`), was tatsächlich gelaufen ist.
 
 ## 4. Kosten
 
@@ -88,14 +126,14 @@ Im **Redaktionsstudio** gilt zusätzlich: Jedes wörtliche Zitat muss **Wort fü
 ## 6. Rückfall
 
 - **Sofort stoppen:** `AI_KILL_SWITCH=1`, oder in Admin → AI den „AI processor“ ausschalten.
-- **Alte Version:** die Dateien des Stands vor dieser Lieferung liegen in GitHub (Commit `d5c8577` und älter). Zurück heißt: alten Stand hochladen und die alte Edge-Funktion wieder einfügen. Dazu müssen `CLAUDE_API_KEY` und `SONNET_MODEL` in Supabase stehen bleiben (sie werden nicht gelöscht).
+- **Alte Version:** der Stand vor diesem ZIP liegt in GitHub (Commit `7ab0813`; vor der ersten Lieferung: Commit `d5c8577`). Zurück heißt: alten Stand hochladen (und die alte Edge-Funktion wieder einfügen). Dazu müssen die alten Schlüssel (`CLAUDE_API_KEY`, `SONNET_MODEL`) noch stehen: **lösche sie deshalb erst nach grünem Test und ein paar Tagen Betrieb** (Abschnitt 2c, Punkt 3).
 - Bricht das System einen Lauf ab (Zeitlimit), blieb der Artikel früher für immer auf „rewriting“ stehen. Jetzt gibt die Edge-Funktion eine Reservierung, die älter als 20 Minuten ist, beim nächsten Lauf frei: das erste Mal zurück in die Warteschlange, das zweite Mal als „failed“ (dann von Hand öffnen und neu starten), damit ein Artikel, der immer zu lange braucht, nicht bei jedem Takt Geld kostet.
 
 ## 7. Umgebungsvariablen
 
-**Supabase (Edge-Funktionen)** — Pflicht: `OPENAI_API_KEY`. Optional: `UNSPLASH_ACCESS_KEY` (Cover), `AI_DAILY_BUDGET_USD` (6), `AI_MONTHLY_BUDGET_USD` (60), `AI_KILL_SWITCH`, `AI_MAX_EFFORT` (max), `AI_EFFORT_<AUFGABE>` (z. B. `AI_EFFORT_WRITE=medium`), `AI_SOL_ENABLED`, `OPENAI_MODEL_LUNA`, `EDGE_SOFT_LIMIT_MS` (180000), `EDITORIAL_DEADLINE_MS` (48000), `OVERLAP_MAX` (0.12), `MAX_EDIT_PASSES` (2), `RELEVANCE_GATE` (on), `COST_MARKUP_PCT` (25), `AI_FLEX_EDGE` (off), `SITE_URL` + `REVALIDATE_SECRET` (Seite sofort neu rendern nach Veröffentlichung).
+**Supabase (Edge-Funktionen)** — Pflicht: `OPENAI_API_KEY`, `SITE_URL`, `ENRICH_SECRET` (die letzten beiden für die Qualitätsprüfung auf der Website). Optional: `UNSPLASH_ACCESS_KEY` (Cover), `AI_DAILY_BUDGET_USD` (6), `AI_MONTHLY_BUDGET_USD` (60), `AI_KILL_SWITCH`, `AI_MAX_EFFORT` (max), `AI_EFFORT_<AUFGABE>` (z. B. `AI_EFFORT_WRITE=medium`), `AI_SOL_ENABLED`, `OPENAI_MODEL_LUNA`, `EDGE_SOFT_LIMIT_MS` (180000), `EDITORIAL_DEADLINE_MS` (48000), `OVERLAP_MAX` (0.12), `MAX_EDIT_PASSES` (2), `RELEVANCE_GATE` (on), `COST_MARKUP_PCT` (25), `AI_FLEX_EDGE` (off), `SITE_URL` + `REVALIDATE_SECRET` (Seite sofort neu rendern nach Veröffentlichung).
 
-**Vercel** — Pflicht: `OPENAI_API_KEY`. Optional wie oben, dazu `AI_APP_BUDGET_MS` (48000) und `AI_FLEX` (off = kein Flex für Hintergrundjobs). Vollständige Liste mit Erklärungen: `.env.example`.
+**Vercel** — Pflicht: `OPENAI_API_KEY` (jetzt auch für den Concierge und die Mail). Optional wie oben, dazu `AI_APP_BUDGET_MS` (48000), `AI_FLEX` (off = kein Flex für Hintergrundjobs), `AI_EFFORT_CHAT` / `AI_EFFORT_HELPER` / `AI_EFFORT_MAIL` (Denkaufwand von Chat, Helfern, Mail), `AI_PUBLIC_DAILY_CALLS` (6000 öffentliche Chat-Anfragen pro Tag), `CONCIERGE_LLM_UNDERSTAND=1` (Suchverständnis, aus) und `CONCIERGE_RERANK=1` (Umsortierung, aus). **Nicht mehr gebraucht:** `CLAUDE_API_KEY`, `SONNET_MODEL`, `CLAUDE_HAIKU`, `GEMINI_API_KEY`. Vollständige Liste mit Erklärungen: `.env.example`.
 
 ## 8. Durchsatz
 
@@ -103,11 +141,14 @@ Der Prozessor nimmt **einen Artikel pro Lauf** (ein zweiter beginnt nur, wenn de
 
 ## 9. Offen / nicht live geprüft
 
+- **Rechenzeit-Messung:** Die 1,9 Sekunden (und die 0,25 Sekunden der Funktion ohne Engine) sind in Node auf meiner Maschine gemessen. Auf Supabase kann der Wert anders ausfallen; der große Abstand zur Grenze von 2 Sekunden ist der Grund für die Auslagerung. Ob das Gateway die Leerzeichen der „Generate“-Antwort so durchreicht wie erwartet, habe ich nicht live geprüft (sonst zeigt die Admin-Seite im schlimmsten Fall wie früher einen Fehler 504, obwohl der Artikel fertig wird; er steht dann trotzdem in den Entwürfen).
 - **Keine einzige Anfrage ging an OpenAI.** Alles ist mit einem geskripteten Modell getestet (Tests laufen ohne Schlüssel). Wie lange Luna in der Praxis denkt, wie viele Denk-Token sie braucht und was ein Artikel wirklich kostet, zeigen erst die ersten Läufe (`ai_spend_log.meta`, `generation_logs.meta`).
 - **Websuche des Ideen-Planers:** der Preis pro Suchaufruf ist mit 0,01 USD angesetzt und nicht bestätigt (`OPENAI_PRICES_JSON` überschreibt Preise).
 - **Sprachqualität:** die Messwerte sind ein Hilfsmittel, kein Ersatz für Muttersprachler. Für RO, PL, EL, AR und RU lohnt eine Stichprobe durch Muttersprachler.
 - **KI-Kennzeichnung (EU-KI-Verordnung, Art. 50):** nach meinem Kenntnisstand müssen KI-erzeugte Texte, die die Öffentlichkeit über Themen von öffentlichem Interesse informieren, als solche gekennzeichnet werden, **außer** sie werden redaktionell geprüft und eine Person trägt die redaktionelle Verantwortung. Die Artikel erscheinen unter den Namen der Autorenliste (`AUTHOR_NAME` in der Edge-Funktion, Autorenseiten `/author/…`) und werden bei eingeschalteter Auto-Veröffentlichung ohne menschliche Freigabe veröffentlicht. Wenn diese Namen keine realen Personen sind, die die Texte verantworten, kommt ein zweites Problem dazu (Irreführung der Leser). Das ist eine **Entscheidung für dich** (Kennzeichnung oder tatsächliche redaktionelle Freigabe), am besten mit juristischer Beratung; ich habe daran nichts geändert.
-- **Zweite Lieferung:** Concierge, Mail-Assistent, Gesundheits-Check, Datenschutztexte in 7 Sprachen, Entfernen der Claude-Reste.
+- **Der Concierge-Strom ist nicht live getestet.** Die Namen der Stream-Ereignisse (`response.output_text.delta`, `response.completed`, `error`) habe ich in der OpenAI-Dokumentation bestätigt; ob Luna so schnell antwortet, dass sich `low` gut anfühlt, zeigt erst der Selbsttest (`first_word_ms`). Bricht ein Gast mitten in der Antwort ab, bleibt der Verbrauch dieser einen Antwort unprotokolliert (kleine Beträge).
+- **Gedächtnis, Begrüßung, Suchverständnis, Umsortierung** laufen jetzt mit einem Modell, das denkt (auf „low“). Das ist langsamer als das frühere kleine Claude-Modell. Suchverständnis und Umsortierung sind standardmäßig aus (`CONCIERGE_LLM_UNDERSTAND`, `CONCIERGE_RERANK`); wer sie einschaltet, merkt jede Sekunde direkt vor dem ersten Wort des Chats. Sie haben je 7 Sekunden Zeit und fallen bei Überschreitung ohne Fehler auf die normale Suche zurück.
+- **Datenschutztexte:** sorgfältig geschrieben, aber ohne juristische Prüfung. Die Aussage im Register, OpenAI nutze Daten der API standardmäßig nicht zum Training und behalte sie bis zu 30 Tage zur Missbrauchsprüfung, stammt aus der OpenAI-Dokumentation (Oktober 2026) und gilt nur, solange du die Datenfreigabe in deinem OpenAI-Konto nicht eingeschaltet hast.
 
 ## 10. Dateien, die nicht mehr gebraucht werden
 
@@ -118,10 +159,13 @@ Ein ZIP kann Dateien überschreiben, aber nicht löschen. Deshalb sind die alten
 | `lib/desk/pipeline.ts` | leere Hülle (der alte Desk: englischer Entwurf, in sechs Sprachen übersetzt, ohne Faktencheck) |
 | `lib/desk/queue.ts` | leere Hülle (die Warteschlange liegt jetzt in der Edge-Funktion) |
 | `lib/desk/prompts.ts`, `lib/desk/cover.ts` | werden von nichts mehr importiert |
+| `lib/aiReply.ts` | leere Hülle (las Antworten des früheren Modell-Anbieters) |
+| `supabase/functions/concierge/index.ts` | leere Hülle; die Funktion selbst in Supabase löschen (Abschnitt 2c) |
 
 ## 11. Wo was steht
 
 - Quellcode der beiden Edge-Funktionen: `scripts/edge/*.src.ts`. Die Dateien in `supabase/functions/…/index.ts` sind **erzeugt** (`node scripts/build-edge-journalism.mjs`); ein Test schlägt fehl, wenn sie nicht zum Quellcode passen. Nie von Hand ändern.
-- Modelle, Aufwand, Preise: `lib/journalism/models.ts`. OpenAI-Client: `lib/journalism/openai.ts`. Ablauf eines Artikels: `lib/journalism/pipeline.ts`. Schreib-Prompts: `lib/journalism/prompts.ts`.
+- Modelle, Aufwand, Preise: `lib/journalism/models.ts`. OpenAI-Client: `lib/journalism/openai.ts`, sein Streaming-Teil `lib/journalism/openaiStream.ts`. Die Tür der App zu OpenAI (Schlüssel, Budget, Ausgabenprotokoll): `lib/ai.ts`. Ablauf eines Artikels: `lib/journalism/pipeline.ts`. Schreib-Prompts: `lib/journalism/prompts.ts`.
+- Concierge: das Gespräch mit dem Modell `lib/concierge/chatModel.ts`, Persona und Kontext `lib/concierge/brain.ts`, Mail-Assistent `lib/mail/assist.ts`.
 - Messung der Sprache: `lib/voice/*` (siehe `docs/VOICE-ENGINE.md`).
 - Tests: `node scripts/tests/run.mjs` (alles, rund 40 Sekunden, ohne Schlüssel und ohne Kosten).

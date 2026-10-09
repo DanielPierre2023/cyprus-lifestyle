@@ -10,7 +10,7 @@
 // ============================================================================
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { callClaude, CLAUDE_HAIKU } from '@/lib/ai';
+import { callAI, parseAiJson } from '@/lib/ai';
 
 export interface MemoryProfile {
   name?: string;
@@ -104,7 +104,7 @@ export function renderMemory(p: MemoryProfile): string {
   );
 }
 
-// Update the profile from the latest exchange (cheap model, JSON out, merge).
+// Update the profile from the latest exchange (small model, JSON out, merge). Runs after the reply is sent: task "helper", gpt-6-luna at "low".
 export async function updateMemory(cid: string, userText: string, assistantText: string, current: MemoryProfile): Promise<void> {
   if (!isValidCid(cid) || !userText) return;
   const system =
@@ -118,9 +118,10 @@ export async function updateMemory(cid: string, userText: string, assistantText:
     `LATEST EXCHANGE:\nGuest: ${userText.slice(0, 800)}\nConcierge: ${assistantText.slice(0, 800)}\n\n` +
     'Return the updated memory JSON.';
   try {
-    const res = await callClaude({ systemInstruction: system, userMessage: user, model: CLAUDE_HAIKU, jsonMode: true, maxTokens: 400, temperature: 0, fn: 'concierge-memory' });
+    const res = await callAI({ systemInstruction: system, userMessage: user, task: 'helper', jsonMode: true, expectTokens: 300, timeoutMs: 30_000, fn: 'concierge-memory' });
     if (!res.text) return;
-    const parsed = JSON.parse(res.text);
+    const parsed = parseAiJson<Record<string, unknown>>(res.text);
+    if (!parsed || Object.keys(parsed).length === 0) return; // not readable (or nothing to keep): the stored profile stays as it is
     const merged = sanitizeProfile({ ...current, ...parsed });
     await saveMemory(cid, merged);
   } catch { /* extraction is best-effort; never breaks the chat */ }

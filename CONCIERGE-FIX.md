@@ -1,5 +1,7 @@
 # The "Concierge is busy" fix — found it
 
+> **Historical note (October 2026).** This file describes the state at the time it was written. Since then the app calls OpenAI only (`OPENAI_API_KEY`, model `gpt-6-luna`) for every text job, including the concierge. What this file says about Claude, Anthropic, `CLAUDE_API_KEY` or `SONNET_MODEL` no longer applies; the current instructions are in `RUNBOOK.md` and `docs/TEXTPRODUKTION-OPENAI.md`.
+
 **Root cause:** the code was asking Anthropic for a model called
 `claude-sonnet-4-6`. That model **does not exist** — Anthropic's current Sonnet is
 `claude-sonnet-5`. So every concierge request was rejected, and the chat showed

@@ -23,7 +23,7 @@ export const privacyDe: LegalDoc = {
       'Für Buchführung, Steuerunterlagen und Auskünfte an Behörden: rechtliche Verpflichtungen.',
     ] },
     { h: '4. Der Concierge und automatisierte Verarbeitung', p: [
-      'Der Concierge ist ein automatisierter Assistent dieser Website. Ihre Fragen werden an KI-Dienstleister (siehe Abschnitt 6) gesendet, um Antworten zu erzeugen und unsere Artikel, Einträge und Ratgeber zu durchsuchen. Er gibt allgemeine Informationen und Empfehlungen; das ist keine Fachberatung, und er trifft keine Entscheidungen mit rechtlicher oder ähnlich erheblicher Wirkung für Sie. Eine Buchungsanfrage wird stets von einem Menschen bearbeitet: Der Inhaber bearbeitet Anfragen persönlich im Backoffice.',
+      'Der Concierge ist ein automatisierter Assistent dieser Website. Ihre Fragen werden an unseren KI-Dienstleister (siehe Abschnitt 6) gesendet, um Antworten zu erzeugen und unsere Artikel, Einträge und Ratgeber zu durchsuchen. Er gibt allgemeine Informationen und Empfehlungen; das ist keine Fachberatung, und er trifft keine Entscheidungen mit rechtlicher oder ähnlich erheblicher Wirkung für Sie. Eine Buchungsanfrage wird stets von einem Menschen bearbeitet: Der Inhaber bearbeitet Anfragen persönlich im Backoffice.',
       'Für Mitglieder kann sich der Concierge die angegebenen Vorlieben geräteübergreifend merken. Sie können sie selbst einsehen und löschen (Gedächtnis-Fenster im Concierge und „Vergessen“ im Konto).',
     ] },
     { h: '5. Empfänger Ihrer Daten', p: ['Wir geben personenbezogene Daten nur im erforderlichen Umfang weiter, an folgende Empfängerkategorien:'], li: [
@@ -37,9 +37,8 @@ export const privacyDe: LegalDoc = {
       'Vercel: Hosting und Auslieferung; Vercel Web Analytics und Speed Insights nur, wenn Sie Analyse akzeptieren.',
       'Stripe (Stripe Payments Europe, Irland, und Konzerngesellschaften): Zahlungen und Abonnements, Steuerberechnung und Kundenportal. Für einzelne Zwecke (z. B. Betrugsprävention, regulatorische Pflichten) ist Stripe nach eigener Datenschutzerklärung eigenständig Verantwortlicher.',
       'Resend: Versand von Transaktions-E-Mails (Wiederherstellungslinks, Buchungspost) und des Newsletters.',
-      'Anthropic: Sprachmodell-Verarbeitung von Concierge-Gesprächen und Unterstützung bei Antworten auf Anfragen.',
-      'OpenAI: Umwandlung Ihrer Frage in einen Suchvektor (Embeddings), Vorlesefunktion (der Antworttext wird zur Audioerzeugung gesendet) und Bebilderung redaktioneller Inhalte.',
-      'Google: KI-Sprachmodelle im redaktionellen Ablauf und Geokodierung von Unternehmensadressen; wir senden personenbezogene Daten von Besuchern nicht absichtlich dorthin. Webcam-Player von YouTube (Google) können auf der Live-Seite laden (siehe Cookie-Richtlinie).',
+      'OpenAI: Sprachmodell-Verarbeitung von Concierge-Gesprächen (auf der Website, über WhatsApp und Telegram) und Unterstützung bei Antworten auf Anfragen; Umwandlung Ihrer Frage in einen Suchvektor (Embeddings); Vorlesefunktion (der Antworttext wird zur Audioerzeugung gesendet) sowie Erstellung redaktioneller Inhalte (Texte, Übersetzung und Bebilderung).',
+      'Google: Geokodierung von Unternehmensadressen (wir senden personenbezogene Daten von Besuchern nicht absichtlich dorthin). Webcam-Player von YouTube (Google) können auf der Live-Seite laden (siehe Cookie-Richtlinie).',
       'Meta (WhatsApp Business / Graph API): Wenn Sie den Concierge über WhatsApp kontaktieren, laufen Nachricht und Telefonnummer über Meta; außerdem veröffentlichen wir redaktionelle Beiträge auf unseren Facebook- und Instagram-Seiten.',
       'Telegram: Wenn Sie den Concierge über Telegram kontaktieren, läuft die Nachricht über Telegram.',
       'Twilio: SMS, soweit zur Verifizierung von Unternehmensinhabern genutzt.',

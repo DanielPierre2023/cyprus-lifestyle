@@ -182,7 +182,7 @@
         {
           "h": "Usługi, które przetwarzają dane w naszym imieniu",
           "p": [
-            "Opieramy się na niewielkiej liczbie renomowanych podmiotów przetwarzających, z których każdy jest związany umową powierzenia przetwarzania danych: Supabase (baza danych i uwierzytelnianie), Vercel (hosting i statystyki bez cookie), Resend (e-maile transakcyjne), Stripe (płatności) oraz OpenAI i Anthropic (które napędzają wielojęzycznego concierge). Przetwarzają dane wyłącznie zgodnie z naszymi instrukcjami i tylko w zakresie niezbędnym do świadczenia usługi."
+            "Opieramy się na niewielkiej liczbie renomowanych podmiotów przetwarzających, z których każdy jest związany umową powierzenia przetwarzania danych: Supabase (baza danych i uwierzytelnianie), Vercel (hosting i statystyki bez cookie), Resend (e-maile transakcyjne), Stripe (płatności) oraz OpenAI (który napędza wielojęzycznego concierge). Przetwarzają dane wyłącznie zgodnie z naszymi instrukcjami i tylko w zakresie niezbędnym do świadczenia usługi."
           ]
         },
         {
