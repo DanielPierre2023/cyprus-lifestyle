@@ -19,6 +19,7 @@ import { writerSystem, writerUser, COMPOSE_SCHEMA, HOUSE_VOICE, stableHash, lead
 import { FACT_CHECK_SCHEMA, factCheckSystem, factCheckUser, parseFactCheck, checkOutcome, needsRepair, REPAIR_SCHEMA, repairSystem, repairUser, type FactCheck, type FactIssue } from './factCheck';
 import { editorialFixes, editorialSystem, editorialUser, EDITORIAL_SCHEMA, deOverlapSystem, fieldsEditorSystem, FIELDS_SCHEMA, type Finding } from './editorial';
 import { fieldTells, fieldScore } from './fields';
+import { isImprovement } from './progress';
 import { LANGS, TITLE_CRAFT, type Lang } from './languages';
 
 export const ALL_LANGS: Lang[] = LANGS;
@@ -258,7 +259,9 @@ export async function runPipeline(input: { title: string; text: string; hintCate
       if (!cand || cand.length < ed.content.length * 0.7 || cand.length > ed.content.length * 1.35) break;
       if (!deps.factsKept(ed.content, cand, lang)) { log(`[desk] ${lang} edit pass ${pass} dropped: a figure or quotation changed`); break; }
       const a2 = await judge(cand, lang, ctx());
-      if (a2.unavailable || a2.score >= a.score) break;
+      // "better" is judged by the weight of the findings, not only by the score: the score stops at 100, and an edition with eight serious
+      // findings that the editor cut to four still shows 100 (see progress.ts). Progress is kept; equal or worse is dropped.
+      if (a2.unavailable || !isImprovement(a, a2)) break;
       ed.content = cand; ed.wc = deps.sanitize.words(cand); a = a2; ed.passes.edit++;
     }
     ed.assessment = a;

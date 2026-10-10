@@ -46,7 +46,7 @@ export interface EditionFinding {
   level: Level;
   // The strongest tells behind the score (label, severity, count) so the admin page can
   // say WHY an edition reads as machine output. Flag-only: nothing here blocks publishing.
-  tells: Array<{ key: string; label: string; severity: 'high' | 'medium' | 'low'; count: number }>;
+  tells: Array<{ key: string; label: string; severity: 'high' | 'medium' | 'low'; count: number; sample: string }>;
 }
 
 export interface LangSummary {
@@ -154,13 +154,13 @@ export function scanPosts(posts: RawPost[]): ScanResult {
         if (r.level === 'high') sum.high += 1;
         if (r.level === 'high' || r.level === 'medium') sum.flagged += 1;
       }
-      const tells = r.tells.slice(0, 4).map((t) => ({ key: t.key, label: t.label, severity: t.severity, count: t.count }));
+      const tells = r.tells.slice(0, 4).map((t) => ({ key: t.key, label: t.label, severity: t.severity, count: t.count, sample: String(t.sample || '') }));
       // Parity problems of THIS edition rank it for repair: a lost half of the text matters more than a stock phrase.
       const pe = parity.editions.find((e) => e.lang === l);
       let score = r.score, level: Level = r.level;
       const pp = parity.problems.filter((x) => x.startsWith(`${l}:`));
       if (pe && pe.status !== 'ok' && !untranslated) {
-        tells.unshift({ key: `parity_${pe.status}`, label: pp[0] || `Edition differs from the others (${pe.status})`, severity: 'high', count: 1 });
+        tells.unshift({ key: `parity_${pe.status}`, label: pp[0] || `Edition differs from the others (${pe.status})`, severity: 'high', count: 1, sample: '' });
         score = Math.min(100, score + 25);
         level = 'high';
       }

@@ -10,6 +10,7 @@ import { DESK_SPEC, type Desk } from '@/lib/voice/desks';
 import type { AiTell } from '@/lib/antiAi';
 import type { Issue } from '@/lib/voice/structure';
 import { reportageBlock } from '@/lib/voice/reportage';
+import { remediesFor, SAMPLE_CHARS } from '@/lib/journalism/editorial';
 
 export const INTEGRITY: string[] = [
   'Keep EVERY fact, name, figure, date, price and quotation exactly as in the text you are given. Change wording and architecture, never substance.',
@@ -77,7 +78,11 @@ export function reviseUser(o: { title: string; body: string; tells: AiTell[]; is
   for (const n of o.notes || []) lines.push(`• ${n}`);
   if (o.tells.length) {
     lines.push('FOUND IN THIS TEXT (all of it must be gone from your version):');
-    for (const t of o.tells.slice(0, 18)) lines.push(`• ${t.label}${t.count > 1 ? ` ×${t.count}` : ''}${t.sample ? `  e.g. “${t.sample.slice(0, 90)}”` : ''}`);
+    const shown = o.tells.slice(0, 18);
+    for (const t of shown) lines.push(`• ${t.label}${t.count > 1 ? ` ×${t.count}` : ''}${t.sample ? `  e.g. “${t.sample.slice(0, SAMPLE_CHARS)}”` : ''}`);
+    // What each finding asks for, once per family (the same remedies the article desk's sub-editor gets): a list of findings alone
+    // leaves the model to guess what "paragraphs are all about the same length" or "cites its source" is supposed to turn into.
+    lines.push('', 'HOW TO FIX (what each finding asks for):', ...remediesFor(shown.map((t) => ({ key: t.key, label: t.label, severity: t.severity, count: t.count, sample: t.sample }))).map((f) => `• ${f}`));
   }
   if (o.issues?.some((i) => i.key === 'straight_quotes')) lines.push('• Use the typographic quotation marks of this language, not straight quotes.');
   lines.push(

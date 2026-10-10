@@ -10,9 +10,12 @@
 // intention only, because a quota in a writer's prompt makes a model produce the theatre it is meant to avoid.
 import { LANG_NAME, TYPOGRAPHY, dashRule, type Lang } from './languages';
 
+/** How much of a finding's sample (the passage, or the measured sizes) the editor is shown. */
+export const SAMPLE_CHARS = 150;
+
 const FIX: Record<string, string> = {
   RHYTHM: 'RHYTHM: the sentence lengths are too even or too regular. Re-edit so that length follows the meaning: a short sentence where one hard fact should land, a longer one where context has to be held together. No formula, no mechanical alternation, no fragment added for effect, no filler to make a sentence longer.',
-  PARAGRAPHS: 'PARAGRAPHS: the paragraphs are too alike in size. Let paragraph length follow the logic of the story: split where the story turns, keep related facts together. Add no one-sentence paragraph for effect and no padding.',
+  PARAGRAPHS: 'PARAGRAPHS: the paragraphs are too alike in size (the measured sizes are listed above). Re-cut them by the logic of the story. Where neighbouring paragraphs carry one thought, join them into ONE fuller paragraph; let a paragraph that carries a single hard fact (a decision, a figure, a quotation) stand alone in one or two sentences; keep a run of background together instead of chopping it into equal pieces. Never merge unrelated facts to reach a size, never split a thought to reach a size, add no filler and no fact, and keep the order of the information.',
   PARA_OPENERS: 'PARAGRAPH OPENINGS: begin neighbouring paragraphs differently (a person, a number, a place, the decision, a quotation); no two in a row start with the same word.',
   SENTENCE_OPENERS: 'SENTENCE OPENINGS: never three sentences in a row that start with the same word; change the subject or the construction.',
   SPEECH_VERBS: 'SPEECH VERBS: use the plain verb of the language for people who speak in the story, and never the same verb in two attributions in a row: put the speaker first, put the attribution at the end, join two statements, or drop the attribution where the speaker is obvious. Replace ornamental verbs (stressed, emphasised, highlighted, betonte, hob hervor, podkreślił, a subliniat, подчеркнул, τόνισε, أكد) by the plain one.',
@@ -32,7 +35,7 @@ const FIX: Record<string, string> = {
   DEMONSTRATIVE_OVERKILL: 'DEMONSTRATIVES: reduce sentences that begin with “This/These” (or the language\'s equivalent) to at most two; use the specific noun instead.',
   SUMMARY_CLOSER: 'ENDING: delete the closing paragraph that restates the significance; end on a concrete fact, number, date or quotation.',
   SPECULATIVE_ENDING: 'ENDING: cut the speculation or forecast from the ending; close on the last verifiable fact or attributed statement.',
-  SOURCE_TALK: 'SOURCE TALK: remove every mention of where the facts came from (newspapers, agencies, websites, consultancies, reviewers, reports, “according to”, “reported by”, “sources say”, any talk about the research). State the fact in the magazine\'s own voice. The magazine contacted no one: never write that someone told or spoke to Cyprus Lifestyle or to “us”. People and institutions may still act and speak inside the story (the minister said).',
+  SOURCE_TALK: 'SOURCE TALK: remove every mention of where the facts came from (newspapers, agencies, websites, consultancies, reviewers, reports, “according to”, “reported by”, “sources say”, any talk about the research). State the fact, the figure and the finding plainly in the magazine\'s own voice: a figure is never introduced by “according to …”, least of all in paragraph after paragraph. A person or body that speaks or acts inside the story may be named as the actor of a plain verb (the minister said), once, where it matters. The magazine contacted no one: never write that someone told or spoke to Cyprus Lifestyle or to “us”.',
   AI_VOCAB: 'VOCABULARY: replace the stock vocabulary of generated text with the concrete, plain word of this language.',
   EM_DASH: 'DASHES: remove every em and en dash; use commas, full stops or parentheses (the Arabic comma for Arabic).',
   GENERIC_PHRASES: 'STOCK PHRASES: rewrite every stock phrase so that the sentence states the plain fact; do not swap in a synonym.',
@@ -88,16 +91,29 @@ export interface Finding { key: string; label?: string; sample?: string; count?:
  * The editor's work order: every finding with its measured value or passage, then the remedy for each family once.
  * Accepts bare flag strings as well as findings (tells from the voice engine carry a label and a sample).
  */
+/** What each family of findings asks for, once per family, in the order the findings come: the "how to fix" part of a work order. */
+export function remediesFor(input: Array<string | Finding>): string[] {
+  const out: string[] = [];
+  for (const x of input) {
+    const key = typeof x === 'string' ? x : x?.key;
+    if (!key) continue;
+    const fam = fixKeyForFlag(key);
+    const fix = fam ? FIX[fam] : FIX.OTHER;
+    if (!out.includes(fix)) out.push(fix);
+  }
+  return out;
+}
+
 export function editorialFixes(input: Array<string | Finding>, max = 16): string {
   const findings: Finding[] = input.map((x) => (typeof x === 'string' ? { key: x } : x)).filter((x) => x && x.key);
-  const lines: string[] = []; const remedies: string[] = [];
+  const lines: string[] = [];
   const order = (s?: string) => (s === 'high' ? 0 : s === 'medium' ? 1 : 2);
-  for (const t of [...findings].sort((a, b) => order(a.severity) - order(b.severity))) {
+  const sorted = [...findings].sort((a, b) => order(a.severity) - order(b.severity));
+  for (const t of sorted) {
     const fam = fixKeyForFlag(t.key);
-    if (lines.length < max) lines.push(`• ${t.label || (fam ? FIX[fam].split(':')[0] : t.key)}${t.count && t.count > 1 ? ` ×${t.count}` : ''}${t.sample ? `: “${String(t.sample).replace(/\s+/g, ' ').slice(0, 90)}”` : ''}`);
-    const fix = fam ? FIX[fam] : FIX.OTHER;
-    if (!remedies.includes(fix)) remedies.push(fix);
+    if (lines.length < max) lines.push(`• ${t.label || (fam ? FIX[fam].split(':')[0] : t.key)}${t.count && t.count > 1 ? ` ×${t.count}` : ''}${t.sample ? `: “${String(t.sample).replace(/\s+/g, ' ').slice(0, SAMPLE_CHARS)}”` : ''}`);
   }
+  const remedies = remediesFor(sorted);
   if (!lines.length) return 'GENERAL: tighten any sentence that carries no information; keep the rhythm natural and the vocabulary plain.';
   return `FOUND IN THIS TEXT (each of these must be gone from your version):\n${lines.join('\n')}\n\nHOW TO FIX:\n${remedies.join('\n')}`;
 }

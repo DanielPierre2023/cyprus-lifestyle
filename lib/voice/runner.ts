@@ -18,6 +18,7 @@ import { deskFor, type Desk } from '@/lib/voice/desks';
 import { scoreVoice, asLang } from '@/lib/voice/score';
 import { reviseToStandard, type CallModel, type ReviseResult } from '@/lib/voice/revise';
 import { MAX_SCORE } from '@/lib/voice/gate';
+import { isImprovement } from '@/lib/journalism/progress';
 import { STATE_KEY, IDLE_RECHECK_MS, parseState, withDay, canRun, chooseNext, recordRun, due, unitKey, visibleTokensFor, trip, type Unit, type VoiceState } from '@/lib/voice/work';
 
 export const EVERGREEN_AUTHOR = 'The Cyprus Lifestyle Desk';
@@ -121,7 +122,9 @@ export async function runVoiceOnce(sb: SupabaseClient, opts: RunOptions = {}): P
   const make = opts.callModel || modelCaller;
   const attempt = (state.attempts[unitKey(unit.id, unit.lang)]?.n || 0) + 1;
   const res: ReviseResult = await reviseToStandard({ title, body, lang, desk: unit.desk, callModel: make(unit.lang, body, attempt), maxPasses: 1, budgetMs: 38_000 });
-  const improved = res.changed && res.after.score < res.before.score && res.facts?.ok !== false;
+  // Saved only when it is a real improvement: a lower score, or at the ceiling of 100 a clearly lower weight of findings (so a text that
+  // lost half of its serious findings is kept, and the next pass starts from there).
+  const improved = res.changed && isImprovement(res.before, res.after) && res.facts?.ok !== false;
   let saved = false;
   if (improved) {
     const upd: Record<string, unknown> = { [`content_${unit.lang}`]: res.body, updated_at: now.toISOString() };

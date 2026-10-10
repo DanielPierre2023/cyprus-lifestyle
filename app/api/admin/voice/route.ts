@@ -3,7 +3,7 @@
 //   /api/admin/voice?on=1 | ?off=1         switch the background worker on / off
 //   /api/admin/voice?cap=40                set the daily cap (editions per day, 0–1000)
 //   /api/admin/voice?dry=1[&id=…&lang=xx]  free dry run: the score, the tells and the cost estimate of the next (or a given) edition
-//   /api/admin/voice?run=1&id=…&lang=xx    repair that one edition now (costs one model call, about US$0.03–0.09)
+//   /api/admin/voice?run=1&id=…&lang=xx    repair that one edition now (one model call: about 1–2 US cents at the standard effort; ?dry=1 shows the estimate first)
 // Anything that changes or spends needs a request typed in the address bar or opened from this site (Sec-Fetch-Site none|same-origin).
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';

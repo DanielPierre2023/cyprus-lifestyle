@@ -169,6 +169,23 @@ async function main() {
     const s5 = scripted(defaults({ edit: () => JSON.stringify({ content_html: article('de', 'still bad') }) }));
     const r5 = await runPipeline(SRC, deps(s5.llm, s5.clock, { assess: (h, l) => (l === 'de' ? { ...bad, score: 20 - (h.includes('still bad') ? 1 : 0) } : goodAssess(h, l)) }), opts(s5.clock, { maxEditPasses: 2 }));
     ok('the number of editing passes is capped', (s5.counts['edit-de'] || 0) <= 2 && r5.editions!.de.passes.edit <= 2);
+
+    // At the ceiling of 100 the score hides progress; the weight of the findings decides (lib/journalism/progress.ts). The first live run
+    // (9 Oct 2026) left Greek, Polish and Russian at 100 with "according to Eurostat" in every paragraph and edit passes = 0.
+    const attr = (n: number): Assessment => ({ score: 100, ok: false, high: 1, words: 120, tells: [{ key: 'source_attribution', label: 'Cites its source ("according to…", "reported by…"): state the fact in the magazine\'s own voice', severity: 'high', count: n, sample: 'Σύμφωνα με στοιχεία της Eurostat' }] });
+    const level = (h: string, l: Lang): Assessment => (l !== 'el' ? goodAssess(h, l) : /CLEAN/.test(h) ? goodAssess(h, l) : /HALF/.test(h) ? attr(4) : attr(8));
+    const s6 = scripted(defaults({ edit: (_sp, n) => JSON.stringify({ content_html: article('el', n === 1 ? 'HALF' : 'CLEAN') }) }));
+    const r6 = await runPipeline(SRC, deps(s6.llm, s6.clock, { assess: level }), opts(s6.clock, { maxEditPasses: 2 }));
+    eq('a partial fix at the ceiling is kept, and the next pass finishes the job', [r6.editions!.el.passes.edit, r6.editions!.el.assessment?.ok, r6.gate?.publishable], [2, true, true]);
+    const s7 = scripted(defaults({ edit: () => JSON.stringify({ content_html: article('el', 'HALF') }) }));
+    const r7 = await runPipeline(SRC, deps(s7.llm, s7.clock, { assess: level }), opts(s7.clock, { maxEditPasses: 1 }));
+    ok('...and with one pass only the better text stays, and the article is still held back', r7.editions!.el.passes.edit === 1 && r7.editions!.el.content.includes('HALF') && r7.gate!.publishable === false && /EL: style score 100/.test(r7.gate!.reasons.join('|')));
+    const s8 = scripted(defaults({ edit: () => JSON.stringify({ content_html: article('el', 'SAME') }) }));
+    const r8 = await runPipeline(SRC, deps(s8.llm, s8.clock, { assess: (h, l) => (l === 'el' ? attr(8) : goodAssess(h, l)) }), opts(s8.clock));
+    eq('an edit that leaves the findings as they were is dropped, and the sub-editor is not asked again', [r8.editions!.el.passes.edit, s8.counts['edit-el']], [0, 1]);
+    const s9 = scripted(defaults({ edit: () => JSON.stringify({ content_html: article('el', 'MORE') }) }));
+    const r9 = await runPipeline(SRC, deps(s9.llm, s9.clock, { assess: (h, l) => (l === 'el' ? attr(/MORE/.test(h) ? 12 : 8) : goodAssess(h, l)) }), opts(s9.clock));
+    eq('an edit that leaves more findings than before is dropped', [r9.editions!.el.passes.edit, r9.editions!.el.content.includes('MORE')], [0, false]);
   }
 
   // ── the short fields ───────────────────────────────────────────────────────────────────────────────────────────────

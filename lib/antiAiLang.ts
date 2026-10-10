@@ -236,6 +236,17 @@ function firstWord(sentence: string, lang: Lang): string {
   return w;
 }
 
+/**
+ * The measured paragraph sizes as a short line, for the editor model and the admin page: "words per paragraph: 58·62·60 (shortest
+ * neighbours: 58 + 62 words)". The pair is a candidate to join, found by size so that it holds whatever the numbering of headings is.
+ */
+export function paragraphSizesSample(sizes: number[]): string {
+  const shown = sizes.slice(0, 16).join('·') + (sizes.length > 16 ? '…' : '');
+  let best = -1; let bestSum = Infinity;
+  for (let i = 0; i + 1 < sizes.length; i++) { const s = sizes[i] + sizes[i + 1]; if (s < bestSum) { bestSum = s; best = i; } }
+  return `words per paragraph: ${shown}${best >= 0 ? ` (shortest neighbours: ${sizes[best]} + ${sizes[best + 1]} words)` : ''}`;
+}
+
 export function structuralTells(text: string, lang: Lang, view: string = text): AiTell[] {
   const out: AiTell[] = [];
   const all = words(text);
@@ -298,7 +309,9 @@ export function structuralTells(text: string, lang: Lang, view: string = text): 
   if (paras.length >= 4) {
     const mean = paras.reduce((a, b) => a + b, 0) / paras.length;
     const cv = Math.sqrt(paras.reduce((a, b) => a + (b - mean) * (b - mean), 0) / paras.length) / mean;
-    if (cv < 0.2) out.push({ key: 'uniform_paragraphs', label: 'Paragraphs are all about the same length', severity: 'low', count: paras.length, sample: 'CV ' + cv.toFixed(2) });
+    // The sample is what the editor model and the admin page are shown: the measured sizes and the shortest neighbouring pair (a
+    // candidate to join), not a statistic nobody can act on.
+    if (cv < 0.2) out.push({ key: 'uniform_paragraphs', label: 'Paragraphs are all about the same length', severity: 'low', count: paras.length, sample: paragraphSizesSample(paras) });
   }
 
   // 7. no specifics — a long piece without a single digit.

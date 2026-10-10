@@ -4,7 +4,8 @@
 //   • 'clean' / 'polish' (default) — the editor: deterministic clean, then up to two model passes in the edition's own language.
 //                A result is saved ONLY if it scores better, keeps every figure, quote and name, and (for scraped pieces)
 //                does not copy the source. Otherwise nothing changes and the answer says why.
-//   • 'rewrite' / 'transcreate' — re-report the edition natively from the SOURCE edition, then judged by the same rules.
+//   • 'rewrite' / 'transcreate' — re-report the edition natively from the SOURCE edition (under the house rule "no sources named"),
+//                then judged by the same rules; saved only when it is a real improvement (lib/voice/accept.ts).
 // Every save writes admin_audit_log (action 'voice.repair') with the previous title and body, so any edition can be restored.
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
@@ -17,6 +18,8 @@ import { runVoiceOnce, deskOfRow } from '@/lib/voice/runner';
 import { scoreVoice, asLang } from '@/lib/voice/score';
 import { checkFacts } from '@/lib/voice/guards';
 import { mechanicalClean } from '@/lib/voice/revise';
+import { judgeRewrite } from '@/lib/voice/accept';
+import { parityOf, LANGS as PARITY_LANGS, type PLang } from '@/lib/voice/parity';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -72,9 +75,13 @@ export async function POST(req: NextRequest) {
     const after = scoreVoice({ title: outTitle, body: outBody, lang, desk });
     const facts = checkFacts(srcBody, outBody, { sameLanguage: false });
     const hadNothing = !body.trim();
-    const better = hadNothing || after.score <= before.score;
-    if (!facts.ok && !hadNothing) return NextResponse.json({ ok: true, id, locale, mode: 'rewrite', changed: false, before: before.score, after: before.score, note: `Rewrite not saved: ${facts.reasons.join('; ') || 'facts differ from the source'}.` });
-    if (!better) return NextResponse.json({ ok: true, id, locale, mode: 'rewrite', changed: false, before: before.score, after: after.score, note: 'Rewrite was not better than the current text, so nothing was saved.' });
+    // Is this edition out of line with its siblings (far too short or too long, figures missing), and does the rewrite put it back?
+    const bodies = Object.fromEntries(PARITY_LANGS.map((l) => [l, String(p[`content_${l}`] || '')])) as Partial<Record<PLang, string>>;
+    const statusOf = (r: ReturnType<typeof parityOf>) => r.editions.find((e) => e.lang === locale)?.status;
+    const parityFixed = statusOf(parityOf(bodies)) !== 'ok' && statusOf(parityOf({ ...bodies, [locale]: outBody })) === 'ok';
+    // Saved only when it is a real improvement (lib/voice/accept.ts): equal is not better, and the ceiling of 100 hides nothing.
+    const verdict = judgeRewrite({ hadNothing, factsOk: facts.ok, factReasons: facts.reasons, before, after, parityFixed });
+    if (!verdict.save) return NextResponse.json({ ok: true, id, locale, mode: 'rewrite', changed: false, before: before.score, after: after.score, note: verdict.note });
     const upd: Record<string, unknown> = { [`content_${locale}`]: outBody, updated_at: new Date().toISOString() };
     if (outTitle && outTitle !== title) upd[`title_${locale}`] = outTitle;
     if (locale === src) { const w = wordCount(outBody); upd.word_count = w; upd.reading_time_min = Math.max(1, Math.ceil(w / 200)); }

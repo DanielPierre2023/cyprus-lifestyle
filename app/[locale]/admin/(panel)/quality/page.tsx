@@ -115,8 +115,10 @@ export default async function QualityTab() {
         <QualityBulkClean targets={repairTargets} />
       </div>
       <p className="sub" style={{ marginTop: 8 }}>
-        Untranslated first, then by AI score — up to {WORST_CAP}. <strong>Clean</strong> humanises + copy-edits the edition in its own
-        language; <strong>Rewrite</strong> re-reports it natively from the source (deeper, for the poorest translations).
+        Untranslated first, then by AI score — up to {WORST_CAP}. <strong>Clean</strong> edits the edition in its own language (sources
+        named, equal-size paragraphs, stock phrases); <strong>Rewrite</strong> re-reports it natively from the source edition, for editions
+        that are far too short, too long or poorly translated. Either is saved only if the text really gets better, and the previous text
+        stays in the admin log.
       </p>
       <table className="adm-t" style={{ marginTop: 10 }}>
         <thead><tr><th>Article</th><th>Edition</th><th>Status</th><th>Fix</th></tr></thead>
@@ -139,7 +141,12 @@ export default async function QualityTab() {
                     : <>AI: {f.level} · {f.score}</>}
                   {!f.untranslated && f.tells.length
                     ? <div className="sub" style={{ margin: '3px 0 0', fontWeight: 400, whiteSpace: 'normal', maxWidth: 380 }}>
-                        {f.tells.map((t) => `${t.label}${t.count > 1 ? ` ×${t.count}` : ''}`).join(' · ')}
+                        {f.tells.map((t, k) => (
+                          <div key={k} style={{ marginTop: k ? 3 : 0 }}>
+                            {t.label}{t.count > 1 ? ` ×${t.count}` : ''}
+                            {t.sample ? <span style={{ color: '#8a8470' }}> — “{t.sample.slice(0, 120)}”</span> : null}
+                          </div>
+                        ))}
                       </div>
                     : null}
                 </td>

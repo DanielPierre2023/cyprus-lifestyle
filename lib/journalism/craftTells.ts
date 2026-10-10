@@ -166,7 +166,7 @@ export function craftTells(input: CraftInput): CraftTell[] {
   if (P.consecutiveSame.length) out.push(T('c_para_opener', `Consecutive paragraphs open with the same word (“${P.consecutiveSame[0].word}”)`, P.consecutiveSame.length >= 3 ? 'medium' : 'low', P.consecutiveSame.length, P.consecutiveSame[0].word));
   if (P.overused) out.push(T('c_para_opener_many', `${P.overused.count} paragraphs open with “${P.overused.word}”`, 'low', P.overused.count, P.overused.word));
   if (words >= 400 && P.count >= 6 && (P.shortParas === 0 || P.longParas === 0)) {
-    out.push(T('c_para_variety', `Paragraphs are all of one size: no ${P.shortParas === 0 ? 'short paragraph (1-2 sentences)' : 'long paragraph (5 or more sentences)'} in a piece of ${words} words`, 'low', 1, `${P.shortParas} short, ${P.longParas} long`));
+    out.push(T('c_para_variety', `Paragraphs are all of one size: no ${P.shortParas === 0 ? 'short paragraph (1-2 sentences)' : 'long paragraph (5 or more sentences)'} in a piece of ${words} words`, 'low', 1, `sentences per paragraph: ${P.sentencesPer.slice(0, 16).join('·')}${P.sentencesPer.length > 16 ? '…' : ''}`));
   }
 
   // ── speech verbs ────────────────────────────────────────────────────────────

@@ -5,7 +5,8 @@
 //  • Mechanical clean first (dashes, known phrases): free, deterministic, and often enough for the surface tells, so the
 //    paid model call is skipped whenever the text already passes. Consequence: a piece that is already good costs nothing.
 //  • A candidate is accepted only if (a) the facts guard passes (no invented figure, quotations verbatim, figures kept),
-//    (b) for sourced input the originality guard passes, (c) the format survived, (d) it scores better than what we hold.
+//    (b) for sourced input the originality guard passes, (c) the format survived, (d) it is a real improvement on what we hold (a lower
+//    score, or at the ceiling of 100 a clearly lower weight of findings: lib/journalism/progress.ts).
 //    Consequence: the loop can never make an article worse or less true; at worst it returns the input unchanged.
 //  • The best candidate is carried to the next pass (progressive repair), and the loop stops at the first pass that clears the
 //    gate, at maxPasses, or when the time budget is spent (Vercel allows 60 s per request).
@@ -17,6 +18,7 @@ import { scoreVoice, asLang, type VoiceReport } from '@/lib/voice/score';
 import { checkFacts, overlap, type FactsReport, type OverlapReport } from '@/lib/voice/guards';
 import { judge, MAX_OVERLAP, MAX_RUN, type GateVerdict } from '@/lib/voice/gate';
 import { voiceSystem, reviseUser } from '@/lib/voice/prompt';
+import { isImprovement } from '@/lib/journalism/progress';
 import type { Desk } from '@/lib/voice/desks';
 
 export interface ModelReply { text?: string; error?: string }
@@ -109,7 +111,9 @@ export async function reviseToStandard(inp: ReviseInput): Promise<ReviseResult> 
     const ev = evaluate(candTitle, candBody);
     if (!ev.facts.ok) { log.push(`pass ${passes}: rejected, ${ev.facts.reasons.join('; ')}`); continue; }
     if (ev.ov && tooClose(ev.ov) && ev.ov.ratio >= (best.ov?.ratio ?? 1)) { log.push(`pass ${passes}: rejected, no closer to original than before (${Math.round(ev.ov.ratio * 100)}% shared with the source)`); continue; }
-    if (ev.report.score >= best.report.score && best.report.score > 0 && !tooClose(best.ov)) { log.push(`pass ${passes}: no improvement (${ev.report.score} vs ${best.report.score})`); continue; }
+    // Judged by the weight of the findings too: the score stops at 100, so a pass that removes half of the serious findings of a text that
+    // showed 100 still shows 100 and would be thrown away by a plain score comparison (lib/journalism/progress.ts).
+    if (best.report.score > 0 && !tooClose(best.ov) && !isImprovement(best.report, ev.report)) { log.push(`pass ${passes}: no improvement (${ev.report.score} vs ${best.report.score})`); continue; }
     best = { title: candTitle, body: candBody, ...ev };
     log.push(`pass ${passes}: score ${ev.report.score}`);
   }

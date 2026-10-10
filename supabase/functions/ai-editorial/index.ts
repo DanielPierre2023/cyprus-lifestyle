@@ -52,7 +52,7 @@ Purpose: journalism that reads as authentic, carefully edited professional work 
 2. EVERY SENTENCE HAS A PURPOSE: report a fact, give context, attribute a statement, describe something relevant, explain a relationship, present evidence, introduce a person, develop an argument, provide analysis or move the story on. Cut sentences that repeat what the reader already understands.
 3. NO FORMULAIC STRUCTURE. Not every piece is introduction, three points, example, conclusion. Breaking news may use the inverted pyramid; a reportage may run chronologically or narratively; an investigation follows the evidence; an interview piece may follow its central conflict or strongest revelation; an opinion piece builds an argument. Choose the structure that serves the story.
 4. NATURAL SENTENCE RHYTHM. Do not make every sentence about the same length: short, medium and long as the meaning requires. Short sentences give emphasis, long ones hold complex context. Never alternate lengths by formula.
-5. NATURAL PARAGRAPH RHYTHM. Paragraph length follows the editorial logic. A one-sentence paragraph only when the story calls for it, never to look human.
+5. NATURAL PARAGRAPH RHYTHM. A paragraph is one move of the story, so paragraphs differ in size because moves differ: a decisive fact (a decision, a figure, a quotation) can stand alone in a sentence or two, background that has to be held together runs on for five or six. Do not cut every paragraph to the same size. Never vary sizes by formula and never to look human.
 6. SPECIFICITY OVER ABSTRACTION. Weak: "The situation has created significant challenges for many people." Stronger: "Since January, the hospital has postponed more than 300 non-urgent operations." Use the names, dates, numbers, locations, actions and documented events the core supplies; never invent specifics.
 7. DO NOT OVER-EXPLAIN. Trust an informed reader. Do not tell the reader what a fact means when its significance is clear; explain genuinely important context only.
 8. NO ARTIFICIAL BALANCE. Do not build "on the one hand / on the other hand" for every issue. Present competing positions when they are relevant, in proportion to the evidence, not as two equal paragraphs.
@@ -85,9 +85,10 @@ var CRAFT_INTENT = `CRAFT (what a careful sub-editor looks for; none of it is a 
 var PROOF_RULE = `FINAL PROOF before you output: reread once and fix accidental duplicated words ("the the"), agreement and tense slips, and any attribution phrase used more than twice. The opening sentence does not start with a date.`;
 
 // lib/journalism/editorial.ts
+var SAMPLE_CHARS = 150;
 var FIX = {
   RHYTHM: "RHYTHM: the sentence lengths are too even or too regular. Re-edit so that length follows the meaning: a short sentence where one hard fact should land, a longer one where context has to be held together. No formula, no mechanical alternation, no fragment added for effect, no filler to make a sentence longer.",
-  PARAGRAPHS: "PARAGRAPHS: the paragraphs are too alike in size. Let paragraph length follow the logic of the story: split where the story turns, keep related facts together. Add no one-sentence paragraph for effect and no padding.",
+  PARAGRAPHS: "PARAGRAPHS: the paragraphs are too alike in size (the measured sizes are listed above). Re-cut them by the logic of the story. Where neighbouring paragraphs carry one thought, join them into ONE fuller paragraph; let a paragraph that carries a single hard fact (a decision, a figure, a quotation) stand alone in one or two sentences; keep a run of background together instead of chopping it into equal pieces. Never merge unrelated facts to reach a size, never split a thought to reach a size, add no filler and no fact, and keep the order of the information.",
   PARA_OPENERS: "PARAGRAPH OPENINGS: begin neighbouring paragraphs differently (a person, a number, a place, the decision, a quotation); no two in a row start with the same word.",
   SENTENCE_OPENERS: "SENTENCE OPENINGS: never three sentences in a row that start with the same word; change the subject or the construction.",
   SPEECH_VERBS: "SPEECH VERBS: use the plain verb of the language for people who speak in the story, and never the same verb in two attributions in a row: put the speaker first, put the attribution at the end, join two statements, or drop the attribution where the speaker is obvious. Replace ornamental verbs (stressed, emphasised, highlighted, betonte, hob hervor, podkreślił, a subliniat, подчеркнул, τόνισε, أكد) by the plain one.",
@@ -107,7 +108,7 @@ var FIX = {
   DEMONSTRATIVE_OVERKILL: "DEMONSTRATIVES: reduce sentences that begin with “This/These” (or the language's equivalent) to at most two; use the specific noun instead.",
   SUMMARY_CLOSER: "ENDING: delete the closing paragraph that restates the significance; end on a concrete fact, number, date or quotation.",
   SPECULATIVE_ENDING: "ENDING: cut the speculation or forecast from the ending; close on the last verifiable fact or attributed statement.",
-  SOURCE_TALK: "SOURCE TALK: remove every mention of where the facts came from (newspapers, agencies, websites, consultancies, reviewers, reports, “according to”, “reported by”, “sources say”, any talk about the research). State the fact in the magazine's own voice. The magazine contacted no one: never write that someone told or spoke to Cyprus Lifestyle or to “us”. People and institutions may still act and speak inside the story (the minister said).",
+  SOURCE_TALK: "SOURCE TALK: remove every mention of where the facts came from (newspapers, agencies, websites, consultancies, reviewers, reports, “according to”, “reported by”, “sources say”, any talk about the research). State the fact, the figure and the finding plainly in the magazine's own voice: a figure is never introduced by “according to …”, least of all in paragraph after paragraph. A person or body that speaks or acts inside the story may be named as the actor of a plain verb (the minister said), once, where it matters. The magazine contacted no one: never write that someone told or spoke to Cyprus Lifestyle or to “us”.",
   AI_VOCAB: "VOCABULARY: replace the stock vocabulary of generated text with the concrete, plain word of this language.",
   EM_DASH: "DASHES: remove every em and en dash; use commas, full stops or parentheses (the Arabic comma for Arabic).",
   GENERIC_PHRASES: "STOCK PHRASES: rewrite every stock phrase so that the sentence states the plain fact; do not swap in a synonym.",
@@ -154,17 +155,27 @@ function fixKeyForFlag(flag) {
   if (f === "title_caps") return "HEADLINE";
   return null;
 }
+function remediesFor(input) {
+  const out = [];
+  for (const x of input) {
+    const key = typeof x === "string" ? x : x?.key;
+    if (!key) continue;
+    const fam = fixKeyForFlag(key);
+    const fix = fam ? FIX[fam] : FIX.OTHER;
+    if (!out.includes(fix)) out.push(fix);
+  }
+  return out;
+}
 function editorialFixes(input, max = 16) {
   const findings = input.map((x) => typeof x === "string" ? { key: x } : x).filter((x) => x && x.key);
   const lines = [];
-  const remedies = [];
   const order = (s) => s === "high" ? 0 : s === "medium" ? 1 : 2;
-  for (const t of [...findings].sort((a, b) => order(a.severity) - order(b.severity))) {
+  const sorted = [...findings].sort((a, b) => order(a.severity) - order(b.severity));
+  for (const t of sorted) {
     const fam = fixKeyForFlag(t.key);
-    if (lines.length < max) lines.push(`• ${t.label || (fam ? FIX[fam].split(":")[0] : t.key)}${t.count && t.count > 1 ? ` ×${t.count}` : ""}${t.sample ? `: “${String(t.sample).replace(/\s+/g, " ").slice(0, 90)}”` : ""}`);
-    const fix = fam ? FIX[fam] : FIX.OTHER;
-    if (!remedies.includes(fix)) remedies.push(fix);
+    if (lines.length < max) lines.push(`• ${t.label || (fam ? FIX[fam].split(":")[0] : t.key)}${t.count && t.count > 1 ? ` ×${t.count}` : ""}${t.sample ? `: “${String(t.sample).replace(/\s+/g, " ").slice(0, SAMPLE_CHARS)}”` : ""}`);
   }
+  const remedies = remediesFor(sorted);
   if (!lines.length) return "GENERAL: tighten any sentence that carries no information; keep the rhythm natural and the vocabulary plain.";
   return `FOUND IN THIS TEXT (each of these must be gone from your version):
 ${lines.join("\n")}
@@ -354,6 +365,19 @@ function firstWord(sentence, lang) {
   if (lang === "ar" && w.length > 3 && w.startsWith("و")) w = w.slice(1);
   return w;
 }
+function paragraphSizesSample(sizes) {
+  const shown = sizes.slice(0, 16).join("·") + (sizes.length > 16 ? "…" : "");
+  let best = -1;
+  let bestSum = Infinity;
+  for (let i = 0; i + 1 < sizes.length; i++) {
+    const s = sizes[i] + sizes[i + 1];
+    if (s < bestSum) {
+      bestSum = s;
+      best = i;
+    }
+  }
+  return `words per paragraph: ${shown}${best >= 0 ? ` (shortest neighbours: ${sizes[best]} + ${sizes[best + 1]} words)` : ""}`;
+}
 function structuralTells(text, lang, view = text) {
   const out = [];
   const all = words(text);
@@ -412,7 +436,7 @@ function structuralTells(text, lang, view = text) {
   if (paras.length >= 4) {
     const mean2 = paras.reduce((a, b) => a + b, 0) / paras.length;
     const cv = Math.sqrt(paras.reduce((a, b) => a + (b - mean2) * (b - mean2), 0) / paras.length) / mean2;
-    if (cv < 0.2) out.push({ key: "uniform_paragraphs", label: "Paragraphs are all about the same length", severity: "low", count: paras.length, sample: "CV " + cv.toFixed(2) });
+    if (cv < 0.2) out.push({ key: "uniform_paragraphs", label: "Paragraphs are all about the same length", severity: "low", count: paras.length, sample: paragraphSizesSample(paras) });
   }
   if (n >= 150 && !/\p{N}/u.test(text)) out.push({ key: "no_specifics", label: "No figures, dates or counts anywhere in a long piece", severity: "low", count: 1, sample: "" });
   return out;
@@ -2602,7 +2626,7 @@ function craftTells(input) {
   if (P.consecutiveSame.length) out.push(T("c_para_opener", `Consecutive paragraphs open with the same word (“${P.consecutiveSame[0].word}”)`, P.consecutiveSame.length >= 3 ? "medium" : "low", P.consecutiveSame.length, P.consecutiveSame[0].word));
   if (P.overused) out.push(T("c_para_opener_many", `${P.overused.count} paragraphs open with “${P.overused.word}”`, "low", P.overused.count, P.overused.word));
   if (words2 >= 400 && P.count >= 6 && (P.shortParas === 0 || P.longParas === 0)) {
-    out.push(T("c_para_variety", `Paragraphs are all of one size: no ${P.shortParas === 0 ? "short paragraph (1-2 sentences)" : "long paragraph (5 or more sentences)"} in a piece of ${words2} words`, "low", 1, `${P.shortParas} short, ${P.longParas} long`));
+    out.push(T("c_para_variety", `Paragraphs are all of one size: no ${P.shortParas === 0 ? "short paragraph (1-2 sentences)" : "long paragraph (5 or more sentences)"} in a piece of ${words2} words`, "low", 1, `sentences per paragraph: ${P.sentencesPer.slice(0, 16).join("·")}${P.sentencesPer.length > 16 ? "…" : ""}`));
   }
   const sentences = paras.flatMap((p) => splitSentences(p, lang));
   const speechRe = rx(lang, SPEECH[lang]);

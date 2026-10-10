@@ -1,6 +1,6 @@
 // GET/POST /api/cron/voice — the voice worker: repairs ONE published edition per call (the worst one that still has attempts left),
 // so every call fits the 60 s function limit. Does nothing until it is switched on (Admin → /api/admin/voice?on=1) and never
-// exceeds the daily cap (default 60 editions). pg_cron job 'cl-voice' (supabase/pg_cron/install-jobs.sql) calls it with POST and
+// exceeds the daily cap (default 120 editions). pg_cron job 'cl-voice' (supabase/pg_cron/install-jobs.sql) calls it with POST and
 // the x-cron-secret header; a manual run may use GET with `Authorization: Bearer $CRON_SECRET`.
 import { NextRequest, NextResponse } from 'next/server';
 import { isCronAuthorized } from '@/lib/cron';

@@ -20,6 +20,7 @@ import { reportageBlock } from '@/lib/voice/reportage';
 import { scoreAiTells } from '@/lib/antiAi';
 import { langFromName, promptTellList, nativeRegisterRules } from '@/lib/antiAiLang';
 import { dashRule } from '@/lib/journalism/languages';
+import { OUR_OWN_REPORTING } from '@/lib/journalism/prompts';
 
 // ── 1. Per-franchise redactional format ─────────────────────────────────────────
 // Keyed by franchise key (see lib/editorial/pipeline.ts FRANCHISES). Each is the
@@ -239,12 +240,14 @@ export function transcreateSystem(language = 'English'): string {
     '',
     `TASK: RE-REPORT the piece below in ${language}. This is transcreation, not translation. Rewrite it as if you had reported and written it yourself in ${language} from the first line, for ${language}-speaking readers.`,
     '',
-    '• Keep EVERY fact, name, number, date, price and quotation exactly as given. Add nothing, drop nothing, invent nothing.',
+    '• Keep EVERY fact, name, number, date, price and quotation exactly as given. Add nothing, invent nothing. The one thing you leave out is the pointer to where a fact came from (no newspaper, agency, website, consultancy or "according to": see OUR OWN REPORTING below); the fact itself stays.',
     '• Keep the section structure and running order: the same beats and headings, in the same sequence, and return the body in the SAME format you receive it (markdown or HTML).',
     `• Do NOT mirror the English sentence shapes, clause order or idioms. Think in ${language} and phrase it the way a ${language} journalist actually writes; where English uses a turn of phrase ${language} would not, recast it natively rather than carrying it across.`,
     `• Translate meaning and effect, never words. The result must read as though ${language} were the original language, with no trace of an English source underneath.`,
     '',
     HOUSE_STYLE,
+    '',
+    OUR_OWN_REPORTING,
     '',
     antiAiRules(language),
     '',
