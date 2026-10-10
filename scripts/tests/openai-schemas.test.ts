@@ -4,7 +4,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { EDITORIAL_SCHEMA, FIELDS_SCHEMA } from '@/lib/journalism/editorial';
 import { FACT_CHECK_SCHEMA, REPAIR_SCHEMA } from '@/lib/journalism/factCheck';
-import { FACT_CORE_SCHEMA } from '@/lib/journalism/factCore';
+import { FACT_CORE_SCHEMA, factCoreSchema } from '@/lib/journalism/factCore';
+import { EVIDENCE_REPAIR_SCHEMA } from '@/lib/journalism/evidence';
 import { COMPOSE_SCHEMA } from '@/lib/journalism/prompts';
 import { buildRequestBody } from '@/lib/journalism/openai';
 import { strictSchemaProblems, requestProblem, JSON_WORD_MESSAGE } from './_openaiRules';
@@ -14,7 +15,8 @@ import { join, relative } from 'node:path';
 
 // ── our schemas ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 const OURS: Record<string, unknown> = {
-  EDITORIAL_SCHEMA, FIELDS_SCHEMA, FACT_CHECK_SCHEMA, REPAIR_SCHEMA, FACT_CORE_SCHEMA, COMPOSE_SCHEMA,
+  EDITORIAL_SCHEMA, FIELDS_SCHEMA, FACT_CHECK_SCHEMA, REPAIR_SCHEMA, FACT_CORE_SCHEMA, COMPOSE_SCHEMA, EVIDENCE_REPAIR_SCHEMA,
+  FACT_CORE_SCHEMA_TWO_SOURCES: factCoreSchema({ labels: ['A', 'B'] }),
   title: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'], additionalProperties: false },
 };
 for (const [name, schema] of Object.entries(OURS)) eq(`${name}: accepted by the strict rules`, strictSchemaProblems(schema), []);

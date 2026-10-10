@@ -1,6 +1,6 @@
 // The Supabase edge function end to end, from its source, with a scripted model and an in-memory database: no network, no key, no money.
 // The deterministic parts are the real ones (clean-up, voice engine, originality gate, publish bar); only the model and the database are faked.
-import { processOne, handle, budgetDeny, isSourceContentRealProse, isTitleGeneric, scrubModelNames, releaseStaleClaims, keepAlive } from '../edge/process-scraped-article.src';
+import { processOne, handle, budgetDeny, isSourceContentRealProse, isTitleGeneric, scrubModelNames, releaseStaleClaims, keepAlive, loadExemplars, loadRecentOpenings } from '../edge/process-scraped-article.src';
 import { runAssess } from '@/lib/journalism/assessService';
 import { FIXTURES } from './fixtures/antiAi-langs';
 import { LANG_NAME, LANGS, type Lang } from '@/lib/journalism/languages';
@@ -23,10 +23,16 @@ const SOURCE = 'The fishing harbour at Latchi has a new café on the quay, and t
   + 'Only three of the eleven trawlers that worked this stretch fifteen years ago are still afloat, and the remaining owners worry about mooring fees. '
   + 'A harbour committee will meet next month to decide whether the quay can host both the café tables and the nets that are mended there every morning.';
 const CORE = {
-  category: 'cyprus', subcategory: 'regional', district: 'paphos', source_lang: 'en', cyprus_angle: true, cyprus_hook: 'Latchi harbour', story_type: 'news', complexity: 'routine', flags: [],
+  category: 'cyprus', subcategory: 'regional', district: 'paphos', source_lang: 'en', cyprus_angle: true, cyprus_basis: 'place', cyprus_evidence: 'The fishing harbour at Latchi has a new café on the quay', cyprus_hook: 'Latchi harbour', story_type: 'news', complexity: 'routine', flags: [],
   headline_fact: 'A new café on the Latchi quay divides the fishermen.',
-  confirmed_facts: ['A new café opened on the quay of Latchi harbour.', 'The municipality approved the lease last spring.', 'Only three of eleven trawlers are still afloat.', 'The café charges nine euros for a frappe.', 'A harbour committee meets next month.'],
-  attributed_claims: [], allegations: [], unverified: [], direct_quotes: [], dates: [], numbers: [{ value: '9 euros', what: 'price of a frappe' }, { value: '3 of 11', what: 'trawlers still afloat' }],
+  confirmed_facts: [
+    { fact: 'A new café opened on the quay of Latchi harbour.', evidence: 'The fishing harbour at Latchi has a new café on the quay' },
+    { fact: 'The municipality approved the lease last spring.', evidence: 'The municipality approved the lease last spring after a long council debate' },
+    { fact: 'Only three of eleven trawlers are still afloat.', evidence: 'Only three of the eleven trawlers that worked this stretch fifteen years ago are still afloat' },
+    { fact: 'The café charges nine euros for a frappe.', evidence: 'the café charges nine euros for a frappe' },
+    { fact: 'A harbour committee meets next month.', evidence: 'A harbour committee will meet next month' },
+  ],
+  attributed_claims: [], allegations: [], unverified: [], direct_quotes: [], dates: [], numbers: [{ value: 'nine euros', what: 'price of a frappe' }, { value: 'three of eleven', what: 'trawlers still afloat' }],
   entities: [{ name: 'Andreas Charalambous', kind: 'person', role: 'fisherman' }, { name: 'Latchi', kind: 'place', role: 'harbour' }], open_questions: [], conflicts: [],
 };
 const NAME_TO_LANG: Record<string, Lang> = Object.fromEntries(LANGS.map((l) => [LANG_NAME[l].toUpperCase(), l]));
@@ -36,7 +42,7 @@ const TAGS: Record<Lang, string[]> = { en: ['latchi', 'harbour', 'fishing'], de:
 interface Script {
   core?: () => unknown; compose?: (l: Lang, n: number) => Record<string, unknown> | { fail: number; body?: unknown };
   factcheck?: (l: Lang, n: number) => unknown; edit?: (l: Lang, n: number) => unknown; deoverlap?: (l: Lang, n: number) => unknown;
-  repair?: (l: Lang, n: number) => unknown; fields?: (l: Lang, n: number) => unknown; openaiStatus?: (kind: string) => { status: number; body: unknown } | null;
+  repair?: (l: Lang, n: number) => unknown; fields?: (l: Lang, n: number) => unknown; evidence?: (n: number) => unknown; openaiStatus?: (kind: string) => { status: number; body: unknown } | null;
 }
 const composeFor = (l: Lang, over: Record<string, unknown> = {}) => ({ title: `${l}: fishermen and the new café on the quay`, excerpt: `${l}: the quay divides the harbour`, summary: `${l}: a café, the mooring fees and the committee`, content_html: BODY[l], tags: TAGS[l], seo_title: `${l}: Latchi harbour café`, seo_description: `${l}: how the new café divides the Latchi fishermen`, ...over });
 const PASS = { verdict: 'pass', issues: [] };
@@ -50,6 +56,7 @@ function classify(body: any): { kind: string; lang?: Lang } {
   const sys = String(body.instructions || '');
   const m = /LANGUAGE NOTES: ([A-Z]+)/.exec(sys);
   if (/research editor of Cyprus Lifestyle/.test(sys)) return { kind: 'core' };
+  if (/source checker of Cyprus Lifestyle/.test(sys)) return { kind: 'evidence' };
   if (m) return { kind: 'compose', lang: NAME_TO_LANG[m[1]] };
   const lang = (/\b(English|German|Polish|Romanian|Russian|Greek|Arabic)\b/.exec(sys) || [])[1];
   const L = lang ? NAME_TO_LANG[lang.toUpperCase()] : undefined;
@@ -78,6 +85,7 @@ function model(body: any): { status: number; body: unknown } {
       if ((r as any).fail) return { status: (r as any).fail, body: (r as any).body ?? { error: { message: 'overloaded' } } };
       return { status: 200, body: responsesBody(JSON.stringify(r)) };
     }
+    case 'evidence': return { status: 200, body: responsesBody(JSON.stringify(script.evidence ? script.evidence(n) : { passages: [] })) };
     case 'factcheck': return { status: 200, body: responsesBody(JSON.stringify(script.factcheck ? script.factcheck(c.lang!, n) : PASS)) };
     case 'edit': return { status: 200, body: responsesBody(JSON.stringify(script.edit ? script.edit(c.lang!, n) : { content_html: '' })) };
     case 'deoverlap': return { status: 200, body: responsesBody(JSON.stringify(script.deoverlap ? script.deoverlap(c.lang!, n) : { content_html: '' })) };
@@ -95,6 +103,10 @@ let unsplashQueries: string[] = [];
 // The website's style check (app/api/desk/assess): the real judge, in process. `assessMode` lets a test take the website down or change the secret.
 let assessCalls: Array<{ lang: string; key: string }> = [];
 let assessMode: 'up' | 'down' | { downAfter: number } = 'up';
+// The embeddings service: every text gets a direction of its own (no two sentences are close), unless a test says otherwise.
+let embedCalls: number[] = [];
+let embedMode: 'up' | 'down' = 'up';
+let embedOf: (t: string) => number[] = (t) => { let h = 7; for (const c of t) h = (h * 131 + c.charCodeAt(0)) % 1_000_003; const k = h % 1024; return Array.from({ length: 1024 }, (_, i) => (i === k ? 1 : 0)); };
 g.fetch = async (url: string, init?: any) => {
   const u = String(url);
   if (u === 'https://site.test/api/desk/assess') {
@@ -105,6 +117,11 @@ g.fetch = async (url: string, init?: any) => {
     if (key !== 'enrich-secret') return new Response('{"ok":false}', { status: 401 });
     const r = runAssess(body);
     return new Response(JSON.stringify(r.json), { status: r.status, headers: { 'content-type': 'application/json' } });
+  }
+  if (u.endsWith('/v1/embeddings')) {
+    const b = JSON.parse(init.body); embedCalls.push(b.input.length);
+    if (embedMode === 'down') return new Response('unavailable', { status: 503 });
+    return new Response(JSON.stringify({ data: b.input.map((t: string, i: number) => ({ index: i, embedding: embedOf(t) })), usage: { prompt_tokens: b.input.length * 20, total_tokens: b.input.length * 20 } }), { status: 200, headers: { 'content-type': 'application/json' } });
   }
   if (u.includes('api.openai.com')) { const b = JSON.parse(init.body); const problem = requestProblem(b); if (problem) { rulesViolations.push(`${b?.text?.format?.type ?? 'plain'} request: ${problem}`); return new Response(JSON.stringify(rejection(problem).body), { status: 400, headers: { 'content-type': 'application/json' } }); } const r = model(b); return new Response(JSON.stringify(r.body), { status: r.status, headers: { 'content-type': 'application/json' } }); }
   if (u.includes('api.unsplash.com')) { unsplashQueries.push(decodeURIComponent((u.split('query=')[1] || '').split('&')[0])); return new Response(JSON.stringify({ results: [{ urls: { regular: 'https://img.test/cover.jpg' } }] }), { status: 200 }); }
@@ -124,7 +141,7 @@ const builder = (table: string) => {
     insert: (p: any) => { q.op = 'insert'; q.payload = p; return b; },
     update: (p: any) => { q.op = 'update'; q.payload = p; return b; },
     eq: (c: string, v: unknown) => { q.filters.push([c, v]); return b; }, gte: (c: string, v: unknown) => { q.filters.push([c, v]); return b; },
-    lt: (c: string, v: unknown) => { q.filters.push([`lt:${c}`, v]); return b; },
+    lt: (c: string, v: unknown) => { q.filters.push([`lt:${c}`, v]); return b; }, neq: (c: string, v: unknown) => { q.filters.push([`neq:${c}`, v]); return b; }, in: (c: string, v: unknown) => { q.filters.push([`in:${c}`, v]); return b; },
     order: () => b, limit: () => b, single: () => run().then((r) => { const d = Array.isArray(r.data) ? r.data[0] : r.data; return { data: d ?? null, error: d ? r.error : (r.error ?? { message: 'no rows' }) }; }),
     maybeSingle: () => run().then((r) => ({ data: Array.isArray(r.data) ? (r.data[0] ?? null) : r.data, error: r.error })),
     then: (res: any, rej: any) => run().then(res, rej),
@@ -137,21 +154,35 @@ const CLIENT = {
   auth: { admin: { listUsers: async () => ({ error: { message: 'not service role' } }) }, getUser: async () => ({ data: { user: null }, error: { message: 'bad token' } }) },
 };
 g.__fakeSupabase = () => CLIENT;
-function makeWorld(over: { status?: string; content?: string; logsHaveMeta?: boolean; daySpend?: number; monthSpend?: number; settings?: any } = {}) {
+function makeWorld(over: { status?: string; content?: string; logsHaveMeta?: boolean; daySpend?: number; monthSpend?: number; settings?: any; queue?: any[]; exemplars?: any[]; openings?: any; url?: string } = {}) {
   const w = {
-    row: { id: 'row-1', original_title: 'Latchi quay café splits fishermen', original_url: 'https://src.test/a', original_content: over.content ?? SOURCE, original_content_full: over.content ?? SOURCE, category: 'cyprus', status: over.status ?? 'scraped' } as any,
+    row: { id: 'row-1', original_title: 'Latchi quay café splits fishermen', original_url: over.url ?? 'https://src.test/a', source_id: 'src-1', original_content: over.content ?? SOURCE, original_content_full: over.content ?? SOURCE, category: 'cyprus', status: over.status ?? 'scraped' } as any,
     settings: over.settings ?? { processor_enabled: true, auto_publish: true },
     spendRows: [] as any[], logs: [] as any[], rejectedLogs: 0, commits: [] as any[], rowUpdates: [] as any[], ops: [] as Q[],
+    queue: (over.queue ?? []) as any[], postUpdates: [] as any[], partnerUpdates: undefined as any[] | undefined,
   };
   const handler = (q: Q): { data?: any; error?: any } => {
     w.ops.push(q);
     if (q.op === 'rpc') {
       if (q.rpc === 'commit_scraper_blog_post') { w.commits.push(q.args); return { data: 'post-1' }; }
+      if (q.rpc === 'recent_article_openings') return { data: over.openings ?? null };
       if (q.rpc === 'ai_spend_since') { const iso = String(q.args.p_since); return { data: iso.endsWith('-01T00:00:00.000Z') ? (over.monthSpend ?? 0) : (over.daySpend ?? 0) }; }
       return { data: null };
     }
     switch (q.table) {
+      case 'style_exemplars': return { data: over.exemplars ?? [] };
+      case 'blog_posts': { if (q.op === 'update') w.postUpdates.push({ payload: q.payload, filters: q.filters }); return {}; }
       case 'scraped_articles': {
+        const idFilter = q.filters.find((f) => f[0] === 'id')?.[1];
+        if (q.op === 'update' && idFilter && idFilter !== w.row.id) {
+          // a second account from the queue
+          const t = w.queue.find((x) => x.id === idFilter); if (!t) return { data: null };
+          const needStatus = q.filters.find((f) => f[0] === 'status')?.[1];
+          w.partnerUpdates = [...(w.partnerUpdates || []), { id: idFilter, payload: q.payload }];
+          if (needStatus !== undefined && t.status !== needStatus) return { data: null };
+          Object.assign(t, q.payload); return { data: q.returning ? { id: t.id } : null };
+        }
+        if (q.op === 'select' && q.filters.some((f) => f[0] === 'neq:id')) return { data: w.queue.filter((x) => x.status === 'scraped') };
         if (q.op === 'update') {
           w.rowUpdates.push(q.payload);
           const needStatus = q.filters.find((f) => f[0] === 'status')?.[1];
@@ -178,7 +209,7 @@ function makeWorld(over: { status?: string; content?: string; logsHaveMeta?: boo
   currentHandler = handler;
   return { w, client: CLIENT };
 }
-const reset = (s: Script = {}, envOver: Record<string, string> = {}) => { calls = []; counts = {}; script = s; revalidated = []; unsplashQueries = []; assessCalls = []; assessMode = 'up'; resetEnv(envOver); };
+const reset = (s: Script = {}, envOver: Record<string, string> = {}) => { calls = []; counts = {}; script = s; revalidated = []; unsplashQueries = []; assessCalls = []; assessMode = 'up'; embedCalls = []; embedMode = 'up'; resetEnv(envOver); };
 
 async function main() {
   // ── the happy path: seven editions, all checks pass, auto-publish ─────────────────────────────────────────────────────
@@ -196,8 +227,10 @@ async function main() {
     ok('published_at is set when published', /^\d{4}-/.test(p.published_at));
     eq('the instant-refresh ping is sent for a published article', revalidated, [{ slug: p.slug, category: 'cyprus' }]);
     eq('the cover search used the model\'s brief', unsplashQueries[0], 'latchi harbour fishing boats');
-    eq('one spend row per billed call, priced with the markup, with no model name', [w.spendRows.length, w.spendRows.every((r) => r.provider === 'llm' && r.model === 'llm' && r.usd > 0 && r.meta.base_usd > 0 && r.meta.markup_pct === 25 && r.meta.reasoning === 300)], [16, true]);
-    ok('the markup is 25 percent of the raw cost', w.spendRows.every((r) => Math.abs(r.usd / r.meta.base_usd - 1.25) < 0.01));
+    const modelRows = w.spendRows.filter((r) => r.function_name !== 'embed');
+    eq('one spend row per billed call, priced with the markup, with no model name', [modelRows.length, modelRows.every((r) => r.provider === 'llm' && r.model === 'llm' && r.usd > 0 && r.meta.base_usd > 0 && r.meta.markup_pct === 25 && r.meta.reasoning === 300)], [16, true]);
+    ok('the markup is 25 percent of the raw cost', modelRows.every((r) => Math.abs(r.usd / r.meta.base_usd - 1.25) < 0.01));
+    eq('the comparison with the source is billed too: one row for the embeddings, priced from the tokens, no model name', w.spendRows.filter((r) => r.function_name === 'embed').map((r) => [r.provider, r.model, r.unit_kind, r.usd > 0, r.meta.markup_pct]), [['llm', 'llm', 'tokens', true, 25]]);
     const lg = w.logs.find((x) => x.status === 'ok');
     ok('the run is logged with words, cost and the structured meta', !!lg && lg.words_en > 0 && lg.words_ru > 0 && lg.est_cost_usd > 0 && lg.meta.gate.publishable === true && Object.keys(lg.meta.style).length === 7 && lg.en_humanness === 100);
     eq('scraped_articles is left claimed for the commit RPC (status rewriting during the run)', w.row.status, 'rewriting');
@@ -257,6 +290,7 @@ async function main() {
   {
     reset({ core: () => ({ ...CORE, cyprus_angle: false, district: 'national', cyprus_hook: 'none', headline_fact: 'Chile exports more wine.', confirmed_facts: ['Chile exported more wine.', 'Buyers are in Asia.', 'The harvest was large.', 'Prices rose.', 'Vineyards grew.'], entities: [] }) });
     const { w, client } = makeWorld({ content: SOURCE.replace(/Latchi/g, 'Valparaiso').replace(/Cyprus/g, 'Chile') });
+    w.row.original_title = 'Valparaiso quay café splits fishermen';
     const out = await processOne(client as any, w.row, true);
     ok('a story without the island is skipped, before any edition is paid for', !out.ok && out.status === 'skipped' && counts.compose === undefined && w.row.status === 'skipped' && w.row.is_used === true);
   }
@@ -420,6 +454,112 @@ async function main() {
     eq('a run that is still going (3 minutes) is left alone', x.w.row.status, 'rewriting');
     reset(); x = makeWorld({ status: 'scraped' });
     eq('nothing stale: nothing released', await releaseStaleClaims(x.client as any), 0);
+  }
+
+
+  // ── the October 2026 additions, end to end ────────────────────────────────────────────────────────────────────────────────
+  {
+    // facts without a passage in the source never reach a writer, and the log says what was dropped
+    reset({ core: () => ({ ...CORE, confirmed_facts: [...CORE.confirmed_facts, { fact: 'The mayor of Polis opened the café himself.', evidence: 'The mayor of Polis opened the café himself' }] }) });
+    const { w, client } = makeWorld();
+    const out = await processOne(client as any, w.row, true);
+    const writer = calls.filter((c) => c.kind === 'compose').map((c) => String(c.body.input));
+    ok('the invented fact is asked for once more, found nowhere, and dropped before any writer sees it', out.ok && (counts.unknown ?? 0) === 0 && writer.length === 7 && writer.every((t) => !t.includes('mayor of Polis')) && writer.every((t) => t.includes('A new café opened on the quay')));
+    const meta = w.logs.find((x) => x.status === 'ok')?.meta;
+    eq('the log carries the evidence check: mode, facts kept, what was dropped and why', [meta?.evidence?.mode, meta?.evidence?.facts, meta?.evidence?.dropped?.[0]?.reason], ['enforce', '5/6', 'the passage is not in the source']);
+    ok('...the Cyprus connection and the comparison with the source', meta?.cyprus?.grounded === true && ALL.every((l) => meta?.meaning?.[l]?.summary) && ALL.every((l) => meta?.rewrites?.[l] === 0));
+    ok('...and the embeddings were asked for once for the source and the seven editions', embedCalls.length === 1 && embedCalls[0] > 30);
+    eq('EVIDENCE_MODE=off works like before (no second ask even for an invented fact)', await (async () => { reset({ core: () => ({ ...CORE, confirmed_facts: [...CORE.confirmed_facts, { fact: 'An invented fact.', evidence: 'nothing like it' }] }) }, { EVIDENCE_MODE: 'off' }); const x = makeWorld(); const o = await processOne(x.client as any, x.w.row, true); return [o.ok, counts.evidence ?? 0, x.w.logs.find((l) => l.status === 'ok')?.meta?.evidence]; })(), [true, 0, null]);
+  }
+  {
+    // nothing in the core can be tied to the source: no edition is paid for, the source is marked failed, and the log says what was looked at
+    reset({ core: () => ({ ...CORE, confirmed_facts: [{ fact: 'An invented fact.', evidence: 'nothing like it' }, { fact: 'Another invented fact.', evidence: 'neither is this' }], attributed_claims: [], allegations: [] }) });
+    const { w, client } = makeWorld();
+    const out = await processOne(client as any, w.row, true);
+    ok('no fact has a passage: the run stops before any writer is paid for', !out.ok && out.status === 'failed' && /evidence/.test(String(out.reason)) && counts.compose === undefined);
+    const lg = w.logs.find((l) => l.status === 'error');
+    ok('...the log names the stage and carries what was dropped', lg?.error_stage === 'evidence' && lg?.meta?.evidence?.facts === '0/2' && lg?.meta?.evidence?.dropped?.length === 2 && w.row.status !== 'processed');
+  }
+  {
+    // the Cyprus connection must come from the source: a Cypriot outlet's passage counts, a foreign outlet's does not
+    const greekCore = { ...CORE, source_lang: 'el', cyprus_basis: 'institution', cyprus_evidence: 'Το υπουργικό συμβούλιο ενέκρινε μέτρα', cyprus_hook: 'The cabinet approved a package', district: 'national',
+      confirmed_facts: [{ fact: 'The cabinet approved measures.', evidence: 'Το υπουργικό συμβούλιο ενέκρινε μέτρα' }, { fact: 'The measures cover bread and milk.', evidence: 'για ψωμί και γάλα' }, { fact: 'The package starts next month.', evidence: 'ξεκινούν τον επόμενο μήνα' }, { fact: 'The finance minister announced it.', evidence: 'ανακοίνωσε ο υπουργός Οικονομικών' }],
+      entities: [], numbers: [], dates: [] };
+    const gr = 'Το υπουργικό συμβούλιο ενέκρινε μέτρα για ψωμί και γάλα, ξεκινούν τον επόμενο μήνα, ανακοίνωσε ο υπουργός Οικονομικών. ' + 'Ο υπουργός δήλωσε ότι τα μέτρα θα εξεταστούν ξανά σε τρεις μήνες και ότι η κυβέρνηση παρακολουθεί τις τιμές κάθε εβδομάδα. '.repeat(5);
+    reset({ core: () => greekCore });
+    const a = makeWorld({ content: gr, url: 'https://www.philenews.com/oikonomia/kypros/article/1/metra' });
+    a.w.row.original_title = 'Μέτρα κατά της ακρίβειας';
+    const o1 = await processOne(a.client as any, a.w.row, true);
+    ok('a Greek story from a Cypriot outlet, with a passage that is really in the source, is relevant', o1.ok && a.w.logs.some((l) => l.status === 'ok' && l.meta?.cyprus?.via === 'evidenced'));
+    reset({ core: () => greekCore });
+    const b = makeWorld({ content: gr, url: 'https://www.example-foreign.com/news/1' });
+    b.w.row.original_title = 'Μέτρα κατά της ακρίβειας';
+    const o2 = await processOne(b.client as any, b.w.row, true);
+    ok('the same story from a foreign outlet is not a Cyprus story: skipped before any edition is paid for', !o2.ok && o2.status === 'skipped' && counts.compose === undefined);
+    ok('...and its log says why: no Cyprus connection could be tied to the source', b.w.logs.some((l) => l.status === 'skipped' && l.error_stage === 'relevance' && l.meta?.cyprus?.grounded === false));
+    reset({ core: () => greekCore }, { CYPRUS_OUTLET_HOSTS: 'example-foreign.com' });
+    const c = makeWorld({ content: gr, url: 'https://www.example-foreign.com/news/1' });
+    c.w.row.original_title = 'Μέτρα κατά της ακρίβειας';
+    const o3 = await processOne(c.client as any, c.w.row, true);
+    ok('...unless the host is added to the list of Cypriot outlets', o3.ok);
+  }
+  {
+    // model pieces and the latest openings reach the writers
+    const piece = { id: 'p1', desk: 'cyprus', lang: 'en', title: 'A model piece', body: Array.from({ length: 4 }, (_, i) => `Paragraph ${i} of the model piece: the authority decided on Monday and named a figure for the first time in years.`).join('\n\n'), article_type: null };
+    reset({});
+    const { w, client } = makeWorld({ exemplars: [piece], openings: { en: ['The Limassol marina announced on Tuesday that fees rise.'], de: ['Die Hafenbehörde hat am Montag mitgeteilt, dass die Gebühr steigt.'] } });
+    const out = await processOne(client as any, w.row, true);
+    const en = calls.find((c) => c.kind === 'compose' && c.lang === 'en')!; const de = calls.find((c) => c.kind === 'compose' && c.lang === 'de')!;
+    ok('the English writer gets the active model piece of the desk, the German one the English piece as a fallback', out.ok && String(en.body.instructions).includes('A model piece') && String(de.body.instructions).includes('take its quality, not its language'));
+    ok('the writers are told how the latest pieces of their language began', String(en.body.input).includes('The Limassol marina announced on Tuesday') && String(de.body.input).includes('Die Hafenbehörde hat am Montag') && !String(calls.find((c) => c.kind === 'compose' && c.lang === 'pl')!.body.input).includes('LATEST'));
+    reset({}, { EXEMPLARS: 'off' });
+    const x = makeWorld({ exemplars: [piece] });
+    await processOne(x.client as any, x.w.row, true);
+    ok('EXEMPLARS=off: no model piece is used', calls.filter((c) => c.kind === 'compose').every((c) => !String(c.body.instructions).includes('MODEL PIECES')));
+    const loaded = await loadExemplars(makeWorld({ exemplars: [piece] }).client as any, 'cyprus');
+    eq('the model pieces are read from the table (active ones of the desk)', loaded.map((e) => [e.id, e.desk, e.lang, e.title]), [['p1', 'cyprus', 'en', 'A model piece']]);
+    eq('a missing function or table means: none', [await loadExemplars({ from: () => { throw new Error('no table'); } } as any, 'cyprus'), await loadRecentOpenings({ rpc: async () => ({ data: null, error: { message: 'function does not exist' } }) } as any)], [[], {}]);
+  }
+  {
+    // two accounts of one event become one article
+    const partnerText = 'Fishermen at Latchi harbour object to the new café that opened on the quay, says Andreas Charalambous, who has fished there for decades. The municipality approved the lease last spring. Only three of the eleven trawlers are still afloat, the owners say, and a harbour committee will meet next month to decide how the quay is shared between the tables and the nets. ' + 'The tenant intends to open an evening terrace in summer, which the fishermen fear will make mooring more expensive for everyone who still works from the harbour every day. '.repeat(2);
+    const partner = () => ({ id: 'row-2', original_title: 'Fishermen object to café on Latchi quay', original_url: 'https://www.politis.com.cy/b', source_id: 'src-2', original_content: partnerText, original_content_full: partnerText, status: 'scraped', is_used: false, created_at: new Date().toISOString() });
+    embedOf = (t: string) => { if (t.startsWith('Latchi quay café splits fishermen.') || t.startsWith('Fishermen object to café on Latchi quay.')) return Array.from({ length: 1024 }, (_, i) => (i === 7 ? 1 : 0)); let h = 7; for (const c of t) h = (h * 131 + c.charCodeAt(0)) % 1_000_003; return Array.from({ length: 1024 }, (_, i) => (i === 100 + (h % 900) ? 1 : 0)); };
+    const merged = { ...CORE, same_story: true, confirmed_facts: [...CORE.confirmed_facts.map((f) => ({ ...f, source: 'A' })), { fact: 'The tenant plans an evening terrace in summer.', evidence: 'The tenant intends to open an evening terrace in summer', source: 'B' }] };
+    reset({ core: () => merged }, { SITE_URL: 'https://site.test' });
+    const { w, client } = makeWorld({ url: 'https://cyprus-mail.com/2026/10/10/latchi', queue: [partner()] });
+    const out = await processOne(client as any, w.row, true);
+    const coreCall = calls.find((c) => c.kind === 'core')!;
+    ok('the other outlet\'s account is found by meaning and shared anchors, and goes to the core next to the first', out.ok && String(coreCall.body.input).includes('SOURCE B TITLE: Fishermen object to café on Latchi quay') && /TWO SOURCES/.test(String(coreCall.body.instructions)));
+    ok('the fact only the second account states is in the article', calls.filter((c) => c.kind === 'compose').every((c) => String(c.body.input).includes('evening terrace')));
+    ok('the second account is used up, with a note, and both sources are recorded on the article', w.queue[0].status === 'processed' && w.queue[0].is_used === true && /MERGED into the article post-1/.test(w.queue[0].error_message) && w.postUpdates.some((u) => JSON.stringify(u.payload.sources) === JSON.stringify(['https://cyprus-mail.com/2026/10/10/latchi', 'https://www.politis.com.cy/b'])));
+    ok('the log says what was merged', w.logs.some((l) => l.status === 'ok' && l.meta?.merged?.url === 'https://www.politis.com.cy/b'));
+    // the core says it is not the same story: the second account goes back into the queue
+    reset({ core: () => ({ ...merged, same_story: false }) });
+    const b = makeWorld({ url: 'https://cyprus-mail.com/2026/10/10/latchi', queue: [partner()] });
+    const o2 = await processOne(b.client as any, b.w.row, true);
+    ok('"not the same story": the article is written from the first source alone and the second account is released', o2.ok && b.w.queue[0].status === 'scraped' && b.w.queue[0].is_used === false && !b.w.postUpdates.length && b.w.logs.some((l) => l.status === 'ok' && l.meta?.merged === null));
+    // an article that ends in a skip releases the account it claimed
+    reset({ core: () => ({ ...merged, cyprus_angle: false, cyprus_evidence: '', district: 'national' }) });
+    const c = makeWorld({ content: SOURCE.replace(/Latchi/g, 'Valparaiso'), queue: [{ ...partner(), original_title: 'Fishermen object to café on Valparaiso quay', original_content: partnerText.replace(/Latchi/g, 'Valparaiso'), original_content_full: partnerText.replace(/Latchi/g, 'Valparaiso') }] });
+    c.w.row.original_title = 'Valparaiso quay café splits fishermen';
+    embedOf = (t: string) => { if (/^(Valparaiso quay café splits fishermen|Fishermen object to café on Valparaiso quay)\./.test(t)) return Array.from({ length: 1024 }, (_, i) => (i === 7 ? 1 : 0)); return Array.from({ length: 1024 }, (_, i) => (i === 200 ? 1 : 0)); };
+    const o3 = await processOne(c.client as any, c.w.row, true);
+    ok('a skipped article gives the second account back', o3.status === 'skipped' && c.w.queue[0].status === 'scraped');
+    // the switches
+    reset({ core: () => merged }, { MERGE_SOURCES: 'off' });
+    const d = makeWorld({ queue: [partner()] });
+    await processOne(d.client as any, d.w.row, true);
+    ok('MERGE_SOURCES=off: the queue is not searched and the core is asked about one source', !d.w.ops.some((q) => q.filters.some((f) => f[0] === 'neq:id')) && !/SOURCE B/.test(String(calls.find((c) => c.kind === 'core')!.body.input)));
+    reset({}, { SEMANTIC_CHECK: 'off', MERGE_SOURCES: 'off' });
+    const e = makeWorld();
+    const o5 = await processOne(e.client as any, e.w.row, true);
+    ok('SEMANTIC_CHECK=off: no embeddings are requested and the article is made all the same', o5.ok && embedCalls.length === 0);
+    reset({});
+    embedMode = 'down';
+    const f = makeWorld();
+    const o6 = await processOne(f.client as any, f.w.row, true);
+    ok('the embeddings service down: no comparison, no merge, the article goes through', o6.ok && f.w.logs.some((l) => l.status === 'ok' && Object.values(l.meta.meaning).every((m) => m === null)));
   }
 
   // ── time: a tight deadline lowers the effort rather than failing ───────────────────────────────────────────────────────

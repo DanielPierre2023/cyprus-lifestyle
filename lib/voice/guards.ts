@@ -150,3 +150,23 @@ export function overlapProse(source: string, candidate: string): OverlapReport &
   const quoted = (String(candidate || '').match(re) || []).filter(isQuote).join(' ').split(/\s+/).filter(Boolean).length;
   return { ...overlap(cut(source), cut(candidate)), quotedWords: quoted };
 }
+
+/**
+ * The runs of words the candidate still shares with the source (five words or more, adjacent hits joined), longest first, as normalised
+ * text. Quotations of eight words or more are left out on both sides, as in overlapProse. It tells a rewriter exactly what to change.
+ */
+export function overlapRuns(source: string, candidate: string, max = 8, n = 5): string[] {
+  const re = /[“"„«]([^”"“»]{1,500})[”"“»]/g;
+  const isQuote = (m: string) => m.replace(/^[“"„«]|[”"“»]$/g, '').trim().split(/\s+/).length >= 8;
+  const cut = (t: string) => String(t || '').replace(re, (m) => (isQuote(m) ? ' ' : m));
+  const src = shingleSet(cut(source), n);
+  const w = wordsOf(normalizeForCompare(cut(candidate)));
+  const runs: string[] = [];
+  let start = -1; let end = -1;
+  for (let i = 0; i + n <= w.length; i++) {
+    if (src.has(w.slice(i, i + n).join(' '))) { if (start < 0) start = i; end = i + n; }
+    else if (start >= 0) { runs.push(w.slice(start, end).join(' ')); start = -1; }
+  }
+  if (start >= 0) runs.push(w.slice(start, end).join(' '));
+  return [...new Set(runs)].sort((a, b) => b.length - a.length).slice(0, max);
+}

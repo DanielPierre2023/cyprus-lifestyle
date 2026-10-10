@@ -13,6 +13,8 @@
 //   • length follows the verified facts; nothing is padded; nothing is asked of a human (no clarifying questions: omit);
 //   • no em or en dashes as pause marks (Russian keeps its required dash); no first person except in commentary; no instruction that engineers rhythm or "humanness".
 import { LANGS, LANG_NAME, TITLE_CRAFT, languageNotes, type Lang } from './languages';
+import { stableHash } from './hash';
+import { exemplarBlock, type Exemplar } from './exemplars';
 
 export type ArticleType = 'brief' | 'news' | 'reportage' | 'feature' | 'interview' | 'analysis' | 'commentary' | 'investigation' | 'listing';
 export const ARTICLE_TYPES: ArticleType[] = ['brief', 'news', 'reportage', 'feature', 'interview', 'analysis', 'commentary', 'investigation', 'listing'];
@@ -135,7 +137,7 @@ export const PROOF_RULE = `FINAL PROOF before you output: reread once and fix ac
 
 /** Desk depth notes (what each desk's piece must contain). Unchanged from the scraped-article desk. */
 export const CATEGORY_DEPTH: Record<string, string> = {
-  cyprus: 'DEPTH: name every actor and institution; quantify the stakes; explain the consequence for the island; at least one named position (who holds it, in what role); reference the timeline.',
+  cyprus: 'DEPTH: name every actor and institution; quantify the stakes; explain the consequence that the facts give; at least one named position (who holds it, in what role); reference the timeline.',
   business: 'DEPTH: specific figures (€, revenue, market cap, growth %); name companies, funds, executives and titles; market impact in numbers; institutional reaction (CSE, finance ministry, Central Bank).',
   property: 'DEPTH: name the development, district, architect/developer, price band per m², yield or residency angle; honest appraisal over sales copy; comparable schemes for context.',
   relocation: 'DEPTH: name the exact scheme, permit or status and the authority; the concrete numbers (thresholds, timelines, fees, tax rates, holding periods) and the eligibility conditions; what it means in practice for a mover; note when a rule changed and from which date.',
@@ -144,9 +146,11 @@ export const CATEGORY_DEPTH: Record<string, string> = {
   culture: 'DEPTH: name the artefact, artist, period, institution or venue; one object, one story; provenance and precedent; avoid catalogue-speak.',
   escapes: 'DEPTH: name the place precisely, how to arrive, what it costs, when to go; one place done properly with detail a visitor can act on.',
   table: 'DEPTH: name the chef, venue, dish, grower or wine (Commandaria, xynisteri, maratheftiko); specific plates, a price signal; where and why we are eating.',
-  world: 'DEPTH: read the region through a Cyprus lens (Greece, the Levant, the Gulf, the EU); name the actors and the mechanism; state plainly why it matters to Cyprus.',
+  world: 'DEPTH: name the actors and the mechanism; say why the story matters to Cyprus only where the CYPRUS CONNECTION of the fact core gives the reason, and say nothing about Cyprus where it does not.',
   news: 'DEPTH: name every actor and institution, quantify the stakes, give at least one named position (who holds it, in what role), explain the consequence concretely.',
 };
+
+export const CYPRUS_RULE = `CYPRUS (house rule): the CYPRUS CONNECTION line of the fact core is the only link between this story and Cyprus that you may state. Do not compare the story with Cyprus, do not add what it "means for Cyprus", and do not state general facts about Cyprus (its economy, market, prices, climate, history, size, position) that the core does not give: they are not reporting, and a reader who knows the island will see the padding. Where the line says there is no connection, do not mention Cyprus at all. A place of the island may be named only if the core or the connection names it.`;
 
 export const COMPOSE_SCHEMA = {
   type: 'object',
@@ -173,13 +177,7 @@ export const LEAD_APPROACHES: Record<LeadApproach, string> = {
 };
 export interface LeadMaterial { hasQuote: boolean; hasFigure: boolean; hasPerson: boolean; hasPlace: boolean; hasDate: boolean }
 
-/** Cheap stable hash (FNV-1a with a final mix, base 36): same input, same output, in the app and in the edge function. */
-export function stableHash(s: string): string {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
-  h ^= h >>> 15; h = Math.imul(h, 2246822507); h ^= h >>> 13; h = Math.imul(h, 3266489909); h ^= h >>> 16;
-  return (h >>> 0).toString(36);
-}
+export { stableHash };
 
 /** The ways in this piece can honestly open. Investigations and listings keep their fixed order (documented fact; what, where, when). */
 export function leadApproachesFor(type: ArticleType, m: LeadMaterial): LeadApproach[] {
@@ -207,6 +205,8 @@ export interface WriterOptions {
   articleType: ArticleType;
   /** Key into CATEGORY_DEPTH. */
   category: string;
+  /** Model pieces the editor-in-chief approved for this desk and language (see exemplars.ts). */
+  exemplars?: readonly Exemplar[];
 }
 
 const section = (title: string, body: string) => `── ${title} ──\n${body}`;
@@ -232,16 +232,23 @@ export function writerSystem(o: WriterOptions): string {
     section('CRAFT', CRAFT_INTENT),
     section('SEVEN LANGUAGES', NATIVE_METHOD),
     section('THIS ARTICLE', [ARTICLE_TYPE_RULES[o.articleType], CATEGORY_DEPTH[o.category] || CATEGORY_DEPTH.news, DEPTH_RULES, allowsFirstPerson(o.articleType) ? '' : FIRST_PERSON_BAN].filter(Boolean).join('\n')),
+    section('CYPRUS', CYPRUS_RULE),
     section(`LANGUAGE NOTES: ${name.toUpperCase()}`, languageNotes(o.lang)),
     section('HEADLINE', TITLE_CRAFT[o.lang]),
+    exemplarBlock(o.exemplars ?? [], o.lang),
     PROOF_RULE,
     directive,
     `Write EVERYTHING (title, excerpt, summary, body, tags, SEO) in ${name}. content_html is clean semantic HTML (<p>, and <h2>/<h3>/<blockquote>/<ul><li> only where a long piece needs them; no <h1>, no inline styles, no images). Tags are 3 to 6 short native-language slugs.
 OUTPUT: JSON only, no preamble: {"title":"...","excerpt":"...","summary":"...","content_html":"...","tags":["..."],"seo_title":"...","seo_description":"..."}`,
-  ].join('\n\n');
+  ].filter(Boolean).join('\n\n');
 }
 
-export function writerUser(o: { lang: Lang; sourceTitle: string; factCore: string; lead?: LeadApproach | null }): string {
+/** What a rewrite from the core is told about the attempt that failed. */
+export interface RedoBrief { reasons: string[]; structure?: boolean; order?: number[] }
+
+export function writerUser(o: { lang: Lang; sourceTitle: string; factCore: string; lead?: LeadApproach | null; recent?: readonly string[]; redo?: RedoBrief }): string {
   const lead = o.lead ? `\nWAY IN FOR THIS EDITION: if the facts support it, open with ${LEAD_APPROACHES[o.lead]}; otherwise open with the strongest fact. A preference only, never a reason to bend or add a fact.` : '';
-  return `SOURCE TITLE: ${o.sourceTitle}\n\nFACT CORE (the only facts you may use; the same for all seven editions; do not copy any phrasing of the source):\n${o.factCore}\n${lead}\nWrite the ${LANG_NAME[o.lang]} article as JSON. Every sentence is your own construction in ${LANG_NAME[o.lang]}.`;
+  const recent = o.recent && o.recent.length ? `\nHOW OUR LATEST ${LANG_NAME[o.lang].toUpperCase()} PIECES BEGAN (do not begin like any of them, neither in the first words nor in the construction):\n${o.recent.slice(0, 12).map((x) => `- ${String(x).replace(/\s+/g, ' ').trim().slice(0, 160)}`).join('\n')}\n` : '';
+  const redo = o.redo ? `\nA FIRST ATTEMPT AT THIS EDITION WAS REJECTED. Do not reuse any sentence of it. It failed because:\n${o.redo.reasons.slice(0, 10).map((r) => `- ${r}`).join('\n')}\n${o.redo.structure ? 'It also followed the original too closely: its order of presentation and its sentences. Open differently from the original, present the facts in a different order (what matters most to the reader first), and build every sentence yourself.\n' : ''}${o.redo.order?.length ? `Suggested order of presentation (confirmed facts by number; follow it where the logic allows): ${o.redo.order.join(', ')}.\n` : ''}Write the edition again from the facts, as the careful, finished piece it should have been.\n` : '';
+  return `SOURCE TITLE: ${o.sourceTitle}\n\nFACT CORE (the only facts you may use; the same for all seven editions; do not copy any phrasing of the source):\n${o.factCore}\n${lead}${recent}${redo}\nWrite the ${LANG_NAME[o.lang]} article as JSON. Every sentence is your own construction in ${LANG_NAME[o.lang]}.`;
 }

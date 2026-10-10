@@ -9,7 +9,7 @@ import { parseJsonLoose } from './openai';
 
 export const ISSUE_KINDS = [
   'invented_specific', 'number_mismatch', 'date_mismatch', 'name_mismatch', 'quote_not_in_core', 'quote_altered', 'claim_as_fact',
-  'allegation_as_fact', 'wrong_attribution', 'source_named', 'contradiction', 'unsupported_causal', 'unsupported_scene',
+  'allegation_as_fact', 'wrong_attribution', 'source_named', 'contradiction', 'unsupported_causal', 'unsupported_scene', 'invented_cyprus_link',
 ] as const;
 export type IssueKind = (typeof ISSUE_KINDS)[number];
 
@@ -51,11 +51,12 @@ Check every sentence of the title and the body for:
 3. a direct quotation whose words are not among the core's DIRECT QUOTES, or one whose meaning, force or speaker has changed. Translating a quotation into this language is fine when the meaning is unchanged (quote_not_in_core, quote_altered);
 4. a claim, allegation, opinion, estimate or prediction presented as an established fact, a claim without its speaker, or a statement attributed to the wrong person (claim_as_fact, allegation_as_fact, wrong_attribution);
 5. a source named or implied: any newspaper, agency, website, consultancy, report, "according to", "reported by", "sources say", or talk about the research (source_named). People and institutions acting or speaking inside the story are allowed;
-6. anything that contradicts the core or presents a conflict recorded in the core as settled (contradiction).
+6. anything that contradicts the core or presents a conflict recorded in the core as settled (contradiction);
+7. an invented link to Cyprus (invented_cyprus_link): a comparison with Cyprus, a "what this means for Cyprus" line, or a general statement about Cyprus (its economy, prices, market, climate, history, position) that the FACT CORE does not give. The only link to Cyprus an edition may state is the one in the core's CYPRUS CONNECTION line; where that line says there is none, ANY mention of Cyprus that is not part of a confirmed fact is a problem. General knowledge about Cyprus is not an excuse here.
 
-Do NOT report: wording and style choices; correct paraphrase or translation; the order of information; general knowledge that is not a claim about this story (for example that Limassol is a city); omitted facts (leaving something out is allowed).
+Do NOT report: wording and style choices; correct paraphrase or translation; the order of information; general knowledge that is not a claim about this story and does not link it to Cyprus (for example that Limassol is a city); omitted facts (leaving something out is allowed).
 
-SEVERITY. high: contradicts the core, or invents a specific, a quotation or an attribution, or turns an allegation or claim into fact, or names a source. medium: an unsupported detail that is plausible but not in the core, or a vague unsupported causal statement.
+SEVERITY. high: contradicts the core, or invents a specific, a quotation or an attribution, or turns an allegation or claim into fact, or names a source, or invents a link to Cyprus. medium: an unsupported detail that is plausible but not in the core, or a vague unsupported causal statement.
 FIX. delete: remove the claim; correct: replace by the core's value (give it in "correction"); attribute: add the speaker the core names; soften: state it as the claim or allegation it is.
 "excerpt" is at most 140 characters copied exactly from the edition. "core_ref" names the core item that decides it ("CONFIRMED FACT 3", "NUMBERS: 4.2 million", "none"). verdict is "pass" when there are no issues at all, otherwise "fix". If the edition is clean, return {"verdict":"pass","issues":[]}.`;
 }

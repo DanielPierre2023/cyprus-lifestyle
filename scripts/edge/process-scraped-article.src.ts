@@ -14,6 +14,15 @@
 //      (title, excerpt, summary, SEO) → fact check against the core, in the edition's own language → repair → check again
 //   5  the publish bar: auto-publish only when ALL seven editions pass; otherwise the article is saved as a DRAFT with the reasons
 //   6  cover picture, author, one atomic commit (commit_scraper_blog_post), telemetry
+// Since October 2026 the steps above also do this (each part has a switch, see OPTIONAL SECRETS):
+//   1  every fact of the core carries the passage of the source that states it; code checks the passage and drops what it cannot find
+//      (EVIDENCE_MODE enforce|warn|off); a second ask goes out for the passages that were not found
+//   1' a second account of the same event may be merged into the core (MERGE_SOURCES): found among the queued articles by meaning and
+//      shared anchors, confirmed by the core ("same story"), marked as used when the article is committed
+//   2  the Cyprus connection must come from the source (it names the island or a place of it, or the Cypriot outlet's passage shows it)
+//   3  the writers get the model pieces the editor-in-chief approved for the desk (table style_exemplars) and the openings of our latest
+//      pieces (function recent_article_openings) to avoid; each edition is compared with the source by meaning and order (SEMANTIC_CHECK)
+//   4  an edition that the editing passes cannot save is written again from the core (ESCALATE)
 //
 // AUTH: admin-only, fails closed.   SECRETS: OPENAI_API_KEY · SITE_URL + ENRICH_SECRET (the style check runs on the website, see below) ·
 //   UNSPLASH_ACCESS_KEY (cover; optional).
@@ -24,17 +33,25 @@
 // CALLS: {source:'cron'} batch | {scraped_article_id:uuid} one now | {action:'selftest'} health check | {} batch
 // OPTIONAL SECRETS: AI_DAILY_BUDGET_USD (6) · AI_MONTHLY_BUDGET_USD (60) · AI_KILL_SWITCH · AI_MAX_EFFORT (max) · AI_EFFORT_<TASK> ·
 //   AI_SOL_ENABLED · OPENAI_MODEL_LUNA/SOL/ASTRA · EDGE_SOFT_LIMIT_MS (180000) · OVERLAP_MAX (0.12) · MAX_EDIT_PASSES (2) ·
-//   RELEVANCE_GATE (on) · COST_MARKUP_PCT (25) · AI_FLEX_EDGE (off) · SITE_URL + REVALIDATE_SECRET (instant refresh after a publish)
+//   RELEVANCE_GATE (on) · COST_MARKUP_PCT (25) · AI_FLEX_EDGE (off) · SITE_URL + REVALIDATE_SECRET (instant refresh after a publish) ·
+//   EVIDENCE_MODE (enforce) · ESCALATE (on) · SEMANTIC_CHECK (on) · EXEMPLARS (on) · MERGE_SOURCES (on) · MERGE_MIN_SIM (0.82) ·
+//   MERGE_WINDOW_HOURS (72) · CYPRUS_OUTLET_HOSTS (extra hosts that count as Cypriot outlets, comma separated)
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { runPipeline, ALL_LANGS, type CallSpec, type LlmFn, type PipelineDeps, type PipelineResult, type Edition } from '@/lib/journalism/pipeline';
 import type { LlmResult } from '@/lib/journalism/openai';
 import { remoteAssess, assessConfigError } from '@/lib/journalism/assessClient';
 import { cleanHtml, cleanField, cleanTitle, normalizeTags, countWords, stripTags, generateSlug } from '@/lib/journalism/sanitize';
 import { hasCyprusTerms } from '@/lib/journalism/relevance';
-import { overlapRatio, factsKept, inventedFigures } from '@/lib/journalism/checks';
+import { overlapRatio, factsKept, inventedFigures, sharedRuns } from '@/lib/journalism/checks';
+import { embedTexts, EMBED_MODEL_DEFAULT } from '@/lib/journalism/embeddings';
+import { evidenceModeFrom } from '@/lib/journalism/evidence';
+import { isCyprusOutlet } from '@/lib/journalism/cyprusGround';
+import { leadOf, pickPartner, type QueueItem } from '@/lib/journalism/merge';
+import { semanticSummary } from '@/lib/journalism/semantic';
+import type { Exemplar } from '@/lib/journalism/exemplars';
 import { parseBudgets, windowStarts } from '@/lib/aiBudget';
 import type { Lang } from '@/lib/journalism/languages';
-import { ENV, numEnv, adminClient, createClient, scrubModelNames, newCost, budgetDeny, spendSince, makeAsk, type Cost, type SupaClient } from './shared';
+import { ENV, numEnv, adminClient, createClient, scrubModelNames, newCost, budgetDeny, spendSince, makeAsk, logSpend, type Cost, type SupaClient } from './shared';
 
 // re-exported for the tests and for anyone reading the generated file
 export { scrubModelNames, budgetDeny };
@@ -58,6 +75,15 @@ const cfg = () => ({
   // The style check runs on the website (see lib/journalism/assessClient.ts): this function carries no voice engine, because an edge function
   // may use only two seconds of computing per call and the engine needs more for one article in seven languages.
   enrichSecret: Deno.env.get('ENRICH_SECRET') || '',
+  // The October 2026 additions. Each can be switched off by a secret without a redeploy of the code.
+  evidence: evidenceModeFrom(Deno.env.get('EVIDENCE_MODE')),
+  escalate: (Deno.env.get('ESCALATE') || 'on').toLowerCase() !== 'off',
+  semantic: (Deno.env.get('SEMANTIC_CHECK') || 'on').toLowerCase() !== 'off',
+  exemplars: (Deno.env.get('EXEMPLARS') || 'on').toLowerCase() !== 'off',
+  merge: (Deno.env.get('MERGE_SOURCES') || 'on').toLowerCase() !== 'off',
+  mergeMinSim: numEnv('MERGE_MIN_SIM', 0.82),
+  mergeWindowH: numEnv('MERGE_WINDOW_HOURS', 72),
+  outletHosts: (Deno.env.get('CYPRUS_OUTLET_HOSTS') || '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean),
 });
 const BATCH_MAX = 3;
 
@@ -135,6 +161,62 @@ function makeLlm(supabase: SupaClient, deadlineAt: number, cost: Cost): LlmFn {
   return (spec: CallSpec): Promise<LlmResult> => ask(spec);
 }
 
+// ── embeddings, model pieces, recent openings, a second account ───────────────────────────────────────────────────────
+/** The comparison by meaning and the search for a second account both need vectors; the spend is logged like every other call. */
+function makeEmbed(supabase: SupaClient, cost: Cost): (texts: string[]) => Promise<number[][] | null> {
+  return (texts) => embedTexts(texts, {
+    apiKey: Deno.env.get('OPENAI_API_KEY') || '',
+    onUsage: (e) => logSpend(supabase, CALLER, { fn: 'embed', model: EMBED_MODEL_DEFAULT, usage: { inputTokens: e.tokens, cachedTokens: 0, outputTokens: 0, reasoningTokens: 0 }, usd: e.usd, ms: e.ms, status: 'completed' }, cost),
+  });
+}
+
+/** The model pieces the editor-in-chief activated for a desk (table style_exemplars). A missing table or a failing read means: none. */
+export async function loadExemplars(supabase: SupaClient, desk: string): Promise<Exemplar[]> {
+  try {
+    const { data, error } = await supabase.from('style_exemplars').select('id, desk, lang, title, body, article_type').eq('active', true).in('desk', [desk, '*']).limit(80);
+    if (error) { console.warn(`[desk] model pieces not available: ${error.message}`); return []; }
+    return ((data || []) as Array<{ id: string; desk: string; lang: string; title: string; body: string; article_type: string | null }>)
+      .map((r) => ({ id: String(r.id), desk: r.desk, lang: r.lang, title: r.title, body: r.body, articleType: r.article_type }));
+  } catch { return []; }
+}
+
+/** How our latest pieces began, per language (function recent_article_openings). A missing function means: nothing to avoid. */
+export async function loadRecentOpenings(supabase: SupaClient): Promise<Partial<Record<Lang, string[]>>> {
+  try {
+    const { data, error } = await supabase.rpc('recent_article_openings', { p_limit: 14 });
+    if (error || !data || typeof data !== 'object') return {};
+    const out: Partial<Record<Lang, string[]>> = {};
+    for (const l of ALL_LANGS) { const v = (data as Record<string, unknown>)[l]; if (Array.isArray(v)) out[l] = v.map(String).filter(Boolean).slice(0, 14); }
+    return out;
+  } catch { return {}; }
+}
+
+interface Partner { id: string; title: string; text: string; url: string; sim: number }
+/**
+ * A second account of the same event among the queued articles: another outlet, queued in the last days, close in meaning and sharing
+ * concrete anchors. The partner is claimed (scraped → rewriting) so that no other run takes it; the caller releases or consumes it.
+ */
+export async function findPartner(supabase: SupaClient, row: ScrapedRow, text: string, embed: (t: string[]) => Promise<number[][] | null>, settings: ReturnType<typeof cfg>): Promise<Partner | null> {
+  if (!settings.merge) return null;
+  try {
+    const since = new Date(Date.now() - settings.mergeWindowH * 3_600_000).toISOString();
+    const { data } = await supabase.from('scraped_articles').select(ROW_COLUMNS).eq('status', 'scraped').eq('is_used', false).neq('id', row.id).gte('created_at', since).order('created_at', { ascending: false }).limit(60);
+    const items: QueueItem[] = ((data || []) as ScrapedRow[])
+      .map((r) => ({ id: r.id, title: r.original_title || '', text: r.original_content_full || r.original_content || '', url: r.original_url || '', sourceId: r.source_id ?? null }))
+      .filter((r) => r.url && isSourceContentRealProse(r.text).ok);
+    if (!items.length) return null;
+    const title = row.original_title || '';
+    const vecs = await embed([leadOf(title, text), ...items.map((i) => leadOf(i.title, i.text))]);
+    if (!vecs || vecs.length !== items.length + 1) return null;
+    const pick = pickPartner({ id: row.id, title, text, url: row.original_url || '', sourceId: row.source_id ?? null, vec: vecs[0] }, items, vecs.slice(1), { minSim: settings.mergeMinSim });
+    if (!pick) return null;
+    const { data: claimed } = await supabase.from('scraped_articles').update({ status: 'rewriting', rewrite_started_at: new Date().toISOString() }).eq('id', pick.item.id).eq('status', 'scraped').select('id').maybeSingle();
+    if (!claimed) return null;
+    console.log(`[desk] second account found: ${pick.item.url} (similarity ${pick.sim.toFixed(2)}; shared ${pick.shared.figures.slice(0, 3).join(', ') || '-'} / ${pick.shared.names.slice(0, 3).join(', ') || '-'})`);
+    return { id: pick.item.id, title: pick.item.title, text: pick.item.text, url: pick.item.url, sim: pick.sim };
+  } catch (e) { console.warn(`[desk] no second account: ${(e as Error).message}`); return null; }
+}
+
 // ── self-test ────────────────────────────────────────────────────────────────────────────────────────────────────────
 // Admin-triggered diagnostic ({ action: "selftest" }): two tiny calls (structured output and plain JSON mode), the budget, the keys.
 // No database writes except the two spend rows; costs a fraction of a cent. Names no model or vendor.
@@ -164,6 +246,22 @@ async function runSelfTest(): Promise<Record<string, unknown>> {
       return { usable: true, detail: `ok (${Date.now() - t}ms, score ${a.score})` };
     } catch (e) { return { usable: false, detail: `FAIL: ${scrubModelNames((e as Error).message.slice(0, 160))}` }; }
   })();
+  // the October 2026 additions: embeddings (comparison with the source by meaning, second accounts), model pieces, recent openings
+  const meaning = await (async () => {
+    const t = Date.now();
+    const v = await makeEmbed(supabase, cost)(['The fishing harbour at Latchi smells of diesel and grilled octopus by half past eleven.']);
+    return v ? { usable: true, detail: `ok (${Date.now() - t}ms)` } : { usable: false, detail: 'not available: the comparison with the source by meaning and the search for a second account are skipped' };
+  })();
+  const pieces = await (async () => {
+    try {
+      const { data, error } = await supabase.from('style_exemplars').select('desk').eq('active', true).limit(500);
+      if (error) return { usable: false, detail: `table not available (${scrubModelNames(error.message.slice(0, 80))}): run the migration 20261012090000` };
+      const byDesk: Record<string, number> = {};
+      for (const r of (data || []) as Array<{ desk: string }>) byDesk[r.desk] = (byDesk[r.desk] || 0) + 1;
+      return { usable: true, detail: Object.keys(byDesk).length ? Object.entries(byDesk).map(([d, n]) => `${d}: ${n}`).join(' · ') : 'no piece is active yet (the writers work without model pieces)' };
+    } catch { return { usable: false, detail: 'not readable' }; }
+  })();
+  const openings = Object.keys(await loadRecentOpenings(supabase)).length;
   const deny = await budgetDeny(supabase);
   let spent: { day: number; month: number } | null = null;
   try { const w = windowStarts(new Date()); spent = { day: +(await spendSince(supabase, w.dayIso)).toFixed(2), month: +(await spendSince(supabase, w.monthIso)).toFixed(2) }; } catch { /* meter unavailable */ }
@@ -176,6 +274,10 @@ async function runSelfTest(): Promise<Record<string, unknown>> {
       : !style.usable ? `The AI service works, but the style check is not available (${style.detail}): articles stay in the queue.`
       : structured.usable && plain.usable ? 'AI service reachable: full quality.' : 'AI service reachable, one mode degraded: articles still compose.',
     style_check: style,
+    meaning_check: meaning,
+    model_pieces: pieces,
+    recent_openings: openings ? `ok (${openings} languages)` : 'not available: run the migration 20261012090000 (the writers then get no list of openings to avoid)',
+    settings: { evidence: conf.evidence, escalate: conf.escalate, semantic: conf.semantic, exemplars: conf.exemplars, merge: conf.merge },
     // The keys below keep the shape the admin page already reads.
     writer_primary: { structured_output: structured.detail, prefill: `plain ${plain.detail}`, usable: structured.usable },
     writer_fallback: { structured_output: structured.detail, prefill: plain.detail, usable: plain.usable },
@@ -245,11 +347,21 @@ async function writeLog(supabase: SupaClient, log: Record<string, unknown>): Pro
 const styleScore = (score: number): number => Math.max(0, Math.min(100, Math.round(100 - score * 4)));
 /** The edition's style score, or null when the style check could not run (that is not a perfect score). */
 const styleOf = (a?: { score: number; unavailable?: string }): number | null => (a && !a.unavailable ? a.score : null);
+/** The comparison with the source by meaning, per language, as it goes into the log (the values to tune the thresholds from). */
+const meaningMeta = (editions: Record<Lang, Edition>) => Object.fromEntries(ALL_LANGS.map((l) => {
+  const m = editions[l].semantic;
+  return [l, m ? { close: m.close, order: m.tau, lede: m.ledeSim, copy: m.copy || m.ledeCopy, summary: semanticSummary(m) } : null];
+}));
+/** What the evidence check and the Cyprus anchor found, as it goes into the log; also when the run stopped before an article existed. */
+const evidenceMeta = (r: PipelineResult) => ({
+  evidence: r.verification ? { mode: r.verification.mode, facts: `${r.verification.confirmed.kept}/${r.verification.confirmed.total}`, claims: `${r.verification.claims.kept}/${r.verification.claims.total}`, quotes: `${r.verification.quotes.kept}/${r.verification.quotes.total}`, figures: `${r.verification.numbers.kept}/${r.verification.numbers.total}`, repaired: r.verification.repaired, dropped: r.verification.dropped.slice(0, 8) } : null,
+  cyprus: r.cyprus ? { grounded: r.cyprus.grounded, via: r.cyprus.via, kind: r.cyprus.kind } : null,
+});
 
 // ── processOne ───────────────────────────────────────────────────────────────────────────────────────────────────────
 interface ScrapedRow {
   id: string; original_title: string | null; original_url: string | null; original_content: string | null; original_content_full: string | null;
-  category?: string | null; scope?: string | null; source_word_count?: number | null; status?: string | null;
+  category?: string | null; scope?: string | null; source_word_count?: number | null; status?: string | null; source_id?: string | null;
 }
 export interface Outcome {
   ok: boolean; reason?: string; post_id?: string; status?: 'published' | 'draft' | 'skipped' | 'failed' | 'queued';
@@ -313,15 +425,27 @@ export async function processOne(supabase: SupaClient, row: ScrapedRow, autoPubl
 
   const log: Record<string, unknown> = { brief_excerpt: title.slice(0, 200), article_type: 'rewrite', category: row.category || null };
   const cost = newCost();
+  let partner: Partner | null = null;       // a second account of the same event, claimed for this run
+  let partnerSettled = false;               // true once it was consumed (merged into the article)
   try {
     const llm = makeLlm(supabase, deadlineAt, cost);
+    const embed = settings.semantic || settings.merge ? makeEmbed(supabase, cost) : undefined;
+    if (embed && settings.merge) partner = await findPartner(supabase, row, content, embed, settings);
+    const recent = await loadRecentOpenings(supabase);
     const deps: PipelineDeps = {
       llm, now: Date.now, assess,
       sanitize: { html: (raw, lang) => cleanHtml(raw, lang), title: (t, lang) => cleanTitle(t, lang), field: (t, lang) => cleanField(t, lang), tags: normalizeTags, words: countWords, text: stripTags },
       overlap: overlapRatio, factsKept, inventedFigures, hasCyprusTerms, deskBrief, titleIsGeneric: isTitleGeneric, log: (m) => console.log(m),
+      sharedRuns, embed: settings.semantic ? embed : undefined,
+      exemplars: settings.exemplars ? (desk) => loadExemplars(supabase, desk) : undefined,
     };
-    const result: PipelineResult = await runPipeline({ title, text: content, hintCategory: row.category || undefined }, deps, {
+    const result: PipelineResult = await runPipeline({
+      title, text: content, hintCategory: row.category || undefined,
+      originCyprus: isCyprusOutlet(sourceUrl, settings.outletHosts), recent,
+      extra: partner ? [{ label: 'B', title: partner.title, text: partner.text, url: partner.url }] : undefined,
+    }, deps, {
       deadlineAt, overlapMax: settings.overlapMax, relevanceGate: settings.relevanceGate, maxEditPasses: settings.maxEditPasses, srcWords: countWords(content),
+      evidence: settings.evidence, escalate: settings.escalate,
     });
     const core = result.core;
     const category = core?.category || row.category || 'cyprus';
@@ -331,7 +455,7 @@ export async function processOne(supabase: SupaClient, row: ScrapedRow, autoPubl
 
     // — stopped before there was anything to publish —
     if (result.skipped === 'off_topic') {
-      await writeLog(supabase, fin({ status: 'skipped', error_stage: 'relevance', error_msg: 'OFF_TOPIC: no Cyprus angle' }));
+      await writeLog(supabase, fin({ status: 'skipped', error_stage: 'relevance', error_msg: 'OFF_TOPIC: no Cyprus angle', meta: evidenceMeta(result) }));
       await supabase.from('scraped_articles').update({ status: 'skipped', is_used: true, error_message: 'OFF_TOPIC: no genuine Cyprus angle, skipped by the relevance gate', rewrite_finished_at: new Date().toISOString() }).eq('id', row.id);
       console.log(`[desk] SKIP ${row.id}: off-topic (${category})`);
       return { ok: false, status: 'skipped', reason: 'Off-topic for Cyprus Lifestyle: no genuine Cyprus angle, so it was not published.', cost_usd: +cost.usd.toFixed(4) };
@@ -345,7 +469,7 @@ export async function processOne(supabase: SupaClient, row: ScrapedRow, autoPubl
         console.warn(`[desk] PAUSE ${row.id}: ${why.slice(0, 200)}`);
         return { ok: false, status: 'queued', reason: why, stop: true, cost_usd: +cost.usd.toFixed(4) };
       }
-      await writeLog(supabase, fin({ status: 'error', error_stage: result.stage || 'pipeline', error_msg: why.slice(0, 500) }));
+      await writeLog(supabase, fin({ status: 'error', error_stage: result.stage || 'pipeline', error_msg: why.slice(0, 500), meta: evidenceMeta(result) }));
       await failRow(supabase, row.id, why);
       console.warn(`[desk] ABORT ${row.id}: ${why.slice(0, 200)}`);
       return { ok: false, status: 'failed', reason: why, cost_usd: +cost.usd.toFixed(4) };
@@ -360,7 +484,7 @@ export async function processOne(supabase: SupaClient, row: ScrapedRow, autoPubl
     const refused = ALL_LANGS.filter((l) => !editions[l].ok);
     if (refused.length) {
       const detail = refused.map((l) => `${l.toUpperCase()}=${editions[l].reason || 'refused'}`).join('; ');
-      await writeLog(supabase, fin({ status: 'error', error_stage: `plagiarism_${refused.join('+')}`, error_msg: detail.slice(0, 500) }));
+      await writeLog(supabase, fin({ status: 'error', error_stage: `plagiarism_${refused.join('+')}`, error_msg: detail.slice(0, 500), meta: { ...evidenceMeta(result), meaning: meaningMeta(editions), overlap: Object.fromEntries(ALL_LANGS.map((l) => [l, +editions[l].overlap.toFixed(3)])) } }));
       await failRow(supabase, row.id, `plagiarism gate: ${detail}`);
       console.error(`[desk] ABORT ${row.id}: plagiarism gate: ${detail}`);
       return { ok: false, status: 'failed', cost_usd: +cost.usd.toFixed(4), reason: `Plagiarism gate failed after rewrite (${detail}). The source is likely too thin to paraphrase safely: pick a richer source or edit by hand.` };
@@ -396,6 +520,14 @@ export async function processOne(supabase: SupaClient, row: ScrapedRow, autoPubl
     const { data: rpc, error: rpcErr } = await supabase.rpc('commit_scraper_blog_post', { p_blog_payload: blogPayload, p_scraped_id: row.id, p_writeback: writeback });
     if (rpcErr || !rpc) throw new Error(`commit_scraper_blog_post RPC failed: ${rpcErr?.message || 'no id'}`);
     const postId = rpc as string;
+    if (partner && result.merged) {
+      // two accounts, one article: the second is used up, and both are recorded as the article's sources (the article is committed; a failure here never undoes it)
+      try {
+        await supabase.from('scraped_articles').update({ status: 'processed', is_used: true, error_message: `MERGED into the article ${postId}`.slice(0, 500), rewrite_finished_at: new Date().toISOString() }).eq('id', partner.id);
+        partnerSettled = true;
+        await supabase.from('blog_posts').update({ sources: [sourceUrl, partner.url] }).eq('id', postId);
+      } catch (e) { console.warn(`[desk] merged article ${postId}: could not record the second source: ${(e as Error).message}`); }
+    }
 
     if (publishNow && settings.siteUrl && settings.revalidateSecret) {
       try {
@@ -413,6 +545,10 @@ export async function processOne(supabase: SupaClient, row: ScrapedRow, autoPubl
       factcheck: Object.fromEntries(ALL_LANGS.map((l) => [l, editions[l].factCheck ? { ran: editions[l].factCheck!.ran, pass: editions[l].factCheck!.pass, high: editions[l].factCheck!.high, medium: editions[l].factCheck!.medium, repaired: editions[l].factCheck!.repaired } : null])),
       passes: Object.fromEntries(ALL_LANGS.map((l) => [l, editions[l].passes])),
       fields: Object.fromEntries(ALL_LANGS.map((l) => [l, editions[l].fieldFindings.length])),
+      ...evidenceMeta(result),
+      meaning: meaningMeta(editions),
+      rewrites: Object.fromEntries(ALL_LANGS.map((l) => [l, editions[l].passes.rewrite])),
+      merged: partner && result.merged ? { url: partner.url, similarity: +partner.sim.toFixed(3) } : null,
       ms: result.ms, calls: cost.calls, cost_usd: +cost.usd.toFixed(4), base_usd: +cost.baseUsd.toFixed(4),
     };
     await writeLog(supabase, fin({ status: 'ok', ...(warns.length ? { error_msg: `${held ? 'held' : 'note'}: ${warns.join(' · ')}`.slice(0, 500) } : {}), meta }));
@@ -424,6 +560,9 @@ export async function processOne(supabase: SupaClient, row: ScrapedRow, autoPubl
     await writeLog(supabase, { ...log, status: 'error', error_stage: 'processOne', error_msg: msg.slice(0, 500), total_ms: Date.now() - t0, est_cost_usd: +cost.usd.toFixed(4) });
     await failRow(supabase, row.id, msg);
     return { ok: false, status: 'failed', reason: msg, cost_usd: +cost.usd.toFixed(4) };
+  } finally {
+    // a second account that was claimed but not merged (another story, a stopped run, an article that failed) goes back into the queue
+    if (partner && !partnerSettled) { try { await supabase.from('scraped_articles').update({ status: 'scraped', rewrite_started_at: null }).eq('id', partner.id).eq('status', 'rewriting'); } catch { /* the stale-claim sweeper releases it */ } }
   }
 }
 
@@ -487,7 +626,7 @@ export function keepAlive(work: () => Promise<Record<string, unknown>>, everyMs 
   return new Response(stream, { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
-const ROW_COLUMNS = 'id, original_title, original_url, original_content, original_content_full, category, scope, source_word_count, status';
+const ROW_COLUMNS = 'id, original_title, original_url, original_content, original_content_full, category, scope, source_word_count, status, source_id';
 
 export async function handle(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
