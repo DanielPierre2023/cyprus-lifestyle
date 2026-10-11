@@ -5,6 +5,11 @@ import { dir, type Locale } from '@/lib/locales';
 
 const BRAND = { obsidian: '#0B0E11', paper: '#F6F1E7', ink: '#16181C', gold: '#C9A24C', champagne: '#E4D2AC' };
 
+// The word in the footer link — localized (the newsletter goes out in all seven editions).
+const UNSUBSCRIBE_LABEL: Record<Locale, string> = {
+  en: 'Unsubscribe', el: 'Διαγραφή από τη λίστα', ro: 'Dezabonare', ar: 'إلغاء الاشتراك', de: 'Abmelden', pl: 'Wypisz się', ru: 'Отписаться',
+};
+
 // The house email template — one luxury lockup used by EVERY message the system
 // sends, from every address (concierge acks, lead alerts, admin replies, the
 // newsletter, fulfilment). Deliberately typographic: no remote logo image (email
@@ -36,7 +41,7 @@ export function brandedEmail(opts: {
     : '';
 
   const unsub = opts.unsubscribe
-    ? `&nbsp;·&nbsp;<a href="${opts.unsubscribe === true ? '{{unsubscribe}}' : opts.unsubscribe}" style="color:#9a927f;text-decoration:underline">Unsubscribe</a>`
+    ? `&nbsp;·&nbsp;<a href="${opts.unsubscribe === true ? '{{unsubscribe}}' : opts.unsubscribe}" style="color:#9a927f;text-decoration:underline">${UNSUBSCRIBE_LABEL[opts.locale] || UNSUBSCRIBE_LABEL.en}</a>`
     : '';
 
   return `<!doctype html><html dir="${rtl ? 'rtl' : 'ltr'}" lang="${opts.locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"></head>
@@ -68,7 +73,7 @@ export function brandedEmail(opts: {
 </td></tr></table></body></html>`;
 }
 
-export async function sendEmail(opts: { to: string | string[]; subject: string; html: string; replyTo?: string; from?: string }): Promise<{ ok: boolean; id?: string; error?: string }> {
+export async function sendEmail(opts: { to: string | string[]; subject: string; html: string; replyTo?: string; from?: string; headers?: Record<string, string> }): Promise<{ ok: boolean; id?: string; error?: string }> {
   const key = process.env.RESEND_API_KEY;
   const from = opts.from || process.env.EMAIL_FROM || 'Cyprus Lifestyle <newsroom@cypruslifestyle.eu>';
   if (!key) return { ok: false, error: 'RESEND_API_KEY not configured' };
@@ -76,12 +81,42 @@ export async function sendEmail(opts: { to: string | string[]; subject: string; 
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ from, to: opts.to, subject: opts.subject, html: opts.html, ...(opts.replyTo ? { reply_to: opts.replyTo } : {}) }),
+      body: JSON.stringify({ from, to: opts.to, subject: opts.subject, html: opts.html, ...(opts.replyTo ? { reply_to: opts.replyTo } : {}), ...(opts.headers ? { headers: opts.headers } : {}) }),
       signal: AbortSignal.timeout(20000),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: data.message || 'Resend error' };
     return { ok: true, id: data.id };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** One message of a batch: its own recipient (and optional headers), so every reader gets a personal unsubscribe link. */
+export interface BatchMessage { to: string; subject: string; html: string; headers?: Record<string, string> }
+
+/**
+ * Send up to 100 DIFFERENT messages in ONE request (Resend's batch endpoint) — one HTTP call instead of one per
+ * reader, which keeps a 60-second serverless run and Resend's per-second request limit comfortable.
+ * The batch is all-or-nothing on Resend's side: on `ok: false` nobody in it was mailed.
+ */
+export async function sendEmailBatch(messages: BatchMessage[], opts: { from?: string } = {}): Promise<{ ok: boolean; ids?: string[]; error?: string }> {
+  const key = process.env.RESEND_API_KEY;
+  const from = opts.from || process.env.EMAIL_FROM || 'Cyprus Lifestyle <newsroom@cypruslifestyle.eu>';
+  if (!key) return { ok: false, error: 'RESEND_API_KEY not configured' };
+  if (messages.length === 0) return { ok: true, ids: [] };
+  if (messages.length > 100) return { ok: false, error: 'a batch holds at most 100 messages' };
+  try {
+    const res = await fetch('https://api.resend.com/emails/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify(messages.map((m) => ({ from, to: [m.to], subject: m.subject, html: m.html, ...(m.headers ? { headers: m.headers } : {}) }))),
+      signal: AbortSignal.timeout(30000),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.message || `Resend error ${res.status}` };
+    const ids = Array.isArray(data.data) ? data.data.map((d: { id?: string }) => String(d.id ?? '')) : [];
+    return { ok: true, ids };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }

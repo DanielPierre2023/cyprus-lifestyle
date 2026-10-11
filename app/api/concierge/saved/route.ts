@@ -11,6 +11,8 @@ import { normalizeKind, sanitizeSlug, isSaveAction } from '@/lib/concierge/saved
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
+  // cid is a bearer secret: throttle reads so ids can't be probed at speed.
+  if (!(await rateLimit(req, 'saved-read', 60, 60))) return NextResponse.json({ ok: false, items: [] }, { status: 429 });
   const cid = String(req.nextUrl.searchParams.get('cid') || '');
   if (!isValidCid(cid)) return NextResponse.json({ ok: true, items: [] });
   const kind = req.nextUrl.searchParams.get('kind');

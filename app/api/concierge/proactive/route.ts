@@ -1,12 +1,12 @@
 // GET /api/concierge/proactive?locale=&cid=
 // The proactive opener: a warm, timely greeting + 3 contextual suggestions,
 // grounded on the season, sea temperature, what's on this week, and the guest's
-// memory. Phrased by a cheap model in the visitor's language. If anything is
+// memory. Phrased by a small, quick model in the visitor's language. If anything is
 // unavailable, returns ok:false and the panel shows its static greeting.
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/ratelimit';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { callClaude, CLAUDE_HAIKU } from '@/lib/ai';
+import { callAI, parseAiJson } from '@/lib/ai';
 import { CLIMATE } from '@/lib/knowledge/cyprus';
 import { loadMemory, isValidCid, isProfileEmpty, type MemoryProfile } from '@/lib/concierge/memory';
 import { isConciergeLocale } from '@/lib/concierge/brain';
@@ -41,7 +41,7 @@ async function upcomingEvents(locale: string): Promise<string[]> {
 export async function GET(req: NextRequest) {
   const locale = isConciergeLocale(String(req.nextUrl.searchParams.get('locale') || '')) ? String(req.nextUrl.searchParams.get('locale')) : 'en';
   if (!(await rateLimit(req, 'concierge-proactive', 20, 60))) return NextResponse.json({ ok: false });
-  if (!process.env.CLAUDE_API_KEY) return NextResponse.json({ ok: false });
+  if (!process.env.OPENAI_API_KEY) return NextResponse.json({ ok: false });
 
   const cid = String(req.nextUrl.searchParams.get('cid') || '');
   const now = new Date();
@@ -75,9 +75,10 @@ export async function GET(req: NextRequest) {
     `Reply in ${LANG[locale] || 'English'}. Return ONLY JSON: {"greeting": string (one warm sentence, max ~24 words), "chips": [three strings, each max ~6 words, phrased as things the guest could tap to ask]}.`;
 
   try {
-    const res = await callClaude({ systemInstruction: system, userMessage: `CONTEXT:\n${context}`, model: CLAUDE_HAIKU, jsonMode: true, maxTokens: 320, temperature: 0.6, fn: 'concierge-proactive' });
+    // Task "helper": gpt-6-luna at "low" (the panel is open and the guest is waiting; AI_EFFORT_HELPER tunes it).
+    const res = await callAI({ systemInstruction: system, userMessage: `CONTEXT:\n${context}`, task: 'helper', jsonMode: true, expectTokens: 240, timeoutMs: 20_000, fn: 'concierge-proactive' });
     if (!res.text) return NextResponse.json({ ok: false });
-    const parsed = JSON.parse(res.text);
+    const parsed = parseAiJson<{ greeting?: unknown; chips?: unknown }>(res.text);
     const greeting = typeof parsed.greeting === 'string' ? parsed.greeting.trim() : '';
     const chips = Array.isArray(parsed.chips) ? parsed.chips.map((c: unknown) => String(c).trim()).filter(Boolean).slice(0, 3) : [];
     if (!greeting || chips.length < 2) return NextResponse.json({ ok: false });

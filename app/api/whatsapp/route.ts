@@ -4,10 +4,18 @@
 // The same grounded brain as the web concierge; per-user memory in Postgres.
 //
 // Env (add in Vercel): WHATSAPP_VERIFY_TOKEN, WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID.
+// REQUIRED for incoming messages: WHATSAPP_APP_SECRET (Meta → App settings → Basic → App secret).
+//   Every POST must carry a valid X-Hub-Signature-256 over the raw body; without the secret
+//   the endpoint refuses all POSTs (fail-closed) so nobody can forge messages or burn tokens.
 // Optional: WHATSAPP_API_VERSION (default v21.0), NEXT_PUBLIC_SITE_URL.
 import { NextRequest, after } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { runConcierge, detectLocale, type ChatMessage } from '@/lib/concierge/brain';
+import { runConcierge, type ChatMessage } from '@/lib/concierge/brain';
+import { resolveChannelLocale, settleLocale, localeFromPhone } from '@/lib/concierge/localeMemory';
+import { composeChannelReply } from '@/lib/concierge/channelLinks';
+import { verifyMetaSignature } from '@/lib/auth/webhookSignature';
+import { rateLimitKey } from '@/lib/ratelimit';
+import { publicAiCeilingDeny } from '@/lib/spendGuard';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -29,9 +37,20 @@ export async function GET(req: NextRequest) {
 
 // ── Incoming messages ─────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => null);
+  const appSecret = process.env.WHATSAPP_APP_SECRET || '';
+  if (!appSecret) {
+    console.error('[whatsapp] WHATSAPP_APP_SECRET is not set — refusing unsigned webhook traffic');
+    return new Response('not configured', { status: 503 });
+  }
+  // Verify against the RAW body (re-serialised JSON would not match Meta's signature).
+  const raw = await req.text();
+  if (!verifyMetaSignature(raw, req.headers.get('x-hub-signature-256'), appSecret)) {
+    return new Response('invalid signature', { status: 401 });
+  }
+  let body: Record<string, unknown> | null = null;
+  try { body = JSON.parse(raw) as Record<string, unknown>; } catch { body = null; }
   // Always ack fast so Meta doesn't retry; do the work afterwards.
-  if (body) after(() => handleWebhook(body).catch((e) => console.error('[whatsapp]', (e as Error).message)));
+  if (body) after(() => handleWebhook(body as Record<string, unknown>).catch((e) => console.error('[whatsapp]', (e as Error).message)));
   return new Response('EVENT_RECEIVED', { status: 200 });
 }
 
@@ -61,28 +80,39 @@ async function handleWebhook(body: Record<string, unknown>) {
 async function handleTextMessage(phoneId: string, token: string, msg: WaMessage) {
   const wa = msg.from;
   const text = msg.text!.body.trim().slice(0, 1000);
+  // Per-sender throttle (a verified sender can still flood the model): 12 messages / minute.
+  if (!(await rateLimitKey(wa, 'wa-msg', 12, 60))) return;
+  if (await publicAiCeilingDeny('chat')) return;
   const sb = supabaseAdmin();
 
   // Load memory + dedupe Meta's retries by message id.
   let history: ChatMessage[] = [];
   let turns = 0;
+  let rememberedLocale: string | null = null; let rememberedAt: string | null = null;
   try {
-    const { data } = await sb.from('concierge_wa_threads').select('messages,last_msg_id,turns').eq('wa_id', wa).maybeSingle();
+    const { data } = await sb.from('concierge_wa_threads').select('messages,last_msg_id,turns,locale,updated_at').eq('wa_id', wa).maybeSingle();
     if (data) {
       if (data.last_msg_id === msg.id) return; // already handled this exact message
       if (Array.isArray(data.messages)) history = data.messages as ChatMessage[];
       turns = Number(data.turns) || 0;
+      rememberedLocale = typeof data.locale === 'string' ? data.locale : null; rememberedAt = typeof data.updated_at === 'string' ? data.updated_at : null;
     }
   } catch { /* no memory available — answer statelessly */ }
 
-  const locale = detectLocale(text);
+  // Language: this message when it is clearly identifiable; a short / ambiguous one ("ja bitte", "salut") keeps the sender's last
+  // confident language; a brand-new sender falls back to the country of the phone number, then English.
+  const lang = resolveChannelLocale({ text, remembered: rememberedLocale, rememberedAt, hint: localeFromPhone(wa) });
+  let locale: string = lang.locale;
+  let persistLocale: string | null = lang.persist;
   const convo: ChatMessage[] = [...history, { role: 'user', content: text }];
 
   let reply = '';
   try {
     const { ctx, text: answer } = await runConcierge(convo, locale, { matchLanguage: true });
-    reply = answer || fallbackNote(locale);
-    reply = appendLink(reply, ctx, locale);
+    // The reply is long enough to tell its language reliably; when we only guessed, links and memory follow the reply.
+    const settled = settleLocale(lang, answer);
+    locale = settled.locale; persistLocale = settled.persist;
+    reply = composeChannelReply(answer || fallbackNote(locale), ctx, locale, SITE);
   } catch (e) {
     console.error('[whatsapp] brain', (e as Error).message);
     reply = fallbackNote(locale);
@@ -94,27 +124,9 @@ async function handleTextMessage(phoneId: string, token: string, msg: WaMessage)
   const nextMessages = [...convo, { role: 'assistant' as const, content: reply }].slice(-12);
   try {
     await sb.from('concierge_wa_threads').upsert({
-      wa_id: wa, locale, messages: nextMessages, last_msg_id: msg.id, turns: turns + 1, updated_at: new Date().toISOString(),
+      wa_id: wa, locale: persistLocale, messages: nextMessages, last_msg_id: msg.id, turns: turns + 1, updated_at: new Date().toISOString(),
     });
   } catch { /* memory write is best-effort */ }
-}
-
-// Append the single most relevant on-site link (the connector), tastefully.
-function appendLink(reply: string, ctx: { guides: { label: string; path: string }[]; picks: { type: string; slug: string; name: string }[]; activities?: { title: string; url: string | null }[] }, locale: string): string {
-  const prefix = locale && locale !== 'en' ? `/${locale}` : '';
-  const lines: string[] = [];
-  if (ctx.guides && ctx.guides.length) {
-    const g = ctx.guides[0];
-    lines.push(`${g.label}: ${SITE}${prefix}${g.path}`);
-  } else if (ctx.picks && ctx.picks.length) {
-    const p = ctx.picks[0];
-    lines.push(`${p.name}: ${SITE}${prefix}/directory/${p.type}/${p.slug}`);
-  }
-  // Up to two bookable experiences from our catalogue (GetYourGuide booking link, partner id
-  // applied, disclosed as a partner link) when the guest asked for things to do.
-  const PARTNER: Record<string, string> = { en: 'partner link', el: 'σύνδεσμος συνεργάτη', ro: 'link de partener', ar: 'رابط شريك', de: 'Partnerlink', pl: 'link partnerski', ru: 'партнёрская ссылка' };
-  for (const a of (ctx.activities || []).slice(0, 2)) if (a.url) lines.push(`${a.title} (GetYourGuide, ${PARTNER[locale] || PARTNER.en}): ${a.url}`);
-  return lines.length ? `${reply}\n\n${lines.join('\n')}` : reply;
 }
 
 function fallbackNote(locale: string): string {

@@ -8,10 +8,11 @@
 // semantic — plus the LLM understanding and the district it scoped to. This is how we
 // answer "why did it return hotels for a gym query" (and "does semantic cover every
 // category, not just gyms") with evidence instead of assertion. Admin only. Each query
-// costs one embedding + one small Haiku call.
+// costs one embedding + one small model call.
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { retrievalTrace, isConciergeLocale, type RetrievalTrace } from '@/lib/concierge/brain';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -80,6 +81,7 @@ async function runMany(items: { q: string; locale: string }[], concurrency = 5) 
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'concierge.retrieval-trace');
   const body = await req.json().catch(() => ({}));
 
   if (body.sweep) {

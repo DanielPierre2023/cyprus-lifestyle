@@ -1,5 +1,7 @@
 # Cyprus Lifestyle — Private-Client Model + fixes (this batch)
 
+> **Historical note (October 2026).** This file describes the state at the time it was written. Since then the app calls OpenAI only (`OPENAI_API_KEY`, model `gpt-6-luna`) for every text job, including the concierge. What this file says about Claude, Anthropic, `CLAUDE_API_KEY` or `SONNET_MODEL` no longer applies; the current instructions are in `RUNBOOK.md` and `docs/TEXTPRODUKTION-OPENAI.md`.
+
 **One deploy + one SQL migration.** Run the SQL first, then deploy the code.
 
 ## 1 · SQL — run these in the Supabase SQL editor FIRST (in order)

@@ -180,6 +180,10 @@ export default function CoverImagePicker({
         const { data: urlData } = supabase.storage.from('blog-images').getPublicUrl(fileName);
         onChange(urlData.publicUrl);
         onCreditChange(credit || 'Cyprus Lifestyle archive');
+        // Resized copies (480/960/1440) so readers get small files; best-effort, never blocks the editor.
+        void fetch('/api/admin/images/variants', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: fileName }),
+        }).catch(() => {});
         note('✓ Image uploaded.');
       } catch (err) {
         note('Upload error: ' + (err as Error).message);

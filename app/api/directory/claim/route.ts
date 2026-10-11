@@ -12,6 +12,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit, isHoneypot } from '@/lib/ratelimit';
 import { startClaim } from '@/lib/directory/claims';
+import { localeOf } from '@/lib/i18n/resolveLocale';
+import { errorBody } from '@/lib/i18n/apiErrors';
 
 export const runtime = 'nodejs';
 
@@ -21,8 +23,10 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   // Honeypot: accept silently so bots don't learn they were caught (matches lead/review routes).
   if (isHoneypot(body)) return NextResponse.json({ ok: true });
+  const locale = localeOf(req, body.locale);
+  // Errors carry a stable `code` (new) next to `error` (same English text for en, localised otherwise).
   if (!(await rateLimit(req, 'directory-claim', 5, 60))) {
-    return NextResponse.json({ ok: false, error: 'Too many requests — please wait a moment.' }, { status: 429 });
+    return NextResponse.json(errorBody('rate_limited', locale), { status: 429 });
   }
 
   const slug = String(body.slug || '').trim().slice(0, 200);
@@ -30,12 +34,12 @@ export async function POST(req: NextRequest) {
   const email = String(body.email || '').trim().toLowerCase().slice(0, 160);
   const phone = String(body.phone || '').trim().slice(0, 40) || null;
 
-  if (!slug) return NextResponse.json({ ok: false, error: 'Missing listing.' }, { status: 400 });
+  if (!slug) return NextResponse.json(errorBody('missing_listing', locale), { status: 400 });
   if (!name || !EMAIL_RE.test(email)) {
-    return NextResponse.json({ ok: false, error: 'A name and a valid email are required.' }, { status: 400 });
+    return NextResponse.json(errorBody('name_email_required', locale), { status: 400 });
   }
 
-  const res = await startClaim({ slug, name, email, phone });
+  const res = await startClaim({ slug, name, email, phone, locale });
 
   // Phone-OTP is the only channel that must expose more (the claimant enters a code).
   // Everything else returns an identical body so nothing about the listing is leaked.

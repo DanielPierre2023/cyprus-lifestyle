@@ -10,6 +10,10 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { logServerError } from '@/lib/monitor.server';
 import { runWorker } from '@/lib/jobs';
 import { enqueueGeocodeBacklog, enqueueDailySubsystems } from '@/lib/jobs.handlers';
+import { isFridayUtc, notifyApprover, prepareDigest } from '@/lib/newsletterDigest';
+import { reconcileMembers } from '@/lib/member/reconcile';
+import { purgeExpiredBusinessCredentials } from '@/lib/business/cleanup';
+import { watchdogIfDue } from '@/lib/ops/watchdog';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap
@@ -25,11 +29,29 @@ export async function GET(req: NextRequest) {
     out.geocodeEnqueued = await enqueueGeocodeBacklog(sb, 60);
   } catch (e) { await logServerError('cron-tick:enqueue', e); }
 
+  // Fridays: prepare the week's newsletter DRAFTS (all editions) and tell the approver. Nothing is sent until an
+  // administrator approves each edition in Admin → Newsletter.
+  if (isFridayUtc(new Date())) {
+    try {
+      const nl = await prepareDigest(sb);
+      out.newsletter = { week: nl.week, created: nl.created, skipped: nl.skipped, notified: await notifyApprover(nl) };
+    } catch (e) { await logServerError('cron-tick:newsletter', e); }
+  }
+
+  // Members: make sure nobody keeps member benefits after a missed cancellation, and tidy expired sessions/links.
+  try { out.members = await reconcileMembers(sb); } catch (e) { await logServerError('cron-tick:members', e); }
+
+  // Business Hub: delete expired sign-in sessions and long-expired sign-in links (credentials only).
+  try { out.business = await purgeExpiredBusinessCredentials(sb); } catch (e) { await logServerError('cron-tick:business', e); }
+
   // Drain a time-boxed batch now, so work progresses even without pg_cron. pg_cron
   // (when enabled) drains continuously between ticks.
   try {
     out.jobs = await runWorker({ deadlineMs: 45_000 });
   } catch (e) { await logServerError('cron-tick:drain', e); }
+
+  // Health watchdog (also runs from the 3-minute worker; this is the fallback when the scheduler itself is down).
+  try { out.watchdog = await watchdogIfDue(sb, { force: true }); } catch (e) { await logServerError('cron-tick:watchdog', e); }
 
   // Self-maintain the error log (keep 90 days). Best-effort.
   try { await sb.rpc('prune_error_log'); } catch { /* function not migrated yet — ignore */ }

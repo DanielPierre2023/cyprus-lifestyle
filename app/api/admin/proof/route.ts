@@ -1,20 +1,23 @@
 // Admin/editor proof tool.
 //   default: deterministic AI-tell score + a humanized version (instant, no cost)
-//   { ai: true }: also run the Greek/Arabic AI proofread pass (Haiku), returning
+//   { ai: true }: also run the Greek/Arabic AI proofread pass, returning
 //   the cleaned text and before/after scores.
 // Body: { title, content, lang, html?, ai? }
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { scoreAiTells, humanizeText, humanizeHtml, type Lang } from '@/lib/antiAi';
 import { proofread } from '@/lib/desk/proofread';
+import { auditAdminRequest } from '@/lib/auditRequest';
+import { isLocale } from '@/lib/locales';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Hobby cap; raise to 300 on Vercel Pro
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'proof');
   const body = await req.json().catch(() => ({}));
-  const lang: Lang = (['en', 'el', 'ro', 'ar'] as string[]).includes(body.lang) ? body.lang : 'en';
+  const lang: Lang = isLocale(String(body.lang)) ? (body.lang as Lang) : 'en';
   const title = String(body.title || '');
   const content = String(body.content || '');
   const isHtml = body.html === true || /<[a-z][\s\S]*>/i.test(content);

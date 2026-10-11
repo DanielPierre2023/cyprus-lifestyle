@@ -33,11 +33,12 @@ messages/{en,el,ro,ar,de,pl,ru}.json   (concierge.chat namespace)
 ## Deploy — 1 place
 **Commit & push the app code.** Vercel builds it. **No SQL, no edge-function change.**
 
-**Env:** the chat route calls Anthropic from the Next side using **`CLAUDE_API_KEY`**
-— the same key that already powers the editorial AI on the site, so it should
-already be in your Vercel project. (Optional: `SONNET_MODEL` to pin the model;
-it defaults to the site's Sonnet.) If the concierge ever replies "busy", add
-`CLAUDE_API_KEY` to the Vercel environment (same value you use in Supabase).
+**Env:** the chat route calls OpenAI from the Next side using **`OPENAI_API_KEY`**
+— the same key that already powers the rest of the site's AI, so it should
+already be in your Vercel project. (Optional: `OPENAI_MODEL_LUNA` to pin the model;
+it defaults to `gpt-6-luna`.) If the concierge ever replies "busy", open
+`/api/concierge/selftest?key=<ENRICH_SECRET>`: it says whether the key, the credit,
+the budget or the model is the cause.
 
 ## Try it after deploy
 Click the gold **Concierge Bell** (bottom corner) on any page:

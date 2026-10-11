@@ -1,0 +1,21 @@
+import { splitForConcierge } from '@/lib/articleSplit';
+import { ok, eq, report } from './_harness';
+const p = (n: number) => Array.from({ length: n }, (_, i) => `<p>Paragraph ${i + 1}.</p>`).join('');
+eq('short article: no mid prompt', splitForConcierge(p(4)), null);
+const r = splitForConcierge(p(6));
+ok('six paragraphs: split after the third', !!r && r.head === p(3) && r.tail === Array.from({ length: 3 }, (_, i) => `<p>Paragraph ${i + 4}.</p>`).join(''));
+ok('head + tail rebuild the original', !!r && r.head + r.tail === p(6));
+const q = `<p>A.</p><p>B.</p><blockquote><p>Quote one.</p><p>Quote two.</p></blockquote><p>C.</p><p>D.</p><p>E.</p>`;
+const rq = splitForConcierge(q);
+ok('never splits inside an open quote', !!rq && !/<blockquote>(?![\s\S]*<\/blockquote>)/.test(rq.head) && rq.head.endsWith('</blockquote>') === false);
+const h = `<h2>X</h2>${p(5)}`;
+ok('headings do not break it', !!splitForConcierge(h));
+eq('empty tail: nothing to split', splitForConcierge('<p>a</p><p>b</p><p>c</p><p>d</p><p>e</p>'), { head: '<p>a</p><p>b</p><p>c</p>', tail: '<p>d</p><p>e</p>' });
+// The real case that broke: an article whose 3rd paragraph end falls inside the specialist card.
+const card = "<p>One.</p><p>Two.</p><aside class='specialist-card'><span class='sc-eyebrow'>Verified</span><h3 class='sc-title'>Cover</h3><p class='sc-lead'>Checked insurers.</p><ul class='sc-links'><li><a href='/x'>A</a></li></ul><a class='sc-cta' href='/ask'>Ask</a></aside><p>Three.</p><p>Four.</p><p>Five.</p><p>Six.</p>";
+const rc = splitForConcierge(card);
+ok('never cuts inside the specialist card', !!rc && (rc.head.match(/<aside/g) || []).length === (rc.head.match(/<\/aside>/g) || []).length);
+ok('head and tail rebuild the card article', !!rc && rc.head + rc.tail === card);
+const allInside = "<p>One.</p><p>Two.</p><aside><p>a</p><p>b</p><p>c</p><p>d</p></aside>";
+eq('no safe point: no split', splitForConcierge(allInside), null);
+report('articleSplit');

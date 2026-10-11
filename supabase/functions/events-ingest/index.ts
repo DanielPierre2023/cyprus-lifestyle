@@ -42,7 +42,7 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const ENRICH_SECRET = Deno.env.get('ENRICH_SECRET') || '';
 const BUCKET = Deno.env.get('ENRICH_BUCKET') || 'listings';
 
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type' };
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-enrich-key' };
 const UA = 'Mozilla/5.0 (compatible; CyprusLifestyle/1.0; +https://cypruslifestyle.eu)';
 const DEFAULT_CITIES = ['limassol', 'nicosia', 'larnaca', 'paphos', 'ayia-napa'];
 
@@ -411,11 +411,36 @@ async function backfillImages(limit: number, dryRun: boolean): Promise<Record<st
   return { mode: 'backfill', processed: rows.length, updated, still_missing, results };
 }
 
+// ── Shared-secret gate (fail-closed, constant-time) ───────────────────────────────────
+// Authorised when the caller presents ENRICH_SECRET in the `x-enrich-key` header or as
+// `Authorization: Bearer`, or — legacy, unless ENRICH_DISABLE_QUERY_KEY=1 — as ?key=.
+// With NO ENRICH_SECRET configured nothing is authorised (it used to be fully open).
+async function sha256Bytes(s: string): Promise<Uint8Array> {
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)));
+}
+async function keyAuthorised(req: Request, u: URL): Promise<boolean> {
+  if (!ENRICH_SECRET) return false;
+  const cands = [req.headers.get('x-enrich-key') || '', (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')];
+  const dq = (Deno.env.get('ENRICH_DISABLE_QUERY_KEY') || '').trim().toLowerCase();
+  if (!(dq === '1' || dq === 'true' || dq === 'yes')) cands.push(u.searchParams.get('key') || '');
+  const want = await sha256Bytes(ENRICH_SECRET);
+  let ok = false;
+  for (const c of cands) {
+    if (!c) continue;
+    const got = await sha256Bytes(c);
+    let diff = 0;
+    for (let i = 0; i < want.length; i++) diff |= want[i] ^ got[i];
+    if (diff === 0) ok = true;
+  }
+  return ok;
+}
+
 async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
   const u = new URL(req.url);
-  if (ENRICH_SECRET && u.searchParams.get('key') !== ENRICH_SECRET) {
-    return new Response(JSON.stringify({ ok: false, error: 'unauthorized' }), { status: 401, headers: { ...CORS, 'Content-Type': 'application/json' } });
+  if (!(await keyAuthorised(req, u))) {
+    const error = ENRICH_SECRET ? 'unauthorized' : 'ENRICH_SECRET is not configured on this function — set it in Supabase → Edge Functions → Secrets';
+    return new Response(JSON.stringify({ ok: false, error }), { status: ENRICH_SECRET ? 401 : 503, headers: { ...CORS, 'Content-Type': 'application/json' } });
   }
   const cities = (u.searchParams.get('cities') || DEFAULT_CITIES.join(',')).split(',').map((c) => slugify(c.trim())).filter(Boolean);
   const perCity = Math.min(Math.max(Number(u.searchParams.get('perCity') || 8), 1), 20);

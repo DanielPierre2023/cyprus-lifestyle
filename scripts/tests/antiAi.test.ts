@@ -60,7 +60,8 @@ eq('ru filler dropped + next word re-capitalised',
   const r = scoreAiTells({ content: 'Музей играет ключевую роль — это настоящая сокровищница.', lang: 'ru' });
   ok('ru scoreAiTells flags AI sentence (not clean)', r.level !== 'clean');
   ok('ru scoreAiTells flags the role calque', hasTell(r, 'ru_role'));
-  ok('ru scoreAiTells flags the em dash', hasTell(r, 'em_dash'));
+  ok('ru: the dash is Russian punctuation, not a tell', !hasTell(r, 'em_dash'));
+  ok('ru: a typed double hyphen still is', hasTell(scoreAiTells({ content: 'Город -- это центр.', lang: 'ru' }), 'double_hyphen'));
 }
 
 // ── Burstiness (language-neutral) ─────────────────────────────────────────────────
@@ -89,6 +90,11 @@ eq('en regression: em dash → comma (stripDashes)',
   humanizeText('Rome — the city.', 'en'),
   'Rome, the city.');
 eq('en regression: stripDashes is unchanged', stripDashes('a — b'), 'a, b');
+eq('ru: stripDashes keeps the dash (тире) and only sets a typed double hyphen', [stripDashes('Лимасол — город', 'ru'), stripDashes('Лимасол -- город', 'ru'), stripDashes('Лимасол&mdash;город', 'ru')], ['Лимасол — город', 'Лимасол — город', 'Лимасол—город']);
+eq('ru: humanizeText leaves the dash alone', humanizeText('Музей — это центр города.', 'ru'), 'Музей — это центр города.');
+eq('ar: the dash becomes the Arabic comma', stripDashes('المرسى — الأكبر', 'ar'), 'المرسى، الأكبر');
+eq('de/pl/el/ro: the dash becomes a comma', ['de', 'pl', 'el', 'ro'].map((l) => stripDashes('A — B', l as Lang)), ['A, B', 'A, B', 'A, B', 'A, B']);
+eq('number ranges lose the en dash everywhere but Russian keeps its text', [stripDashes('2019–2021', 'en'), stripDashes('2019–2021', 'de')], ['2019-2021', '2019-2021']);
 eq('en regression: scrubLexicon is unchanged', scrubLexicon('The city boasts.', 'en'), 'The city has.');
 {
   const clean = scoreAiTells({ content: 'The city has nice weather.', lang: 'en' });

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { formatNumber } from '@/lib/i18n/format';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
@@ -55,7 +56,7 @@ export default async function LuxuryPage({ params }: { params: Promise<{ locale:
                 </Link>
                 <span className="kicker">{typeLabels[x.type] || x.type}{x.district ? ` · ${x.district}` : ''}{x.price_band ? ` · ${x.price_band}` : ''}</span>
                 <h3><Link href={`/directory/${x.type}/${x.slug}`}>{x.name}</Link></h3>
-                {x.rating != null ? <div className="lx-rate"><Stars rating={x.rating} /> <b>{x.rating.toFixed(1)}</b>{x.rating_count ? <span className="muted"> · {x.rating_count.toLocaleString(l)} {t('directory.reviews')}</span> : null}</div> : null}
+                {x.rating != null ? <div className="lx-rate"><Stars rating={x.rating} /> <b>{x.rating.toFixed(1)}</b>{x.rating_count ? <span className="muted"> · {formatNumber(l, x.rating_count)} {t('directory.reviews')}</span> : null}</div> : null}
                 {x.summary ? <p>{x.summary}</p> : null}
               </article>
             ))}

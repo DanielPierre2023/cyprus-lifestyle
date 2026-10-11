@@ -1,5 +1,7 @@
 # The "Concierge is busy" fix — found it
 
+> **Historical note (October 2026).** This file describes the state at the time it was written. Since then the app calls OpenAI only (`OPENAI_API_KEY`, model `gpt-6-luna`) for every text job, including the concierge. What this file says about Claude, Anthropic, `CLAUDE_API_KEY` or `SONNET_MODEL` no longer applies; the current instructions are in `RUNBOOK.md` and `docs/TEXTPRODUKTION-OPENAI.md`.
+
 **Root cause:** the code was asking Anthropic for a model called
 `claude-sonnet-4-6`. That model **does not exist** — Anthropic's current Sonnet is
 `claude-sonnet-5`. So every concierge request was rejected, and the chat showed
@@ -36,10 +38,17 @@ makes it permanent.
 
 ## Confirm it — the new self-test
 
-After the fix + redeploy, open this in your browser (uses your ENRICH_SECRET):
+After the fix + redeploy, sign in to /admin and then open this in the same browser
+(your admin session authorises it — no secret in the URL):
 
 ```
-https://cyprus-lifestyle.vercel.app/api/concierge/selftest?key=enrich-live-3f9c7a2b
+https://cyprus-lifestyle.vercel.app/api/concierge/selftest
+```
+
+From a script, send the secret in a header instead of the URL:
+
+```
+curl -H "x-enrich-key: $ENRICH_SECRET" https://cyprus-lifestyle.vercel.app/api/concierge/selftest
 ```
 
 It calls Claude and OpenAI for real and shows the actual result:

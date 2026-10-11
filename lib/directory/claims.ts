@@ -28,6 +28,10 @@ import 'server-only';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { sendEmail, brandedEmail } from '@/lib/email';
+import { claimVerifyMail } from '@/lib/directory/ownerCopy';
+import { hubUrl } from '@/lib/business/hubCopy';
+import { claimMessages } from '@/lib/i18n/notices';
+import { isLocale, DEFAULT_LOCALE, type Locale } from '@/lib/locales';
 
 export type ClaimMethod = 'onfile_email' | 'domain_email' | 'phone_otp' | 'manual';
 
@@ -36,6 +40,8 @@ export interface StartClaimInput {
   name?: string | null;
   email?: string | null;
   phone?: string | null;
+  /** Edition the claimant is browsing; localises the verification e-mail and its pages. Default en. */
+  locale?: string | null;
 }
 
 export interface StartClaimResult {
@@ -73,11 +79,10 @@ const OTP_MAX_ATTEMPTS = 5;
 // One generic, non-enumerating message for EVERY email/manual outcome — including an
 // unknown slug — so a caller can never tell from the response whether a listing has an
 // on-file email, a matching domain, or nothing at all.
-const GENERIC_MESSAGE =
-  "Thanks — we've started verifying your claim. If ownership can be confirmed, a verification link will be sent to the business's contact address on file (or to your email if it matches the business's own website). Otherwise our team will review your request and follow up with you by email.";
-
-const ALREADY_MESSAGE =
-  'This business already has a verified owner profile. If you need access, please contact our team and we will help.';
+// English originals live in lib/i18n/notices.ts (claimMessages) in all seven editions; the text for
+// 'en' is byte-identical to what this file returned before increment 5.2.
+const genericMessage = (l: string): string => claimMessages(l).generic;
+const alreadyMessage = (l: string): string => claimMessages(l).already;
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -171,20 +176,12 @@ const esc = (s: string): string =>
   String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
 
 // ── delivery (all best-effort; failures never surface to the claimant) ───────
-async function sendVerifyLink(to: string, bizName: string, token: string): Promise<void> {
-  const url = `${siteUrl()}/api/directory/claim/verify?token=${encodeURIComponent(token)}`;
-  const html = brandedEmail({
-    locale: 'en',
-    heading: `Confirm your claim of ${bizName}`,
-    bodyHtml:
-      `<p>Someone asked to claim and verify the Cyprus Lifestyle listing for <strong>${esc(bizName)}</strong>.</p>` +
-      `<p>If this was you (or your business), open the secure confirmation page below and click <strong>Confirm</strong> to take ownership of the listing. The link is valid for 72 hours and can be used once — ownership transfers only when you click Confirm on that page, so it is safe to open.</p>` +
-      `<p>If you did not request this, you can safely ignore this email — nothing will change.</p>`,
-    ctaLabel: 'Review your claim',
-    ctaUrl: url,
-    preheader: `Verify your claim of ${bizName} on Cyprus Lifestyle`,
-  });
-  await sendEmail({ to, subject: `Verify your claim — ${bizName}`, html }).catch(() => {});
+async function sendVerifyLink(to: string, bizName: string, token: string, locale: Locale = DEFAULT_LOCALE): Promise<void> {
+  // `lang` rides on the link so the confirm/result pages open in the same edition as the e-mail.
+  const url = `${siteUrl()}/api/directory/claim/verify?token=${encodeURIComponent(token)}&lang=${locale}`;
+  const m = claimVerifyMail(locale, bizName, hubUrl(siteUrl(), locale));
+  const html = brandedEmail({ locale, heading: m.heading, bodyHtml: m.bodyHtml, ctaLabel: m.ctaLabel, ctaUrl: url, preheader: m.preheader });
+  await sendEmail({ to, subject: m.subject, html }).catch(() => {});
 }
 
 // Minimal Twilio REST send, used only when the phone channel is reached (i.e. a provider
@@ -250,7 +247,8 @@ async function flipListing(sb: ReturnType<typeof supabaseAdmin>, slug: string, c
  * desk. Always returns a non-enumerating result. Never throws.
  */
 export async function startClaim(input: StartClaimInput): Promise<StartClaimResult> {
-  const generic: StartClaimResult = { ok: true, method: 'none', message: GENERIC_MESSAGE };
+  const locale: Locale = input.locale && isLocale(input.locale) ? input.locale : DEFAULT_LOCALE;
+  const generic: StartClaimResult = { ok: true, method: 'none', message: genericMessage(locale) };
   const slug = String(input.slug ?? '').trim().slice(0, 200);
   if (!slug) return generic;
 
@@ -271,7 +269,7 @@ export async function startClaim(input: StartClaimInput): Promise<StartClaimResu
 
     // Already owned → nothing to do. (Verified state is already visible on the page.)
     if (String(listing.provenance || '') === 'owner-verified') {
-      return { ok: true, method: 'already', message: ALREADY_MESSAGE };
+      return { ok: true, method: 'already', message: alreadyMessage(locale) };
     }
 
     const bizName = String(listing.name_en || slug);
@@ -320,7 +318,7 @@ export async function startClaim(input: StartClaimInput): Promise<StartClaimResu
 
     // Deliver + tell the desk a claim has started (all best-effort).
     if (method === 'onfile_email') {
-      await sendVerifyLink(onfileEmail, bizName, rawToken);
+      await sendVerifyLink(onfileEmail, bizName, rawToken, locale);
       await notifyDesk(
         `Claim started — ${bizName}`,
         'A listing claim has started',
@@ -329,11 +327,11 @@ export async function startClaim(input: StartClaimInput): Promise<StartClaimResu
         `<p>Claimant: ${esc(name || '—')}${claimantEmail ? ` &lt;${esc(claimantEmail)}&gt;` : ''}${claimantPhone ? ` · ${esc(claimantPhone)}` : ''}</p>`,
         `Claim started for ${bizName}`,
       );
-      return { ok: true, method, message: GENERIC_MESSAGE };
+      return { ok: true, method, message: genericMessage(locale) };
     }
 
     if (method === 'domain_email') {
-      await sendVerifyLink(claimantEmail, bizName, rawToken);
+      await sendVerifyLink(claimantEmail, bizName, rawToken, locale);
       await notifyDesk(
         `Claim started — ${bizName}`,
         'A listing claim has started',
@@ -342,7 +340,7 @@ export async function startClaim(input: StartClaimInput): Promise<StartClaimResu
         `<p>Claimant: ${esc(name || '—')} &lt;${esc(claimantEmail)}&gt;${claimantPhone ? ` · ${esc(claimantPhone)}` : ''}</p>`,
         `Claim started for ${bizName}`,
       );
-      return { ok: true, method, message: GENERIC_MESSAGE };
+      return { ok: true, method, message: genericMessage(locale) };
     }
 
     if (method === 'phone_otp') {
@@ -360,7 +358,7 @@ export async function startClaim(input: StartClaimInput): Promise<StartClaimResu
         method,
         requiresCode: true,
         claimId,
-        message: 'We’ve sent a 6-digit code by SMS to the phone number on file for this business. Enter it below to finish verifying your claim.',
+        message: claimMessages(locale).otpSent,
       };
     }
 
@@ -373,7 +371,7 @@ export async function startClaim(input: StartClaimInput): Promise<StartClaimResu
       `<p>Claimant: ${esc(name || '—')}${claimantEmail ? ` &lt;${esc(claimantEmail)}&gt;` : ''}${claimantPhone ? ` · ${esc(claimantPhone)}` : ''}</p>`,
       `Manual claim for ${bizName}`,
     );
-    return { ok: true, method, message: GENERIC_MESSAGE };
+    return { ok: true, method, message: genericMessage(locale) };
   } catch {
     // Any unexpected failure still looks like a normal started claim.
     return generic;

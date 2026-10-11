@@ -1,5 +1,7 @@
 # Cyprus Lifestyle — Editorial Engine · Increment 3.1 (Planner resilience)
 
+> **Historical note (October 2026).** This file describes the state at the time it was written. Since then the app calls OpenAI only (`OPENAI_API_KEY`, model `gpt-6-luna`) for every text job, including the concierge. What this file says about Claude, Anthropic, `CLAUDE_API_KEY` or `SONNET_MODEL` no longer applies; the current instructions are in `RUNBOOK.md` and `docs/TEXTPRODUKTION-OPENAI.md`.
+
 Fixes "Planned: 0 ideas" when web search is unavailable, and surfaces the real reason.
 
 Files (replace the versions from Inc 3 / Inc 4):

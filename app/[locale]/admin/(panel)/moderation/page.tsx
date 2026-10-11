@@ -310,6 +310,7 @@ export default function ModerationConsole() {
   const [editsErr, setEditsErr] = useState('');
   const [reviewErr, setReviewErr] = useState('');
   const [flash, setFlash] = useState('');
+  const [bizWaiting, setBizWaiting] = useState<number | null>(null);
 
   const loadEdits = useCallback(async () => {
     setLoadingEdits(true); setEditsErr('');
@@ -330,6 +331,10 @@ export default function ModerationConsole() {
   }, []);
 
   useEffect(() => { loadEdits(); loadReview(); }, [loadEdits, loadReview]);
+  // Proposals waiting in the other queue (Business Hub); best-effort, shown only as a pointer.
+  useEffect(() => {
+    getJSON<{ ok: boolean; waiting?: number }>('/api/admin/business?status=submitted').then((d) => setBizWaiting(d.ok ? (d.waiting ?? 0) : null)).catch(() => setBizWaiting(null));
+  }, []);
 
   function toast(msg: string) { setFlash(msg); setTimeout(() => setFlash(''), 2500); }
 
@@ -358,6 +363,12 @@ export default function ModerationConsole() {
       <h1>Moderation</h1>
       <p className="sub">
         Owner-submitted edits awaiting review, listings the enrichment job held back, and a one-click runner for the stub-enrichment job.
+      </p>
+
+      <p className="sub">
+        This queue holds edits from the older owner editor and the enrichment job. Proposals that businesses send from their <strong>Business Hub</strong>
+        account (descriptions, photo links, news) are a separate queue: <a href="/admin/business">Admin → Business Hub</a>
+        {bizWaiting === null ? '' : ` (${bizWaiting} waiting)`}.
       </p>
 
       <div className="cards">

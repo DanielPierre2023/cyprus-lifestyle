@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadMaplibre, cartoGlStyle, type MlMap, type MlPopup, type GeoFeature } from '@/lib/map/maplibre';
 import { isOwnedImage } from '@/lib/images';
+import { formatNumber } from '@/lib/i18n/format';
 
 export interface MapPoint {
   lat: number;
@@ -222,7 +223,7 @@ export default function DirectoryMap({
         .dm-legend button.is-off{opacity:.4}
       `}</style>
       <div ref={ref} style={{ height, width: '100%', borderRadius: 6, overflow: 'hidden', border: '1px solid #e3d9c4', boxShadow: '0 4px 20px rgba(0,0,0,.06)' }} aria-label={ariaLabel} />
-      <div className="dm-badge">{visibleCount.toLocaleString()} {placesLabel}</div>
+      <div className="dm-badge">{formatNumber(locale, visibleCount)} {placesLabel}</div>
       {legend.length ? (
         <div className="dm-legend">
           {legend.map((t) => (

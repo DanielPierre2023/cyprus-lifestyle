@@ -47,10 +47,9 @@ messages/de.json  messages/pl.json  messages/ru.json
 ```
 
 ### 2) Edge function → Supabase dashboard
-Open **Edge Functions → concierge → Code**, paste the full contents of
-`supabase/functions/concierge/index.ts`, keep **Verify JWT = OFF**, and **Deploy**.
-No new secrets — it reuses `CLAUDE_API_KEY`, `SONNET_MODEL`,
-`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+**Retired.** The `concierge` edge function is no longer used: the concierge answers on the website
+(`lib/concierge/brain.ts`, OpenAI). Skip this step; if the function still exists in your Supabase
+project you can delete it (Edge Functions → concierge).
 
 ---
 

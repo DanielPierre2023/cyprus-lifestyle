@@ -1,0 +1,417 @@
+{
+ "events": [
+  {
+   "id": 787383,
+   "global_id": "www.visitcyprus.com?id=787383",
+   "author": "4191",
+   "status": "publish",
+   "date": "2026-06-03 08:48:17",
+   "date_utc": "2026-06-03 05:48:17",
+   "modified": "2026-06-03 08:48:17",
+   "modified_utc": "2026-06-03 05:48:17",
+   "url": "https://www.visitcyprus.com/event/teu14-tennis-europe-u14-5-11-10-2026/",
+   "rest_url": "https://www.visitcyprus.com/wp-json/tribe/events/v1/events/787383",
+   "title": "TEU14 (Tennis Europe U14) &#8211; 5-11.10.2026",
+   "description": "<p>European tennis tournament for athletes under 14 years old. It is expected to have approximately 100 athletes, coaches and parents.</p>\n<p>It is a large-scale event that will offer significant exposure and visibility for Cyprus.</p>",
+   "excerpt": "",
+   "slug": "teu14-tennis-europe-u14-5-11-10-2026",
+   "image": {
+    "url": "https://www.visitcyprus.com/wp-content/uploads/2026/06/famagusta.jpg"
+   },
+   "all_day": true,
+   "start_date": "2026-10-05 00:00:00",
+   "start_date_details": {
+    "year": "2026",
+    "month": "10",
+    "day": "05",
+    "hour": "00",
+    "minutes": "00",
+    "seconds": "00"
+   },
+   "end_date": "2026-10-11 23:59:59",
+   "end_date_details": {
+    "year": "2026",
+    "month": "10",
+    "day": "11",
+    "hour": "23",
+    "minutes": "59",
+    "seconds": "59"
+   },
+   "utc_start_date": "2026-10-04 21:00:00",
+   "utc_start_date_details": {
+    "year": "2026",
+    "month": "10",
+    "day": "04",
+    "hour": "21",
+    "minutes": "00",
+    "seconds": "00"
+   },
+   "utc_end_date": "2026-10-11 20:59:59",
+   "utc_end_date_details": {
+    "year": "2026",
+    "month": "10",
+    "day": "11",
+    "hour": "20",
+    "minutes": "59",
+    "seconds": "59"
+   },
+   "timezone": "Asia/Nicosia",
+   "timezone_abbr": "EEST",
+   "cost": "Free",
+   "cost_details": {
+    "currency_symbol": "€",
+    "currency_code": "EUR",
+    "currency_position": "prefix",
+    "values": [
+     "free"
+    ]
+   },
+   "website": "www.famagustatc.com",
+   "show_map": false,
+   "show_map_link": true,
+   "hide_from_listings": false,
+   "sticky": false,
+   "featured": false,
+   "categories": [
+    {
+     "name": "Sports",
+     "slug": "sports",
+     "term_group": 0,
+     "term_taxonomy_id": 6704,
+     "taxonomy": "tribe_events_cat",
+     "description": "",
+     "parent": 0,
+     "count": 58,
+     "filter": "raw",
+     "id": 6704,
+     "urls": {
+      "self": "https://www.visitcyprus.com/wp-json/tribe/events/v1/categories/6704",
+      "collection": "https://www.visitcyprus.com/wp-json/tribe/events/v1/categories"
+     }
+    },
+    {
+     "name": "Tennis",
+     "slug": "tennis",
+     "term_group": 0,
+     "term_taxonomy_id": 7337,
+     "taxonomy": "tribe_events_cat",
+     "description": "",
+     "parent": 6704,
+     "count": 3,
+     "filter": "raw",
+     "id": 7337,
+     "urls": {
+      "self": "https://www.visitcyprus.com/wp-json/tribe/events/v1/categories/7337",
+      "collection": "https://www.visitcyprus.com/wp-json/tribe/events/v1/categories",
+      "up": "https://www.visitcyprus.com/wp-json/tribe/events/v1/categories/6704"
+     }
+    }
+   ],
+   "tags": [],
+   "venue": {
+    "id": 787363,
+    "author": "4191",
+    "status": "publish",
+    "date": "2026-06-03 08:24:42",
+    "date_utc": "0000-00-00 00:00:00",
+    "modified": "2026-06-03 08:24:42",
+    "modified_utc": "0000-00-00 00:00:00",
+    "url": "https://www.visitcyprus.com/venue/famagusta-tennis-club/",
+    "venue": "Famagusta Tennis Club",
+    "slug": "famagusta-tennis-club",
+    "address": "3 Mesaorias Str",
+    "city": "Limassol",
+    "zip": "3071",
+    "show_map": true,
+    "show_map_link": true,
+    "global_id": "www.visitcyprus.com?id=787363",
+    "global_id_lineage": [
+     "www.visitcyprus.com?id=787363"
+    ]
+   },
+   "organizer": [
+    {
+     "id": 787364,
+     "author": "4191",
+     "status": "publish",
+     "date": "2026-06-03 08:24:43",
+     "date_utc": "0000-00-00 00:00:00",
+     "modified": "2026-06-03 08:24:43",
+     "modified_utc": "0000-00-00 00:00:00",
+     "url": "https://www.visitcyprus.com/organizer/famagusta-tennis-club/",
+     "organizer": "Famagusta Tennis Club",
+     "slug": "famagusta-tennis-club",
+     "global_id": "www.visitcyprus.com?id=787364",
+     "global_id_lineage": [
+      "www.visitcyprus.com?id=787364"
+     ]
+    }
+   ],
+   "custom_fields": []
+  },
+  {
+   "id": 787838,
+   "global_id": "www.visitcyprus.com?id=787838",
+   "author": "4191",
+   "status": "publish",
+   "date": "2026-06-22 14:39:28",
+   "date_utc": "2026-06-22 11:39:28",
+   "modified": "2026-06-22 14:39:28",
+   "modified_utc": "2026-06-22 11:39:28",
+   "url": "https://www.visitcyprus.com/event/aida-garifullina-cyprus-symphony-orchestra-9-10-10-2026/",
+   "rest_url": "https://www.visitcyprus.com/wp-json/tribe/events/v1/events/787838",
+   "title": "Aida Garifullina | Cyprus Symphony Orchestra &#8211; 9-10.10.2026",
+   "description": "<p>World-renowned soprano Aida Garifullina comes to Cyprus for two extraordinary evenings of classical music, together with the Cyprus Symphony Orchestra.</p>\n<p>Aida Garifullina is considered one of the most celebrated voices of today’s opera world. She is a soloist of the Vienna State Opera and has performed on the world’s most prestigious stages, including the Metropolitan Opera in New York, La Scala in Milan, the Royal Opera House in London, Paris Opera, Arena di Verona, and the Salzburg Festival.</p>\n<p>Her international career rose to prominence after winning the Operalia competition founded by Plácido Domingo, and she has collaborated with leading artists and musicians worldwide.</p>\n<p>In 2018, Aida Garifullina performed at the opening ceremony of the FIFA World Cup in Moscow alongside Robbie Williams, in one of the most widely viewed musical events worldwide.</p>\n<p>The concert will take place at the iconic Ancient Kourion Amphitheatre, under the Cypriot night sky, featuring masterpieces of opera and classical music.</p>\n<p>A rare cultural experience with one of the greatest sopranos of our time, accompanied by the Cyprus Symphony Orchestra.</p>",
+   "excerpt": "",
+   "slug": "aida-garifullina-cyprus-symphony-orchestra-9-10-10-2026",
+   "image": {
+    "url": "https://www.visitcyprus.com/wp-content/uploads/2026/06/soprano.jpg"
+   },
+   "all_day": false,
+   "start_date": "2026-10-09 20:00:00",
+   "start_date_details": {
+    "year": "2026",
+    "month": "10",
+    "day": "09",
+    "hour": "20",
+    "minutes": "00",
+    "seconds": "00"
+   },
+   "end_date": "2026-10-10 22:30:00",
+   "end_date_details": {
+    "year": "2026",
+    "month": "10",
+    "day": "10",
+    "hour": "22",
+    "minutes": "30",
+    "seconds": "00"
+   },
+   "utc_start_date": "2026-10-09 17:00:00",
+   "utc_start_date_details": {
+    "year": "2026",
+    "month": "10",
+    "day": "09",
+    "hour": "17",
+    "minutes": "00",
+    "seconds": "00"
+   },
+   "utc_end_date": "2026-10-10 19:30:00",
+   "utc_end_date_details": {
+    "year": "2026",
+    "month": "10",
+    "day": "10",
+    "hour": "19",
+    "minutes": "30",
+    "seconds": "00"
+   },
+   "timezone": "Asia/Nicosia",
+   "timezone_abbr": "EEST",
+   "cost": "€80",
+   "cost_details": {
+    "currency_symbol": "€",
+    "currency_code": "EUR",
+    "currency_position": "prefix",
+    "values": [
+     "80"
+    ]
+   },
+   "website": "https://www.soldoutticketbox.com/event/aida-garifullina-2026?lang=en",
+   "show_map": false,
+   "show_map_link": true,
+   "hide_from_listings": false,
+   "sticky": false,
+   "featured": false,
+   "categories": [
+    {
+     "name": "Cultural",
+     "slug": "cultural",
+     "term_group": 0,
+     "term_taxonomy_id": 6699,
+     "taxonomy": "tribe_events_cat",
+     "description": "",
+     "parent": 0,
+     "count": 79,
+     "filter": "raw",
+     "id": 6699,
+     "urls": {
+      "self": "https://www.visitcyprus.com/wp-json/tribe/events/v1/categories/6699",
+      "collection": "https://www.visitcyprus.com/wp-json/tribe/events/v1/categories"
+     }
+    },
+    {
+     "name": "Music",
+     "slug": "music",
+     "term_group": 0,
+     "term_taxonomy_id": 6719,
+     "taxonomy": "tribe_events_cat",
+     "description": "",
+     "parent": 6699,
+     "count": 226,
+     "filter": "raw",
+     "id": 6719,
+     "urls": {
+      "self": "https://www.visitcyprus.com/wp-json/tribe/events/v1/categories/6719",
+      "collection": "https://www.visitcyprus.com/wp-json/tribe/events/v1/categories",
+      "up": "https://www.visitcyprus.com/wp-json/tribe/events/v1/categories/6699"
+     }
+    }
+   ],
+   "tags": [],
+   "venue": {
+    "id": 555421,
+    "author": "4191",
+    "status": "publish",
+    "date": "2024-09-18 11:49:23",
+    "date_utc": "2024-09-18 11:49:23",
+    "modified": "2024-09-18 11:49:23",
+    "modified_utc": "2024-09-18 11:49:23",
+    "url": "https://www.visitcyprus.com/venue/curium-ancient-theatre/",
+    "venue": "Curium Ancient Theatre",
+    "slug": "curium-ancient-theatre",
+    "show_map": false,
+    "show_map_link": false,
+    "global_id": "www.visitcyprus.com?id=555421",
+    "global_id_lineage": [
+     "www.visitcyprus.com?id=555421"
+    ]
+   },
+   "organizer": [
+    {
+     "id": 787831,
+     "author": "4191",
+     "status": "publish",
+     "date": "2026-06-22 14:32:42",
+     "date_utc": "2026-06-22 11:32:42",
+     "modified": "2026-06-22 14:32:42",
+     "modified_utc": "2026-06-22 11:32:42",
+     "url": "https://www.visitcyprus.com/organizer/celebrity-gala-ekaterina-dementeva-ksenia-grishina-maria-soynikova/",
+     "organizer": "Celebrity Gala / Ekaterina Dementeva / Ksenia Grishina/Maria Soynikova",
+     "slug": "celebrity-gala-ekaterina-dementeva-ksenia-grishina-maria-soynikova",
+     "global_id": "www.visitcyprus.com?id=787831",
+     "global_id_lineage": [
+      "www.visitcyprus.com?id=787831"
+     ]
+    }
+   ],
+   "custom_fields": []
+  },
+  {
+   "id": 791777,
+   "global_id": "www.visitcyprus.com?id=791777",
+   "author": "4191",
+   "status": "publish",
+   "date": "2026-09-14 11:47:36",
+   "date_utc": "2026-09-14 08:47:36",
+   "modified": "2026-09-14 11:47:36",
+   "modified_utc": "2026-09-14 08:47:36",
+   "url": "https://www.visitcyprus.com/event/22nd-kyperounta-apple-festival-10-11-10-2026/",
+   "rest_url": "https://www.visitcyprus.com/wp-json/tribe/events/v1/events/791777",
+   "title": "22nd Kyperounta Apple Festival &#8211; 10-11.10.2026",
+   "description": "<p>The Apple Festival was established in 2002 as a simple social and dance gathering, with the aim of bringing together and entertaining the local community. Over the years, the event gradually evolved and gained increasing recognition and popularity.</p>\n<p>In 2012, the event was relocated to the central square of Kyperounta and transformed into a one-day festival, opening its doors to a wider audience and attracting visitors from across Cyprus. Its great success and the growing participation of the public led, in 2014, to its establishment as a two-day festival.</p>\n<p>Since then, the Apple Festival has evolved into a well-established annual institution, attracting a large number of visitors each year and serving as a point of reference for Kyperounta and the wider mountainous region. From a small local event, it has developed into one of the largest and most beloved festivals in Cyprus, while maintaining its authentic character and strong connection to the local community, traditions and agricultural production.</p>\n<p>The Apple Festival is one of Kyperounta’s most significant annual cultural and gastronomic events, with the apple, local production and the rich traditions of the area at its heart. Through a diverse and multifaceted programme, the Festival highlights the unique identity of Kyperounta while showcasing the natural, cultural, agricultural and gastronomic wealth of the wider region.</p>\n<p>A central element of the Festival is its thematic exhibition and market stalls, which are directly associated with apples and apple-based products, as well as with local products from Kyperounta and the surrounding communities. Visitors have the opportunity to discover and taste a wide range of products made from apples, alongside a variety of traditional and contemporary local products, creating a comprehensive culinary experience and an opportunity to discover the area’s local production.</p>\n<p>Particular emphasis is placed on the participation and promotion of local producers, artisans and businesses. The Festival provides an important platform for established businesses in Kyperounta to showcase their products and services, while also creating opportunities for emerging businesses, new entrepreneurial initiatives and innovative products to gain visibility. Through their participation in the Festival, small local businesses and emerging producers have the opportunity to present their work to a broad audience, engage directly with consumers and visitors, and explore new opportunities for growth and development.</p>\n<p>The Festival goes beyond the presentation and sale of products, seeking to offer visitors an immersive experience of the traditions and cultural heritage of the area. To this end, a variety of workshops are organised, allowing members of the public to participate actively. The workshops are primarily traditional in character and give both children and adults the opportunity to discover traditional techniques, recipes, crafts and methods of production, transforming a visit to the Festival from a passive experience into an engaging and interactive one.</p>\n<p>An important part of the Festival is also its artistic and music-and-dance programme. Traditional Cypriot dances and music are presented throughout the Festival, highlighting the island’s cultural heritage and creating an authentic Cypriot atmosphere. The participation of traditional dance groups, musicians and other artists enriches the programme and provides entertainment for visitors of all ages.<br />\nParticular importance is also placed on the active involvement of the local community. The Festival is the result of a collective effort involving residents, volunteers, producers, businesses, cultural organisations and professionals from the area. In this way, the Festival strengthens the sense of community and cooperation, while fostering an institution that is deeply rooted in Kyperounta and its people.</p>\n<p>The Apple Festival also serves as an important platform for promoting Kyperounta as a tourist destination. The event provides visitors from across Cyprus with the opportunity to discover the village, explore the surrounding area, experience local production and engage with the traditional way of life and cultural heritage of the mountainous regions of Cyprus. The significant number of visitors attracted by the Festival contributes to strengthening the local economy and increasing activity for businesses in accommodation, food and beverage, retail and other tourism-related sectors in the area.</p>\n<p>Through the combination of gastronomy, agricultural production, tradition, culture, entertainment and active public participation, the Apple Festival has developed a distinctive identity of its own. The aim of the organisers is for the Festival to continue to grow and evolve each year, while preserving its authentic and traditional character, so that it remains both a complete and memorable visitor experience and an important means of supporting and promoting the local community and its production.</p>\n<p>Finally, the Festival seeks to bridge tradition with contemporary entrepreneurship by providing space for new ideas, emerging producers and new businesses to showcase their work. In this way, the Festival is not merely a celebration of the apple, but an institution that actively contributes to the preservation of cultural heritage, the promotion of local products, the strengthening of the local economy and the tourism promotion of Kyperounta and the wider mountainous region of Cyprus.</p>",
+   "excerpt": "",
+   "slug": "22nd-kyperounta-apple-festival-10-11-10-2026",
+   "image": {
+    "url": "https://www.visitcyprus.com/wp-content/uploads/2026/09/apple-festival.jpg"
+   },
+   "all_day": false,
+   "start_date": "2026-10-10 10:00:00",
+   "start_date_details": {
+    "year": "2026",
+    "month": "10",
+    "day": "10",
+    "hour": "10",
+    "minutes": "00",
+    "seconds": "00"
+   },
+   "end_date": "2026-10-11 20:00:00",
+   "end_date_details": {
+    "year": "2026",
+    "month": "10",
+    "day": "11",
+    "hour": "20",
+    "minutes": "00",
+    "seconds": "00"
+   },
+   "utc_start_date": "2026-10-10 07:00:00",
+   "utc_start_date_details": {
+    "year": "2026",
+    "month": "10",
+    "day": "10",
+    "hour": "07",
+    "minutes": "00",
+    "seconds": "00"
+   },
+   "utc_end_date": "2026-10-11 17:00:00",
+   "utc_end_date_details": {
+    "year": "2026",
+    "month": "10",
+    "day": "11",
+    "hour": "17",
+    "minutes": "00",
+    "seconds": "00"
+   },
+   "timezone": "Asia/Nicosia",
+   "timezone_abbr": "EEST",
+   "cost": "free",
+   "cost_details": {
+    "currency_symbol": "€",
+    "currency_code": "EUR",
+    "currency_position": "prefix",
+    "values": [
+     "free"
+    ]
+   },
+   "website": "https://www.facebook.com/festmilou",
+   "show_map": false,
+   "show_map_link": true,
+   "hide_from_listings": false,
+   "sticky": false,
+   "featured": false,
+   "categories": [],
+   "tags": [],
+   "venue": {
+    "id": 791784,
+    "author": "4191",
+    "status": "publish",
+    "date": "2026-09-14 11:47:36",
+    "date_utc": "2026-09-14 08:47:36",
+    "modified": "2026-09-14 11:47:36",
+    "modified_utc": "2026-09-14 08:47:36",
+    "url": "https://www.visitcyprus.com/venue/kyperountas-square/",
+    "venue": "Kyperounta’s Square",
+    "slug": "kyperountas-square",
+    "address": "1st April 18",
+    "city": "Kyperounta",
+    "country": "Cyprus",
+    "zip": "4876",
+    "show_map": true,
+    "show_map_link": true,
+    "global_id": "www.visitcyprus.com?id=791784",
+    "global_id_lineage": [
+     "www.visitcyprus.com?id=791784"
+    ]
+   },
+   "organizer": [
+    {
+     "id": 791785,
+     "author": "4191",
+     "status": "publish",
+     "date": "2026-09-14 11:47:36",
+     "date_utc": "2026-09-14 08:47:36",
+     "modified": "2026-09-14 11:47:36",
+     "modified_utc": "2026-09-14 08:47:36",
+     "url": "https://www.visitcyprus.com/organizer/michalis-hatzimichael-kyperounta-community-council/",
+     "organizer": "Michalis Hatzimichael (Kyperounta Community Council)",
+     "slug": "michalis-hatzimichael-kyperounta-community-council",
+     "global_id": "www.visitcyprus.com?id=791785",
+     "global_id_lineage": [
+      "www.visitcyprus.com?id=791785"
+     ]
+    }
+   ],
+   "custom_fields": []
+  }
+ ],
+ "total": 3,
+ "total_pages": 1
+}

@@ -1,4 +1,5 @@
 // lib/images.ts
+import { imageMode } from '@/lib/imageVariants';
 // Single source of truth for the "owned vs hot-linked image" policy ("Own the Data").
 // Pure module (no 'use client' / 'server-only') so it can be imported from client
 // components (CoverImage, DirectoryMap), server components, and server modules (lib/seo).
@@ -25,4 +26,13 @@ export function isOwnedImage(src: string | null | undefined): boolean {
   }
   try { return ownedHosts.has(new URL(s).host); }
   catch { return false; }                          // not a vettable absolute URL → don't embed
+}
+
+/**
+ * Can this image go through CoverImage (next/image + custom loader) without changing what is shown? True for our own
+ * images and for the hosts the loader can resize (Unsplash, picsum). A hot-linked third-party URL is NOT embeddable
+ * under the owned-image policy above, so callers keep their plain <img> for those rather than hide the picture.
+ */
+export function isOptimisableImage(src: string | null | undefined): boolean {
+  return isOwnedImage(src) || (!!src && imageMode(src) !== 'plain');
 }

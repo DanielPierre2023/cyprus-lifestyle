@@ -1,16 +1,19 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { formatDateWith } from '@/lib/i18n/format';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { getArticle, getByCategory, getLatest, getEventsByDistrict, getUpcomingEvents, getReviewSubject, type Card, type EventItem } from '@/lib/queries';
+import { getArticle, getByCategory, getLatest, getEventsByDistrict, getUpcomingEvents, getReviewSubject, type Card, type EventItem } from '@/lib/queries.cached';
 import { pageMetadata, clampSeoTitle } from '@/lib/seo';
 import { JsonLd, article, breadcrumb, faqPage, review } from '@/lib/seo/jsonld';
 import ArticleCard from '@/components/ArticleCard';
 import CommentSection from '@/components/CommentSection';
 import CoverImage from '@/components/CoverImage';
 import NewsletterSignup from '@/components/NewsletterSignup';
+import { sanitizeArticleHtml } from '@/lib/sanitizeHtml';
 import AskConcierge from '@/components/AskConcierge';
+import { splitForConcierge } from '@/lib/articleSplit';
 
 // Culture / events articles get an "In our Agenda" block linking to the real events.
 const CULTURE_CATS = ['culture', 'arts', 'events', 'event', 'music', 'festival', 'entertainment', 'nightlife', 'agenda'];
@@ -29,9 +32,10 @@ const ASK: Record<string, { heading: string; label: string; q: (t: string) => st
   ru: { heading: 'Спросите консьержа Cyprus Lifestyle', label: 'Спросить об этом', q: (t) => `Я читаю «${t}». Помогите, пожалуйста, и подскажите, что делать дальше.` },
 };
 const AGENDA_LABEL: Record<string, string> = { en: 'In our Agenda', el: 'Στην Ατζέντα μας', ro: 'În Agenda noastră', ar: 'في أجندتنا', de: 'In unserem Kalender', pl: 'W naszej Agendzie', ru: 'В нашей Афише' };
-const eventWhen = (iso: string, l: string) => { try { return new Date(iso).toLocaleDateString(l === 'ar' ? 'ar' : l, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
+const eventWhen = (iso: string, l: string) => formatDateWith(l, iso, { day: 'numeric', month: 'short', year: 'numeric' });
 
-export const revalidate = 300;
+// ISR 1 h: DB webhooks call /api/revalidate/tags on every edit (PERFORMANCE-SETUP.md 2b); this is only the safety net. Keep equal to TTL in lib/queries.cached.ts.
+export const revalidate = 3600;
 
 // Article HTML is stored with root-relative links (/directory/g/…, /ask). next-intl
 // serves non-English editions under a locale prefix, so rewrite internal links to the
@@ -69,6 +73,8 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     locale: locale as Locale, path: `/article/${slug}`,
     title: a.seo_title, description: a.seo_description, type: 'article',
     ogTitle: a.title, kicker, cover: a.cover_image,
+    imageAlt: a.title,
+    article: { publishedTime: a.published_at, modifiedTime: a.updated_at, section: kicker, tags: a.tags, authors: a.author_name ? [a.author_name] : undefined },
   });
   // Force an ABSOLUTE document <title> within Google's ~60-char budget. The root
   // layout (app/[locale]/layout.tsx, not owned here) sets a global
@@ -88,7 +94,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
   if (!a) notFound();
 
   const date = a.published_at
-    ? new Date(a.published_at).toLocaleDateString(l === 'ar' ? 'ar' : l, { year: 'numeric', month: 'long', day: 'numeric' })
+    ? formatDateWith(l, a.published_at, { year: 'numeric', month: 'long', day: 'numeric' })
     : '';
   const catLabel = a.category ? (t.has(`nav.${a.category}`) ? t(`nav.${a.category}`) : a.category) : '';
   const metaTail = [date, a.reading_time_min ? `${a.reading_time_min} ${t('common.minRead')}` : ''].filter(Boolean);
@@ -177,7 +183,20 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
 
         <div className="article wrap">
           <div className="rule-orn lead-orn"><span className="diamond" /></div>
-          <div className="prose" dangerouslySetInnerHTML={{ __html: localizeHtml(a.content, l) }} />
+          {(() => {
+            // The concierge appears inside the text as well as at the end, on every article (scraped, written, interview, review).
+            const html = sanitizeArticleHtml(localizeHtml(a.content, l));
+            const parts = splitForConcierge(html);
+            return parts ? (
+              <>
+                <div className="prose" dangerouslySetInnerHTML={{ __html: parts.head }} />
+                <AskConcierge inline question={ask.q(a.title)} heading={ask.heading} label={ask.label} />
+                <div className="prose" dangerouslySetInnerHTML={{ __html: parts.tail }} />
+              </>
+            ) : (
+              <div className="prose" dangerouslySetInnerHTML={{ __html: html }} />
+            );
+          })()}
 
           {a.tags?.length ? (
             <div className="tags">
@@ -187,11 +206,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ locale
             </div>
           ) : null}
 
-          {a.source_url ? (
-            <p className="source">
-              {t('common.source')}: <a href={a.source_url} target="_blank" rel="noopener nofollow">{a.source_url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}</a>
-            </p>
-          ) : null}
+          {/* No source line: every article is our own production. The source URL stays in the database for the originality check only. */}
 
           <AskConcierge question={ask.q(a.title)} heading={ask.heading} label={ask.label} />
         </div>

@@ -28,6 +28,22 @@ const COPY: Record<string, Copy> = {
     dek: 'تعذّر العثور على الصفحة المطلوبة. ربما نُقلت أو لم تُنشر في هذه الطبعة قط.',
     home: 'العودة إلى الصفحة الأولى',
   },
+  // de / pl / ru: machine-written (increment 5.1), needs native review.
+  de: {
+    title: 'Seite nicht gefunden',
+    dek: 'Die gesuchte Seite wurde nicht gefunden. Vielleicht wurde sie verschoben — oder sie hat es nie in die Ausgabe geschafft.',
+    home: 'Zurück zur Titelseite',
+  },
+  pl: {
+    title: 'Nie znaleziono strony',
+    dek: 'Nie można znaleźć strony, której szukasz. Być może została przeniesiona — a może nigdy nie trafiła do wydania.',
+    home: 'Wróć na stronę główną',
+  },
+  ru: {
+    title: 'Страница не найдена',
+    dek: 'Запрошенная страница не найдена. Возможно, её перенесли — или она так и не попала в выпуск.',
+    home: 'Вернуться на главную',
+  },
 };
 
 export default function NotFound() {

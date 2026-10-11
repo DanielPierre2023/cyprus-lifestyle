@@ -10,8 +10,10 @@
 //    cut-over; it is kept intact so those in-flight claims don't break.
 import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useLocale } from 'next-intl';
 import HoneypotField from '@/components/HoneypotField';
 import { HONEYPOT_FIELD } from '@/lib/honeypot';
+import { hubPath } from '@/lib/business/hubCopy';
 
 const SUMMARY_FIELDS = [
   ['summary_en', 'Description (English)'],
@@ -26,6 +28,9 @@ function slugFromInput(s: string): string {
 
 function Portal() {
   const params = useSearchParams();
+  const hubHref = hubPath(useLocale());
+  // Pointer to the Business Hub (sign-in for verified owners). This page is English-only.
+  const hubNote = <p className="sub" style={{ marginTop: 22 }}>Already a verified owner? <a href={hubHref}>Sign in to the Business Hub</a>: your enquiries, your figures and your proposals to our editorial desk.</p>;
   const token = params.get('token') || '';
   const [mode, setMode] = useState<'claim' | 'verifying' | 'edit' | 'invalid' | 'otp' | 'done'>(token ? 'verifying' : 'claim');
   const [slug, setSlug] = useState(() => params.get('listing') || ''); // prefilled from the map's "Is this your business?" link
@@ -111,6 +116,7 @@ function Portal() {
     <div style={wrap}>
       <h1>Claim your listing</h1>
       <p className="sub">{msg}</p>
+      {hubNote}
     </div>
   );
 
@@ -143,6 +149,7 @@ function Portal() {
         <button style={button} disabled={busy}>{busy ? 'Submitting…' : 'Submit changes for review'}</button>
         {msg ? <p className="sub" style={{ marginTop: 14, color: '#1f7a3f' }}>{msg}</p> : null}
       </form>
+      {hubNote}
     </div>
   );
 
@@ -159,6 +166,7 @@ function Portal() {
         <button style={button} disabled={busy}>{busy ? 'Starting…' : 'Claim this listing'}</button>
         {msg ? <p className="sub" style={{ marginTop: 14 }}>{msg}</p> : null}
       </form>
+      {hubNote}
     </div>
   );
 }

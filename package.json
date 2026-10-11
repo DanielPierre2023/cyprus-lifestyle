@@ -7,12 +7,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/tests/run.mjs",
     "eval:antiai": "tsx scripts/eval-antiai.ts",
     "perf:budgets": "node scripts/perf/check-budgets.mjs",
-    "perf:loadtest": "node scripts/perf/loadtest.mjs"
+    "perf:loadtest": "node scripts/perf/loadtest.mjs",
+    "check:secrets": "node scripts/check-secrets.mjs",
+    "check:migrations": "node scripts/check-migrations.mjs",
+    "check:i18n": "node scripts/check-i18n-parity.mjs",
+    "check:i18n-dicts": "node scripts/check-i18n-dicts.mjs",
+    "report:i18n": "node scripts/i18n-report.mjs",
+    "ci": "npm run check:secrets && npm run check:migrations && npm run check:i18n && npm run check:i18n-dicts && npm run typecheck && npm run lint && npm test",
+    "db:drill": "bash scripts/db/restore-drill.sh",
+    "smoke": "node scripts/smoke/site-smoke.mjs"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.74.0",
@@ -22,17 +30,22 @@
     "@upstash/redis": "^1.38.4",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
-    "leaflet": "^1.9.4",
     "next": "15.5.25",
     "next-intl": "^4.14.4",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "sanitize-html": "^2.18.0",
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
-    "@types/leaflet": "^1.9.22",
+    "@eslint/eslintrc": "^3.3.7",
     "@types/node": "^22.9.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/sanitize-html": "^2.16.2",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.25",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   },

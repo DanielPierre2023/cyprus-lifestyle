@@ -1,0 +1,15 @@
+// lib/member/loginEmail.ts — the "sign in to your account" e-mail, in all seven editions (RTL-aware via brandedEmail).
+import type { Locale } from '@/lib/locales';
+
+export interface LoginEmailCopy { subject: string; heading: string; body: string; cta: string; footnote: string }
+
+const COPY: Record<Locale, LoginEmailCopy> = {
+  en: { subject: 'Your Cyprus Lifestyle sign-in link', heading: 'Sign in to your account', body: 'Use the button below to open your Cyprus Lifestyle account: your membership, invoices and billing. The link works once and expires in 30 minutes.', cta: 'Sign in', footnote: 'If you did not ask for this e-mail, you can ignore it; nobody can sign in without this link.' },
+  de: { subject: 'Ihr Anmeldelink für Cyprus Lifestyle', heading: 'In Ihr Konto anmelden', body: 'Mit der Schaltfläche unten öffnen Sie Ihr Cyprus-Lifestyle-Konto: Mitgliedschaft, Rechnungen und Zahlungsdaten. Der Link funktioniert einmal und läuft nach 30 Minuten ab.', cta: 'Anmelden', footnote: 'Wenn Sie diese E-Mail nicht angefordert haben, ignorieren Sie sie einfach; ohne diesen Link kann sich niemand anmelden.' },
+  el: { subject: 'Ο σύνδεσμος σύνδεσής σας στο Cyprus Lifestyle', heading: 'Συνδεθείτε στον λογαριασμό σας', body: 'Με το κουμπί παρακάτω ανοίγετε τον λογαριασμό σας στο Cyprus Lifestyle: συνδρομή, τιμολόγια και χρεώσεις. Ο σύνδεσμος λειτουργεί μία φορά και λήγει σε 30 λεπτά.', cta: 'Σύνδεση', footnote: 'Αν δεν ζητήσατε αυτό το email, αγνοήστε το· κανείς δεν μπορεί να συνδεθεί χωρίς αυτόν τον σύνδεσμο.' },
+  pl: { subject: 'Twój link do logowania w Cyprus Lifestyle', heading: 'Zaloguj się na swoje konto', body: 'Przyciskiem poniżej otworzysz swoje konto Cyprus Lifestyle: członkostwo, faktury i płatności. Link działa jednorazowo i wygasa po 30 minutach.', cta: 'Zaloguj się', footnote: 'Jeśli nie prosiłeś o tę wiadomość, po prostu ją zignoruj; bez tego linku nikt się nie zaloguje.' },
+  ro: { subject: 'Linkul dumneavoastră de autentificare Cyprus Lifestyle', heading: 'Autentificați-vă în cont', body: 'Cu butonul de mai jos deschideți contul Cyprus Lifestyle: abonamentul, facturile și plățile. Linkul funcționează o singură dată și expiră în 30 de minute.', cta: 'Autentificare', footnote: 'Dacă nu ați cerut acest email, ignorați-l; nimeni nu se poate autentifica fără acest link.' },
+  ru: { subject: 'Ваша ссылка для входа в Cyprus Lifestyle', heading: 'Вход в личный кабинет', body: 'Кнопка ниже откроет ваш кабинет Cyprus Lifestyle: членство, счета и оплату. Ссылка действует один раз и истекает через 30 минут.', cta: 'Войти', footnote: 'Если вы не запрашивали это письмо, просто проигнорируйте его: без этой ссылки войти нельзя.' },
+  ar: { subject: 'رابط تسجيل الدخول إلى Cyprus Lifestyle', heading: 'سجّل الدخول إلى حسابك', body: 'استخدم الزر أدناه لفتح حسابك في Cyprus Lifestyle: العضوية والفواتير والمدفوعات. الرابط يعمل مرة واحدة وتنتهي صلاحيته خلال 30 دقيقة.', cta: 'تسجيل الدخول', footnote: 'إذا لم تطلب هذه الرسالة فتجاهلها؛ لا يمكن لأحد تسجيل الدخول بدون هذا الرابط.' },
+};
+export const loginEmailCopy = (l: Locale): LoginEmailCopy => COPY[l] || COPY.en;

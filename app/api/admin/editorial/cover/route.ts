@@ -14,6 +14,7 @@ import { isAdmin } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { getEditorialSettings } from '@/lib/editorial/settings';
 import { attachCover, coverInputFromPiece, type ImageSource } from '@/lib/editorial/cover';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // AI generation needs the headroom.
@@ -22,6 +23,7 @@ const MODES: ImageSource[] = ['off', 'stock', 'ai', 'stock-then-ai'];
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'editorial.cover');
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   const id = typeof body.id === 'string' ? body.id : '';
   if (!id) return NextResponse.json({ ok: false, error: 'Provide { id }.' }, { status: 400 });

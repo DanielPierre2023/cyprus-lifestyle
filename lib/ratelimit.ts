@@ -62,6 +62,21 @@ export async function rateLimit(req: Request, bucket: string, limit = 5, windowS
 }
 
 /**
+ * Same limiter keyed by an arbitrary identity (a phone number, chat id, email…) instead of
+ * the client IP — for webhooks where every request arrives from the provider's IPs, so an
+ * IP bucket would throttle everybody together (or nobody).
+ */
+export async function rateLimitKey(identity: string, bucket: string, limit = 5, windowSec = 60): Promise<boolean> {
+  const key = `${bucket}:${identity}`;
+  const rl = getDistributed(limit, windowSec);
+  if (rl) {
+    try { const { success } = await rl.limit(key); return success; }
+    catch { return true; } // never block on limiter failure
+  }
+  return memoryAllow(key, limit, windowSec * 1000);
+}
+
+/**
  * Honeypot: a hidden field (HONEYPOT_FIELD, rendered by components/HoneypotField.tsx)
  * that humans never see and naive bots fill in. Returns true if the submission looks
  * like spam. It must NOT look at any real form field — in particular not `company`,

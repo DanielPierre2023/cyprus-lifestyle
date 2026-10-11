@@ -5,6 +5,7 @@
 //   • pages          — static / marketing routes
 //   • hubs           — directory type hubs, category-group hubs, best-of
 //                      collections, practical guides, and audience markets
+//   • activities     — /activities + every public experience page (lib/activities/public.ts)
 //   • articles-<n>   — published articles, chunk n
 //   • listings-<n>   — published directory listings, chunk n
 // All DB reads are read-only and best-effort; a failed read yields a smaller
@@ -17,6 +18,7 @@ import {
   newsChildXml,
   type UrlEntry,
 } from '@/lib/seo/sitemap';
+import { activitySitemapPaths } from '@/lib/activities/public';
 
 // Regenerate at most daily — sitemaps do not need to be fresh to the second.
 export const revalidate = 86_400;
@@ -32,7 +34,7 @@ const STATIC_PATHS = [
   '/relocation', '/cyprus', '/agenda', '/world',
   '/directory', '/luxury', '/ask',
   '/guide', '/for', '/when-to-visit', '/membership', '/about', '/advertise',
-  '/contact', '/standards', '/privacy', '/sourcing', '/partner',
+  '/contact', '/standards', '/privacy', '/terms', '/cookies', '/legal-notice', '/sourcing', '/partner',
 ];
 
 async function pagesEntries(): Promise<UrlEntry[]> {
@@ -85,6 +87,8 @@ export async function GET(
     entries = await pagesEntries();
   } else if (segment === 'hubs') {
     entries = await hubsEntries();
+  } else if (segment === 'activities') {
+    entries = await activitySitemapPaths();
   } else {
     const listings = /^listings-(\d+)$/.exec(segment);
     const articles = /^articles-(\d+)$/.exec(segment);

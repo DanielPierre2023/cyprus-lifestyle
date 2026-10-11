@@ -3,13 +3,14 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { DIRECTORY_TYPES, getAllListings, getCollectionFacets } from '@/lib/queries';
+import { DIRECTORY_TYPES, getAllListings, getCollectionFacets, tagPage, cacheTag, cacheTagWithLocale } from '@/lib/queries.cached';
 import { districtLabel } from '@/lib/collections';
 import { breadcrumbJsonLd, itemListJsonLd, ld, pageMetadata } from '@/lib/seo';
 import DirectoryMap from '@/components/DirectoryMap';
 import CoverImage from '@/components/CoverImage';
 
-export const revalidate = 300;
+// ISR 1 h: DB webhooks call /api/revalidate/tags on every edit (PERFORMANCE-SETUP.md 2b); this is only the safety net. Keep equal to TTL in lib/queries.cached.ts.
+export const revalidate = 3600;
 
 export function generateStaticParams() {
   return DIRECTORY_TYPES.map((type) => ({ type }));
@@ -29,7 +30,8 @@ export default async function DirectoryType({ params }: { params: Promise<{ loca
   setRequestLocale(locale);
   const l = locale as Locale;
   const t = await getTranslations();
-  const [listings, allFacets] = await Promise.all([getAllListings(l, type), getCollectionFacets()]);
+  // Tag the page (the listing set is too big for the data cache) so editing a listing of this type refreshes it.
+  const [listings, allFacets] = await Promise.all([getAllListings(l, type), getCollectionFacets(), tagPage([...cacheTagWithLocale(cacheTag.dir(type), l), ...cacheTagWithLocale(cacheTag.dir(null), l)], `dirtype:${type}:${l}`)]);
   const collections = allFacets.filter((f) => f.type === type).slice(0, 12);
   const label = t(`directory.${type}`);
   const points = listings.filter((x) => x.lat != null && x.lng != null)

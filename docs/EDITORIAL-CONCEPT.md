@@ -28,14 +28,13 @@ birth**.
 ## Signature franchises
 - **The Island Index** *(annual)* — the definitive "Best of Cyprus". The issue everyone keeps.
 - **The Dispatch** *(weekly email)* — property, money and culture, every Friday.
-- **The Circle** *(membership)* — events, print edition, directory, concierge.
+- **The Circle** *(membership)* — events, directory, concierge.
 - **The Cover Story** *(monthly)* — one long, photographed feature, in all four languages.
 - **At Home With…** *(fortnightly)* — inside a significant Cypriot residence.
 - **The Reservation** *(rolling)* — a living map of where to eat, stay and be seen.
 
 ## Cadence
-Daily web-first stories · **weekly** Dispatch · **quarterly** print edition ·
-**annual** Island Index.
+Daily web-first stories · **weekly** Dispatch · **annual** Island Index.
 
 ## Four languages, by birth
 | Language | Role | Type |

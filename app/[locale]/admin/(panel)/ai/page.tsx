@@ -2,6 +2,18 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
+/** The part of a probe's detail that adds something: a probe reports "ok (998ms)" or "FAIL: reason" and the line already says ok or FAIL. */
+function detail(s: unknown): string {
+  return String(s ?? '').replace(/^(?:ok|FAIL):?\s*/i, '').replace(/^\((.*)\)$/, '$1');
+}
+
+/** Why the concierge self-test failed, in one short line without model names or keys. */
+function conciergeFailure(c: any): string {
+  const chat = c?.chat || {};
+  const why = String(chat.error || c?.error || 'no answer').replace(/gpt-[\w.\-]+/gi, 'the model').replace(/\b(?:sk|rk|pk)-[A-Za-z0-9_*\-]{6,}/g, 'the key').slice(0, 160);
+  return (chat.kind ? chat.kind + ': ' : '') + why;
+}
+
 export default function AiTab() {
   const sb = supabaseBrowser();
   const [auto, setAuto] = useState<{ scraper_enabled: boolean; processor_enabled: boolean; auto_publish: boolean; mail_autoack_enabled: boolean; developments_enabled: boolean; developments_autopublish: boolean; regulation_watch_enabled: boolean; events_watch_enabled: boolean }>({ scraper_enabled: false, processor_enabled: false, auto_publish: false, mail_autoack_enabled: false, developments_enabled: false, developments_autopublish: false, regulation_watch_enabled: false, events_watch_enabled: false });
@@ -39,7 +51,7 @@ export default function AiTab() {
     // Invoke the Supabase Edge Function directly (the admin's session JWT authorises it).
     // This runs the AI desk on Supabase — where the model keys live and the runtime is
     // long enough — instead of the Vercel route, which has no keys and a 60s limit.
-    setBusy(id); setMsg('Composing four editions natively — this takes a minute or two…');
+    setBusy(id); setMsg('Composing seven editions natively and checking each against the facts — this takes two to three minutes…');
     try {
       const { data, error } = await sb.functions.invoke('process-scraped-article', { body: { scraped_article_id: id } });
       const d = data as any;
@@ -48,7 +60,8 @@ export default function AiTab() {
         const r = d.reason || 'unknown';
         setMsg(/off-topic/i.test(r) ? 'Skipped — ' + r : 'Generation failed — ' + r);
       }
-      else if (d && d.quality_warning) setMsg('Article drafted, but ⚠ ' + d.quality_warning);
+      else if (d && d.status === 'published') setMsg('Article published.' + (d.quality_warning ? ' Notes: ' + d.quality_warning : ''));
+      else if (d && d.quality_warning) setMsg('Article saved as a draft, but ⚠ ' + d.quality_warning);
       else setMsg('Article drafted. See it in Articles (status: draft).');
     } catch (e) {
       setMsg('Generation error: ' + (e as Error).message);
@@ -56,16 +69,21 @@ export default function AiTab() {
     setBusy(''); load();
   }
 
-  // Diagnostic: check the AI service is reachable (health only — no model names).
+  // Diagnostic: check the AI service is reachable (health only — no model names). Two parts run side by side: the article desk
+  // (the edge function in Supabase) and the concierge (the website's own chat, streamed, which also times the first word).
   async function selfTest() {
     setBusy('selftest'); setMsg('Checking the AI service…'); setReport(null);
     try {
-      const { data, error } = await sb.functions.invoke('process-scraped-article', { body: { action: 'selftest' } });
-      if (error) { setMsg('Self-test failed: ' + (error.message || 'edge function error')); }
+      const [edge, concierge] = await Promise.all([
+        sb.functions.invoke('process-scraped-article', { body: { action: 'selftest' } }),
+        fetch('/api/concierge/selftest', { credentials: 'same-origin' }).then((r) => r.json()).catch((e) => ({ ok: false, chat: { error: (e as Error).message } })),
+      ]);
+      if (edge.error) { setMsg('Self-test failed: ' + (edge.error.message || 'edge function error')); }
       else {
-        const d = data as any;
+        const d = { ...(edge.data as any), concierge };
         setReport(d);
-        setMsg((d?.ok ? '✓ ' : '✗ ') + (d?.verdict || 'Self-test complete.'));
+        const conciergeLine = concierge?.ok ? '' : ' · concierge chat: ' + conciergeFailure(concierge);
+        setMsg((d?.ok && concierge?.ok ? '✓ ' : '✗ ') + (d?.verdict || 'Self-test complete.') + conciergeLine);
       }
     } catch (e) {
       setMsg('Self-test error: ' + (e as Error).message);
@@ -206,11 +224,14 @@ export default function AiTab() {
       </div>
       {report ? (
         <pre style={{ background: '#0B0E11', color: '#E4D2AC', padding: 12, borderRadius: 4, fontSize: 12, overflowX: 'auto', margin: '0 0 14px', whiteSpace: 'pre-wrap' }}>
-{`AI service:       ${report.ok ? 'reachable' : 'NOT reachable'}
-primary writer:   ${report.writer_primary?.usable ? 'ok' : 'FAIL'} (${report.writer_primary?.prefill ?? ''})
-fallback writer:  ${report.writer_fallback?.usable ? 'ok' : 'FAIL'}
-research helper:  ${report.research ?? ''}
-keys present:     ${Object.entries(report.keys_present || {}).map(([k, v]) => `${k}=${v ? 'yes' : 'NO'}`).join('  ')}`}
+{`AI service:        ${report.writer_primary?.usable || report.writer_fallback?.usable ? 'reachable' : 'NOT reachable'}
+structured output: ${report.writer_primary?.usable ? 'ok' : 'FAIL'} (${detail(report.writer_primary?.structured_output)})
+plain JSON mode:   ${report.writer_fallback?.usable ? 'ok' : 'FAIL'} (${detail(report.writer_fallback?.prefill)})
+style check:       ${report.style_check ? (report.style_check.usable ? 'ok' : 'FAIL') + ' (' + detail(report.style_check.detail) + ')' : 'n/a'}
+concierge chat:    ${report.concierge ? (report.concierge.ok ? 'ok (first word after ' + ((report.concierge.chat?.first_word_ms ?? 0) / 1000).toFixed(1) + ' s, answer complete after ' + ((report.concierge.chat?.total_ms ?? 0) / 1000).toFixed(1) + ' s)' : 'FAIL (' + conciergeFailure(report.concierge) + ')') : 'n/a'}
+budget:            ${report.budget ? `today $${report.budget.spent_today_usd ?? '?'} of $${report.budget.daily_limit_usd} · month $${report.budget.spent_month_usd ?? '?'} of $${report.budget.monthly_limit_usd}${report.budget.paused ? ' · PAUSED: ' + report.budget.paused : ''}` : ''}
+keys present:      ${Object.entries(report.keys_present || {}).map(([k, v]) => `${k}=${v ? 'yes' : 'NO'}`).join('  ')}
+overall:           ${report.ok && (report.concierge ? report.concierge.ok : true) ? 'ready' : 'NOT ready'}${report.verdict ? ' · ' + report.verdict : ''}`}
         </pre>
       ) : null}
 
@@ -338,7 +359,7 @@ keys present:     ${Object.entries(report.keys_present || {}).map(([k, v]) => `$
 
       <h1 style={{ fontSize: 20, marginTop: 22 }}>Recent desk runs</h1>
       <table className="adm-t">
-        <thead><tr><th>When</th><th>Editor</th><th>Status</th><th>ms</th><th>Humanness (EN)</th></tr></thead>
+        <thead><tr><th>When</th><th>Editor</th><th>Status</th><th>ms</th><th>Style (EN, 100 = clean)</th></tr></thead>
         <tbody>
           {logs.map((l) => (
             <tr key={l.id}>

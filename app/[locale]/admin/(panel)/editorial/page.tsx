@@ -86,7 +86,9 @@ export default function EditorialStudio() {
       });
       const d = await res.json();
       if (!d.ok) { setMsg(d.error || 'Generation failed'); setBusy(false); return; }
-      setResult(d.result || {}); setMsg('');
+      setResult(d.result || {});
+      // The studio checks quotations against the transcript, figures against the material and the prose against the house style; what it could not settle is shown here.
+      setMsg(Array.isArray(d.notes) && d.notes.length ? `Please check before saving: ${d.notes.join(' ')}` : '');
     } catch (e) { setMsg((e as Error).message); }
     setBusy(false);
   }

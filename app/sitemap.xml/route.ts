@@ -20,6 +20,7 @@ export async function GET(): Promise<Response> {
   const children: { loc: string; lastmod?: string }[] = [
     { loc: childSitemapUrl('pages'), lastmod: now },
     { loc: childSitemapUrl('hubs'), lastmod: now },
+    { loc: childSitemapUrl('activities'), lastmod: now }, // /activities + one URL per experience (≈530)
     // Google News sitemap (trailing-48h articles); loc = `${SITE_URL}/sitemaps/news`.
     { loc: childSitemapUrl('news'), lastmod: now },
   ];

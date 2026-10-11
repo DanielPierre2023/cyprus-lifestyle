@@ -9,11 +9,13 @@ import { isAdmin, supabaseServer } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { erasePersonalData, isErasableEmail } from '@/lib/privacy/erase';
 import { logServerError } from '@/lib/monitor.server';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'privacy.erase');
   const body = await req.json().catch(() => ({}));
   const email = String(body.email || '');
   if (!isErasableEmail(email)) return NextResponse.json({ ok: false, error: 'A valid email is required.' }, { status: 400 });

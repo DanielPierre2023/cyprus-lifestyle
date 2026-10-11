@@ -22,7 +22,7 @@ export default function EditorTab() {
 
   const load = useCallback(async (pid: string) => {
     const l = LOCALES.map((x) => LANG_FIELDS.map((k) => `${k}_${x}`)).flat().join(', ');
-    const { data } = await sb.from('blog_posts').select(`id, slug, category, county, status, ai_editor, author_name, cover_image, cover_image_credit, tags_en, ${l}`).eq('id', pid).maybeSingle();
+    const { data } = await sb.from('blog_posts').select(`id, slug, category, county, status, ai_editor, author_name, cover_image, cover_image_credit, published_at, tags_en, ${l}`).eq('id', pid).maybeSingle();
     if (data) setF(data as F);
   }, [sb]);
 
@@ -98,7 +98,8 @@ export default function EditorTab() {
     const row: F = {
       category: f.category, county: f.county || null, ai_editor: f.ai_editor, author_name: f.author_name,
       cover_image: f.cover_image || null, cover_image_credit: f.cover_image_credit || null, status,
-      published_at: status === 'published' ? new Date().toISOString() : null,
+      // Keep the original publication date when an already-published article is saved again; stamp it only on first publish.
+      published_at: status === 'published' ? ((f.published_at as string | undefined) || new Date().toISOString()) : null,
       tags_en: (f.tags_en_str ?? (Array.isArray(f.tags_en) ? f.tags_en.join(', ') : '')).split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean),
     };
     for (const x of LOCALES) for (const k of LANG_FIELDS) row[`${k}_${x}`] = f[`${k}_${x}`] ?? null;

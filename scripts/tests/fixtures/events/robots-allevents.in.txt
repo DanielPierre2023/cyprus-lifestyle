@@ -1,0 +1,60 @@
+User-agent: AhrefsBot
+Crawl-Delay: 10
+
+User-agent: Yandex
+Crawl-Delay: 30
+
+User-agent: ICC-Crawler
+Crawl-Delay: 30
+
+User-agent: ClaudeBot
+Crawl-delay: 10
+
+User-agent: *
+disallow: /*/2013-0
+disallow: /*/2013-1
+allow: /*/*/2013-0
+allow: /*/*/2013-1
+
+disallow: /*/2014-0
+disallow: /*/2014-1
+allow: /*/*/2014-0
+allow: /*/*/2014-1
+
+disallow: /*/2015-0
+disallow: /*/2015-1
+allow: /*/*/2015-0
+allow: /*/*/2015-1
+
+disallow: /*/2016-0
+disallow: /*/2016-1
+allow: /*/*/2016-0
+allow: /*/*/2016-1
+
+disallow: /*/2017-0
+disallow: /*/2017-1
+allow: /*/*/2017-0
+allow: /*/*/2017-1
+
+disallow: /*/2018-0
+disallow: /*/2018-1
+allow: /*/*/2018-0
+allow: /*/*/2018-1
+
+disallow: /*/2019-0
+disallow: /*/2019-1
+allow: /*/*/2019-0
+allow: /*/*/2019-1
+
+disallow: /*/2020-0
+disallow: /*/2020-1
+allow: /*/*/2020-0
+allow: /*/*/2020-1
+
+disallow: /*/2021-0
+disallow: /*/2021-1
+allow: /*/*/2021-0
+allow: /*/*/2021-1
+
+disallow: /*/2022-0
+disallow: /*/2022-1

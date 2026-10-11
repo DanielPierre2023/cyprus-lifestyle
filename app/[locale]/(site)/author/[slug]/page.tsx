@@ -3,7 +3,8 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { isLocale, type Locale } from '@/lib/locales';
 import { getAuthor, getByAuthor } from '@/lib/queries';
-import { pageMetadata, urlFor, SITE_URL, SITE_NAME, ld } from '@/lib/seo';
+import { pageMetadata, SITE_NAME, ld } from '@/lib/seo';
+import { authorJsonLd } from '@/lib/seo/authorJsonLd';
 import ArticleCard from '@/components/ArticleCard';
 import NewsletterSignup from '@/components/NewsletterSignup';
 
@@ -30,11 +31,8 @@ export default async function AuthorPage({ params }: { params: Promise<{ locale:
   if (!a) notFound();
   const articles = await getByAuthor(l, a.id, 24);
 
-  const orgLd = {
-    '@context': 'https://schema.org', '@type': 'Organization',
-    name: a.name, description: a.bio || a.title || undefined,
-    url: urlFor(l, `/author/${slug}`), parentOrganization: { '@id': `${SITE_URL}/#organization` },
-  };
+  // Person for a named editor, Organization for a house desk (data from the authors table only).
+  const orgLd = authorJsonLd({ locale: l, slug, name: a.name, title: a.title, bio: a.bio, editorKey: a.editorKey, socialX: a.socialX });
 
   return (
     <>

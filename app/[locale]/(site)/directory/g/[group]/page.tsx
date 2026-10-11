@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { formatNumber } from '@/lib/i18n/format';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
@@ -61,7 +62,7 @@ export default async function GroupPage({ params }: { params: Promise<{ locale: 
                 </Link>
                 <span className="kicker">{x.district || label}{x.price_band ? ` · ${x.price_band}` : ''}</span>
                 <h3><Link href={`/directory/${x.type}/${x.slug}`}>{x.name}</Link></h3>
-                {x.rating != null ? <p style={{ margin: '2px 0 0', fontFamily: 'var(--sans)', fontSize: 14, color: '#8a5b12' }}>★ {x.rating.toFixed(1)}{x.rating_count ? <span className="muted" style={{ color: 'var(--ink-soft,#5b5346)' }}> · {x.rating_count.toLocaleString(l)}</span> : null}</p> : null}
+                {x.rating != null ? <p style={{ margin: '2px 0 0', fontFamily: 'var(--sans)', fontSize: 14, color: '#8a5b12' }}>★ {x.rating.toFixed(1)}{x.rating_count ? <span className="muted" style={{ color: 'var(--ink-soft,#5b5346)' }}> · {formatNumber(l, x.rating_count)}</span> : null}</p> : null}
                 {x.summary ? <p>{x.summary}</p> : null}
               </article>
             ))}

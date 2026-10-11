@@ -1,5 +1,6 @@
 import 'server-only';
 import { brandedEmail } from '@/lib/email';
+import { escapeHtml } from '@/lib/util';
 
 // What we need from the buyer to get each product live. Drives the automatic
 // onboarding email sent from the Stripe webhook right after payment.
@@ -24,10 +25,11 @@ export interface OrderLike {
 /** Branded onboarding email: confirms the purchase and asks for exactly what we
  *  need to fulfil it. Best-effort; the webhook ignores failures. */
 export function onboardingEmail(o: OrderLike): { subject: string; html: string } {
-  const label = o.label || 'your placement';
-  const name = o.company || o.customer_name || 'there';
+  const rawLabel = o.label || 'your placement';
+  const label = escapeHtml(rawLabel);
+  const name = escapeHtml(o.company || o.customer_name || 'there');
   const needs = NEEDS[o.slot || ''] || ['A few details so we can set this up for you'];
-  const list = needs.map((n) => `<li style="margin:0 0 6px">${n}</li>`).join('');
+  const list = needs.map((n) => `<li style="margin:0 0 6px">${escapeHtml(n)}</li>`).join('');
   const bodyHtml =
     `<p>Dear ${name},</p>` +
     `<p>Thank you — your <strong>${label}</strong> with Cyprus Lifestyle is confirmed. To get it live across all seven editions, could you reply to this email with:</p>` +
@@ -40,5 +42,5 @@ export function onboardingEmail(o: OrderLike): { subject: string; html: string }
     bodyHtml,
     preheader: `Next steps for ${label}`,
   });
-  return { subject: `Cyprus Lifestyle — next steps for ${label}`, html };
+  return { subject: `Cyprus Lifestyle — next steps for ${rawLabel}`, html };
 }

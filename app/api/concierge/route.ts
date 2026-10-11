@@ -2,7 +2,7 @@
 // Public "Ask the island" endpoint. Rate-limited, then answered by the SHARED
 // concierge brain (lib/concierge/brain.ts) — the SAME grounded, multilingual core
 // that powers the streaming web chat, Telegram and WhatsApp. One concierge brain,
-// one behaviour on every surface. The model key (CLAUDE_API_KEY) stays server-side.
+// one behaviour on every surface. The model key (OPENAI_API_KEY) stays server-side.
 //
 // Previously this route PROXIED to the `concierge` Supabase edge function (which
 // held its own model key). That function is now deprecated (see
@@ -12,16 +12,21 @@
 // gone.
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/ratelimit';
+import { publicAiCeilingDeny } from '@/lib/spendGuard';
 import { runConcierge, type ChatMessage } from '@/lib/concierge/brain';
+import { cardsFor, sourceHints } from '@/lib/concierge/sources';
 
 export const runtime = 'nodejs';
 // The brain embeds, retrieves across several legs, reranks, then makes one
-// non-streaming Claude call (60s timeout inside runConcierge). Match the chat
+// non-streaming model call (45s limit inside runConcierge). Match the chat
 // route's budget so the function isn't killed before that call can complete.
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   if (!(await rateLimit(req, 'concierge', 12, 60))) {
+    return NextResponse.json({ ok: false, error: 'A lot of questions at once — give it a moment and try again.' }, { status: 429 });
+  }
+  if (await publicAiCeilingDeny('chat')) {
     return NextResponse.json({ ok: false, error: 'A lot of questions at once — give it a moment and try again.' }, { status: 429 });
   }
   const body = await req.json().catch(() => ({}));
@@ -31,7 +36,7 @@ export async function POST(req: NextRequest) {
 
   // The brain reuses the model key already on the Next side (the same key the chat,
   // Telegram and WhatsApp concierge use). Without it there is nothing to answer with.
-  if (!process.env.CLAUDE_API_KEY) {
+  if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ ok: false, error: 'The concierge is not configured.' }, { status: 500 });
   }
 
@@ -57,6 +62,8 @@ export async function POST(req: NextRequest) {
       rating_count: p.rating_count,
       price_band: p.price_band,
       image: p.image,
+      // false → a 'listed' business with no public page: the widget shows it as text, never a link.
+      linkable: p.linkable,
       why: '',
     }));
     const guides = ctx.guides.map((g) => ({ label: g.label, path: g.path }));
@@ -68,7 +75,9 @@ export async function POST(req: NextRequest) {
     }
     // Bookable experiences (GetYourGuide) that fit this question — rendered as booking cards.
     const activities = ctx.activities || [];
-    return NextResponse.json({ ok: true, answer: text, picks, guides, activities });
+    // Cards for events / articles / knowledge pages / official notes / webcams, each with its trust label.
+    const sourceCards = cardsFor(ctx.sources, locale);
+    return NextResponse.json({ ok: true, answer: text, picks, guides, activities, sourceCards, sourceHints: sourceHints(ctx.sources, ctx.sourceNotes) });
   } catch (e) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
   }

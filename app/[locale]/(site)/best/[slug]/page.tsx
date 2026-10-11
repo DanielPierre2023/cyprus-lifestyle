@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { formatDateWith, formatNumber } from '@/lib/i18n/format';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
@@ -98,7 +99,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ loc
     { name: place, path: `/best/${slug}` },
   ]);
 
-  const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(l, { day: 'numeric', month: 'short' });
+  const fmtDate = (iso: string) => formatDateWith(l, iso, { day: 'numeric', month: 'short' });
 
   return (
     <>
@@ -138,7 +139,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ loc
               <span className="kicker">{place}{x.price_band ? ` · ${x.price_band}` : ''}</span>
               <h3><Link href={`/directory/${x.type}/${x.slug}`}>{x.name}</Link></h3>
               {x.rating != null ? (
-                <div className="cl-rate"><Stars rating={x.rating} /> <b>{x.rating.toFixed(1)}</b>{x.rating_count ? <span className="muted"> · {x.rating_count.toLocaleString(l)} {t('collections.reviews')}</span> : null}</div>
+                <div className="cl-rate"><Stars rating={x.rating} /> <b>{x.rating.toFixed(1)}</b>{x.rating_count ? <span className="muted"> · {formatNumber(l, x.rating_count)} {t('collections.reviews')}</span> : null}</div>
               ) : null}
               {x.verified ? <span className="cl-verified">✓ {t('collections.verified')}</span> : null}
               {x.summary ? <p>{x.summary}</p> : null}

@@ -2,6 +2,7 @@
 // The pipeline machinery is ported from Transilvania Times; the PROMPTS are
 // written new for a Cyprus luxury title (TT's Romanian-newsroom prompts don't
 // transfer). Voice is drawn from the House Book (docs/EDITORIAL-CONCEPT.md).
+import { reportageBlock } from '@/lib/voice/reportage';
 
 export type EditorKey = 'cyprus' | 'business' | 'property' | 'culture' | 'escapes' | 'table' | 'world';
 
@@ -15,7 +16,7 @@ RULES:
 - Headlines and subheadings in sentence case — never ALL CAPS, never Title Case. Keep real acronyms (EU, VAT, NATO, CSE).
 - Ban AI clichés: delve, boasts, nestled, tapestry, "a testament to", "stands as a", underscores, showcases, seamless, "plays a crucial role", "it's worth noting", "in the heart of", moreover, furthermore, "in conclusion". Prefer plain, exact words.
 - No hype, no hard sell, no listicles unless the subject truly warrants one. Concrete nouns over adjectives.
-- Attribute facts to their source. If a claim cannot be verified from the material provided, soften it or leave it out — never invent quotes, prices, names or figures.
+- The article is our own reporting: never name the outlet, agency, consultancy, reviewer or report the facts came from (no "according to", no "reported by", no "sources say"), and never write about the research ("I found", "could not be confirmed"). People and institutions may act and speak in the story (the minister said, the council approved). If a claim cannot be verified from the material provided, leave it out — never invent quotes, prices, names or figures.
 - Write for a reader who has been everywhere; tell them something they don't know about Cyprus.`;
 
 export const DESK_BRIEF: Record<EditorKey, string> = {
@@ -56,7 +57,9 @@ export function draftSystemPrompt(editor: EditorKey, wordTarget: number): string
     ``,
     `You are ${DESK_BRIEF[editor]}`,
     ``,
-    `TASK: From the source material provided, write an ORIGINAL Cyprus Lifestyle article in ENGLISH. Do not copy the source's wording or structure — re-report it in our voice, keep every verifiable fact, and frame it for a Cyprus audience. Target about ${wordTarget} words.`,
+    `TASK: From the source material provided, write an ORIGINAL Cyprus Lifestyle article in ENGLISH. Do not copy the source's wording or structure — re-report it in our voice, keep every verifiable fact, and frame it for a Cyprus audience. Length follows the facts in the material: there is NO minimum and no target, and you must never pad (every sentence needs a source in the material); never exceed about ${wordTarget} words.`,
+    ``,
+    reportageBlock(),
     ``,
     `Return ONLY a JSON object with these keys:`,
     `{`,

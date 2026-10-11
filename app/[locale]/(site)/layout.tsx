@@ -1,7 +1,8 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import ConciergeChat, { type ConciergeChatLabels } from '@/components/ConciergeChat';
+import type { ConciergeChatLabels } from '@/components/ConciergeChat';
+import ConciergeLazy from '@/components/ConciergeLazy';
 import { isLocale, type Locale } from '@/lib/locales';
 
 // Opt this subtree into static rendering (next-intl needs the locale set in the
@@ -40,7 +41,7 @@ export default async function SiteLayout({
       <Header />
       <main>{children}</main>
       <Footer />
-      {isLocale(locale) && <ConciergeChat locale={locale as Locale} labels={conciergeLabels} />}
+      {isLocale(locale) && <ConciergeLazy locale={locale as Locale} labels={conciergeLabels} />}
     </>
   );
 }

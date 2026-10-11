@@ -1,6 +1,6 @@
 // lib/concierge/understand.ts
 // ============================================================================
-// LLM QUERY UNDERSTANDING (CI-3) — a cheap Haiku pass that reads a guest message in
+// LLM QUERY UNDERSTANDING (CI-3) — a cheap, quick model pass that reads a guest message in
 // ANY of the seven languages and returns a structured interpretation the existing
 // keyword engine already handles well: the district, a best-guess subtype, and 1–4
 // ENGLISH category stems for the KIND of business wanted. This is what breaks the
@@ -15,7 +15,7 @@
 // current keyword + semantic path unchanged. The pure helpers are unit-tested.
 // ============================================================================
 import 'server-only';
-import { callClaude, CLAUDE_HAIKU, parseAiJson } from '@/lib/ai';
+import { callAI, parseAiJson } from '@/lib/ai';
 
 export interface Understanding {
   district: string | null;   // canonical: larnaca | limassol | paphos | nicosia | famagusta
@@ -76,15 +76,17 @@ const SYSTEM =
 export async function understandQuery(text: string): Promise<Understanding | null> {
   const q = (text || '').trim();
   if (!q) return null;
-  if (process.env.CONCIERGE_LLM_UNDERSTAND !== '1') return null; // opt-in — costs a Haiku call per turn
+  if (process.env.CONCIERGE_LLM_UNDERSTAND !== '1') return null; // opt-in — costs one small model call per turn
   try {
-    const r = await callClaude({
+    // Task "helper": gpt-6-luna at "low" (AI_EFFORT_HELPER tunes it). It sits in front of the search, so it is time-boxed: on a miss the
+    // plain keyword + semantic retrieval runs unchanged.
+    const r = await callAI({
       systemInstruction: SYSTEM,
       userMessage: q.slice(0, 600),
-      model: CLAUDE_HAIKU,
+      task: 'helper',
       jsonMode: true,
-      maxTokens: 200,
-      timeoutMs: 3500,
+      expectTokens: 120,
+      timeoutMs: 7000,
       fn: 'concierge-understand',
     });
     if (r.error || !r.text) return null;

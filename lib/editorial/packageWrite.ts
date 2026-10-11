@@ -8,16 +8,17 @@ import 'server-only';
 import type { PackageFields } from '@/lib/editorial/seo';
 import type { PackageInput } from '@/lib/editorial/generate';
 
-/** The blog_posts UPDATE fragment that stores a package for one edition. */
+/** The blog_posts UPDATE fragment that stores a package for one edition. Only fields that have a value are written, so a partial result
+ *  never wipes what is already stored (and never writes a blank over a good field). */
 export function packageColumns(locale: string, pkg: PackageFields): Record<string, unknown> {
-  return {
-    [`seo_title_${locale}`]: pkg.seoTitle || null,
-    [`seo_description_${locale}`]: pkg.seoDescription || null,
-    [`excerpt_${locale}`]: pkg.excerpt || null,
-    [`summary_${locale}`]: pkg.summary || null,
-    [`tags_${locale}`]: pkg.tags,
-    [`faq_${locale}`]: pkg.faq,
-  };
+  const out: Record<string, unknown> = {};
+  if (pkg.seoTitle) out[`seo_title_${locale}`] = pkg.seoTitle;
+  if (pkg.seoDescription) out[`seo_description_${locale}`] = pkg.seoDescription;
+  if (pkg.excerpt) out[`excerpt_${locale}`] = pkg.excerpt;
+  if (pkg.summary) out[`summary_${locale}`] = pkg.summary;
+  if (pkg.tags.length) out[`tags_${locale}`] = pkg.tags;
+  if (pkg.faq.length) out[`faq_${locale}`] = pkg.faq;
+  return out;
 }
 
 /** Read a stored package for one edition back out of a blog_posts row. */

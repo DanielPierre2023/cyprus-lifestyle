@@ -3,10 +3,19 @@
 // site's concierge widget with a question seeded from the article's topic (via a
 // 'concierge:ask' window event ConciergeChat listens for) — so a reader can go
 // straight from reading to asking, in their own language.
-export default function AskConcierge({ question, heading, label }: { question: string; heading: string; label: string }) {
+export default function AskConcierge({ question, heading, label, inline = false }: { question: string; heading: string; label: string; inline?: boolean }) {
   const ask = () => {
     try { window.dispatchEvent(new CustomEvent('concierge:ask', { detail: { q: question } })); } catch { /* no-op */ }
   };
+  if (inline) {
+    // The slim prompt placed inside the article text: one line, no box, so the reading is not interrupted.
+    return (
+      <aside style={{ margin: '22px 0', padding: '10px 0', borderTop: '1px solid rgba(201,162,76,.45)', borderBottom: '1px solid rgba(201,162,76,.45)', display: 'flex', gap: 14, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <span style={{ fontFamily: 'Georgia, serif', fontSize: 16 }}>{heading}</span>
+        <button onClick={ask} style={{ padding: '7px 14px', borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap', border: '1px solid #C9A24C', background: 'transparent', color: 'inherit', fontWeight: 600, fontSize: 12.5 }}>✦ {label}</button>
+      </aside>
+    );
+  }
   return (
     <aside
       style={{

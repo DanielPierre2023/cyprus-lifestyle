@@ -9,18 +9,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/ratelimit';
 import { validateOwnerToken, OWNER_COOKIE, OWNER_SESSION_MAX_AGE } from '@/lib/directory/owner';
+import { pageCopy } from '@/lib/directory/ownerCopy';
+import { localeOf } from '@/lib/i18n/resolveLocale';
+import { dir, type Locale } from '@/lib/locales';
 
 export const runtime = 'nodejs';
 
 // A minimal, self-contained, on-brand result page (obsidian/gold/ivory) — no deps.
 // Mirrors app/api/directory/claim/verify/route.ts.
-function resultPage(opts: { title: string; heading: string; body: string; ctaUrl?: string; ctaLabel?: string }): string {
+function resultPage(locale: Locale, opts: { title: string; heading: string; body: string; ctaUrl?: string; ctaLabel?: string }): string {
   const O = '#0B0E11', G = '#C9A24C', INK = '#16181C', IVORY = '#FBF8F1';
   const serif = "Georgia,'Times New Roman',serif";
   const cta = opts.ctaUrl && opts.ctaLabel
     ? `<a href="${opts.ctaUrl}" style="display:inline-block;margin-top:22px;background:${G};color:${O};text-decoration:none;font-family:${serif};font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:14px 30px;border-radius:2px">${opts.ctaLabel}</a>`
     : '';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${opts.title}</title></head>
+  return `<!doctype html><html lang="${locale}" dir="${dir(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${opts.title}</title></head>
 <body style="margin:0;padding:0;background:#F6F1E7;font-family:${serif};color:${INK}">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:48px 12px"><tr><td align="center">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:${IVORY};border:1px solid #e7ddc6;border-top:3px solid ${G}">
@@ -43,21 +46,24 @@ function html(markup: string, status = 200): NextResponse {
 }
 
 export async function GET(req: NextRequest) {
+  // Edition: ?lang= (put on the e-mailed link), else Accept-Language, else English.
+  const locale = localeOf(req, new URL(req.url).searchParams.get('lang'));
+  const c = pageCopy(locale);
   // Cheap defence-in-depth against link brute force (the token itself is 256-bit).
   if (!(await rateLimit(req, 'owner-verify', 20, 60))) {
-    return html(resultPage({
-      title: 'Please wait', heading: 'Too many attempts',
-      body: 'Please wait a moment and open your management link again.',
-      ctaUrl: '/directory', ctaLabel: 'Browse the directory',
+    return html(resultPage(locale, {
+      title: c.waitTitle, heading: c.waitH,
+      body: c.waitBody,
+      ctaUrl: '/directory', ctaLabel: c.browse,
     }), 429);
   }
 
   const token = (new URL(req.url).searchParams.get('token') || '').trim();
   if (!token) {
-    return html(resultPage({
-      title: 'Management link invalid', heading: 'This link is not valid',
-      body: 'The management link is missing its token. Please use the most recent link we emailed you.',
-      ctaUrl: '/directory', ctaLabel: 'Browse the directory',
+    return html(resultPage(locale, {
+      title: c.mgmtMissingTitle, heading: c.missingH,
+      body: c.mgmtMissingBody,
+      ctaUrl: '/directory', ctaLabel: c.browse,
     }), 400);
   }
 
@@ -77,11 +83,9 @@ export async function GET(req: NextRequest) {
     return redirect;
   }
 
-  const body = res.error === 'expired'
-    ? 'This management link has expired. Links are valid for 60 minutes — please request a fresh one from your listing.'
-    : 'This management link is no longer valid. It may have already been used, or it has been superseded by a newer link. Please request a fresh one from your listing.';
-  return html(resultPage({
-    title: 'Management link expired', heading: 'This link can’t be used',
-    body, ctaUrl: '/directory', ctaLabel: 'Browse the directory',
+  const body = res.error === 'expired' ? c.mgmtExpired : c.mgmtInvalid;
+  return html(resultPage(locale, {
+    title: c.mgmtDeadTitle, heading: c.linkH,
+    body, ctaUrl: '/directory', ctaLabel: c.browse,
   }), 410);
 }

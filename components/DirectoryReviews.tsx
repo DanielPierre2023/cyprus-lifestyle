@@ -6,6 +6,7 @@
 // → returns null, no visual change). No client JS; styling matches the listing
 // detail page's `.lh-sec`/`.lh-h2` section rhythm.
 import { getApprovedReviews, getFirstPartyRating } from '@/lib/directory/reviews';
+import { formatDateWith, formatNumber } from '@/lib/i18n/format';
 
 function Stars({ rating }: { rating: number }) {
   const full = Math.max(0, Math.min(5, Math.round(rating)));
@@ -38,8 +39,7 @@ export default async function DirectoryReviews({
   if (!reviews.length) return null;
 
   const fmt = (iso: string) => {
-    try { return new Date(iso).toLocaleDateString(locale, { year: 'numeric', month: 'short' }); }
-    catch { return ''; }
+    return formatDateWith(locale, iso, { year: 'numeric', month: 'short' });
   };
 
   return (
@@ -49,7 +49,7 @@ export default async function DirectoryReviews({
       {rating && rating.count > 0 && rating.avg != null ? (
         <p className="dr-agg">
           <Stars rating={rating.avg} /> <b>{rating.avg.toFixed(1)}</b>
-          <span className="dr-muted"> · {rating.count.toLocaleString(locale)} {reviewsLabel}</span>
+          <span className="dr-muted"> · {formatNumber(locale, rating.count)} {reviewsLabel}</span>
           <span className="dr-fp" title="Collected first-party by Cyprus Lifestyle">◆ first-party</span>
         </p>
       ) : null}

@@ -41,7 +41,7 @@
 | Source | Today | Gap / action |
 |---|---|---|
 | `directory_listings` (~14.7k "listed" + ~3k published) | Searched **and** embedded (name-fuzzy, category, keyword, pgvector global+district, geo radius, top-rated fallback, optional rerank) | Embedding is a manual job; embedded text omits `canonical_category` and development facts → nightly embed cron, richer doc text |
-| Static KB (~89–105 intents, doing-business list) | Searched + embedded; keyword leg English-token only | 38/105 intents have **no** translation in any of 6 locales |
+| Static KB (105 intents, doing-business list) | Searched + embedded; keyword leg English-token only | ~~38/105 intents had no translation~~ all 105 translated 2026-10-05 (review pending) |
 | `blog_posts` (articles) | Full-text only, top 3, **title only** reaches the prompt | Embed articles; pass excerpt + key facts; use semantic not AND-keyword search |
 | `activities` (566 GetYourGuide rows) | Keyword/district only, not embedded | Embed; add to hybrid retrieval |
 | `events` | **Ignored** by chat (only 2 titles in greeting) | Date-filtered retrieval ("what's on this weekend") — currently falls back to "general knowledge" = hallucination risk |
@@ -64,7 +64,7 @@ Additional concierge defects: recommends `listed` businesses that have **no publ
 | The whole island, curated | Not enforced by anything |
 | (technical) | One sentence `MEMBER_BLOCK` in the prompt + "✦ Member" badge |
 
-Billing defects: no `invoice.paid`/`customer.subscription.updated` handler → **a member whose card is recovered by Stripe retry stays locked out**; no Customer Portal/cancel; no annual plan; no VAT/invoice handling; no idempotency on webhook redelivery; no guard against double subscription; membership keyed to `localStorage cl_cid`; and the page copy says "Membership begins free, and always will… a paid tier is on the way" directly above a live paid tier. Patron ("print edition, member evenings") is a vapor card.
+Billing defects: no `invoice.paid`/`customer.subscription.updated` handler → **a member whose card is recovered by Stripe retry stays locked out**; no Customer Portal/cancel; no annual plan; no VAT/invoice handling; no idempotency on webhook redelivery; no guard against double subscription; membership keyed to `localStorage cl_cid`; and the page copy says "Membership begins free, and always will… a paid tier is on the way" directly above a live paid tier. Patron (a card promising benefits that do not exist, one of which is no longer planned) is a vapor card.
 
 ### 2.3 Booking / request flow (concierge → redaction)
 
@@ -96,17 +96,19 @@ Other: fake editor personas (`0015_editors.sql`); bug `AI_TELLS.slice(0,40)` dro
 
 ### 2.5 Languages — "everything in all 7"
 
+> **Updated 2026-10-05** (increments 5.1 and 5.2; figures re-measured against the repository and the live database with read-only queries). The table below keeps the original findings, with the outdated cells replaced. What changed since 2026-10-04: `messages/*.json` grew from 376 to **499 keys** (Business Hub) and is still clean in all 7 locales; the knowledge base is now **105/105 intents and 13/13 domains translated** in all six locales (38 intents were added in 5.2, machine-written, needs native review); the DSAR acknowledgement e-mail is wired (once per address per 24 h); every public form/route returns a stable error `code` next to the unchanged English `error`; date/number/currency formatting call sites moved onto `lib/i18n/format.ts`; the error and 404 pages carry de/pl/ru. Owner decision of 2026-10-05: **every page is shown in every edition with an English fallback — no noindex gate, no 404** (see `docs/I18N.md`).
+
 | Layer | State |
 |---|---|
-| `messages/*.json` (376 keys) | **Clean**: 0 missing/empty/placeholder mismatches in all 7 |
-| Knowledge base (`qa.i18n.ts`) | **36% (38/105) intents untranslated**; both `doing-business` and `licensing` domains untranslated — shown in English on 6 locales |
-| DB `blog_posts` | 74/74 in all 6 non-EN locales ✔ |
-| DB `directory_listings` (17,827) | Names el/ro/ar 17.7%, de/pl/ru 3%; **summaries ~71% untranslated** → English fallback; hreflang still emitted (thin-duplicate SEO risk) |
-| DB `events` (31) | 68% in el/ro/ar; **0% in de/pl/ru** |
-| Inline dictionaries (~25) | Error/404 pages only EN/EL/RO/AR; proof/comment-reply/scraper/media-kit lists only 4 languages |
+| `messages/*.json` (**499 keys**, was 376) | **Clean**: 0 missing/empty/placeholder mismatches in all 7 (CI-gated) |
+| Knowledge base (`qa.i18n.ts`) | ~~36% (38/105) intents untranslated~~ **105/105 intents and 13/13 domains translated** in el/ro/ar/de/pl/ru (the 38 `doing-business`/`licensing`/lifestyle intents were added 2026-10-05; machine-written, native review pending) |
+| DB `blog_posts` | 74/74 published in all 6 non-EN locales ✔ (bodies); 5 articles still have English-copy titles/excerpts/summaries in 1–3 locales — data script `supabase/data/blog_translations_20261007.sql` |
+| DB `directory_listings` (17,833) | ~~summaries ~71% untranslated~~ Re-measured: all **3,076 published listings have an English summary and all six translations** (203 apparent German gaps are identical-by-nature stubs such as "Restaurant in Paphos."). 9,452/17,833 rows (53%) carry a translated summary overall; the other **8,358 are unpublished `listed` rows with no summary in ANY language** (a content-generation gap, not a translation gap). Names are mostly proper nouns (83 rows have a distinct Greek name). Untranslated text falls back to English; hreflang is emitted for all editions by decision (no noindex gate) |
+| DB `events` (**16** published, was 31) | 0% of titles translated in any locale at the time of measurement; titles of 11 events and summaries of 9 events written in `supabase/data/events_translations_20261007.sql` (owner runs it); 5 events keep English titles (proper nouns/line-ups) |
+| Inline dictionaries (**~248 scanned**, was ~25) | Error/404 pages now EN/EL/RO/AR/DE/PL/RU; CI gate `check:i18n-dicts` fails on any new or worse gap (3 known gaps in the baseline) |
 | Hard-coded English (public) | Claim-listing box on every listing page; `/partner`; `/directory/manage`; OwnerEditor; OwnerRequestLink; PrivacyRequestForm; ConciergeChat trip-plan labels; advertise FAQ; OG "The Arabic Edition" |
-| Emails/pages | Claim, owner-link, onboarding, lead, newsletter-confirm and unsubscribe pages **English only**; DSAR/contact have no acknowledgement; API errors English across ~50 routes |
-| Formatting | `gyg.ts` maps el/ro/ar to `en-US`; concierge prices `en-US`; no currency helper; plural rules absent (ar/ru/pl) |
+| Emails/pages | Claim, owner-link and newsletter-confirm pages/e-mails are localised (5.1); **DSAR acknowledgement e-mail now sent** (once per address per 24 h, fixed text, only our own reference echoed); public API routes return `{ ok:false, code, error }` with locale-aware `error` (admin and `api/concierge/*` excluded) |
+| Formatting | `lib/i18n/format.ts` exists (currency, numbers, dates, CLDR plurals); pages, components and `gyg.ts` (el→el-GR, ro→ro-RO) now use it; **still open: concierge call sites** (`lib/concierge/brain.ts` en-US money, `api/concierge/proactive`, `lib/concierge/sources.ts`) |
 | Fonts/OG/RTL | Bodoni Moda lacks Greek subset; Arabic OG card is text-less; globals.css has 0 logical properties |
 | Structure | 4 translation mechanisms, no shared type/CI check; flat `*_<locale>` columns need `ALTER` for every new locale; no glossary, TM, review state, or stale detection |
 | Admin | 120+ files English-only (middleware comment says intentional) |
@@ -167,7 +169,7 @@ Positives worth preserving: server-only service client, Stripe HMAC, hashed toke
 3. **Island Key card (innovative):** a digital member card (wallet pass + QR) redeemed at partner venues for member privileges. Every redemption is logged → **partners get measurable ROI; the redaction gets a commission/fee ledger; the subscription becomes self-financing and sellable** (partners in Signature/Partner tiers fund the privileges — member never pays twice). This also turns the directory into a *loyalty network* no competitor has.
 4. **Trip Dossier:** the AI builds a personalised itinerary (dates, party, tastes, language) from the *whole* database (directory, events, activities, weather, regulations), an editor-reviewed PDF + live link, re-planned automatically if weather/events change.
 5. **Concierge on the member's channel:** one thread across web / WhatsApp / Telegram, same memory, verified by magic link (not a browser id).
-6. **Editorial access:** quarterly print/digital edition, early access to *The Island Index*, member-only events, "Ask the Editors" monthly session, the Circle diary.
+6. **Editorial access:** early access to *The Island Index*, member-only events, "Ask the Editors" monthly session, the Circle diary.
 7. **Quotas that mean something:** e.g. 2 bespoke arrangements/month included, extra at a disclosed fee — replaces the meaningless "unlimited".
 8. **Billing self-service:** Stripe Customer Portal, annual plan, VAT-inclusive consumer pricing.
 
@@ -176,9 +178,9 @@ Positives worth preserving: server-only service client, Stripe HMAC, hashed toke
 | Tier | Price (VAT incl.) | Purpose |
 |---|---|---|
 | **Reader** | Free | Letter, archive, saved items, AI concierge (rate-limited), account via magic link |
-| **Member — The Island Key** | €19/mo or €190/yr (existing price, now *earned*) | Items 1–8 above; print edition included at annual |
+| **Member — The Island Key** | €19/mo or €190/yr (existing price, now *earned*) | Items 1–8 above |
 | **Private Client** | from €79/mo, capped seats, application-based | Named senior concierge, 1-hour SLA, bespoke arrangements, private events |
-| *Retire* | Patron; the vapor card | Fold print + events into Member |
+| *Retire* | Patron; the vapor card | Fold events into Member |
 
 (The commercial reviewer proposed €9/€49; I recommend keeping €19 *only if* items 1–3 ship — otherwise the price is not defensible. Test €9 "Insider" without priority/dossier as a conversion rung if needed.)
 
@@ -319,7 +321,7 @@ Durations assume a small senior team (2–3 engineers + 1 designer + editorial l
 - Extend reply-language lists (proof, comment-reply, scraper, media kit, inbox) to all 7.
 
 ### Phase 6 — Brand, scale & growth (months 5–9)
-- Image strategy (CDN/transform instead of `unoptimized`), font diet, JS budget cut, tag-based revalidation for 7×~3k pages; data-licensing review for Google-sourced content; print edition tooling; sponsorship inventory manager; partner marketplace; mobile PWA/app for Island Key.
+- Image strategy (CDN/transform instead of `unoptimized`), font diet, JS budget cut, tag-based revalidation for 7×~3k pages; data-licensing review for Google-sourced content; sponsorship inventory manager; partner marketplace; mobile PWA/app for Island Key.
 
 ---
 
@@ -334,5 +336,9 @@ Editorial: % pieces with fact-check complete (target 100%), time idea→publish,
 3. Admin language scope: public + business hub + emails in 7 languages, admin English-first (my recommendation) vs translate admin too.
 4. Island Key pricing: keep €19 only if priority/named-human/card ship; confirm willingness to fund partner privileges via Signature tier.
 5. Budget acknowledgements for paid services my standards ask me to flag: Vercel Pro (commercial use), Supabase Pro/staging, Upstash, Resend volume, Sentry, transcription (e.g. Whisper API — or self-hosted open-source to avoid cost), and Google Places enrichment (~$500–650 per repo docs). Free/self-hosted alternatives will be preferred where viable.
+
+**Owner decisions recorded 2026-10-06**
+- **No AI-disclosure statement on articles.** Owner decision: articles carry no notice about AI involvement, in any of the seven languages, and the generation and translation prompts now say so. This replaces the "publish AI policy" part of the recommendation in item 2 above. Risk accepted by the owner and noted here for the record: finding 9 in the table above (EU AI Act Art. 50, from Aug 2026, which exempts text that has undergone human review or editorial control under someone's editorial responsibility; and Google's scaled-content policy). Application dates were not re-checked when this note was written.
+- Auto-publish stays as it is.
 
 Upon approval I will deliver each phase as complete files with full paths, starting with Phase 0.

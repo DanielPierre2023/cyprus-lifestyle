@@ -11,6 +11,7 @@
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadMaplibre, cartoGlStyle } from '@/lib/map/maplibre';
+import { formatNumber } from '@/lib/i18n/format';
 import { categoryIcon, catLabel, type BizCategory, type BizLabels } from '@/lib/directory/map-meta';
 
 const GOLD = '#C9A24C';
@@ -282,7 +283,7 @@ export default function BusinessMap({
             <button key={c.k} type="button" className={`bm-row${sel === c.k ? ' on' : ''}`} onClick={() => loadCategory(c.k)}>
               <span className="bm-ic" dangerouslySetInnerHTML={{ __html: iconSvg(c.icon, 'currentColor', 17) }} />
               <span className="bm-nm">{catLabel(c.k, locale)}</span>
-              <span className="bm-n">{c.count.toLocaleString()}</span>
+              <span className="bm-n">{formatNumber(locale, c.count)}</span>
             </button>
           ))}
         </div>
@@ -291,7 +292,7 @@ export default function BusinessMap({
       <div className="bm-mapcol">
         <div ref={mapEl} className="bm-map" aria-label={labels.title} />
         <div className="bm-status">
-          {loading ? labels.loading : shown != null ? `${shown.toLocaleString()} ${labels.inView}` : labels.choose}
+          {loading ? labels.loading : shown != null ? `${formatNumber(locale, shown)} ${labels.inView}` : labels.choose}
         </div>
       </div>
     </div>

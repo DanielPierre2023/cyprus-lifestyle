@@ -3,11 +3,17 @@
 //   POST — incoming updates → the concierge brain → reply via the Telegram API.
 // The same grounded brain as the web + WhatsApp concierge; per-chat memory in Postgres.
 //
-// Env (add in Vercel): TELEGRAM_BOT_TOKEN, TELEGRAM_SECRET_TOKEN.
+// Env (add in Vercel): TELEGRAM_BOT_TOKEN, TELEGRAM_SECRET_TOKEN (REQUIRED — pass the same
+// value as `secret_token` when calling setWebhook; without it every POST is refused).
 // Optional: NEXT_PUBLIC_SITE_URL.
 import { NextRequest, after } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { runConcierge, detectLocale, type ChatMessage } from '@/lib/concierge/brain';
+import { runConcierge, type ChatMessage } from '@/lib/concierge/brain';
+import { resolveChannelLocale, settleLocale } from '@/lib/concierge/localeMemory';
+import { composeChannelReply } from '@/lib/concierge/channelLinks';
+import { safeEqual } from '@/lib/auth/secretMatch';
+import { rateLimitKey } from '@/lib/ratelimit';
+import { publicAiCeilingDeny } from '@/lib/spendGuard';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -50,9 +56,14 @@ export async function GET() {
 
 // ── Incoming updates ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  // Validate Telegram's secret header when configured; reject a mismatch.
-  const secret = process.env.TELEGRAM_SECRET_TOKEN;
-  if (secret && req.headers.get('x-telegram-bot-api-secret-token') !== secret) {
+  // The secret header is mandatory (fail-closed): without it anyone could POST forged
+  // updates and spend model tokens or impersonate a chat. Constant-time comparison.
+  const secret = process.env.TELEGRAM_SECRET_TOKEN || '';
+  if (!secret) {
+    console.error('[telegram] TELEGRAM_SECRET_TOKEN is not set — refusing unsigned webhook traffic');
+    return new Response('not configured', { status: 503 });
+  }
+  if (!safeEqual(req.headers.get('x-telegram-bot-api-secret-token') || '', secret)) {
     return new Response('unauthorized', { status: 401 });
   }
   const body = await req.json().catch(() => null);
@@ -74,6 +85,10 @@ async function handleUpdate(body: TgUpdate) {
   const text = typeof msg?.text === 'string' ? msg.text : '';
   if (chatId == null || !text.trim()) return;
 
+  // Per-chat throttle: 12 messages / minute.
+  if (!(await rateLimitKey(String(chatId), 'tg-msg', 12, 60))) return;
+  if (await publicAiCeilingDeny('chat')) return;
+
   await handleTextMessage(token, String(chatId), text, tgLocale(msg?.from?.language_code));
 }
 
@@ -94,19 +109,27 @@ async function handleTextMessage(token: string, chatId: string, raw: string, uiL
 
   // Load memory.
   let history: ChatMessage[] = [];
+  let rememberedLocale: string | null = null; let rememberedAt: string | null = null;
   try {
-    const { data } = await sb.from('concierge_tg_threads').select('messages').eq('chat_id', chatId).maybeSingle();
+    const { data } = await sb.from('concierge_tg_threads').select('messages,locale,updated_at').eq('chat_id', chatId).maybeSingle();
     if (data && Array.isArray(data.messages)) history = data.messages as ChatMessage[];
+    if (data) { rememberedLocale = typeof data.locale === 'string' ? data.locale : null; rememberedAt = typeof data.updated_at === 'string' ? data.updated_at : null; }
   } catch { /* no memory available — answer statelessly */ }
 
-  const locale = detectLocale(query);
+  // Language: this message when clearly identifiable; a short / ambiguous one keeps the chat's last confident language;
+  // a brand-new chat falls back to the Telegram UI language, then English.
+  const lang = resolveChannelLocale({ text: query, remembered: rememberedLocale, rememberedAt, hint: uiLocale });
+  let locale: string = lang.locale;
+  let persistLocale: string | null = lang.persist;
   const convo: ChatMessage[] = [...history, { role: 'user', content: query }];
 
   let reply = '';
   try {
     const { ctx, text: answer } = await runConcierge(convo, locale, { matchLanguage: true });
-    reply = answer || fallbackNote(locale);
-    reply = appendLink(reply, ctx, locale);
+    // The reply is long enough to tell its language reliably; when we only guessed, links and memory follow the reply.
+    const settled = settleLocale(lang, answer);
+    locale = settled.locale; persistLocale = settled.persist;
+    reply = composeChannelReply(answer || fallbackNote(locale), ctx, locale, SITE);
   } catch (e) {
     console.error('[telegram] brain', (e as Error).message);
     reply = fallbackNote(locale);
@@ -118,27 +141,9 @@ async function handleTextMessage(token: string, chatId: string, raw: string, uiL
   const nextMessages = [...convo, { role: 'assistant' as const, content: reply }].slice(-10);
   try {
     await sb.from('concierge_tg_threads').upsert({
-      chat_id: chatId, locale, messages: nextMessages, updated_at: new Date().toISOString(),
+      chat_id: chatId, locale: persistLocale, messages: nextMessages, updated_at: new Date().toISOString(),
     });
   } catch { /* memory write is best-effort */ }
-}
-
-// Append the single most relevant on-site link (the connector), tastefully.
-function appendLink(reply: string, ctx: { guides: { label: string; path: string }[]; picks: { type: string; slug: string; name: string }[]; activities?: { title: string; url: string | null }[] }, locale: string): string {
-  const prefix = locale && locale !== 'en' ? `/${locale}` : '';
-  const lines: string[] = [];
-  if (ctx.guides && ctx.guides.length) {
-    const g = ctx.guides[0];
-    lines.push(`${g.label}: ${SITE}${prefix}${g.path}`);
-  } else if (ctx.picks && ctx.picks.length) {
-    const p = ctx.picks[0];
-    lines.push(`${p.name}: ${SITE}${prefix}/directory/${p.type}/${p.slug}`);
-  }
-  // Up to two bookable experiences from our catalogue (GetYourGuide booking link, partner id
-  // applied, disclosed as a partner link) when the guest asked for things to do.
-  const PARTNER: Record<string, string> = { en: 'partner link', el: 'σύνδεσμος συνεργάτη', ro: 'link de partener', ar: 'رابط شريك', de: 'Partnerlink', pl: 'link partnerski', ru: 'партнёрская ссылка' };
-  for (const a of (ctx.activities || []).slice(0, 2)) if (a.url) lines.push(`${a.title} (GetYourGuide, ${PARTNER[locale] || PARTNER.en}): ${a.url}`);
-  return lines.length ? `${reply}\n\n${lines.join('\n')}` : reply;
 }
 
 function fallbackNote(locale: string): string {

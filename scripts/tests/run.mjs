@@ -9,6 +9,7 @@ import { readdirSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { urlStubs } from './_stubs/url-stubs.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -34,7 +35,9 @@ for (const f of files) {
       entryPoints: [join(here, f)],
       bundle: true, platform: 'node', format: 'esm',
       tsconfig: join(root, 'tsconfig.json'),
-      alias, outfile, logLevel: 'silent',
+      // sanitize-html pulls in postcss, which uses CommonJS require() that an ESM bundle can't
+      // inline — load it from node_modules at runtime instead.
+      alias, plugins: [urlStubs], external: ['sanitize-html', 'esbuild'], outfile, logLevel: 'silent',
     });
   } catch (e) {
     console.log(`✗ ${f}: bundle failed`);

@@ -10,7 +10,10 @@
 //   (a) untranslated — the edition is empty, or still serving the English copy;
 //   (b) AI-tell — how much the local draft reads as machine output (scoreAiTells).
 // ============================================================================
-import { scoreAiTells, type Lang } from '@/lib/antiAi';
+import type { Lang } from '@/lib/antiAi';
+import { scoreVoice } from '@/lib/voice/score';
+import { deskFor } from '@/lib/voice/desks';
+import { parityOf, type PLang } from '@/lib/voice/parity';
 
 // The seven editions Cyprus Lifestyle publishes.
 export const LANGS = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'] as const;
@@ -26,7 +29,7 @@ export const WORST_CAP = 50;
 
 // Every column the scan needs: identity + status + each edition's title and body.
 export const SCAN_COLS = [
-  'id', 'slug', 'status', 'source_lang', 'published_at', 'created_at',
+  'id', 'slug', 'status', 'source_lang', 'published_at', 'created_at', 'category', 'franchise', 'kind', 'author_name',
   ...LANGS.map((l) => `title_${l}`),
   ...LANGS.map((l) => `content_${l}`),
 ].join(', ');
@@ -41,6 +44,9 @@ export interface EditionFinding {
   untranslated: boolean;
   score: number;
   level: Level;
+  // The strongest tells behind the score (label, severity, count) so the admin page can
+  // say WHY an edition reads as machine output. Flag-only: nothing here blocks publishing.
+  tells: Array<{ key: string; label: string; severity: 'high' | 'medium' | 'low'; count: number; sample: string }>;
 }
 
 export interface LangSummary {
@@ -49,6 +55,7 @@ export interface LangSummary {
   scored: number;       // translated editions actually scored in this language
   avgScore: number;     // mean AI-tell score over `scored` editions (0 when none)
   high: number;         // scored editions whose AI level is 'high'
+  flagged: number;      // scored editions at 'medium' or 'high' (worth a human pass)
 }
 
 export interface ScanResult {
@@ -73,6 +80,9 @@ export function stripHtml(html: unknown): string {
   if (!html) return '';
   return String(html)
     .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+    // Block ends become a blank line so paragraph-level detectors (summary openers,
+    // uniform paragraph sizes) still see paragraphs after the tags are gone.
+    .replace(/<\s*(?:br|\/p|\/div|\/li|\/h[1-6]|\/blockquote|\/tr)\s*\/?>/gi, '\n\n')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
@@ -81,7 +91,9 @@ export function stripHtml(html: unknown): string {
     .replace(/&(?:quot|#34);/gi, '"')
     .replace(/&(?:#39|apos|rsquo|lsquo);/gi, "'")
     .replace(/&[#0-9a-z]+;/gi, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/[ \t\f\v\r\u00a0]+/g, ' ')
+    .replace(/ ?\n ?/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
@@ -97,7 +109,7 @@ function sourceOf(v: unknown): Edition {
 
 function emptyPerLang(): Record<Edition, LangSummary> {
   return Object.fromEntries(
-    LANGS.map((l) => [l, { total: 0, untranslated: 0, scored: 0, avgScore: 0, high: 0 }]),
+    LANGS.map((l) => [l, { total: 0, untranslated: 0, scored: 0, avgScore: 0, high: 0, flagged: 0 }]),
   ) as Record<Edition, LangSummary>;
 }
 
@@ -113,16 +125,21 @@ export function scanPosts(posts: RawPost[]): ScanResult {
     const enStripped = stripHtml(p.content_en);
     const id = p.id == null ? '' : String(p.id);
     const slug = str(p.slug);
+    // Do the seven editions say the same thing? (length, figures; the outlier is named whichever language it is)
+    const parity = parityOf(Object.fromEntries(LANGS.map((x) => [x, str(p[`content_${x}`])])) as Partial<Record<PLang, string>>);
 
     for (const l of LANGS) {
-      if (l === src) continue; // only editions that should be translations of the source
+      // The source edition is scored too: that is where most machine patterns are born, and every translation inherits them.
+      void src;
       const stripped = stripHtml(p[`content_${l}`]);
       // Untranslated: nothing there, or (for a non-English edition) byte-identical
       // to the English body — i.e. English is being served in its place.
       const untranslated =
         stripped === '' || (l !== 'en' && enStripped !== '' && stripped === enStripped);
 
-      const r = scoreAiTells({ title: str(p[`title_${l}`]), content: stripped, lang: l as Lang });
+      // One scorer for the whole site (lib/voice): words, sentence shape, layout and per-language tells, on the body as published.
+      const desk = deskFor({ category: str(p.category) || null, franchise: str(p.franchise) || null, kind: str(p.kind) || null, evergreen: p.author_name === 'The Cyprus Lifestyle Desk' });
+      const r = scoreVoice({ title: str(p[`title_${l}`]), body: str(p[`content_${l}`]), lang: l as Lang, desk });
       const title = str(p[`title_${l}`]) || str(p.title_en) || slug || '(untitled)';
 
       const sum = perLang[l];
@@ -135,8 +152,19 @@ export function scanPosts(posts: RawPost[]): ScanResult {
         sum.scored += 1;
         scoreSum[l] += r.score;
         if (r.level === 'high') sum.high += 1;
+        if (r.level === 'high' || r.level === 'medium') sum.flagged += 1;
       }
-      editions.push({ id, slug, title, lang: l, untranslated, score: r.score, level: r.level });
+      const tells = r.tells.slice(0, 4).map((t) => ({ key: t.key, label: t.label, severity: t.severity, count: t.count, sample: String(t.sample || '') }));
+      // Parity problems of THIS edition rank it for repair: a lost half of the text matters more than a stock phrase.
+      const pe = parity.editions.find((e) => e.lang === l);
+      let score = r.score, level: Level = r.level;
+      const pp = parity.problems.filter((x) => x.startsWith(`${l}:`));
+      if (pe && pe.status !== 'ok' && !untranslated) {
+        tells.unshift({ key: `parity_${pe.status}`, label: pp[0] || `Edition differs from the others (${pe.status})`, severity: 'high', count: 1, sample: '' });
+        score = Math.min(100, score + 25);
+        level = 'high';
+      }
+      editions.push({ id, slug, title, lang: l, untranslated, score, level, tells });
     }
   }
 

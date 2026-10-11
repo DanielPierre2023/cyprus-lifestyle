@@ -1,24 +1,19 @@
 // lib/editorial/gate.ts
 // ============================================================================
 // Shared helpers for the key-gated editorial pipeline routes.
-//   • denyReason — the EXACT ENRICH_SECRET key-gate used by the concierge
-//     enrichment routes (app/api/concierge/*), so all pipeline jobs authorise
-//     the same way: ?key=<ENRICH_SECRET>.
+//   • denyReason — the shared ENRICH_SECRET key-gate (lib/auth/keyGate.ts) used by the
+//     concierge enrichment routes and the pipeline jobs, so they all authorise the same way.
 //   • subjectFromListing — pure mapper from a directory_listings row to the
 //     PipelineSubject the generate layer grounds on.
 // ============================================================================
 import type { NextRequest } from 'next/server';
 import type { PipelineSubject } from '@/lib/editorial/pipeline';
+import { keyGateDeny } from '@/lib/auth/keyGate';
 
-// A clear reason instead of a bare "unauthorized", so the cause is obvious.
-export function denyReason(req: NextRequest): string | null {
-  if (!process.env.ENRICH_SECRET) {
-    return 'ENRICH_SECRET is not set on the server. Add it in Vercel → Settings → Environment Variables, redeploy, then call this URL with ?key=<that same value>.';
-  }
-  if ((req.nextUrl.searchParams.get('key') || '') !== process.env.ENRICH_SECRET) {
-    return 'Unauthorized — the ?key= value does not match ENRICH_SECRET set on the server.';
-  }
-  return null;
+// Shared key-gate (see lib/auth/keyGate.ts): ENRICH_SECRET via header / Bearer / legacy
+// ?key=, or a signed-in admin session. Async — callers must `await` it.
+export async function denyReason(req: NextRequest): Promise<string | null> {
+  return keyGateDeny(req);
 }
 
 // Pure: build the subject the pipeline reasons about from a directory listing row.

@@ -6,6 +6,7 @@
 // with cross-session memory, and the memory is updated after the turn.
 import { NextRequest, after } from 'next/server';
 import { rateLimit } from '@/lib/ratelimit';
+import { publicAiCeilingDeny } from '@/lib/spendGuard';
 import { streamConcierge, latestUserText, type ChatMessage } from '@/lib/concierge/brain';
 import { renderMemory, updateMemory, isValidCid, type MemoryProfile } from '@/lib/concierge/memory';
 import { isMemberCid, MEMBER_BLOCK } from '@/lib/concierge/membership';
@@ -35,6 +36,10 @@ export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   if (!(await rateLimit(req, 'concierge-chat', 30, 60))) {
+    return new Response(JSON.stringify({ error: 'busy' }), { status: 429, headers: { 'Content-Type': 'application/json' } });
+  }
+  // Global daily ceiling for anonymous model calls (also honours AI_KILL_SWITCH).
+  if (await publicAiCeilingDeny('chat')) {
     return new Response(JSON.stringify({ error: 'busy' }), { status: 429, headers: { 'Content-Type': 'application/json' } });
   }
   const body = await req.json().catch(() => ({}));

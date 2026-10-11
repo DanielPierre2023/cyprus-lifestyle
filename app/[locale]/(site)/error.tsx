@@ -39,6 +39,28 @@ const COPY: Record<string, Copy> = {
     retry: 'حاول مرة أخرى',
     home: 'العودة إلى الصفحة الأولى',
   },
+  // de / pl / ru: machine-written (increment 5.1), needs native review.
+  de: {
+    kicker: 'Redaktionelle Notiz',
+    title: 'Da ist etwas schiefgelaufen',
+    dek: 'Ein unerwarteter Fehler hat diese Seite unterbrochen. Die Redaktion wurde benachrichtigt — bitte versuchen Sie es erneut.',
+    retry: 'Erneut versuchen',
+    home: 'Zurück zur Titelseite',
+  },
+  pl: {
+    kicker: 'Komunikat redakcji',
+    title: 'Coś poszło nie tak',
+    dek: 'Nieoczekiwany błąd przerwał działanie tej strony. Redakcja została powiadomiona — spróbuj ponownie.',
+    retry: 'Spróbuj ponownie',
+    home: 'Wróć na stronę główną',
+  },
+  ru: {
+    kicker: 'Заметка редакции',
+    title: 'Что-то пошло не так',
+    dek: 'Непредвиденная ошибка прервала загрузку этой страницы. Редакция уведомлена — попробуйте ещё раз.',
+    retry: 'Попробовать снова',
+    home: 'Вернуться на главную',
+  },
 };
 
 export default function SiteError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {

@@ -4,7 +4,7 @@
  * /api/admin/enrich-stubs (GET = dry-run census + cost, POST = fill a batch). The
  * heavy lifting (grounded generation, validation, writes, the SEO gate) lives in
  * lib/directory/enrich.ts and runs server-side inside Next, where the service-role
- * client + CLAUDE_API_KEY are available. This script is a thin, dependency-free
+ * client + OPENAI_API_KEY are available. This script is a thin, dependency-free
  * HTTP loop, so it runs under plain `tsx` (the lib modules are `server-only` and
  * cannot be imported into a bare Node process).
  *
@@ -14,7 +14,7 @@
  *
  * ── Setup ────────────────────────────────────────────────────────────────────
  *   The target server must be running (next dev, or your deployed instance) and
- *   have SUPABASE_SERVICE_ROLE_KEY + CLAUDE_API_KEY configured. Auth uses an admin
+ *   have SUPABASE_SERVICE_ROLE_KEY + OPENAI_API_KEY configured. Auth uses an admin
  *   bearer secret: set ENRICH_STUBS_SECRET (or CRON_SECRET) on BOTH the server and
  *   here (this script reads .env.local / .env automatically on Node ≥ 20.12).
  *
@@ -82,7 +82,7 @@ function printHelp(): void {
     --concurrency N   parallel model calls  (default 4)
     --batches N       number of batches     (default 1 ; --all = unlimited)
     --translate       also fill el/ro/ar/de/pl/ru (faithful translation of the EN blurb)
-    --model ID        override the model    (default: the server's Haiku default)
+    --model ID        override the model    (default: the server's default, gpt-6-luna)
     --base-url URL    app URL               (env ENRICH_BASE_URL, default localhost:3000)
     --secret TOKEN    admin bearer          (env ENRICH_STUBS_SECRET / CRON_SECRET)
   `);

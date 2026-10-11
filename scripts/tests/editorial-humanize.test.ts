@@ -5,21 +5,24 @@
 // The model-backed layer (generate.ts: draftPiece/translatePiece/transcreatePiece/
 // polishPiece) is deliberately NOT tested here — it is server-only I/O.
 import {
-  AI_TELLS, BURSTINESS, antiAiRules, transcreateSystem, stripHtml, lintAiTells,
+  AI_TELLS, PROSE_STANDARD, antiAiRules, transcreateSystem, stripHtml, lintAiTells,
 } from '@/lib/editorial/craft';
 import { eq, ok, report } from './_harness';
 
-// ── BURSTINESS structural directive ────────────────────────────────────────────
-ok('BURSTINESS is a non-empty string', typeof BURSTINESS === 'string' && BURSTINESS.length > 120);
-ok('BURSTINESS demands uneven paragraph lengths', /uneven/i.test(BURSTINESS) && /paragraph/i.test(BURSTINESS));
-ok('BURSTINESS wants one-sentence AND long paragraphs', /single (short )?sentence/i.test(BURSTINESS) && /\blong\b/i.test(BURSTINESS));
-ok('BURSTINESS spreads sentence length (short vs long numbers)', /three to five/i.test(BURSTINESS) && /thirty/i.test(BURSTINESS));
-ok('BURSTINESS forbids uniform rhythm', /uniform|metronome|unpredictab/i.test(BURSTINESS));
-ok('BURSTINESS forbids two adjacent similar paragraphs', /adjacent|next to each other|the one before/i.test(BURSTINESS));
+// ── the prose standard: an intention, not a quota ────────────────────────────────
+ok('PROSE_STANDARD is a non-empty string', typeof PROSE_STANDARD === 'string' && PROSE_STANDARD.length > 200);
+ok('it lets sentence and paragraph length follow the meaning', /follow the meaning/i.test(PROSE_STANDARD) && /paragraph length follow the logic/i.test(PROSE_STANDARD));
+ok('it carries no number and no rhythm quota (the measurements belong to the editor\'s work order)', !/\d/.test(PROSE_STANDARD) && !/(under|over) (eight|twenty|8|25)|at least (two|three|four)|three to five|thirty|uneven|burstiness|verbless/i.test(PROSE_STANDARD));
+ok('it forbids mechanical alternation and fragments for effect', /no mechanical alternation/i.test(PROSE_STANDARD) && /no fragment added for effect/i.test(PROSE_STANDARD));
+ok('it asks for plain speech verbs and forbids the ornamental ones', /plain speech verbs/i.test(PROSE_STANDARD) && /ornamental/i.test(PROSE_STANDARD));
 
-// ── antiAiRules embeds burstiness and keeps its existing guarantees ──────────────
-ok('antiAiRules embeds the BURSTINESS block verbatim', antiAiRules('German').includes(BURSTINESS));
-ok('antiAiRules still bans the em dash', /em dash|—/.test(antiAiRules()));
+// ── antiAiRules embeds the standard and keeps its guarantees ──────────────────────
+ok('antiAiRules embeds the prose standard verbatim', antiAiRules('German').includes(PROSE_STANDARD));
+ok('antiAiRules still bans the dash as a pause mark', /no em or en dashes/i.test(antiAiRules()) && /no em or en dashes/i.test(antiAiRules('German')));
+ok('...except in Russian, whose punctuation needs the dash', !/no em or en dashes/i.test(antiAiRules('Russian')) && antiAiRules('Russian').includes('тире'));
+ok('antiAiRules (Arabic) names the Arabic comma', antiAiRules('Arabic').includes('،'));
+ok('antiAiRules never asks to be undetectable or to defeat a detector', ['English', 'German', 'Polish', 'Greek', 'Arabic'].every((L) => !/undetect|defeat|evade|burstiness|dry aside|occasional short fragment/i.test(antiAiRules(L))));
+ok('antiAiRules forbids invented scenes, moods and opinions', /no scene, no mood, no opinion/.test(antiAiRules('English')));
 ok('antiAiRules (English) still sets British English', /British English/.test(antiAiRules('English')));
 ok('antiAiRules uppercases the target language in the heading', /GERMAN/.test(antiAiRules('German')) && /POLISH/.test(antiAiRules('Polish')) && /RUSSIAN/.test(antiAiRules('Russian')));
 ok('antiAiRules names the target language natively for non-English', /idiomatic, publication-grade German/.test(antiAiRules('German')));
@@ -43,7 +46,7 @@ eq('lint stays clean on plain reportage', lintAiTells('The road west out of Paph
   ok('transcreateSystem is re-reporting, not translation', /RE-REPORT/.test(t) && /transcreation, not translation/i.test(t));
   ok('transcreateSystem freezes facts AND structure', /every fact/i.test(t) && /section structure/i.test(t));
   ok('transcreateSystem forbids mirroring English shapes', /do not mirror/i.test(t));
-  ok('transcreateSystem embeds the anti-AI + burstiness rules', t.includes(BURSTINESS));
+  ok('transcreateSystem embeds the standard of the piece', t.includes(PROSE_STANDARD));
   ok('transcreateSystem states the JSON output contract', /JSON/.test(t) && /"title"/.test(t) && /"body"/.test(t));
   ok('transcreateSystem defaults to English', /NATIVE ENGLISH STAFF WRITER/.test(transcreateSystem()));
   // Localises for every non-English edition name we ship.

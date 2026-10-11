@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit, isHoneypot } from '@/lib/ratelimit';
 import { logInboundToAccount } from '@/lib/crm';
+import { localeOf } from '@/lib/i18n/resolveLocale';
+import { errorBody, codedError } from '@/lib/i18n/apiErrors';
 
 export const runtime = 'nodejs';
 
@@ -22,7 +24,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   if (isHoneypot(body)) return NextResponse.json({ ok: true }); // silently drop bots
   if (!(await rateLimit(req, 'contact'))) {
-    return NextResponse.json({ ok: false, error: 'Too many requests — please wait a moment.' }, { status: 429 });
+    return NextResponse.json(errorBody('rate_limited', localeOf(req, body.locale)), { status: 429 });
   }
   const name = String(body.name || '').trim().slice(0, 120);
   const email = String(body.email || '').trim().toLowerCase();
@@ -34,7 +36,7 @@ export async function POST(req: NextRequest) {
   const rc = String(body.requestClass || '').trim().toLowerCase();
   const requestClass: RequestClass = (CLASSES as readonly string[]).includes(rc) ? (rc as RequestClass) : 'general';
   if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !message) {
-    return NextResponse.json({ ok: false, error: 'name, a valid email and a message are required' }, { status: 400 });
+    return NextResponse.json(errorBody('contact_fields_required', localeOf(req, body.locale)), { status: 400 });
   }
   // Prefix the subject with the class so the queue is visible in the existing inbox
   // even in an environment where the request_class column has not been added yet.
@@ -47,7 +49,7 @@ export async function POST(req: NextRequest) {
     // Migration 0121 not applied yet → retry with the base columns so the form never breaks.
     ({ error } = await sb.from('contact_messages').insert({ name, email, subject, message, status: 'unread' }));
   }
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+  if (error) return NextResponse.json(codedError('save_failed', error.message), { status: 400 });
 
   // Route to the CRM timeline for sales/editorial-relevant classes from a tracked
   // business (matched by email domain); best-effort, never blocks the reply.

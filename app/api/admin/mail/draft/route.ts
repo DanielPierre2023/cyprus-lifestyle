@@ -14,12 +14,14 @@ import { isAdmin } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { composeReply } from '@/lib/mail/assist';
 import { isLocale } from '@/lib/locales';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'mail.draft');
   const body = await req.json().catch(() => ({}));
   const id = String(body.id || '');
   const mode = body.mode === 'polish' ? 'polish' : 'compose';

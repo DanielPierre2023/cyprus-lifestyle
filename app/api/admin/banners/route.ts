@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 
@@ -57,6 +58,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 403 });
+  auditAdminRequest(req, 'banners');
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   const sb = supabaseAdmin();
   const action = typeof body.action === 'string' ? body.action : '';

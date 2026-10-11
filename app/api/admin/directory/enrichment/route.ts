@@ -16,6 +16,7 @@ import { isAdmin } from '@/lib/supabase/server';
 import { buildEnrichmentWorkbook, buildWebsitesCsv, planUpload, applyPlan } from '@/lib/directory/enrichment-data';
 import { NEED_KEYS, SOCIALS, DAYS, isOwnWebsite, type NeedKey, type Patch } from '@/lib/directory/enrichment';
 import { cleanEmail, cleanPhone, safeUrl } from '@/lib/map/explorer-index';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -84,6 +85,7 @@ function sanitizePatch(p: unknown): Patch | null {
 
 export async function POST(req: NextRequest) {
   if (!(await authed(req))) return deny();
+  auditAdminRequest(req, 'directory.enrichment');
   try {
     const type = req.headers.get('content-type') || '';
     if (type.includes('application/json')) {

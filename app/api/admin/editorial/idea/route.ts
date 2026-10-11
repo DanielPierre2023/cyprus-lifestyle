@@ -3,7 +3,7 @@
 //   approve → create a pipeline piece (blog_posts, commissioned) from the idea and link
 //             it. When autonomy is 'auto-draft', the writing is handed to the dedicated
 //             /api/editorial/draft route IN THE BACKGROUND (via after()), so this request
-//             returns fast and the full Sonnet draft runs in its own 60s function instead
+//             returns fast and the full draft runs in its own 60s function instead
 //             of timing out inline.
 //   reject  → mark the idea rejected (with an optional reason).
 //   assign  → set assigned_to and mark it assigned.
@@ -13,6 +13,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { uniqueSlug } from '@/lib/util';
 import { suggestCommission, isFranchise, getFranchise } from '@/lib/editorial/pipeline';
 import { getEditorialSettings } from '@/lib/editorial/settings';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -85,6 +86,7 @@ async function approve(idea: Idea): Promise<Record<string, unknown>> {
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'editorial.idea');
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   const id = typeof body.id === 'string' ? body.id : '';
   const action = typeof body.action === 'string' ? body.action : '';

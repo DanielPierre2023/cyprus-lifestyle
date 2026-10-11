@@ -2,6 +2,8 @@ import { getTranslations, getLocale } from 'next-intl/server';
 import { Link } from '@/lib/i18n/routing';
 import LocaleSwitch from '@/components/LocaleSwitch';
 import type { Locale } from '@/lib/locales';
+import { LEGAL_UI } from '@/lib/legal';
+import CookieSettingsButton from '@/components/legal/CookieSettingsButton';
 
 // The nine merged departments (see lib/editorial/taxonomy.ts).
 const CATS = ['style', 'table', 'escapes', 'design-living', 'property', 'business', 'culture', 'people', 'the-island'] as const;
@@ -25,6 +27,7 @@ export default async function Footer() {
   const t = await getTranslations();
   const locale = (await getLocale()) as Locale;
   const year = new Date().getFullYear();
+  const legal = LEGAL_UI[locale] || LEGAL_UI.en;
   return (
     <footer className="foot">
       <div className="wrap">
@@ -56,6 +59,10 @@ export default async function Footer() {
             <Link href="/standards">{t('footer.standards')}</Link>
             <Link href="/contact">{t('footer.contact')}</Link>
             <Link href="/privacy">{t('footer.privacy')}</Link>
+            <Link href="/terms">{legal.terms}</Link>
+            <Link href="/cookies">{legal.cookies}</Link>
+            <Link href="/legal-notice">{legal.notice}</Link>
+            <CookieSettingsButton label={legal.cookieSettings} />
             <Link href="/sourcing">{t('footer.sourcing')}</Link>
           </div>
         </div>

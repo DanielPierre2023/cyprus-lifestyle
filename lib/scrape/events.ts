@@ -11,7 +11,7 @@
 // an event is only added if the article states a real name AND a real future date.
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { callClaude, CLAUDE_HAIKU, parseAiJson } from '@/lib/ai';
+import { callAI, parseAiJson } from '@/lib/ai';
 import { slugify, canonDistrict } from '@/lib/scrape/developments';
 
 export const CULTURE_CATEGORIES = ['culture', 'arts', 'events', 'event', 'music', 'festival', 'entertainment', 'nightlife'];
@@ -28,9 +28,10 @@ export async function refreshAgenda(opts?: { cities?: string; limit?: number; pe
   const key = process.env.ENRICH_SECRET;
   if (!base || !key) return { ok: false, status: 0, skipped: 'ENRICH_SECRET / SUPABASE_URL not set' };
   const cities = opts?.cities || 'limassol,nicosia,larnaca,paphos,ayia-napa';
-  const url = `${base}/functions/v1/events-ingest?key=${encodeURIComponent(key)}&cities=${encodeURIComponent(cities)}&limit=${opts?.limit ?? 24}&perCity=${opts?.perCity ?? 6}`;
+  // The secret travels in a header, never in the URL (URLs end up in access logs).
+  const url = `${base}/functions/v1/events-ingest?cities=${encodeURIComponent(cities)}&limit=${opts?.limit ?? 24}&perCity=${opts?.perCity ?? 6}`;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(55_000) });
+    const res = await fetch(url, { headers: { 'x-enrich-key': key }, signal: AbortSignal.timeout(55_000) });
     return { ok: res.ok, status: res.status };
   } catch (e) { return { ok: false, status: 0, skipped: (e as Error).message.slice(0, 120) }; }
 }
@@ -59,7 +60,7 @@ export function normalizeEvent(e: RawEvent): { name: string; starts_at: string; 
 
 async function extractEventsFromArticle(title: string, body: string): Promise<RawEvent[]> {
   if (body.trim().length < 120) return [];
-  const { text, error } = await callClaude({
+  const { text, error } = await callAI({
     systemInstruction: [
       `Extract concrete, DATED, upcoming events described in this Cyprus culture article. Only events with a REAL specific date (a day, or a clear date range) AND a name. Skip anything vague, past, or recurring-without-a-date.`,
       `Republic of Cyprus (south) only. Never invent a date, venue or price — leave a field null if the article doesn't state it.`,
@@ -67,7 +68,7 @@ async function extractEventsFromArticle(title: string, body: string): Promise<Ra
       `Return {"events":[ ... ]}, at most 8. If there are no concrete dated events, return {"events":[]}.`,
     ].join('\n'),
     userMessage: `TITLE: ${title}\n\nARTICLE:\n"""${body.slice(0, 9000)}"""`,
-    model: CLAUDE_HAIKU, jsonMode: true, maxTokens: 1500, fn: 'events-from-article',
+    task: 'extract', jsonMode: true, expectTokens: 1500, background: true, fn: 'events-from-article',
   });
   if (error) throw new Error(error);
   const parsed = parseAiJson<{ events?: RawEvent[] }>(text);

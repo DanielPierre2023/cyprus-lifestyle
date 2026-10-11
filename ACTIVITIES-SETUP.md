@@ -134,3 +134,28 @@ Keep it that way: grow the catalogue by hand, not from new scraped exports. Once
 passes ~100k monthly visits you can apply for the **Partner API** (live data, used in real
 time, not cached). If you want certainty, show your partner manager a sample entry and ask
 them to confirm in writing.
+
+## Public pages (increment 5.3)
+
+Every active experience now has its own page, in all seven editions (`/activities`, `/de/activities/<slug>` …):
+
+| Route | What |
+|---|---|
+| `/activities` | the index: filter chips (type, district, duration, price level), 24 per page |
+| `/activities/browse/<filters>` | a filtered / paginated list. Filters live in the PATH, e.g. `kind-boat_district-paphos_dur-half_price-2_page-2` (fixed order, page 1 omitted) so every list is a cacheable ISR page. Only the unfiltered list and single-facet page 1 are indexable; combinations are `noindex,follow`. |
+| `/activities/<slug>` | the detail page: our title and summary (English in every edition — owner rule), kind, place, duration, price level / basis, group size, a link to the map explorer, the partner booking link (`rel="sponsored nofollow noopener"`, partner id from `lib/activities/classify.ts affiliateUrl`), `TouristTrip` + breadcrumb JSON-LD (no ratings, prices or coordinates), self canonical + hreflang for all editions |
+
+- **Honesty:** a pin is an *approximate area* ("Around the Blue Lagoon (Latchi) — approximate area" / "Departs from the Paphos area — approximate area"); every page says the real meeting point is confirmed on the booking page, and the price level is indicative.
+- **North:** tours that visit northern sites (`visits_north`) have **no page, no sitemap entry, no concierge card** unless `ACTIVITIES_NORTH_TOURS=show` (same switch as the map). With it on, the page carries a plain note that the site is not under the control of the Republic's government.
+- **Labels** come from the typed module `lib/activities/pageCopy.ts` (7 locales; **needs native review** for el ro ar de pl ru); `messages/*.json` is untouched.
+- **Cache / revalidation:** ISR 3600 like the other pages; data reads are tagged `activities` and `activity:<slug>` (+ per-locale twins on the pages). Refresh after a catalogue edit with `POST /api/revalidate/tags {"kind":"activity","slug":"<slug>"}`, or point a Supabase DB webhook for table `activities` at it. Nothing is pre-rendered at build (`generateStaticParams` returns `[]`): a page renders on first visit, then is cached.
+- **Sitemap:** child `/sitemaps/activities` (listed in `/sitemap.xml`): `/activities` + one URL per visible experience, with hreflang alternates.
+- **Concierge:** the cards link to the experience page (internal); GetYourGuide stays as the secondary "Book" action. WhatsApp / Telegram send the page link first, then (for the first experience) the partner link.
+
+### Concierge language memory (WhatsApp / Telegram)
+
+`lib/concierge/localeMemory.ts`: the last *confidently* detected language is kept in the existing `locale` column of `concierge_wa_threads` / `concierge_tg_threads` (no migration). A short or ambiguous reply ("ja bitte") uses it; an unconfident message never overwrites it; memory older than 30 days is ignored; a brand-new Telegram chat falls back to the Telegram UI language, then English. Rows written before this change may hold an unconfident `en`; they heal on the next clearly identifiable message.
+
+### Orphan vectors (nightly embed job)
+
+`/api/concierge/embed-sources` now first deletes `concierge_embeddings` rows whose article / event / experience is no longer published / active (batches of 100, ≤ 2000 per run, 12 s budget, idempotent). The response reports it under `prune`. Guards: a source with no live rows is skipped, so is a run that would delete more than half of a source's vectors (`?prune=force` lifts that); `?prune=0` turns the step off; `?dry=1` only reports.

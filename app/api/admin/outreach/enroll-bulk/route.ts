@@ -6,11 +6,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { auditAdminRequest } from '@/lib/auditRequest';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
+  auditAdminRequest(req, 'outreach.enroll-bulk');
   const b = await req.json().catch(() => ({}));
   const arg = (v: unknown) => { const s = String(v ?? '').trim(); return s && s !== 'all' ? s : null; };
   const { data, error } = await supabaseAdmin().rpc('enroll_prospects_bulk', {

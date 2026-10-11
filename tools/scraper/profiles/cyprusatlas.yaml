@@ -5,7 +5,7 @@ base_url: https://cyprusatlas.com
 target: directory
 fetcher: http           # "browser" only if a page needs JS rendering
 delay: 2.0
-ai_fallback: false      # set true (+ CLAUDE_API_KEY) to also lift a clean address + summary
+ai_fallback: false      # set true (+ OPENAI_API_KEY) to also lift a clean address + summary
 
 discovery:
   listings:
