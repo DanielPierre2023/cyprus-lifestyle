@@ -220,7 +220,7 @@ export default function AiTab() {
         <button className="abtn ghost" disabled={busy === 'selftest'} onClick={selfTest}>
           {busy === 'selftest' ? 'Checking…' : 'Run AI health check'}
         </button>
-        <span style={{ fontSize: 12, color: '#8a8371' }}>Checks that the AI service is reachable, before you generate.</span>
+        <span style={{ fontSize: 12, color: '#8a8371' }}>Checks that the AI service is reachable, before you generate. Run it here, signed in as admin: the article-desk function refuses calls that carry no admin login.</span>
       </div>
       {report ? (
         <pre style={{ background: '#0B0E11', color: '#E4D2AC', padding: 12, borderRadius: 4, fontSize: 12, overflowX: 'auto', margin: '0 0 14px', whiteSpace: 'pre-wrap' }}>
@@ -228,6 +228,10 @@ export default function AiTab() {
 structured output: ${report.writer_primary?.usable ? 'ok' : 'FAIL'} (${detail(report.writer_primary?.structured_output)})
 plain JSON mode:   ${report.writer_fallback?.usable ? 'ok' : 'FAIL'} (${detail(report.writer_fallback?.prefill)})
 style check:       ${report.style_check ? (report.style_check.usable ? 'ok' : 'FAIL') + ' (' + detail(report.style_check.detail) + ')' : 'n/a'}
+meaning check:     ${report.meaning_check ? (report.meaning_check.usable ? 'ok' : 'NOT available') + ' (' + detail(report.meaning_check.detail) + ')' : 'n/a (the article-desk function is not updated yet)'}
+model pieces:      ${report.model_pieces ? (report.model_pieces.usable ? 'ok' : 'NOT available') + ' (' + detail(report.model_pieces.detail) + ')' : 'n/a (the article-desk function is not updated yet)'}
+recent openings:   ${report.recent_openings ? String(report.recent_openings) : 'n/a (the article-desk function is not updated yet)'}
+desk settings:     ${report.settings ? Object.entries(report.settings).map(([k, v]) => `${k}=${typeof v === 'string' ? v : v ? 'on' : 'off'}`).join('  ') : 'n/a (the article-desk function is not updated yet)'}
 concierge chat:    ${report.concierge ? (report.concierge.ok ? 'ok (first word after ' + ((report.concierge.chat?.first_word_ms ?? 0) / 1000).toFixed(1) + ' s, answer complete after ' + ((report.concierge.chat?.total_ms ?? 0) / 1000).toFixed(1) + ' s)' : 'FAIL (' + conciergeFailure(report.concierge) + ')') : 'n/a'}
 budget:            ${report.budget ? `today $${report.budget.spent_today_usd ?? '?'} of $${report.budget.daily_limit_usd} · month $${report.budget.spent_month_usd ?? '?'} of $${report.budget.monthly_limit_usd}${report.budget.paused ? ' · PAUSED: ' + report.budget.paused : ''}` : ''}
 keys present:      ${Object.entries(report.keys_present || {}).map(([k, v]) => `${k}=${v ? 'yes' : 'NO'}`).join('  ')}
