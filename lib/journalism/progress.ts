@@ -13,8 +13,14 @@ export interface Weighed { key?: string; severity?: string; count?: number }
 export interface Judged { score: number; tells: ReadonlyArray<Weighed>; raw?: number }
 
 const WEIGHT: Record<string, number> = { high: 40, medium: 7, low: 3 };
-/** Findings whose `count` is the size of the text (paragraphs), not the number of times the fault occurs: they weigh once. */
-const COUNTS_THE_TEXT = new Set(['uniform_paragraphs']);
+/**
+ * Findings whose `count` is the size of the text (its paragraphs, its headings, its bullets), not the number of times the fault occurs:
+ * they weigh once, in the displayed score as well as here. A "low" finding that grew with the length of the article (five headings made
+ * "many headings on a short piece" weigh ten points, more than a medium finding) could not be repaired by rewording and kept guides
+ * above the bar for good.
+ */
+const COUNTS_THE_TEXT = new Set(['uniform_paragraphs', 'over_sectioned', 'templated_headings', 'listicle', 'c_specificity', 'c_para_opener_many', 'c_speech_mono']);
+export const countsTheText = (key: string | undefined): boolean => COUNTS_THE_TEXT.has(String(key));
 
 /** Smallest weight difference (points) that counts as progress at the same displayed score: one "low" finding is 3, so any real fix passes. */
 export const PROGRESS_MARGIN = 2;

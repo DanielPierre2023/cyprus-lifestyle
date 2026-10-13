@@ -69,6 +69,82 @@ export function numbersIn(input: string): string[] {
 /** Figures too small to count as facts: list numbers and counts of one to ten ("3 steps"). */
 const trivial = (n: string) => /^\d$/.test(n) || n === '10';
 
+// ── figures in any notation ───────────────────────────────────────────────────────────
+/**
+ * One figure of a text together with every way it may be written. A rewrite or a translation changes notation, not substance:
+ * "18:30" becomes "18.30" or "6:30 pm", "19:00" becomes "19.00" or "19 Uhr", "19.00" is "19", "1.200,50" is "1,200.50". Reading those
+ * as different numbers made the guard reject a faithful text ("new figures not in the source: 18.30, 19.00; drops 50% of the figures").
+ * Two figures are the same when their `keys` meet; `id` is the one key used when figures are counted or compared across editions.
+ */
+export interface Figure {
+  shown: string; id: string; trivial: boolean;
+  /** Spellings of exactly this value: figures that share one are the same figure, on whichever side they stand. */
+  keys: string[];
+  /** Looser spellings, used only for a figure of the SOURCE ("19:00" may come back as "ora 19", but a bare "19" never vouches for a time). */
+  also: string[];
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** A time of day. Written with a colon, with a dot, with am/pm or as a bare hour on the hour; the 12-hour forms of an afternoon time too. */
+function timeFigure(h: number, m: number): Figure {
+  const hh = String(h), mm = pad2(m);
+  const id = `t${hh}:${mm}`;
+  const keys = [id, `${hh}.${mm}`];
+  const also: string[] = [];
+  if (m === 0) also.push(hh);                                                     // "19:00" is also "ora 19", "19 Uhr"
+  if (h >= 13) { const h12 = String(h - 12); keys.push(`t${h12}:${mm}`, `${h12}.${mm}`); if (m === 0) also.push(h12); }
+  return { shown: `${hh}:${mm}`, id, keys, also, trivial: false };
+}
+
+/** A number as numbersIn spells it (digits, "." as the decimal mark): "19.00" is "19", "18.30" may also be a time written with a dot. */
+function numberFigure(canon: string): Figure {
+  const keys = [canon];
+  let id = canon;
+  if (canon.includes('.')) {
+    const stripped = canon.replace(/0+$/, '').replace(/\.$/, '');
+    if (stripped !== canon) keys.push(stripped);
+    const t = /^([01]?\d|2[0-3])\.([0-5]\d)$/.exec(canon);
+    if (t) { id = `t${Number(t[1])}:${t[2]}`; keys.push(id); } else id = stripped;
+  }
+  return { shown: canon, id, keys, also: [], trivial: trivial(canon) };
+}
+
+// 12-hour clock ("6:30 pm", "6.30pm", "7 p.m.") and 24-hour clock with a colon ("18:30"): read first, so their digits are not counted as two numbers.
+const CLOCK_12 = /(?<![\d.,:])(\d{1,2})(?:[:.]([0-5]\d))?\s?([ap])\.?\s?m\b\.?/gi;
+const CLOCK_24 = /(?<![\d.,:])([01]?\d|2[0-3]):([0-5]\d)(?![\d:])/g;
+
+/** Every figure of a text, times of day as one figure each. */
+export function figuresIn(input: string): Figure[] {
+  let t = toAsciiDigits(stripHtml(String(input || '')));
+  const out: Figure[] = [];
+  t = t.replace(CLOCK_12, (m, hh: string, mm: string | undefined, ap: string) => {
+    const h12 = Number(hh);
+    if (h12 < 1 || h12 > 12) return m;
+    out.push(timeFigure((h12 % 12) + (/p/i.test(ap) ? 12 : 0), mm ? Number(mm) : 0));
+    return ' ';
+  });
+  t = t.replace(CLOCK_24, (_m, hh: string, mm: string) => { out.push(timeFigure(Number(hh), Number(mm))); return ' '; });
+  for (const n of numbersIn(t)) out.push(numberFigure(n));
+  return out;
+}
+
+const uniqueFigures = (figs: Figure[]): Figure[] => { const seen = new Set<string>(); return figs.filter((f) => (seen.has(f.id) ? false : (seen.add(f.id), true))); };
+const keySet = (figs: Figure[], withAlso = false): Set<string> => {
+  const s = new Set<string>();
+  for (const f of figs) { for (const k of f.keys) s.add(k); if (withAlso) for (const k of f.also) s.add(k); }
+  return s;
+};
+
+/**
+ * The figures of `text` that occur nowhere in `allowed` (nor in `attested`, text known to be true to the article, such as its title).
+ * Single digits and ten are not counted unless `strict` (short fields such as a title: "4 films" must not become "5 films").
+ */
+export function unknownFigures(allowed: string, text: string, opts: { attested?: string; strict?: boolean } = {}): string[] {
+  const known = keySet([...figuresIn(allowed), ...figuresIn(opts.attested || '')], true);
+  return uniqueFigures(figuresIn(text)).filter((f) => (opts.strict || !f.trivial) && !f.keys.some((k) => known.has(k))).map((f) => f.shown);
+}
+
 // ── quotations ───────────────────────────────────────────────────────────────────────
 const QUOTE_PAIRS: [string, string][] = [['“', '”'], ['„', '“'], ['„', '”'], ['«', '»'], ['"', '"'], ['‘', '’']];
 /** Quoted passages of 25+ characters (shorter ones are scare-quotes or titles). */
@@ -108,16 +184,23 @@ export interface FactsReport {
  * Compare a candidate against the text it was derived from (the previous version or the scraped source).
  * Same-language rewrites only: a translation changes words, so quotation and name checks do not apply there.
  */
-export function checkFacts(source: string, candidate: string, opts: { sameLanguage?: boolean; lang?: string } = {}): FactsReport {
+export function checkFacts(
+  source: string, candidate: string,
+  opts: { sameLanguage?: boolean; lang?: string; attested?: string; candidateTitle?: string } = {},
+): FactsReport {
   const same = opts.sameLanguage !== false;
   // German capitalises every noun, so "capitalised mid-sentence word" is not a name signal there: figures and quotes are still checked.
   const namesApply = opts.lang !== 'de';
-  const srcNums = new Set(numbersIn(source));
-  const candNums = [...new Set(numbersIn(candidate))];
-  const invented = candNums.filter((n) => !trivial(n) && !srcNums.has(n));
-  const srcImportant = [...srcNums].filter((n) => !trivial(n));
-  const candSet = new Set(candNums);
-  const dropped = srcImportant.filter((n) => !candSet.has(n));
+  // Figures are compared as figures, not as strings (times, decimals): see Figure. `attested` is further text known to be true to the
+  // article (its title, its other editions): a figure found there is not invented, but it is not required of the candidate either.
+  const srcFigs = uniqueFigures(figuresIn(source));
+  const known = keySet([...srcFigs, ...figuresIn(opts.attested || '')], true);
+  const candFigs = uniqueFigures([...figuresIn(candidate), ...figuresIn(opts.candidateTitle || '')]);
+  const invented = candFigs.filter((f) => !f.trivial && !f.keys.some((k) => known.has(k))).map((f) => f.shown);
+  const srcImportant = srcFigs.filter((f) => !f.trivial);
+  const have = keySet(candFigs);
+  const droppedFigs = srcImportant.filter((f) => !f.keys.some((k) => have.has(k)) && !f.also.some((k) => have.has(k)));
+  const dropped = droppedFigs.map((f) => f.shown);
   const droppedRatio = srcImportant.length ? dropped.length / srcImportant.length : 0;
 
   let changedQuotes: string[] = [];

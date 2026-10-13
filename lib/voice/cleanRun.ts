@@ -41,3 +41,31 @@ export function summaryLine(t: CleanTally): string {
   if (t.failed) parts.push(`${t.failed} failed`);
   return `${parts.join(' · ')}.`;
 }
+
+// ── what the admin reads when nothing was saved ─────────────────────────────────────────────────────────────────────────────────────
+// The revise loop leaves terse log lines ("pass 1: rejected, new figures not in the source: 15, 18.30"). The admin who pressed Clean should
+// read a sentence that says what happened and what it means, not a log line: "I don't see any changes" is the worst answer to a click.
+const reasonText = (r: string): string => {
+  let m: RegExpExecArray | null;
+  if ((m = /^new figures not in the source: (.+)$/.exec(r))) return `the new version added figures that are not in the text (${m[1]})`;
+  if ((m = /^drops (\d+)% of the source's figures$/.exec(r))) return `it left out ${m[1]}% of the figures`;
+  if ((m = /^(\d+) quotation\(s\) not verbatim from the source$/.exec(r))) return `it changed ${m[1]} quotation(s)`;
+  if ((m = /^new proper names not in the source: (.+)$/.exec(r))) return `it introduced names that are not in the text (${m[1]})`;
+  if ((m = /^length changed ×([\d.]+)$/.exec(r))) return `it changed the length too much (×${m[1]})`;
+  if (/^HTML structure lost$/.test(r)) return 'it lost the page formatting';
+  if (/^no closer to original/.test(r)) return 'it stayed too close to the source wording';
+  return r;
+};
+
+/** One plain sentence for the last line the revise loop logged (or the route's own message). */
+export function explainNote(note: string | undefined | null): string {
+  const n = String(note || '').trim();
+  if (!n) return 'No safe improvement found; the text was left as it was.';
+  let m: RegExpExecArray | null;
+  if ((m = /^start: score (\d+)$/.exec(n))) return `Nothing to change: the text already passes the bar (score ${m[1]}).`;
+  if ((m = /no improvement \((\d+) vs (\d+)\)/.exec(n))) return `The new version was not better (it scored ${m[1]}, the live text ${m[2]}), so nothing was changed.`;
+  if ((m = /rejected, (.+)$/.exec(n))) return `Not saved: ${m[1].split('; ').map(reasonText).join(' and ')}.`;
+  if (/model error|empty reply/.test(n)) return `The AI model did not answer (${n.replace(/^pass \d+: model error\s*/, '') || 'empty reply'}); try again in a minute.`;
+  if (/unparseable/.test(n)) return "The model's answer could not be read; try again in a minute.";
+  return n;
+}

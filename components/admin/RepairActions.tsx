@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { wantsSecondPass, type RepairReply } from '@/lib/voice/cleanRun';
+import { wantsSecondPass, explainNote, type RepairReply } from '@/lib/voice/cleanRun';
 
 // One-click repair for a single edition, from the /admin/quality worst-offenders table. "Clean" is the editor's pass in the edition's
 // own language (sources named, equal-size paragraphs, stock phrases); a text that moved but still fails the bar gets one more call that
@@ -12,7 +12,7 @@ const chip: React.CSSProperties = {
   padding: '3px 9px', cursor: 'pointer', lineHeight: 1.3,
 };
 
-export default function RepairActions({ id, locale }: { id: string; locale: string }) {
+export default function RepairActions({ id, locale, clean = true, rewrite = true }: { id: string; locale: string; clean?: boolean; rewrite?: boolean }) {
   const [busy, setBusy] = useState<'' | 'clean' | 'rewrite'>('');
   const [msg, setMsg] = useState('');
 
@@ -36,19 +36,23 @@ export default function RepairActions({ id, locale }: { id: string; locale: stri
       const changed = replies.some((x) => x.changed);
       setMsg(changed
         ? `✓ ${first.before}→${last.after}${last.ok_standard ? ' · passes' : ''}${replies.length > 1 ? ' · 2 passes' : ''}`
-        : `${last.note || 'No safe improvement found.'} (${last.after})`);
+        : `${mode === 'clean' ? explainNote(last.note) : (last.note || 'No safe improvement found.')} (score ${last.after})`);
       setTimeout(() => location.reload(), 1000);
     } catch (e) { setMsg((e as Error).message); setBusy(''); }
   }
 
   return (
     <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
-      <button type="button" style={chip} disabled={!!busy} onClick={() => run('clean')} title="Edit this edition in its own language (up to two passes)">
-        {busy === 'clean' ? '…' : 'Clean'}
-      </button>
-      <button type="button" style={chip} disabled={!!busy} onClick={() => run('rewrite')} title="Re-report this edition natively from the source edition (for editions far too short, too long or poorly translated)">
-        {busy === 'rewrite' ? '…' : 'Rewrite'}
-      </button>
+      {clean && (
+        <button type="button" style={chip} disabled={!!busy} onClick={() => run('clean')} title="Edit this edition in its own language (up to two passes)">
+          {busy === 'clean' ? '…' : 'Clean'}
+        </button>
+      )}
+      {rewrite && (
+        <button type="button" style={chip} disabled={!!busy} onClick={() => run('rewrite')} title="Re-report this edition natively from the source edition (for editions far too short, too long or poorly translated)">
+          {busy === 'rewrite' ? '…' : 'Rewrite'}
+        </button>
+      )}
       {msg && <span style={{ fontFamily: 'var(--sans, Jost, sans-serif)', fontSize: 10.5, color: msg.startsWith('✓') ? '#1c6b34' : '#9a2020' }}>{msg}</span>}
     </span>
   );

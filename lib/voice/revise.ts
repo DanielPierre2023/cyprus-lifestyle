@@ -29,6 +29,11 @@ export interface ReviseInput {
   title: string; body: string; lang: string; desk: Desk;
   /** External source text (a scraped article): enables the originality guard and is the fact baseline. */
   source?: string | null;
+  /**
+   * Further text that is true to the article (the titles and bodies of its other editions). A figure found there is not "invented" by a
+   * rewrite: the model writes "15" for "cincisprezece" when the other editions say 15. The title of this edition always counts.
+   */
+  attested?: string;
   callModel: CallModel;
   maxPasses?: number;
   budgetMs?: number;
@@ -65,11 +70,13 @@ export async function reviseToStandard(inp: ReviseInput): Promise<ReviseResult> 
   const factBase = inp.source && inp.source.trim() ? inp.source : inp.body;     // what the rewrite must stay true to
   const external = !!(inp.source && inp.source.trim());                          // originality only against an outside source
   const log: string[] = [];
+  const attested = [inp.title, inp.attested || ''].join('\n');
 
   const evaluate = (title: string, body: string) => {
     const report = scoreVoice({ title, body, lang, desk: inp.desk });
     const ov = external ? overlap(inp.source as string, body) : null;
-    const facts = checkFacts(factBase, body, { sameLanguage: true, lang });
+    // The headline is judged with the body: a figure in the new title must exist in the source, the old title or the other editions.
+    const facts = checkFacts(factBase, body, { sameLanguage: true, lang, attested, candidateTitle: title });
     return { report, ov, facts, verdict: judge({ report, overlap: ov, facts }) };
   };
 

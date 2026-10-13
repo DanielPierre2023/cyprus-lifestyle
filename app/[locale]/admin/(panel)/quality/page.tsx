@@ -4,14 +4,16 @@ import {
   scanPosts, rankWorst,
   type RawPost, type Edition, type Level,
 } from '@/lib/editorial/qualityScan';
+import { MAX_SCORE } from '@/lib/voice/gate';
 import { langProfile } from '@/lib/antiAiLang';
 import type { Lang } from '@/lib/antiAi';
 import RepairActions from '@/components/admin/RepairActions';
 import QualityBulkClean from '@/components/admin/QualityBulkClean';
 
-// AI-tell score at/above which a clean pass is worth a model call (matches the
-// proofread threshold; below this an edition already reads clean/low).
-const REPAIR_THRESHOLD = 16;
+// An edition needs Clean when its style score is above the publish bar (MAX_SCORE, the same bar the automatic worker uses) or it carries a
+// machine signature. An edition that is only out of line with the others (too short or too long) needs Rewrite, not Clean: editing the
+// words cannot give back a lost half of the text. A very heavy style score (this or more) is also better re-reported than edited.
+const HEAVY = 25;
 
 export const dynamic = 'force-dynamic';
 
@@ -53,10 +55,10 @@ export default async function QualityTab() {
   const { scanned, perLang, editions } = scanPosts((data as RawPost[] | null) || []);
   const worst = rankWorst(editions, WORST_CAP);
 
-  // Editions a one-click clean can actually improve: translated (not English-served)
-  // and still reading medium+ on the AI-tell score.
+  // Editions a one-click clean can actually improve: translated (not English-served) and above the style bar. An edition that is only
+  // too short or too long is left out: Clean cannot repair it, and calling it would spend a model pass on a text that cannot get better.
   const repairTargets = worst
-    .filter((f) => !f.untranslated && f.score >= REPAIR_THRESHOLD && f.id)
+    .filter((f) => f.needsClean && f.id)
     .map((f) => ({ id: f.id, locale: f.lang }));
 
   const totalEditions = LANGS.reduce((a, l) => a + perLang[l].total, 0);
@@ -115,16 +117,20 @@ export default async function QualityTab() {
         <QualityBulkClean targets={repairTargets} />
       </div>
       <p className="sub" style={{ marginTop: 8 }}>
-        Untranslated first, then by AI score — up to {WORST_CAP}. <strong>Clean</strong> edits the edition in its own language (sources
-        named, equal-size paragraphs, stock phrases); <strong>Rewrite</strong> re-reports it natively from the source edition, for editions
-        that are far too short, too long or poorly translated. Either is saved only if the text really gets better, and the previous text
-        stays in the admin log.
+        Untranslated first, then by score — up to {WORST_CAP}. The <strong>style</strong> score is what the publish bar measures (at most {MAX_SCORE},
+        no machine signature); <strong>Clean</strong> edits the edition in its own language (sources named, equal-size paragraphs, stock
+        phrases) and is offered only where the style is above the bar. <strong>Rewrite</strong> re-reports the edition natively from the source
+        edition, for editions that are far too short, too long or poorly translated (shown under <em>Length</em>). Either is saved only if the
+        text really gets better and keeps every figure, and the previous text stays in the admin log. The automatic worker repairs the rest in the
+        background, one edition every ten minutes.
       </p>
       <table className="adm-t" style={{ marginTop: 10 }}>
         <thead><tr><th>Article</th><th>Edition</th><th>Status</th><th>Fix</th></tr></thead>
         <tbody>
           {worst.map((f, i) => {
-            const color = f.untranslated ? '#9a2020' : toneForLevel(f.level);
+            // Colour follows what needs doing: the style level when the style fails the bar, red for a length problem, green when only the style passes.
+            const color = f.untranslated ? '#9a2020' : f.needsClean ? (f.voiceLevel === 'high' ? '#9a2020' : '#C9A24C') : f.parity ? '#9a2020' : '#1f7a3f';
+            const styleTells = f.tells.filter((t) => !t.key.startsWith('parity_'));
             return (
               <tr key={`${f.id || f.slug}-${f.lang}-${i}`}>
                 <td style={{ fontWeight: 600 }}>
@@ -138,10 +144,15 @@ export default async function QualityTab() {
                   <Dot color={color} />
                   {f.untranslated
                     ? <>Untranslated <span className="sub" style={{ margin: 0 }}>(serving English)</span></>
-                    : <>AI: {f.level} · {f.score}</>}
-                  {!f.untranslated && f.tells.length
+                    : <>Style {f.voice} · {f.needsClean ? `above the bar of ${MAX_SCORE}` : 'passes the bar'}</>}
+                  {!f.untranslated && f.parity
+                    ? <div className="sub" style={{ margin: '3px 0 0', fontWeight: 400, whiteSpace: 'normal', maxWidth: 380, color: '#9a2020' }}>
+                        Length: {f.parity}
+                      </div>
+                    : null}
+                  {!f.untranslated && styleTells.length
                     ? <div className="sub" style={{ margin: '3px 0 0', fontWeight: 400, whiteSpace: 'normal', maxWidth: 380 }}>
-                        {f.tells.map((t, k) => (
+                        {styleTells.map((t, k) => (
                           <div key={k} style={{ marginTop: k ? 3 : 0 }}>
                             {t.label}{t.count > 1 ? ` ×${t.count}` : ''}
                             {t.sample ? <span style={{ color: '#8a8470' }}> — “{t.sample.slice(0, 120)}”</span> : null}
@@ -153,15 +164,15 @@ export default async function QualityTab() {
                 <td style={{ whiteSpace: 'nowrap' }}>
                   {f.untranslated
                     ? <span className="sub" style={{ margin: 0 }}>run backfill</span>
-                    : f.id && f.score >= REPAIR_THRESHOLD
-                      ? <RepairActions id={f.id} locale={f.lang} />
+                    : f.id && (f.needsClean || f.parity)
+                      ? <RepairActions id={f.id} locale={f.lang} clean={f.needsClean} rewrite={!!f.parity || f.voice >= HEAVY} />
                       : <span className="sub" style={{ margin: 0, color: '#1f7a3f' }}>ok</span>}
                 </td>
               </tr>
             );
           })}
           {worst.length === 0
-            ? <tr><td colSpan={4} className="sub" style={{ margin: 0 }}>{scanned ? 'Every edition is translated and reading clean.' : 'No published articles to scan yet.'}</td></tr>
+            ? <tr><td colSpan={4} className="sub" style={{ margin: 0 }}>{scanned ? 'Every edition is translated, passes the style bar and is in line with the others.' : 'No published articles to scan yet.'}</td></tr>
             : null}
         </tbody>
       </table>

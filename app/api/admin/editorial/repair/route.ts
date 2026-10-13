@@ -14,11 +14,12 @@ import { transcreatePiece } from '@/lib/editorial/generate';
 import { auditAdminRequest } from '@/lib/auditRequest';
 import { auditLog } from '@/lib/audit';
 import { wordCount } from '@/lib/util';
-import { runVoiceOnce, deskOfRow } from '@/lib/voice/runner';
+import { runVoiceOnce, deskOfRow, attestedText } from '@/lib/voice/runner';
 import { scoreVoice, asLang } from '@/lib/voice/score';
 import { checkFacts } from '@/lib/voice/guards';
 import { mechanicalClean } from '@/lib/voice/revise';
 import { judgeRewrite } from '@/lib/voice/accept';
+import { explainNote } from '@/lib/voice/cleanRun';
 import { parityOf, LANGS as PARITY_LANGS, type PLang } from '@/lib/voice/parity';
 
 export const runtime = 'nodejs';
@@ -46,7 +47,9 @@ export async function POST(req: NextRequest) {
       const after = r.after ?? r.before ?? 0;
       return NextResponse.json({
         ok: true, id, locale, mode: 'clean', changed: !!r.saved, before: r.before, after, ok_standard: !!r.ok,
-        note: r.saved ? '' : (r.log && r.log[r.log.length - 1]) || 'No safe improvement found; the text was left as it was.',
+        // In plain words (lib/voice/cleanRun.ts explainNote); the raw log stays in `log` for whoever needs the detail.
+        note: r.saved ? '' : explainNote(r.log && r.log[r.log.length - 1]),
+        log: r.log,
       });
     } catch (e) {
       return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
@@ -73,7 +76,8 @@ export async function POST(req: NextRequest) {
     const outBody = mechanicalClean(tc.body, lang);
     const outTitle = tc.title || title;
     const after = scoreVoice({ title: outTitle, body: outBody, lang, desk });
-    const facts = checkFacts(srcBody, outBody, { sameLanguage: false });
+    // Judged as figures, not strings: the rewrite may write 18:30 where the source says 6:30 pm. The headlines count, and so do the other editions.
+    const facts = checkFacts(srcBody, outBody, { sameLanguage: false, attested: `${srcTitle}\n${attestedText(p, locale)}`, candidateTitle: outTitle });
     const hadNothing = !body.trim();
     // Is this edition out of line with its siblings (far too short or too long, figures missing), and does the rewrite put it back?
     const bodies = Object.fromEntries(PARITY_LANGS.map((l) => [l, String(p[`content_${l}`] || '')])) as Partial<Record<PLang, string>>;

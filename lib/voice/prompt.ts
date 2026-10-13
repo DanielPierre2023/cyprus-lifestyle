@@ -15,6 +15,7 @@ import { remediesFor, SAMPLE_CHARS } from '@/lib/journalism/editorial';
 export const INTEGRITY: string[] = [
   'Keep EVERY fact, name, figure, date, price and quotation exactly as in the text you are given. Change wording and architecture, never substance.',
   'Add no figure, name, date, quotation, source or claim that is not in the text. If you need a transition, make it from what the text already says.',
+  'Write every figure, date and time exactly as the text writes it: digits stay digits, spelled-out numbers stay words, a time keeps its notation (18:30 stays 18:30, 6:30 pm stays 6:30 pm), a date keeps its form, decimals and thousands keep the marks of the language.',
   'Quotations stay verbatim and in the same language; never invent or "improve" a quote. Do not add quotation marks around anything that was not quoted.',
   'Keep the language of the text: write in the edition\'s own language, not a translation-sounding version of another.',
   'Keep the format you receive: if it is HTML keep every tag, link, heading level and list; if it is markdown keep the markdown. Do not add or remove links or images.',

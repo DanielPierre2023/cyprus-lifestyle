@@ -10,6 +10,7 @@
 // Arabic or Cyrillic letters (Latin de/pl keep \b).
 
 import { lexicalTells, structuralTells, prepare } from '@/lib/antiAiLang';
+import { countsTheText } from '@/lib/journalism/progress';
 
 export type Lang = 'en' | 'el' | 'ro' | 'ar' | 'de' | 'pl' | 'ru';
 
@@ -24,6 +25,7 @@ const KEEP_UPPER = new Set<string>([
   // finance / tech / general
   'VAT', 'IPO', 'ETF', 'CEO', 'CFO', 'COO', 'AI', 'GPS', 'USB', 'PC', 'TV',
   'SUV', 'PDF', 'URL', 'SMS', 'PIN', 'ATM', 'VIP', 'PR', 'HR', 'FC',
+  'GESY', 'HIO', 'UNESCO', 'UNICEF', 'UEFA', 'FIFA', 'IBAN', 'SWIFT', 'NGO', 'ID', 'IT', 'EEA', 'EFTA',
   // Romanian institutions kept for the RO edition
   'UE', 'ONU', 'OMS', 'FMI', 'BCE', 'TVA', 'PIB', 'PSD', 'PNL', 'USR', 'AUR',
   // roman numerals
@@ -376,6 +378,11 @@ export function humanizeHtml(html: string, lang: Lang): string {
 export interface AiTell { key: string; label: string; severity: 'high' | 'medium' | 'low'; count: number; sample: string }
 export interface AiTellReport { score: number; level: 'clean' | 'low' | 'medium' | 'high'; tells: AiTell[]; burstiness?: { sentenceCV: number; paraCV: number; uniform: boolean } }
 const WEIGHT = { high: 40, medium: 7, low: 3 } as const;
+/** What one finding adds to the score: severity × the occurrences counted (five at most, each further one at 0.7); a finding that counts the text weighs once. */
+export function tellPoints(t: { key?: string; severity: 'high' | 'medium' | 'low'; count: number }): number {
+  const n = countsTheText(t.key) ? 1 : t.count;
+  return WEIGHT[t.severity] * Math.min(n, 5) * (n > 1 ? 0.7 : 1);
+}
 
 function bodyDefs(lang: Lang): Array<{ key: string; label: string; severity: 'high' | 'medium' | 'low'; re: RegExp }> {
   const common = [
@@ -480,7 +487,9 @@ export function scoreAiTells(input: { title?: string; content?: string; lang?: L
   let score = 0;
   if (title) {
     const words = title.match(/[\p{L}][\p{L}\p{M}'''\-]*/gu) || [];
-    const shouted = words.filter((w) => isAllCaps(w) && !KEEP_UPPER.has(w.replace(/[.\-']/g, '').toUpperCase()));
+    // An acronym the article itself writes in capitals (GESY, UNESCO) is a name, not shouting.
+    const bodyCaps = new Set((content.match(/(?<![\p{L}\p{M}])\p{Lu}{2,}(?![\p{L}\p{M}])/gu) || []).map((w) => w.toUpperCase()));
+    const shouted = words.filter((w) => { const k = w.replace(/[.\-']/g, '').toUpperCase(); return isAllCaps(w) && !KEEP_UPPER.has(k) && !bodyCaps.has(k); });
     if (shouted.length >= 1) {
       const whole = words.length > 0 && shouted.length >= Math.max(2, Math.ceil(words.length * 0.6));
       tells.push({ key: 'title_caps', label: whole ? 'ALL-CAPS title' : 'Shouted word(s) in the title', severity: whole ? 'high' : 'medium', count: shouted.length, sample: shouted.slice(0, 4).join(', ') });
@@ -494,7 +503,7 @@ export function scoreAiTells(input: { title?: string; content?: string; lang?: L
       const count = matches ? matches.length : 0;
       if (count > 0) {
         tells.push({ key: def.key, label: def.label, severity: def.severity, count, sample: sampleAround(content, new RegExp(def.re.source, def.re.flags)) });
-        score += WEIGHT[def.severity] * Math.min(count, 5) * (count > 1 ? 0.7 : 1);
+        score += tellPoints({ key: def.key, severity: def.severity, count });
       }
     }
   }
@@ -505,7 +514,7 @@ export function scoreAiTells(input: { title?: string; content?: string; lang?: L
     const extra = [...lexicalTells(content, lang), ...structuralTells(pre.text, lang, pre.view)];
     for (const t of extra) {
       tells.push(t);
-      score += WEIGHT[t.severity] * Math.min(t.count, 5) * (t.count > 1 ? 0.7 : 1);
+      score += tellPoints(t);
     }
   }
   // Burstiness — a language-neutral rhythm signal folded in additively.

@@ -7,7 +7,7 @@
 //   • figures: a number that most editions carry but one lacks is a dropped fact; a number found in only one edition is invented.
 // There is no source edition to trust here: the median and the consensus decide, so the outlier is named whichever language it is.
 import { wordCountOf } from '@/lib/voice/structure';
-import { numbersIn } from '@/lib/voice/guards';
+import { figuresIn } from '@/lib/voice/guards';
 
 export const LANGS = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'] as const;
 export type PLang = (typeof LANGS)[number];
@@ -27,7 +27,7 @@ export interface ParityReport { ok: boolean; medianWords: number; editions: Edit
 
 const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length ? (s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2) : 0; };
 const plain = (html: string) => String(html || '').replace(/<[^>]+>/g, ' ');
-const trivial = (n: string) => n.length < 2 || /^\d$/.test(n);
+const trivial = (n: string) => n.length < 2 || /^\d$/.test(n);   // a time of day ("t18:30") is never trivial
 
 export function parityOf(bodies: Partial<Record<PLang, string>>): ParityReport {
   const present = LANGS.filter((l) => plain(bodies[l] || '').trim());
@@ -35,8 +35,9 @@ export function parityOf(bodies: Partial<Record<PLang, string>>): ParityReport {
   const norm = present.map((l) => words[l] / LENGTH_FACTOR[l]);
   const med = median(norm);
 
-  // Figures: the consensus set is every number that at least half of the present editions carry.
-  const figs = Object.fromEntries(present.map((l) => [l, new Set(numbersIn(plain(bodies[l] || '')).filter((n) => !trivial(n)))])) as Record<string, Set<string>>;
+  // Figures: the consensus set is every number that at least half of the present editions carry. Times and decimals are read as figures
+  // (18:30, 18.30 and 6:30 pm are one figure), so an edition that writes the time in its own notation is not "missing" it.
+  const figs = Object.fromEntries(present.map((l) => [l, new Set(figuresIn(plain(bodies[l] || '')).map((f) => f.id).filter((n) => !trivial(n)))])) as Record<string, Set<string>>;
   const tally = new Map<string, number>();
   for (const l of present) for (const n of figs[l]) tally.set(n, (tally.get(n) || 0) + 1);
   const need = Math.max(2, Math.ceil(present.length / 2));

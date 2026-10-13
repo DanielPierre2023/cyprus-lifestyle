@@ -15,12 +15,19 @@ export const MAX_ATTEMPTS = 3;
 export const RETRY_AFTER_MS = 2 * 3600_000;
 export const DEFAULT_DAILY_CAP = 120;
 export const RECENT_KEEP = 30;
+/**
+ * Bump when the judge or the guards change so that earlier verdicts are stale (false findings removed, a guard that rejected faithful
+ * rewrites corrected): every edition then gets a fresh set of attempts instead of staying "tried three times" for good.
+ * v2: the template cards no longer count, "EU House" / "Anna" are no pronouns, pattern findings weigh once, figures are read in any notation.
+ */
+export const RULES_VERSION = 2;
 
 export interface Attempt { n: number; last: string; ok: boolean; score: number }
 export interface RecentRun { at: string; id: string; slug: string; lang: string; before: number; after: number; ok: boolean; changed: boolean; note: string }
 export interface VoiceState {
   enabled: boolean; dailyCap: number; day: string; usedToday: number;
   attempts: Record<string, Attempt>; recent: RecentRun[];
+  rules?: number;      // RULES_VERSION the attempts were recorded under
   idleUntil: string;   // when nothing needed repair, look again after this time (ISO)
   lastRunAt: string;   // last time a repair was attempted (ISO)
 }
@@ -32,12 +39,14 @@ export const dayKey = (now: Date) => now.toISOString().slice(0, 10);
 export function parseState(raw: unknown): VoiceState {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const cap = Number(o.dailyCap);
+  const current = Number(o.rules) === RULES_VERSION;   // attempts recorded under older rules are stale: start over
   return {
     enabled: o.enabled === true,   // off until you switch it on at /api/admin/voice?on=1 (it spends API money)
     dailyCap: Number.isFinite(cap) && cap >= 0 && cap <= 1000 ? Math.floor(cap) : DEFAULT_DAILY_CAP,
     day: typeof o.day === 'string' ? o.day : '',
     usedToday: Number.isFinite(Number(o.usedToday)) ? Math.max(0, Math.floor(Number(o.usedToday))) : 0,
-    attempts: o.attempts && typeof o.attempts === 'object' ? (o.attempts as Record<string, Attempt>) : {},
+    attempts: current && o.attempts && typeof o.attempts === 'object' ? (o.attempts as Record<string, Attempt>) : {},
+    rules: RULES_VERSION,
     idleUntil: typeof o.idleUntil === 'string' ? o.idleUntil : '',
     lastRunAt: typeof o.lastRunAt === 'string' ? o.lastRunAt : '',
     recent: Array.isArray(o.recent) ? (o.recent as RecentRun[]).slice(0, RECENT_KEEP) : [],

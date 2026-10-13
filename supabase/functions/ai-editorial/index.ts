@@ -460,6 +460,10 @@ function lexicalTells(content, lang) {
   return out;
 }
 
+// lib/journalism/progress.ts
+var COUNTS_THE_TEXT = /* @__PURE__ */ new Set(["uniform_paragraphs", "over_sectioned", "templated_headings", "listicle", "c_specificity", "c_para_opener_many", "c_speech_mono"]);
+var countsTheText = (key) => COUNTS_THE_TEXT.has(String(key));
+
 // lib/antiAi.ts
 var KEEP_UPPER = /* @__PURE__ */ new Set([
   // Cyprus / regional institutions & bodies
@@ -522,6 +526,19 @@ var KEEP_UPPER = /* @__PURE__ */ new Set([
   "PR",
   "HR",
   "FC",
+  "GESY",
+  "HIO",
+  "UNESCO",
+  "UNICEF",
+  "UEFA",
+  "FIFA",
+  "IBAN",
+  "SWIFT",
+  "NGO",
+  "ID",
+  "IT",
+  "EEA",
+  "EFTA",
   // Romanian institutions kept for the RO edition
   "UE",
   "ONU",
@@ -910,6 +927,10 @@ function humanizeHtml(html, lang) {
   }).join("");
 }
 var WEIGHT = { high: 40, medium: 7, low: 3 };
+function tellPoints(t) {
+  const n = countsTheText(t.key) ? 1 : t.count;
+  return WEIGHT[t.severity] * Math.min(n, 5) * (n > 1 ? 0.7 : 1);
+}
 function bodyDefs(lang) {
   const common = [
     // Russian needs its dash (тире) as punctuation, so it is not a tell there; a typed " -- " still is.
@@ -1017,7 +1038,11 @@ function scoreAiTells(input) {
   let score = 0;
   if (title) {
     const words2 = title.match(/[\p{L}][\p{L}\p{M}'''\-]*/gu) || [];
-    const shouted = words2.filter((w) => isAllCaps(w) && !KEEP_UPPER.has(w.replace(/[.\-']/g, "").toUpperCase()));
+    const bodyCaps = new Set((content.match(/(?<![\p{L}\p{M}])\p{Lu}{2,}(?![\p{L}\p{M}])/gu) || []).map((w) => w.toUpperCase()));
+    const shouted = words2.filter((w) => {
+      const k = w.replace(/[.\-']/g, "").toUpperCase();
+      return isAllCaps(w) && !KEEP_UPPER.has(k) && !bodyCaps.has(k);
+    });
     if (shouted.length >= 1) {
       const whole = words2.length > 0 && shouted.length >= Math.max(2, Math.ceil(words2.length * 0.6));
       tells.push({ key: "title_caps", label: whole ? "ALL-CAPS title" : "Shouted word(s) in the title", severity: whole ? "high" : "medium", count: shouted.length, sample: shouted.slice(0, 4).join(", ") });
@@ -1031,7 +1056,7 @@ function scoreAiTells(input) {
       const count2 = matches ? matches.length : 0;
       if (count2 > 0) {
         tells.push({ key: def.key, label: def.label, severity: def.severity, count: count2, sample: sampleAround(content, new RegExp(def.re.source, def.re.flags)) });
-        score += WEIGHT[def.severity] * Math.min(count2, 5) * (count2 > 1 ? 0.7 : 1);
+        score += tellPoints({ key: def.key, severity: def.severity, count: count2 });
       }
     }
   }
@@ -1040,7 +1065,7 @@ function scoreAiTells(input) {
     const extra = [...lexicalTells(content, lang), ...structuralTells(pre.text, lang, pre.view)];
     for (const t of extra) {
       tells.push(t);
-      score += WEIGHT[t.severity] * Math.min(t.count, 5) * (t.count > 1 ? 0.7 : 1);
+      score += tellPoints(t);
     }
   }
   const burst = burstiness(content);
@@ -2587,7 +2612,8 @@ function dateLeadRe(lang) {
   return new RegExp(foldFor(lang, re), "iu");
 }
 var FIRST_PERSON = {
-  en: String.raw`I|I['’](?:m|ve|d|ll)|[Mm]y|[Mm]ine|[Mm]yself|[Ww]e|[Ww]e['’](?:re|ve|ll|d)|[Oo]urs?|[Oo]urselves`,
+  // "I" is not a Roman numeral ("124(I)/2018", "Part I", "World War I"); "mine" is left out (a mine, an asbestos mine: the noun is far commoner).
+  en: String.raw`(?<!\()(?<!\b(?:Part|Phase|Class|Tier|Stage|Annex|Appendix|Schedule|Level|Type|Group|Chapter|Article|Section|War|Basel|Category|Book|Volume|Vol|Law|Act)\.?\s)I(?![)\d/])|I['’](?:m|ve|d|ll)|[Mm]y|[Mm]yself|[Ww]e|[Ww]e['’](?:re|ve|ll|d)|[Oo]urs?|[Oo]urselves`,
   de: String.raw`ich|mir|mich|mein(?:e|en|er|em|es)?|wir|uns|unser(?:e|en|er|em|es)?`,
   pl: String.raw`ja|mnie|mi|mój|moja|moje|moją|moim|moich|moimi|mojego|mojej|mojemu|my|nas|nam|nami|nasi|nasz(?:a|e|ą|ych|ym|ymi|ego|ej|emu)?`,
   ro: String.raw`eu|mie|mă|meu|mea|mei|mele|ne|nostru|noastră|noștri|noastre`,
@@ -2607,6 +2633,12 @@ var VAGUE = {
 var GERUND_RO = String.raw`,\s+(?:subliniind|evidențiind|reflectând|demonstrând|marcând|confirmând|arătând|ilustrând|consolidând|asigurând|reprezentând|indicând|sugerând|semnalând|dovedind|accentuând|contribuind|punând în evidență|oferind|permițând)`;
 var QUOTES = /[“„«"]([^”“»"\n]{1,400})[”“»"]/gu;
 var stripQuotes = (s) => s.replace(QUOTES, " ");
+function firstPersonText(s, lang) {
+  let t = s.replace(/(?<![\p{L}\p{M}])\p{Lu}{2,}(?![\p{L}\p{M}])/gu, " ");
+  if (lang === "en") t = t.replace(/\bOur Lady\b/g, " ");
+  if (lang === "ar") t = t.replace(/\u0622/g, "ﺁ");
+  return t;
+}
 var T = (key, label, severity, n, sample = "") => ({ key, label, severity, count: n, sample: clip(sample) });
 function craftTells(input) {
   const lang = input.lang;
@@ -2663,7 +2695,7 @@ function craftTells(input) {
   }
   if (!input.allowFirstPerson) {
     const fpRe = rx(lang, FIRST_PERSON[lang], lang === "en" ? "gu" : "giu");
-    const fpText = stripQuotes(text);
+    const fpText = firstPersonText(stripQuotes(text), lang);
     const fp = count(fpRe, lang === "en" ? fpText : foldFor(lang, fpText));
     if (fp >= 1) out.push(T("c_first_person", `First person in a news text (“${first(fpRe, lang === "en" ? fpText : foldFor(lang, fpText))}”): the magazine reports, it does not speak as “I” or “we”`, "medium", fp, first(fpRe, lang === "en" ? fpText : foldFor(lang, fpText))));
   }
@@ -2692,9 +2724,12 @@ var FIRST_PERSON_DESKS = /* @__PURE__ */ new Set(["review", "interview", "people
 function maskTitles(text) {
   return String(text || "").replace(/[“"„«]([^”"“»\n]{1,80})[”"“»]/g, (m, inner) => inner.trim().split(/\s+/).length <= 7 ? "§" : m);
 }
+function withoutCards(html) {
+  return String(html || "").replace(/<aside\b[^>]*>[\s\S]*?<\/aside\s*>/gi, " ");
+}
 function scoreVoice(input) {
   const lang = asLang(input.lang);
-  const raw = String(input.body || "");
+  const raw = withoutCards(String(input.body || ""));
   const plain = stripHtml(raw);
   const lexical = maskTitles(plain);
   const base = scoreAiTells({ title: input.title, content: lexical, lang });
@@ -2707,7 +2742,7 @@ function scoreVoice(input) {
     extra.push(t);
   }
   let score = base.score;
-  for (const t of extra) score += WEIGHT2[t.severity] * Math.min(t.count, 5) * (t.count > 1 ? 0.7 : 1);
+  for (const t of extra) score += tellPoints(t);
   score = Math.max(0, Math.min(100, Math.round(score)));
   const tells = [...base.tells, ...extra].sort((a, b2) => WEIGHT2[b2.severity] - WEIGHT2[a.severity] || b2.count - a.count);
   const level = score === 0 ? "clean" : score <= 15 ? "low" : score <= 40 ? "medium" : "high";
@@ -3347,6 +3382,64 @@ function numbersIn(input) {
   return out;
 }
 var trivial = (n) => /^\d$/.test(n) || n === "10";
+var pad2 = (n) => String(n).padStart(2, "0");
+function timeFigure(h, m) {
+  const hh = String(h), mm = pad2(m);
+  const id = `t${hh}:${mm}`;
+  const keys = [id, `${hh}.${mm}`];
+  const also = [];
+  if (m === 0) also.push(hh);
+  if (h >= 13) {
+    const h12 = String(h - 12);
+    keys.push(`t${h12}:${mm}`, `${h12}.${mm}`);
+    if (m === 0) also.push(h12);
+  }
+  return { shown: `${hh}:${mm}`, id, keys, also, trivial: false };
+}
+function numberFigure(canon) {
+  const keys = [canon];
+  let id = canon;
+  if (canon.includes(".")) {
+    const stripped = canon.replace(/0+$/, "").replace(/\.$/, "");
+    if (stripped !== canon) keys.push(stripped);
+    const t = /^([01]?\d|2[0-3])\.([0-5]\d)$/.exec(canon);
+    if (t) {
+      id = `t${Number(t[1])}:${t[2]}`;
+      keys.push(id);
+    } else id = stripped;
+  }
+  return { shown: canon, id, keys, also: [], trivial: trivial(canon) };
+}
+var CLOCK_12 = /(?<![\d.,:])(\d{1,2})(?:[:.]([0-5]\d))?\s?([ap])\.?\s?m\b\.?/gi;
+var CLOCK_24 = /(?<![\d.,:])([01]?\d|2[0-3]):([0-5]\d)(?![\d:])/g;
+function figuresIn(input) {
+  let t = toAsciiDigits(stripHtml(String(input || "")));
+  const out = [];
+  t = t.replace(CLOCK_12, (m, hh, mm, ap) => {
+    const h12 = Number(hh);
+    if (h12 < 1 || h12 > 12) return m;
+    out.push(timeFigure(h12 % 12 + (/p/i.test(ap) ? 12 : 0), mm ? Number(mm) : 0));
+    return " ";
+  });
+  t = t.replace(CLOCK_24, (_m, hh, mm) => {
+    out.push(timeFigure(Number(hh), Number(mm)));
+    return " ";
+  });
+  for (const n of numbersIn(t)) out.push(numberFigure(n));
+  return out;
+}
+var uniqueFigures = (figs) => {
+  const seen = /* @__PURE__ */ new Set();
+  return figs.filter((f) => seen.has(f.id) ? false : (seen.add(f.id), true));
+};
+var keySet = (figs, withAlso = false) => {
+  const s = /* @__PURE__ */ new Set();
+  for (const f of figs) {
+    for (const k of f.keys) s.add(k);
+    if (withAlso) for (const k of f.also) s.add(k);
+  }
+  return s;
+};
 var QUOTE_PAIRS = [["“", "”"], ["„", "“"], ["„", "”"], ["«", "»"], ['"', '"'], ["‘", "’"]];
 function quotesIn(input) {
   const t = stripHtml(String(input || ""));
@@ -3369,12 +3462,14 @@ function namesIn(input) {
 function checkFacts(source, candidate, opts = {}) {
   const same = opts.sameLanguage !== false;
   const namesApply = opts.lang !== "de";
-  const srcNums = new Set(numbersIn(source));
-  const candNums = [...new Set(numbersIn(candidate))];
-  const invented = candNums.filter((n) => !trivial(n) && !srcNums.has(n));
-  const srcImportant = [...srcNums].filter((n) => !trivial(n));
-  const candSet = new Set(candNums);
-  const dropped = srcImportant.filter((n) => !candSet.has(n));
+  const srcFigs = uniqueFigures(figuresIn(source));
+  const known = keySet([...srcFigs, ...figuresIn(opts.attested || "")], true);
+  const candFigs = uniqueFigures([...figuresIn(candidate), ...figuresIn(opts.candidateTitle || "")]);
+  const invented = candFigs.filter((f) => !f.trivial && !f.keys.some((k) => known.has(k))).map((f) => f.shown);
+  const srcImportant = srcFigs.filter((f) => !f.trivial);
+  const have = keySet(candFigs);
+  const droppedFigs = srcImportant.filter((f) => !f.keys.some((k) => have.has(k)) && !f.also.some((k) => have.has(k)));
+  const dropped = droppedFigs.map((f) => f.shown);
   const droppedRatio = srcImportant.length ? dropped.length / srcImportant.length : 0;
   let changedQuotes = [];
   let newNames = [];

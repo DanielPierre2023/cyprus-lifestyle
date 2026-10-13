@@ -1158,6 +1158,28 @@ Return the corrected article as JSON.`;
 // lib/antiAiLang.ts
 var L = String.raw`\p{L}\p{M}\p{N}`;
 
+// lib/journalism/progress.ts
+var WEIGHT = { high: 40, medium: 7, low: 3 };
+var COUNTS_THE_TEXT = /* @__PURE__ */ new Set(["uniform_paragraphs", "over_sectioned", "templated_headings", "listicle", "c_specificity", "c_para_opener_many", "c_speech_mono"]);
+var PROGRESS_MARGIN = 2;
+function findingsWeight(tells) {
+  let sum = 0;
+  for (const t of tells) {
+    const w = WEIGHT[String(t.severity)] ?? 0;
+    const n = COUNTS_THE_TEXT.has(String(t.key)) ? 1 : Math.max(1, Math.floor(Number(t.count) || 1));
+    sum += w * (1 + 0.7 * (n - 1));
+  }
+  return sum;
+}
+function rawOf(j) {
+  return typeof j.raw === "number" && Number.isFinite(j.raw) ? j.raw : findingsWeight(j.tells);
+}
+function isImprovement(before, after) {
+  if (after.score > before.score) return false;
+  if (after.score < before.score) return true;
+  return rawOf(after) < rawOf(before) - PROGRESS_MARGIN;
+}
+
 // lib/antiAi.ts
 var KEEP_UPPER = /* @__PURE__ */ new Set([
   // Cyprus / regional institutions & bodies
@@ -1220,6 +1242,19 @@ var KEEP_UPPER = /* @__PURE__ */ new Set([
   "PR",
   "HR",
   "FC",
+  "GESY",
+  "HIO",
+  "UNESCO",
+  "UNICEF",
+  "UEFA",
+  "FIFA",
+  "IBAN",
+  "SWIFT",
+  "NGO",
+  "ID",
+  "IT",
+  "EEA",
+  "EFTA",
   // Romanian institutions kept for the RO edition
   "UE",
   "ONU",
@@ -1687,6 +1722,68 @@ function numbersIn(input) {
   return out;
 }
 var trivial = (n) => /^\d$/.test(n) || n === "10";
+var pad2 = (n) => String(n).padStart(2, "0");
+function timeFigure(h, m) {
+  const hh = String(h), mm = pad2(m);
+  const id = `t${hh}:${mm}`;
+  const keys = [id, `${hh}.${mm}`];
+  const also = [];
+  if (m === 0) also.push(hh);
+  if (h >= 13) {
+    const h12 = String(h - 12);
+    keys.push(`t${h12}:${mm}`, `${h12}.${mm}`);
+    if (m === 0) also.push(h12);
+  }
+  return { shown: `${hh}:${mm}`, id, keys, also, trivial: false };
+}
+function numberFigure(canon) {
+  const keys = [canon];
+  let id = canon;
+  if (canon.includes(".")) {
+    const stripped = canon.replace(/0+$/, "").replace(/\.$/, "");
+    if (stripped !== canon) keys.push(stripped);
+    const t = /^([01]?\d|2[0-3])\.([0-5]\d)$/.exec(canon);
+    if (t) {
+      id = `t${Number(t[1])}:${t[2]}`;
+      keys.push(id);
+    } else id = stripped;
+  }
+  return { shown: canon, id, keys, also: [], trivial: trivial(canon) };
+}
+var CLOCK_12 = /(?<![\d.,:])(\d{1,2})(?:[:.]([0-5]\d))?\s?([ap])\.?\s?m\b\.?/gi;
+var CLOCK_24 = /(?<![\d.,:])([01]?\d|2[0-3]):([0-5]\d)(?![\d:])/g;
+function figuresIn(input) {
+  let t = toAsciiDigits(stripHtml(String(input || "")));
+  const out = [];
+  t = t.replace(CLOCK_12, (m, hh, mm, ap) => {
+    const h12 = Number(hh);
+    if (h12 < 1 || h12 > 12) return m;
+    out.push(timeFigure(h12 % 12 + (/p/i.test(ap) ? 12 : 0), mm ? Number(mm) : 0));
+    return " ";
+  });
+  t = t.replace(CLOCK_24, (_m, hh, mm) => {
+    out.push(timeFigure(Number(hh), Number(mm)));
+    return " ";
+  });
+  for (const n of numbersIn(t)) out.push(numberFigure(n));
+  return out;
+}
+var uniqueFigures = (figs) => {
+  const seen = /* @__PURE__ */ new Set();
+  return figs.filter((f) => seen.has(f.id) ? false : (seen.add(f.id), true));
+};
+var keySet = (figs, withAlso = false) => {
+  const s = /* @__PURE__ */ new Set();
+  for (const f of figs) {
+    for (const k of f.keys) s.add(k);
+    if (withAlso) for (const k of f.also) s.add(k);
+  }
+  return s;
+};
+function unknownFigures(allowed, text, opts = {}) {
+  const known = keySet([...figuresIn(allowed), ...figuresIn(opts.attested || "")], true);
+  return uniqueFigures(figuresIn(text)).filter((f) => (opts.strict || !f.trivial) && !f.keys.some((k) => known.has(k))).map((f) => f.shown);
+}
 var QUOTE_PAIRS = [["“", "”"], ["„", "“"], ["„", "”"], ["«", "»"], ['"', '"'], ["‘", "’"]];
 function quotesIn(input) {
   const t = stripHtml(String(input || ""));
@@ -1709,12 +1806,14 @@ function namesIn(input) {
 function checkFacts(source, candidate, opts = {}) {
   const same = opts.sameLanguage !== false;
   const namesApply = opts.lang !== "de";
-  const srcNums = new Set(numbersIn(source));
-  const candNums = [...new Set(numbersIn(candidate))];
-  const invented = candNums.filter((n) => !trivial(n) && !srcNums.has(n));
-  const srcImportant = [...srcNums].filter((n) => !trivial(n));
-  const candSet = new Set(candNums);
-  const dropped = srcImportant.filter((n) => !candSet.has(n));
+  const srcFigs = uniqueFigures(figuresIn(source));
+  const known = keySet([...srcFigs, ...figuresIn(opts.attested || "")], true);
+  const candFigs = uniqueFigures([...figuresIn(candidate), ...figuresIn(opts.candidateTitle || "")]);
+  const invented = candFigs.filter((f) => !f.trivial && !f.keys.some((k) => known.has(k))).map((f) => f.shown);
+  const srcImportant = srcFigs.filter((f) => !f.trivial);
+  const have = keySet(candFigs);
+  const droppedFigs = srcImportant.filter((f) => !f.keys.some((k) => have.has(k)) && !f.also.some((k) => have.has(k)));
+  const dropped = droppedFigs.map((f) => f.shown);
   const droppedRatio = srcImportant.length ? dropped.length / srcImportant.length : 0;
   let changedQuotes = [];
   let newNames = [];
@@ -1802,6 +1901,18 @@ function figuresOf(s) {
   for (const re of [UNIT_AFTER, UNIT_BEFORE]) for (const m of text.matchAll(re)) out.push(m[1]);
   return out;
 }
+var unitDigits = (s) => {
+  const out = [];
+  const text = String(s || "");
+  for (const re of [UNIT_AFTER, UNIT_BEFORE]) for (const m of text.matchAll(re)) out.push(m[1]);
+  return out;
+};
+function missingFigures(text, passage) {
+  const out = unknownFigures(passage, text);
+  const have = new Set(unitDigits(passage));
+  for (const d of unitDigits(text)) if (!have.has(d) && !out.includes(d)) out.push(d);
+  return out;
+}
 var STOP = /* @__PURE__ */ new Set(["that", "with", "from", "were", "have", "this", "their", "which", "about", "after", "before", "will", "would", "been", "being", "also", "more", "than", "over", "into", "such", "other", "there", "these", "those", "while", "where", "when", "what", "said", "says"]);
 var EN_FUNCTION_WORDS = /* @__PURE__ */ new Set(["the", "of", "and", "to", "that", "was", "with", "for", "said", "has", "have", "will", "from", "is", "are", "by", "on", "at", "which", "were", "been", "this", "its"]);
 function looksEnglish(text) {
@@ -1830,8 +1941,8 @@ function verifyCore(core, sources, o = { mode: "enforce" }) {
   const hays = new Map(sources.map((s) => [s.label, foldForMatch(`${s.title}
 ${s.text}`)]));
   const allHay = [...hays.values()].join(" \n ");
-  const allFigures = new Set(sources.flatMap((s) => numbersIn(`${s.title}
-${s.text}`)));
+  const allText = sources.map((s) => `${s.title}
+${s.text}`).join("\n");
   const englishOf = new Map(sources.map((s) => [s.label, looksEnglish(`${s.title}
 ${s.text}`)]));
   const declaredEnglish = core.sourceLang === "en";
@@ -1850,8 +1961,7 @@ ${s.text}`)]));
     const hay = p?.source && hays.get(p.source) || allHay;
     const at = locatePassage(hay, evidence);
     if (!at.found) return { ok: false, reason: at.reason, pos: -1 };
-    const have = new Set(figuresOf(evidence));
-    const missing = figuresOf(text).filter((n2) => !have.has(n2));
+    const missing = missingFigures(text, evidence);
     if (missing.length) return { ok: false, reason: `the figure ${missing[0]} is not in the passage`, pos: at.pos };
     if (englishFor(p?.source)) {
       const sup = lexicalSupport(text, evidence);
@@ -1889,14 +1999,12 @@ ${s.text}`)]));
     return ok;
   });
   const numbers = core.numbers.filter((n) => {
-    const need = figuresOf(n.value);
-    const ok = need.every((x) => allFigures.has(x));
+    const ok = missingFigures(n.value, allText).length === 0;
     if (!ok) report.dropped.push({ kind: "number", text: `${n.value}: ${n.what}`.slice(0, 160), reason: "the figure is not in the source" });
     return ok;
   });
   const dates = core.dates.filter((d) => {
-    const need = figuresOf(d.when);
-    const ok = need.every((x) => allFigures.has(x)) || locatePassage(allHay, d.when).found;
+    const ok = missingFigures(d.when, allText).length === 0 || locatePassage(allHay, d.when).found;
     if (!ok) report.dropped.push({ kind: "date", text: `${d.when}: ${d.what}`.slice(0, 160), reason: "the date is not in the source" });
     return ok;
   });
@@ -2891,28 +2999,6 @@ function fieldScore(tells) {
     const c = t.count ?? 1;
     return a + (w[t.severity || "low"] ?? 3) * Math.min(c, 3) * (c > 1 ? 0.7 : 1);
   }, 0)));
-}
-
-// lib/journalism/progress.ts
-var WEIGHT = { high: 40, medium: 7, low: 3 };
-var COUNTS_THE_TEXT = /* @__PURE__ */ new Set(["uniform_paragraphs"]);
-var PROGRESS_MARGIN = 2;
-function findingsWeight(tells) {
-  let sum = 0;
-  for (const t of tells) {
-    const w = WEIGHT[String(t.severity)] ?? 0;
-    const n = COUNTS_THE_TEXT.has(String(t.key)) ? 1 : Math.max(1, Math.floor(Number(t.count) || 1));
-    sum += w * (1 + 0.7 * (n - 1));
-  }
-  return sum;
-}
-function rawOf(j) {
-  return typeof j.raw === "number" && Number.isFinite(j.raw) ? j.raw : findingsWeight(j.tells);
-}
-function isImprovement(before, after) {
-  if (after.score > before.score) return false;
-  if (after.score < before.score) return true;
-  return rawOf(after) < rawOf(before) - PROGRESS_MARGIN;
 }
 
 // lib/journalism/pipeline.ts
