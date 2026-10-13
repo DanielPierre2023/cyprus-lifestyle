@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   const encoder = new TextEncoder();
   let collected = '';
   const t0 = Date.now();
-  const meta = { picks: 0, kb: 0, near: false, recommended: [] as string[] };
+  const meta = { picks: 0, kb: 0, near: false, recommended: [] as string[], miss: [] as string[] };
   const stream = new ReadableStream({
     async start(controller) {
       const send = (obj: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
           else if (evt.type === 'meta') {
             meta.picks = evt.picks.length; meta.kb = evt.kb; meta.near = evt.near;
             meta.recommended = evt.picks.map((p) => p.slug).filter(Boolean);
+            meta.miss = evt.miss || [];
           }
           send(evt);
         }
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest) {
     if (!collected.trim()) return;
     await logConciergeTurn({
       cid: cid || null, locale, channel: 'web', question: lastUser, answer: collected,
-      picks: meta.picks, kb: meta.kb, near: meta.near, recommended: meta.recommended, latencyMs: Date.now() - t0,
+      picks: meta.picks, kb: meta.kb, near: meta.near, recommended: meta.recommended, latencyMs: Date.now() - t0, miss: meta.miss,
     });
     if (cid) {
       await updateMemory(cid, lastUser, collected, memory);

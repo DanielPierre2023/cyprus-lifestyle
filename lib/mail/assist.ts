@@ -124,7 +124,7 @@ export async function composeReply(
         await logConciergeTurn({
           locale, channel: 'email', question: `${subject}\n${guestText}`.trim(), answer: text,
           picks: ctx?.picks.length || 0, kb: ctx?.kb.length || 0, near: !!ctx?.near,
-          recommended: (ctx?.picks || []).map((p) => p.slug).filter(Boolean),
+          recommended: (ctx?.picks || []).map((p) => p.slug).filter(Boolean), miss: ctx?.miss,
         });
       }
       return { body: text.trim(), locale, desk: desk.name, grounded: grounded(ctx) };
