@@ -14,6 +14,7 @@ import type { Lang } from '@/lib/antiAi';
 import { scoreVoice } from '@/lib/voice/score';
 import { deskFor } from '@/lib/voice/desks';
 import { parityOf, type PLang } from '@/lib/voice/parity';
+import { MAX_SCORE } from '@/lib/voice/gate';
 
 // The seven editions Cyprus Lifestyle publishes.
 export const LANGS = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'] as const;
@@ -42,8 +43,16 @@ export interface EditionFinding {
   title: string;
   lang: Edition;
   untranslated: boolean;
+  /** Ranking score: the style score, plus 25 when the edition is out of line with the others (a lost half of the text outranks a stock phrase). */
   score: number;
   level: Level;
+  /** The style score alone: what Clean can change, and what the publish bar (lib/voice/gate.ts) is measured on. */
+  voice: number;
+  voiceLevel: Level;
+  /** The edition fails the publish bar on style (score above the bar, or a machine signature): Clean's job. */
+  needsClean: boolean;
+  /** Why the edition is out of line with the other editions (too short or long, figures missing); '' when it is in line: Rewrite's job. */
+  parity: string;
   // The strongest tells behind the score (label, severity, count) so the admin page can
   // say WHY an edition reads as machine output. Flag-only: nothing here blocks publishing.
   tells: Array<{ key: string; label: string; severity: 'high' | 'medium' | 'low'; count: number; sample: string }>;
@@ -159,12 +168,15 @@ export function scanPosts(posts: RawPost[]): ScanResult {
       const pe = parity.editions.find((e) => e.lang === l);
       let score = r.score, level: Level = r.level;
       const pp = parity.problems.filter((x) => x.startsWith(`${l}:`));
+      let parityNote = '';
       if (pe && pe.status !== 'ok' && !untranslated) {
+        parityNote = (pp[0] || `Edition differs from the others (${pe.status})`).replace(/^[a-z]{2}:\s*/, '');
         tells.unshift({ key: `parity_${pe.status}`, label: pp[0] || `Edition differs from the others (${pe.status})`, severity: 'high', count: 1, sample: '' });
         score = Math.min(100, score + 25);
         level = 'high';
       }
-      editions.push({ id, slug, title, lang: l, untranslated, score, level, tells });
+      const needsClean = !untranslated && (r.score > MAX_SCORE || r.tells.some((t) => t.severity === 'high'));
+      editions.push({ id, slug, title, lang: l, untranslated, score, level, voice: r.score, voiceLevel: r.level, needsClean, parity: parityNote, tells });
     }
   }
 
@@ -174,9 +186,13 @@ export function scanPosts(posts: RawPost[]): ScanResult {
   return { scanned: posts.length, perLang, editions };
 }
 
-// Pure: worst offenders — untranslated editions first, then by AI score descending.
+/** An edition the page has something to offer for: untranslated, above the style bar, or out of line with the other editions. */
+export const isOffender = (f: EditionFinding): boolean => f.untranslated || f.needsClean || !!f.parity;
+
+// Pure: worst offenders — untranslated editions first, then by score descending. Editions that pass the bar and are in line are not listed.
 export function rankWorst(editions: EditionFinding[], cap: number = WORST_CAP): EditionFinding[] {
-  return [...editions]
+  return editions
+    .filter(isOffender)
     .sort((a, b) => (a.untranslated === b.untranslated ? 0 : a.untranslated ? -1 : 1) || b.score - a.score)
     .slice(0, cap);
 }

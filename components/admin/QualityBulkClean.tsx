@@ -49,7 +49,8 @@ export default function QualityBulkClean({ targets }: { targets: Target[] }) {
   if (!targets.length) return null;
   return (
     <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center' }}>
-      <button type="button" style={{ ...btn, opacity: busy ? 0.7 : 1 }} disabled={busy} onClick={run}>
+      <button type="button" style={{ ...btn, opacity: busy ? 0.7 : 1 }} disabled={busy} onClick={run}
+        title="Cleans the editions whose style is above the publish bar, one after the other. Editions that are only too short or too long are left out: use Rewrite for those.">
         {busy ? `Cleaning ${done}/${targets.length}…` : `Clean all flagged (${targets.length})`}
       </button>
       {msg && <span className="sub" style={{ margin: 0, color: '#1c6b34' }}>{msg}</span>}

@@ -8,7 +8,7 @@ import 'server-only';
 import { callAI, budgetClock, parseAiJson } from '@/lib/ai';
 import { tokensForChars } from '@/lib/journalism/models';
 import { dashRule } from '@/lib/journalism/languages';
-import { checkFacts, numbersIn } from '@/lib/voice/guards';
+import { checkFacts, unknownFigures } from '@/lib/voice/guards';
 import { humanizeHtml, humanizeText, type Lang } from '@/lib/antiAi';
 import { promptTellList, nativeRegisterRules } from '@/lib/antiAiLang';
 import { LOCALE_NAME, type Locale } from '@/lib/locales';
@@ -109,7 +109,7 @@ export async function translateText(text: string, source: Locale, target: Locale
   const out = r.error ? '' : stripFences(r.text);
   if (!out) return '';
   // A figure the source did not have is a wrong translation: better none than a wrong one.
-  if (numbersIn(out).some((n) => !numbersIn(body).includes(n))) return '';
+  if (unknownFigures(body, out, { strict: true }).length) return '';
   return humanizeText(out, target as Lang);
 }
 
@@ -140,7 +140,7 @@ export async function translateBundle(
   for (const [k, v] of Object.entries(parsed)) {
     if (typeof v !== 'string' || !v.trim() || !(k in fields)) continue;
     const src = fields[k] || '';
-    if (numbersIn(v).some((n) => !numbersIn(src).includes(n))) continue;   // an invented figure: leave the field out
+    if (unknownFigures(src, v, { strict: true, attested: Object.values(fields).join('\n') }).length) continue;   // an invented figure: leave the field out
     out[k] = humanizeText(v, target as Lang);
   }
   return out;

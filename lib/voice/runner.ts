@@ -35,6 +35,19 @@ export async function saveState(sb: SupabaseClient, s: VoiceState): Promise<void
   await sb.from('site_settings').upsert({ key: STATE_KEY, value: s, updated_at: new Date().toISOString() }, { onConflict: 'key' });
 }
 
+/**
+ * Text that is true to the article besides the edition being repaired: every edition's title and the bodies of the other editions.
+ * The facts guard accepts a figure found here (the model may write "15" where the edition spelled "cincisprezece" and the title says 15).
+ */
+export function attestedText(r: Row, lang: string): string {
+  const parts: string[] = [];
+  for (const l of LOCALES) {
+    parts.push(String(r[`title_${l}`] || ''));
+    if (l !== lang) parts.push(String(r[`content_${l}`] || ''));
+  }
+  return parts.join('\n');
+}
+
 export const deskOfRow = (r: Row): Desk => deskFor({
   category: r.category as string | null, franchise: r.franchise as string | null, kind: r.kind as string | null,
   evergreen: r.author_name === EVERGREEN_AUTHOR,
@@ -121,7 +134,7 @@ export async function runVoiceOnce(sb: SupabaseClient, opts: RunOptions = {}): P
 
   const make = opts.callModel || modelCaller;
   const attempt = (state.attempts[unitKey(unit.id, unit.lang)]?.n || 0) + 1;
-  const res: ReviseResult = await reviseToStandard({ title, body, lang, desk: unit.desk, callModel: make(unit.lang, body, attempt), maxPasses: 1, budgetMs: 38_000 });
+  const res: ReviseResult = await reviseToStandard({ title, body, lang, desk: unit.desk, callModel: make(unit.lang, body, attempt), maxPasses: 1, budgetMs: 38_000, attested: attestedText(row, unit.lang) });
   // Saved only when it is a real improvement: a lower score, or at the ceiling of 100 a clearly lower weight of findings (so a text that
   // lost half of its serious findings is kept, and the next pass starts from there).
   const improved = res.changed && isImprovement(res.before, res.after) && res.facts?.ok !== false;

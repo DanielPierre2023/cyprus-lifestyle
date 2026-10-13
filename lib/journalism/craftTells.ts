@@ -119,7 +119,8 @@ function dateLeadRe(lang: RLang): RegExp {
 
 // First person outside quotations. "uns/ne/nas" are included; ambiguous short words (Romanian "noi" = we OR new) are left out.
 const FIRST_PERSON: Record<RLang, string> = {
-  en: String.raw`I|I['’](?:m|ve|d|ll)|[Mm]y|[Mm]ine|[Mm]yself|[Ww]e|[Ww]e['’](?:re|ve|ll|d)|[Oo]urs?|[Oo]urselves`,
+  // "I" is not a Roman numeral ("124(I)/2018", "Part I", "World War I"); "mine" is left out (a mine, an asbestos mine: the noun is far commoner).
+  en: String.raw`(?<!\()(?<!\b(?:Part|Phase|Class|Tier|Stage|Annex|Appendix|Schedule|Level|Type|Group|Chapter|Article|Section|War|Basel|Category|Book|Volume|Vol|Law|Act)\.?\s)I(?![)\d/])|I['’](?:m|ve|d|ll)|[Mm]y|[Mm]yself|[Ww]e|[Ww]e['’](?:re|ve|ll|d)|[Oo]urs?|[Oo]urselves`,
   de: String.raw`ich|mir|mich|mein(?:e|en|er|em|es)?|wir|uns|unser(?:e|en|er|em|es)?`,
   pl: String.raw`ja|mnie|mi|mój|moja|moje|moją|moim|moich|moimi|mojego|mojej|mojemu|my|nas|nam|nami|nasi|nasz(?:a|e|ą|ych|ym|ymi|ego|ej|emu)?`,
   ro: String.raw`eu|mie|mă|meu|mea|mei|mele|ne|nostru|noastră|noștri|noastre`,
@@ -140,6 +141,17 @@ const GERUND_RO = String.raw`,\s+(?:subliniind|evidențiind|reflectând|demonstr
 
 const QUOTES = /[“„«"]([^”“»"\n]{1,400})[”“»"]/gu;
 const stripQuotes = (s: string) => s.replace(QUOTES, ' ');
+
+/**
+ * The text the first-person detector reads. A word in capitals is an acronym, never a pronoun ("EU House": Romanian "eu" is "I");
+ * "Our Lady" is a name; and the Arabic name Anna (آنا) becomes the pronoun "ana" once the alef variants are unified, so it is shielded first.
+ */
+function firstPersonText(s: string, lang: RLang): string {
+  let t = s.replace(/(?<![\p{L}\p{M}])\p{Lu}{2,}(?![\p{L}\p{M}])/gu, ' ');
+  if (lang === 'en') t = t.replace(/\bOur Lady\b/g, ' ');
+  if (lang === 'ar') t = t.replace(/\u0622/g, '\uFE81');
+  return t;
+}
 
 const T = (key: string, label: string, severity: CraftTell['severity'], n: number, sample = ''): CraftTell => ({ key, label, severity, count: n, sample: clip(sample) });
 
@@ -203,7 +215,7 @@ export function craftTells(input: CraftInput): CraftTell[] {
   // ── first person in our own reporting ───────────────────────────────────────
   if (!input.allowFirstPerson) {
     const fpRe = rx(lang, FIRST_PERSON[lang], lang === 'en' ? 'gu' : 'giu');
-    const fpText = stripQuotes(text);
+    const fpText = firstPersonText(stripQuotes(text), lang);
     const fp = count(fpRe, lang === 'en' ? fpText : foldFor(lang, fpText));
     if (fp >= 1) out.push(T('c_first_person', `First person in a news text (“${first(fpRe, lang === 'en' ? fpText : foldFor(lang, fpText))}”): the magazine reports, it does not speak as “I” or “we”`, 'medium', fp, first(fpRe, lang === 'en' ? fpText : foldFor(lang, fpText))));
   }

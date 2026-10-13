@@ -5,7 +5,7 @@
 // pieces were live. scoreVoice is the single scorer: it takes the existing per-language scorer (lib/antiAi.ts, unchanged),
 // adds the data-driven language tells (lib/voice/data), the shape checks (lib/voice/structure.ts), and returns one report.
 // Lower is better: 0 = clean. Weights match scoreAiTells (high 40, medium 7, low 3; diminishing after the first hit).
-import { scoreAiTells, burstiness, type AiTell, type AiTellReport, type Lang } from '@/lib/antiAi';
+import { scoreAiTells, burstiness, tellPoints, type AiTell, type AiTellReport, type Lang } from '@/lib/antiAi';
 import { stripHtml } from '@/lib/editorial/craft';
 import { dataTells, titleTells } from '@/lib/voice/tells';
 import { shapeTells, layoutTells, qualityIssues, paragraphsOf, wordCountOf, type Issue } from '@/lib/voice/structure';
@@ -28,6 +28,15 @@ export function maskTitles(text: string): string {
   return String(text || '').replace(/[“"„«]([^”"“»\n]{1,80})[”"“»]/g, (m, inner: string) => (inner.trim().split(/\s+/).length <= 7 ? '§' : m));
 }
 
+/**
+ * The site's own calls to action (<aside class="specialist-card">: "Verified firms from our directory", a link list) are template text in
+ * the magazine's voice, not the writer's prose. No detector may judge them: they carry "our", an extra heading and a list of links, and
+ * a rewrite is told to leave them as they are, so a finding inside one could never be repaired.
+ */
+export function withoutCards(html: string): string {
+  return String(html || '').replace(/<aside\b[^>]*>[\s\S]*?<\/aside\s*>/gi, ' ');
+}
+
 export interface VoiceReport {
   score: number;
   level: AiTellReport['level'];
@@ -40,7 +49,7 @@ export interface VoiceReport {
 
 export function scoreVoice(input: { title?: string; body: string; lang: string; desk: Desk; allowFirstPerson?: boolean }): VoiceReport {
   const lang = asLang(input.lang);
-  const raw = String(input.body || '');
+  const raw = withoutCards(String(input.body || ''));
   const plain = stripHtml(raw);
   const lexical = maskTitles(plain);
   const base = scoreAiTells({ title: input.title, content: lexical, lang });
@@ -55,7 +64,7 @@ export function scoreVoice(input: { title?: string; body: string; lang: string; 
     extra.push(t);
   }
   let score = base.score;
-  for (const t of extra) score += WEIGHT[t.severity] * Math.min(t.count, 5) * (t.count > 1 ? 0.7 : 1);
+  for (const t of extra) score += tellPoints(t);
   score = Math.max(0, Math.min(100, Math.round(score)));
 
   const tells = [...base.tells, ...extra].sort((a, b) => WEIGHT[b.severity] - WEIGHT[a.severity] || b.count - a.count);

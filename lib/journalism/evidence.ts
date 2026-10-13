@@ -12,7 +12,7 @@
 // What the check proves: the passage exists in the source and carries the figures of the fact (and, for an English source, the words of
 // the fact). What it cannot prove: that a passage in another language means what the fact says. That part stays with the model, which is
 // why the fact check after the writing remains. The two together are the guarantee; neither alone is.
-import { numbersIn } from '@/lib/voice/guards';
+import { numbersIn, unknownFigures } from '@/lib/voice/guards';
 import type { FactCore } from './factCore';
 
 export interface Proof { evidence: string; source: string }
@@ -80,6 +80,25 @@ export function figuresOf(s: string): string[] {
   return out;
 }
 
+/** The single digits that carry a unit or a currency in a text ("5%", "€3"): they count as figures where a bare digit does not. */
+const unitDigits = (s: string): string[] => {
+  const out: string[] = [];
+  const text = String(s || '');
+  for (const re of [UNIT_AFTER, UNIT_BEFORE]) for (const m of text.matchAll(re)) out.push(m[1]);
+  return out;
+};
+/**
+ * The figures of `text` that `passage` does not carry. Figures are compared as figures, not as strings: "6:30 pm" in the source supports
+ * "18:30" in the fact, "19.00" supports "19:00", "2,5" supports "2.5" (lib/voice/guards.ts figuresIn). Single digits and ten count only
+ * with a unit or a currency, as in figuresOf.
+ */
+export function missingFigures(text: string, passage: string): string[] {
+  const out = unknownFigures(passage, text);
+  const have = new Set(unitDigits(passage));
+  for (const d of unitDigits(text)) if (!have.has(d) && !out.includes(d)) out.push(d);
+  return out;
+}
+
 const STOP = new Set(['that', 'with', 'from', 'were', 'have', 'this', 'their', 'which', 'about', 'after', 'before', 'will', 'would', 'been', 'being', 'also', 'more', 'than', 'over', 'into', 'such', 'other', 'there', 'these', 'those', 'while', 'where', 'when', 'what', 'said', 'says']);
 const EN_FUNCTION_WORDS = new Set(['the', 'of', 'and', 'to', 'that', 'was', 'with', 'for', 'said', 'has', 'have', 'will', 'from', 'is', 'are', 'by', 'on', 'at', 'which', 'were', 'been', 'this', 'its']);
 /**
@@ -133,7 +152,7 @@ export function verifyCore(core: FactCore, sources: SourceText[], o: { mode: Evi
 
   const hays = new Map(sources.map((s) => [s.label, foldForMatch(`${s.title}\n${s.text}`)]));
   const allHay = [...hays.values()].join(' \n ');
-  const allFigures = new Set(sources.flatMap((s) => numbersIn(`${s.title}\n${s.text}`)));
+  const allText = sources.map((s) => `${s.title}\n${s.text}`).join('\n');
   // The lexical check needs the model to say English AND the source itself to be English (see looksEnglish).
   const englishOf = new Map(sources.map((s) => [s.label, looksEnglish(`${s.title}\n${s.text}`)] as const));
   const declaredEnglish = core.sourceLang === 'en';
@@ -153,8 +172,7 @@ export function verifyCore(core: FactCore, sources: SourceText[], o: { mode: Evi
     const hay = (p?.source && hays.get(p.source)) || allHay;
     const at = locatePassage(hay, evidence);
     if (!at.found) return { ok: false, reason: at.reason, pos: -1 };
-    const have = new Set(figuresOf(evidence));
-    const missing = figuresOf(text).filter((n) => !have.has(n));
+    const missing = missingFigures(text, evidence);
     if (missing.length) return { ok: false, reason: `the figure ${missing[0]} is not in the passage`, pos: at.pos };
     if (englishFor(p?.source)) {
       const sup = lexicalSupport(text, evidence);
@@ -187,14 +205,12 @@ export function verifyCore(core: FactCore, sources: SourceText[], o: { mode: Evi
     return ok;
   });
   const numbers = core.numbers.filter((n) => {
-    const need = figuresOf(n.value);
-    const ok = need.every((x) => allFigures.has(x));
+    const ok = missingFigures(n.value, allText).length === 0;
     if (!ok) report.dropped.push({ kind: 'number', text: `${n.value}: ${n.what}`.slice(0, 160), reason: 'the figure is not in the source' });
     return ok;
   });
   const dates = core.dates.filter((d) => {
-    const need = figuresOf(d.when);
-    const ok = need.every((x) => allFigures.has(x)) || locatePassage(allHay, d.when).found;
+    const ok = missingFigures(d.when, allText).length === 0 || locatePassage(allHay, d.when).found;
     if (!ok) report.dropped.push({ kind: 'date', text: `${d.when}: ${d.what}`.slice(0, 160), reason: 'the date is not in the source' });
     return ok;
   });
