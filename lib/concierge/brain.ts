@@ -36,6 +36,7 @@ import { MEMBERSHIP_FACTS } from '@/lib/member/truth';
 import { isOfficialAuthorityUrl } from '@/lib/concierge/linkPolicy';
 import { nameGrams, distinctiveTerms, contentTerms, askedNames, asksAboutBusiness, hasVenueWord, nameCovers, fold as foldName } from '@/lib/concierge/names';
 import { trustOf, trustTag, promotePaying, type Trust } from '@/lib/concierge/trust';
+import { isSensitive, asksForSensitive } from '@/lib/concierge/sensitive';
 import { factsOf, factLines, type Facts } from '@/lib/concierge/facts';
 
 /** The model the concierge answers with (the routing table's "chat" task; override with OPENAI_MODEL_LUNA). Recorded with every live quality evaluation. */
@@ -757,6 +758,11 @@ export async function assembleContext(locale: string, latestUser: string): Promi
   }
   if (candidates.length < 4) candidates = mergeDirHits(candidates, await topRated(locale, 8), 8);
 
+  // SENSITIVE KINDS (plan V1d): adult shops, betting, casinos, lotteries and gun shops are in the directory and found by name, but the
+  // concierge does not volunteer them to a guest who asked for something else. A named business, or a guest asking for that kind, lifts the filter.
+  const namedSlugs = new Set(nameHits.slice(0, 3).map((h) => h.slug));
+  if (!asksForSensitive(latestUser)) candidates = candidates.filter((c) => !isSensitive(c) || namedSlugs.has(c.slug));
+
   // RERANK (CI-7, opt-in): reorder by true relevance (drops wrong-category noise) then
   // commercial tier (paying partners lead among comparable matches). Honest by design —
   // relevance dominates, so a partner never beats a clearly better-matched option.
@@ -765,7 +771,6 @@ export async function assembleContext(locale: string, latestUser: string): Promi
   // SALES-AGENT ORDER (plan S5): among the businesses that fit the guest's category, those with a paid tier come first
   // (Partner > Featured > Listed), right after any business the guest named. No-op while nobody pays; never pulls a paying
   // business from another category forward. (Labelled as a partner placement in the context below.)
-  const namedSlugs = new Set(nameHits.slice(0, 3).map((h) => h.slug));
   candidates = promotePaying(candidates, namedSlugs, [targetCanonical]);
 
   // UNKNOWN BUSINESS (plan S4): a proper name the guest wrote that no retrieved business carries. Logged for the desk and told to

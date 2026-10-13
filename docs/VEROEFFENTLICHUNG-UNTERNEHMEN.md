@@ -1,7 +1,7 @@
 # Alle Unternehmen veröffentlichen: Ablauf (Runbook)
 
 Gehört zu `docs/PLAN-UNTERNEHMEN-CONCIERGE-VERKAUF.md`, Paket V. Stand: 13. Oktober 2026.
-**Nichts in diesem Dokument wurde ausgeführt.** Die Datenbank ist unverändert. Jeder Schritt mit „Datenbank“ braucht Daniels „Go“.
+Daniel hat am 13. Oktober das „Go“ für Concierge-Code und Unternehmensdaten (Veröffentlichung, Adressen, Koordinaten) gegeben. Dieses Dokument ist der Ablauf dazu; was tatsächlich ausgeführt wurde, steht im Plan.
 
 ## Warum nicht einfach „alles auf published“?
 
@@ -22,7 +22,7 @@ Die Karte (`/map`) liest schon `published` **und** `listed` und braucht keine Ä
 ## Reihenfolge
 
 1. Pull Request mergen, Vercel-Deployment „Ready“ abwarten.
-2. **Datenbank (einmalig):** `supabase/migrations/20261013120000_concierge_name_search.sql` und `supabase/migrations/20261013121000_directory_facets.sql` im Supabase SQL Editor ausführen.
+2. **Datenbank (einmalig):** `supabase/migrations/20261013120000_concierge_name_search.sql`, `supabase/migrations/20261013121000_directory_facets.sql` und `supabase/migrations/20261013122000_directory_address_source.sql` ausführen.
 3. Stichprobe auf der Live-Seite: `/directory/vendor` zeigt 48 Karten, Seite 2 (`/directory/vendor/p/2`) lädt, Ranking sieht sinnvoll aus.
 4. **Go von Daniel.**
 5. Sicherung → Wechsel → Prüfung (unten).
@@ -41,7 +41,13 @@ create table backup_20261013.directory_status as
 -- 2. Pro Zeile würde sonst ein Aufruf an die Website gehen (14.671 mal): kurz abschalten
 alter table public.directory_listings disable trigger zz_cl_revalidate;
 
--- 3. Wechsel in Paketen (jedes unter 60 Sekunden); so oft wiederholen, bis 0 Zeilen
+-- 3. Ausnahmen zuerst auf 'hidden' (nicht öffentlich, auch nicht auf der Karte): die 6 Einträge der Rubrik escort-agencies
+--    und die 2 Platzhalter.
+update public.directory_listings set status = 'hidden'
+ where status = 'listed'
+   and (subtype = 'escort-agencies' or slug in (<Slugs der 2 Platzhalter>));
+
+-- 4. Wechsel in Paketen (jedes unter 60 Sekunden); so oft wiederholen, bis 0 Zeilen
 with todo as (
   select id from public.directory_listings
   where status = 'listed'
@@ -51,10 +57,10 @@ update public.directory_listings l
    set status = 'published', published_at = coalesce(l.published_at, now())
   from todo where l.id = todo.id;
 
--- 4. Wieder einschalten
+-- 5. Wieder einschalten
 alter table public.directory_listings enable trigger zz_cl_revalidate;
 
--- 5. Prüfung
+-- 6. Prüfung
 select status, count(*) from public.directory_listings group by status order by 2 desc;
 ```
 
@@ -69,20 +75,19 @@ update public.directory_listings l
 alter table public.directory_listings enable trigger zz_cl_revalidate;
 ```
 
-## Ausnahmen, die Daniel noch entscheiden muss (V1d)
+## Ausnahmen (V1d, von Daniel am 13. Oktober freigegeben)
 
-„Ohne Ausnahme“ ist verstanden. Diese Gruppen würde ich trotzdem **nicht blind** mitveröffentlichen, weil ein Luxus-Lifestyle-Magazin dafür haftet:
+Daniel wollte „ohne Ausnahme“ und hat den folgenden Ausnahmen zugestimmt, weil die Marke dafür haftet:
 
-| Gruppe | Anzahl | Befund | Vorschlag |
+| Gruppe | Anzahl | Befund | Entscheidung |
 |---|---|---|---|
-| Escort-Agenturen | 3 | „Desire Cyprus Escorts“, „VIP Escorts“, „Adults Boutique Limassol“; rechtlich heikel, Markenschaden | nicht veröffentlichen |
-| Sex-Shops, Casino, Wetten | 14 | legal, aber nicht Marke; der Concierge würde sie Luxusgästen nicht empfehlen | veröffentlichen, aber **nicht** vom Concierge empfehlen, außer auf direkte Frage |
-| Entwürfe (Bauprojekte, keine Koordinaten) | 56 | z. B. „Aqua Pearl Residences“ (ausverkauft), Einzelobjekte | erst Koordinaten/Status prüfen |
-| Versteckt | 30 | 18 liegen im besetzten Norden (nie zeigen); 1 „[CLOSED] Yiannis Romanian Grill house“ | Norden und „geschlossen“ bleiben versteckt; die übrigen 11 prüfen und freigeben |
-| Platzhalter | 2 | „{EMPTY COMPANY} - Cyprus“, „Car for sale Cyprus - Limassol“ | nicht veröffentlichen |
+| Rubrik `escort-agencies` | 6 | „Desire Cyprus Escorts“, „VIP Escorts“, „Hot Independent“, „Skokka“ (Anzeigenportal) sowie „Adults Boutique Limassol“ und „LOVE SHOP“ (Erotik-Läden, die in dieser Rubrik landeten) | **nicht öffentlich** (`hidden`, damit auch nicht auf der Karte) |
+| Sex-Shops, Wetten, Casino, Lotterie, Waffengeschäfte | ca. 45 | legal, aber nicht Marke | **veröffentlicht**; der Concierge nennt sie nur auf Namen oder direkte Frage (Plan S6) |
+| Entwürfe (Bauprojekte, keine Koordinaten) | 56 | z. B. „Aqua Pearl Residences“ (ausverkauft), Einzelobjekte | bleiben Entwurf; erst Koordinaten und Status prüfen |
+| Versteckt | 30 | 18 liegen im besetzten Norden (nie zeigen); 1 „[CLOSED] Yiannis Romanian Grill house“ | bleiben versteckt; die übrigen 11 sind noch zu prüfen |
+| Platzhalter | 2 | „{EMPTY COMPANY} - Cyprus“, „Car for sale Cyprus - Limassol“ | **nicht öffentlich** (`hidden`) |
 
-Wenn Daniel „alle ohne Ausnahme“ bestätigt, ändere ich nur die `where`-Zeile im Wechsel (`status = 'listed'`) nicht. Für die Vorschläge oben käme dazu:
-`and slug not in ('empty-company-cyprus') and subtype <> 'escort-agencies'`.
+Die Erotik-Läden „Adults Boutique Limassol“ und „LOVE SHOP“ liegen nur wegen ihrer Rubrik in der Ausnahme. Soll einer davon doch erscheinen, wird er mit einem `update … set status = 'published'` freigegeben.
 
 ## Wie Google damit umgeht (Risiko offen gesagt)
 
