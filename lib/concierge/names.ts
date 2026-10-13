@@ -73,7 +73,7 @@ export const GENERIC: Set<string> = set(
   `ресторан рестораны кафе бар отель отели пляж аптека клиника юрист банк магазин`,
   `restaurant restaurante cafenea hotel hoteluri plajă farmacie clinică avocat bancă magazin`,
   `restauracja restauracje kawiarnia hotel plaża apteka klinika prawnik bank sklep`,
-  `restaurant gaststätte café hotel strand apotheke klinik anwalt bank geschäft`,
+  `restaurant gaststätte café hotel strand apotheke klinik anwalt bank geschäft zahnarzt arzt tierarzt friseur bäckerei metzger makler rechtsanwalt steuerberater notar versicherung klempner elektriker fitnessstudio`,
   `مطعم مطاعم مقهى فندق فنادق شاطئ صيدلية عيادة محامي بنك متجر`,
 );
 
@@ -160,6 +160,23 @@ export function distinctiveTerms(q: string, max = 5): string[] {
   return out.sort((a, b) => b.length - a.length).slice(0, max);
 }
 
+/**
+ * Single words for the keyword search over a business's TEXT and category (summary, subtype): every content word except function
+ * words and towns — everyday category words stay in ("pizza" must still find pizzerias). Longest first, at most `max`.
+ */
+export function contentTerms(q: string, max = 5): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const w of words(q)) {
+    const f = fold(w);
+    if (!isContent(w) || isPlaceWord(f) || seen.has(f)) continue;
+    if (f.length < (isLatin(w) ? 4 : 3)) continue;
+    seen.add(f);
+    out.push(w.toLowerCase().replace(/[(),*%_]/g, ''));
+  }
+  return out.sort((a, b) => b.length - a.length).slice(0, max);
+}
+
 // Does the question look like it is ABOUT one particular business (contact details, hours, booking, "tell me about …")?
 const ABOUT_RX = new RegExp([
   'phone|telephone|call|number|address|where is|located|location|opening|open on|open at|hours|closed|website|menu|book|reserve|reservation|contact|email|tell me about|do you know|know of|know about|reviews?|rating',
@@ -195,6 +212,10 @@ export function askedNames(q: string, max = 3): string[] {
   for (const m of text.matchAll(/["“«„]([^"”»“]{3,60})["”»“]/gu)) push(m[1]);
 
   const ws = words(text);
+  // German writes every noun with a capital: "Zahnarzt", "Telefonnummer". When most of the content words after the first are capitalised,
+  // a capital says nothing about a name, so only quoted phrases count.
+  const rest = ws.slice(1).filter((w) => isContent(w) && !isPlaceWord(fold(w)) && !DEMONYMS_AND_CALENDAR.has(fold(w)));
+  if (rest.length >= 3 && rest.filter((w) => /^\p{Lu}/u.test(w)).length / rest.length >= 0.6) return found.slice(0, max);
   let run: string[] = [];
   const flush = () => {
     while (run.length && (CONNECTOR_WORDS.has(fold(run[0])) || CONNECTOR_WORDS.has(fold(run[run.length - 1])))) {

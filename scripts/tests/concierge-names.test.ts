@@ -1,5 +1,5 @@
 // Finding a business by name inside a sentence — pure helpers (lib/concierge/names.ts). Offline, deterministic.
-import { fold, words, nameGrams, distinctiveTerms, askedNames, asksAboutBusiness, nameCovers, STOP, GENERIC, PLACE_WORDS } from '@/lib/concierge/names';
+import { fold, words, nameGrams, distinctiveTerms, contentTerms, askedNames, asksAboutBusiness, nameCovers, STOP, GENERIC, PLACE_WORDS } from '@/lib/concierge/names';
 import { eq, ok, report } from './_harness';
 
 // ── fold ─────────────────────────────────────────────────────────────────────
@@ -51,6 +51,11 @@ ok('terms are longest first', (() => { const t = distinctiveTerms('pharmacy Chri
 ok('terms never contain wildcard characters', distinctiveTerms('rimini*(x),%').every((t) => !/[(),*%_]/.test(t)));
 ok('terms keep 3-letter non-Latin words', distinctiveTerms('مطعم زيا').includes('زيا'));
 
+// ── contentTerms (keyword search over a business's text): category words stay in ──
+eq('pizza is a content term although it is not a name', contentTerms('best pizza in Limassol'), ['pizza']);
+ok('towns and function words never count', !contentTerms('a good pharmacy near Mackenzie please').includes('mackenzie') && !contentTerms('a good pharmacy near Mackenzie please').includes('please'));
+ok('3-letter non-Latin words kept', contentTerms('مطعم زيا').includes('زيا'));
+
 // ── asksAboutBusiness ────────────────────────────────────────────────────────
 ok('phone number question', asksAboutBusiness('What is the phone number of Zya Cafe?'));
 ok('opening hours question (de)', asksAboutBusiness('Wie sind die Öffnungszeiten von Zya?'));
@@ -66,6 +71,8 @@ eq('months and days are not names', askedNames('Is it open on Monday in August?'
 eq('quoted phrase is a name', askedNames('do you know "Blue Lagoon Divers"?'), ['Blue Lagoon Divers']);
 eq('Greek capitalised name', askedNames('Ξέρεις το Κυριάκος στη Λεμεσό;'), ['Κυριάκος']);
 eq('all lower-case question yields nothing (no false alarm)', askedNames('is zya cafe open'), []);
+eq('German capitalises every noun: no false name', askedNames('Gibt es einen guten Zahnarzt in der Nähe? Wie ist die Telefonnummer?'), []);
+eq('German with a quoted name still works', askedNames('Kennen Sie das Restaurant "Zorba" und die Öffnungszeiten?'), ['Zorba']);
 ok('at most 3 names', askedNames('Alpha met Bravo and Charlie with Delta').length <= 3);
 
 // ── nameCovers ───────────────────────────────────────────────────────────────

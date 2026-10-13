@@ -34,7 +34,7 @@ import { retrieveSources, publishedSet } from '@/lib/concierge/sourcesRetrieve';
 import { supabaseSourceDeps } from '@/lib/concierge/sourcesDeps';
 import { MEMBERSHIP_FACTS } from '@/lib/member/truth';
 import { isOfficialAuthorityUrl } from '@/lib/concierge/linkPolicy';
-import { nameGrams, distinctiveTerms, askedNames, asksAboutBusiness, hasVenueWord, nameCovers, fold as foldName } from '@/lib/concierge/names';
+import { nameGrams, distinctiveTerms, contentTerms, askedNames, asksAboutBusiness, hasVenueWord, nameCovers, fold as foldName } from '@/lib/concierge/names';
 import { trustOf, trustTag, promotePaying, type Trust } from '@/lib/concierge/trust';
 import { factsOf, factLines, type Facts } from '@/lib/concierge/facts';
 
@@ -402,8 +402,10 @@ export async function searchDirectory(locale: string, q: string, limit = 8, opts
     if (lux) x = x.order('luxury', { ascending: false, nullsFirst: false });
     return x.order('verified', { ascending: false, nullsFirst: false }).order('rating', { ascending: false, nullsFirst: false });
   };
-  // Distinctive words only (function words, everyday category words and towns are left to the intent legs) — plan item S3.
+  // Plan item S3. Function words and towns never count. Two sets: the words that can be part of a NAME (everyday category words
+  // left out — "pizza" is not a name), and the words worth looking for in a business's text and category (category words stay in).
   const terms = distinctiveTerms(q, 5);
+  const bodyTerms = contentTerms(q, 5);
 
   try {
     // Subtype-exact FIRST (highest precision): "an accountant in Larnaca" must return
@@ -434,19 +436,23 @@ export async function searchDirectory(locale: string, q: string, limit = 8, opts
         push(wide as Record<string, unknown>[] | null);
       }
     }
-    if (terms.length) {
+    if (terms.length || bodyTerms.length) {
       // NAME matches first: a business whose own name holds the guest's distinctive words beats one that merely mentions them in its
       // text. Within the same number of name hits the order is the database's: paying tier, verified, rating (never rating alone — the
       // imported businesses have no rating and used to sink below every rated one).
-      const nameOr = terms.flatMap((t) => [`name_${locale}.ilike.*${t}*`, `name_en.ilike.*${t}*`]).join(',');
-      const { data: byName } = await ordered(sb.from('directory_listings').select(cols).in('status', CONCIERGE_STATUSES).or(nameOr)).limit(24);
-      const nameRows = ((byName as Record<string, unknown>[] | null) || [])
-        .map((r, i) => ({ r, i, hit: nameTermHits(r, terms, locale) }))
-        .sort((a, b) => b.hit - a.hit || a.i - b.i);
-      push(nameRows.map((x) => x.r));
-      const bodyOr = terms.flatMap((t) => [`summary_${locale}.ilike.*${t}*`, `summary_en.ilike.*${t}*`, `subtype.ilike.*${t}*`]).join(',');
-      const { data } = await ordered(sb.from('directory_listings').select(cols).in('status', CONCIERGE_STATUSES).or(bodyOr)).limit(16);
-      push(data as Record<string, unknown>[] | null);
+      if (terms.length) {
+        const nameOr = terms.flatMap((t) => [`name_${locale}.ilike.*${t}*`, `name_en.ilike.*${t}*`]).join(',');
+        const { data: byName } = await ordered(sb.from('directory_listings').select(cols).in('status', CONCIERGE_STATUSES).or(nameOr)).limit(24);
+        const nameRows = ((byName as Record<string, unknown>[] | null) || [])
+          .map((r, i) => ({ r, i, hit: nameTermHits(r, terms, locale) }))
+          .sort((a, b) => b.hit - a.hit || a.i - b.i);
+        push(nameRows.map((x) => x.r));
+      }
+      if (bodyTerms.length) {
+        const bodyOr = bodyTerms.flatMap((t) => [`summary_${locale}.ilike.*${t}*`, `summary_en.ilike.*${t}*`, `subtype.ilike.*${t}*`]).join(',');
+        const { data } = await ordered(sb.from('directory_listings').select(cols).in('status', CONCIERGE_STATUSES).or(bodyOr)).limit(16);
+        push(data as Record<string, unknown>[] | null);
+      }
     }
     for (const ty of types) {
       let query = sb.from('directory_listings').select(cols).in('status', CONCIERGE_STATUSES).eq('type', ty);

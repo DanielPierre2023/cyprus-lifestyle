@@ -78,6 +78,17 @@ const CORE_EVAL_SET: EvalItem[] = [
   { id: 'de-invest', locale: 'de', intent: 'practical', question: 'Ist Zypern ein guter Ort zum Investieren, und wie fange ich an?' },
   { id: 'pl-beach', locale: 'pl', intent: 'beach', question: 'Które plaże w pobliżu Ayia Napa są najlepsze?' },
   { id: 'ru-state', locale: 'ru', intent: 'practical', question: 'Как сейчас общая обстановка на Кипре? Стоит ли приезжать?' },
+
+  // ── Businesses by name, the facts we hold, honesty about what we do not know (plan items S1–S5). The judge checks that the
+  // answer names only what the context lists, quotes contact details exactly, says plainly when a business or an opening time is
+  // not on file, and mentions (once) that unreviewed businesses have not been checked by our editors.
+  { id: 'en-name-phone', locale: 'en', intent: 'named-business', question: 'Do you have a phone number for A and M Solomou Signs in Kato Polemidia?' },
+  { id: 'en-name-hours', locale: 'en', intent: 'named-business', question: 'What are the opening hours of Solymaris Beach Bar in Protaras?' },
+  { id: 'en-name-unknown', locale: 'en', intent: 'unknown-business', question: 'Tell me about the taverna Xenos Kyriakos in Paphos — is it good and open on Sundays?' },
+  { id: 'en-unreviewed', locale: 'en', intent: 'trust', question: 'Which dentist in Limassol would you recommend, and have you checked them?' },
+  { id: 'de-name-unknown', locale: 'de', intent: 'unknown-business', question: 'Kennen Sie das Restaurant "Zum Goldenen Esel" in Larnaka? Ich brauche die Telefonnummer.' },
+  { id: 'ru-name-phone', locale: 'ru', intent: 'named-business', question: 'Расскажи про магазин Компот в Лимассоле: адрес и телефон?' },
+  { id: 'el-unreviewed', locale: 'el', intent: 'trust', question: 'Ποιον δικηγόρο στη Λεμεσό προτείνετε για αγορά ακινήτου και τον έχετε ελέγξει;' },
 ];
 
 // Increment 2.1b: the 13 live-eval questions for the non-directory sources (events, own articles, bookable
