@@ -202,6 +202,36 @@ function toListing(r: Record<string, unknown>, l: Locale): Listing {
     provenance: (r.provenance as string) ?? null,
   };
 }
+// The order of every public list (plan item V1): our paying clients first (featured, then tier), then businesses our editors have
+// verified, then the best rated / most reviewed, then A–Z. Without this the ~14.7k imported businesses (no rating) would be listed
+// alphabetically and the 3k with real ratings buried among them.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ranked<T extends { order: (column: string, options?: { ascending?: boolean; nullsFirst?: boolean }) => any }>(query: T): T {
+  return query
+    .order('featured', { ascending: false })
+    .order('commercial_rank', { ascending: false, nullsFirst: false })
+    .order('verified', { ascending: false })
+    .order('rating', { ascending: false, nullsFirst: false })
+    .order('rating_count', { ascending: false, nullsFirst: false })
+    .order('name_en', { ascending: true });
+}
+export const LIST_PER_PAGE = 48;
+export interface ListingPage { items: Listing[]; total: number; page: number; pages: number; perPage: number }
+/** One page of a category list (a type or a category group), ranked as above. `total` is the exact count of published businesses. */
+export async function getListingsPage(
+  locale: Locale, opts: { type?: string; group?: string; page?: number; perPage?: number },
+): Promise<ListingPage> {
+  const perPage = Math.min(96, Math.max(12, Math.floor(opts.perPage || LIST_PER_PAGE)));
+  const page = Math.max(1, Math.floor(opts.page || 1));
+  let q = supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale), { count: 'exact' }).eq('status', 'published');
+  if (opts.type) q = q.eq('type', opts.type);
+  if (opts.group) q = q.eq('category_group', opts.group);
+  const from = (page - 1) * perPage;
+  const { data, count } = await ranked(q).range(from, from + perPage - 1);
+  const total = count ?? 0;
+  const items = ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale)).filter((x) => x.name);
+  return { items, total, page, pages: Math.max(1, Math.ceil(total / perPage)), perPage };
+}
 // haversine distance in km between two lat/lng points
 function distKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
   const R = 6371, toR = Math.PI / 180;
@@ -213,13 +243,22 @@ export interface NearbyItem extends Listing { distanceKm: number }
 // "Around this place": published listings near a point, closest first, capped per
 // type so one category can't crowd the rest. Bounding-box prefilter + haversine.
 export async function getNearby(locale: Locale, lat: number, lng: number, excludeSlug: string, radiusKm = 9, perType = 4, total = 12): Promise<NearbyItem[]> {
-  const dLat = radiusKm / 111, dLng = radiusKm / (111 * Math.cos(lat * Math.PI / 180) || 1);
-  const { data } = await supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale))
-    .eq('status', 'published')
-    .gte('lat', lat - dLat).lte('lat', lat + dLat)
-    .gte('lng', lng - dLng).lte('lng', lng + dLng)
-    .limit(400);
-  const rows = ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale)).filter((x) => x.name && x.slug !== excludeSlug && x.lat != null && x.lng != null);
+  const CAP = 400;
+  // The bounding-box read is capped, and the cap returns ARBITRARY rows. In a dense town (17.7k published businesses) a 9 km box can hold
+  // thousands, so the radius shrinks until the box is complete (or tiny): the nearest businesses are always inside the final box.
+  let rows: Listing[] = [];
+  for (const r of [radiusKm, radiusKm / 2, radiusKm / 4.5, radiusKm / 9, radiusKm / 18]) {
+    const dLat = r / 111, dLng = r / (111 * Math.cos(lat * Math.PI / 180) || 1);
+    const { data } = await supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale))
+      .eq('status', 'published')
+      .gte('lat', lat - dLat).lte('lat', lat + dLat)
+      .gte('lng', lng - dLng).lte('lng', lng + dLng)
+      .limit(CAP);
+    const got = (data || []) as unknown as Record<string, unknown>[];
+    rows = got.map((x) => toListing(x, locale)).filter((x) => x.name && x.slug !== excludeSlug && x.lat != null && x.lng != null);
+    if (got.length < CAP) { radiusKm = r; break; }
+    radiusKm = r;
+  }
   const withD = rows.map((x) => ({ ...x, distanceKm: distKm(lat, lng, x.lat as number, x.lng as number) }))
     .filter((x) => x.distanceKm <= radiusKm)
     .sort((a, b) => a.distanceKm - b.distanceKm);
@@ -257,8 +296,7 @@ export async function getPeers(
   const fetchBy = async (col: 'subtype' | 'type' | 'category_group', val: string | null): Promise<unknown> => {
     if (!val) return [];
     try {
-      const { data } = await sb.from('directory_listings').select(cols).eq('status', 'published')
-        .eq(col, val).order('rating', { ascending: false, nullsFirst: false }).limit(40);
+      const { data } = await ranked(sb.from('directory_listings').select(cols).eq('status', 'published').eq(col, val)).limit(40);
       return data;
     } catch { return []; }
   };
@@ -287,7 +325,7 @@ export async function getEventsByDistrict(locale: Locale, district: string | nul
 export async function getListings(locale: Locale, type?: string, limit = 200): Promise<Listing[]> {
   let q = supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale)).eq('status', 'published');
   if (type) q = q.eq('type', type);
-  const { data } = await q.order('featured', { ascending: false }).order('name_en', { ascending: true }).limit(limit);
+  const { data } = await ranked(q).limit(limit);
   return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale)).filter((x) => x.name);
 }
 // ALL published listings of a type (or all types), paginated past PostgREST's
@@ -368,24 +406,35 @@ let _facetCache: { at: number; data: CollectionFacet[] } | null = null;
 export async function getCollectionFacets(): Promise<CollectionFacet[]> {
   if (_facetCache && Date.now() - _facetCache.at < 60_000) return _facetCache.data;
   const sb = supabaseAdmin();
-  const rows: { type: string | null; district: string | null }[] = [];
-  const PAGE = 1000;
-  for (let from = 0; from < 12000; from += PAGE) {
-    const { data } = await sb.from('directory_listings').select('type, district')
-      .eq('status', 'published').not('district', 'is', null).order('slug').range(from, from + PAGE - 1);
-    const batch = (data || []) as { type: string | null; district: string | null }[];
-    rows.push(...batch);
-    if (batch.length < PAGE) break;
-  }
   const acc = new Map<string, CollectionFacet>();
-  for (const r of rows) {
-    if (!r.type || !r.district) continue;
-    const districtSlug = slugifyDistrict(r.district);
-    if (!districtSlug) continue;
-    const key = `${r.type}::${districtSlug}`;
+  const add = (type: string | null, district: string | null, n: number) => {
+    if (!type || !district) return;
+    const districtSlug = slugifyDistrict(district);
+    if (!districtSlug) return;
+    const key = `${type}::${districtSlug}`;
     const cur = acc.get(key);
-    if (cur) cur.count += 1;
-    else acc.set(key, { type: r.type, district: r.district, districtSlug, slug: collectionSlug(r.type, districtSlug), count: 1 });
+    if (cur) cur.count += n;
+    else acc.set(key, { type, district, districtSlug, slug: collectionSlug(type, districtSlug), count: n });
+  };
+  // Preferred: one aggregate in the database (migration 20261013121000_directory_facets.sql) — a few hundred rows instead of 17k.
+  let done = false;
+  try {
+    const { data, error } = await sb.rpc('directory_facets');
+    if (!error && Array.isArray(data)) {
+      for (const r of data as { type: string | null; district: string | null; n: number | string }[]) add(r.type, r.district, Number(r.n) || 0);
+      done = true;
+    }
+  } catch { /* RPC not applied yet — scan below */ }
+  if (!done) {
+    // Fallback (RPC missing): page through the rows. The ceiling used to be 12,000 and silently dropped everything after it.
+    const PAGE = 1000;
+    for (let from = 0; from < 60000; from += PAGE) {
+      const { data } = await sb.from('directory_listings').select('type, district')
+        .eq('status', 'published').not('district', 'is', null).order('slug').range(from, from + PAGE - 1);
+      const batch = (data || []) as { type: string | null; district: string | null }[];
+      for (const r of batch) add(r.type, r.district, 1);
+      if (batch.length < PAGE) break;
+    }
   }
   const data = [...acc.values()].filter((f) => f.count >= MIN_COLLECTION_SIZE).sort((a, b) => b.count - a.count);
   _facetCache = { at: Date.now(), data };
@@ -401,11 +450,8 @@ export async function getCollectionsInDistrict(districtSlug: string, excludeType
 }
 // Ranked listings for a collection: featured first, then rating, then review volume.
 export async function getCollectionListings(locale: Locale, type: string, district: string, limit = 30): Promise<Listing[]> {
-  const { data } = await supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale))
-    .eq('status', 'published').eq('type', type).eq('district', district)
-    .order('featured', { ascending: false })
-    .order('rating', { ascending: false, nullsFirst: false })
-    .order('rating_count', { ascending: false, nullsFirst: false })
+  const { data } = await ranked(supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale))
+    .eq('status', 'published').eq('type', type).eq('district', district))
     .limit(limit);
   return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale)).filter((x) => x.name);
 }

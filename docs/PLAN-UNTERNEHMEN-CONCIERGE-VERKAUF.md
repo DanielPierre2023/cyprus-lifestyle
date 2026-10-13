@@ -56,11 +56,11 @@ Status: `[x]` fertig und geprüft · `[~]` in Arbeit · `[ ]` offen · `[?]` war
 
 ### Paket V: Alles veröffentlichen und auf der Karte
 
-- [ ] **V1a Seiten vorbereiten.** Seitenaufteilung für `/directory/[type]` und `/directory/g/[group]` (48 pro Seite), Filter Bezirk/Kategorie, Vorschau nach Qualität statt alphabetisch, Facetten ohne 12.000-Grenze, „In der Nähe“ wirklich nach Entfernung, keine Fremd-Fotos.
-- [ ] **V1b Suche und Sitemap.** Sitemap-Auslieferung prüfen (2 Dateien à 10.000), dünne Seiten (zu kurzer Text) bleiben `noindex`, bis Text vorliegt.
-- [ ] **V1c Veröffentlichung (Runbook).** Sicherung (`backup_20261013.directory_status`) → Revalidate-Trigger kurz aus → `listed` → `published` in Paketen → Trigger an → Stichproben.
+- [x] **V1a Seiten vorbereiten.** Fertig im Code und getestet: Seitenaufteilung für `/directory/<Art>` und `/directory/g/<Gruppe>` (48 pro Seite, `/p/<n>`), Ranking statt alphabetisch (Partner, geprüft, Bewertung, A–Z), Facetten über eine Datenbank-Zählung (`directory_facets`) statt Scan mit Grenze 12.000, „In der Nähe“ mit schrumpfendem Radius (kein Zufall mehr), Quellen-Werbebild wird nicht gezeigt, Hinweis „nicht von der Redaktion geprüft“ auf jeder ungeprüften Seite (7 Sprachen).
+- [x] **V1b Suche und Sitemap.** Geprüft: Sitemap ist bereits in Dateien à 10.000 geteilt (`listings-0`, `listings-1`), dünne Seiten bleiben `noindex` und fehlen in der Sitemap. Keine Änderung nötig.
+- [~] **V1c Veröffentlichung (Runbook).** Ablauf, Sicherung und Rückweg stehen in `docs/VEROEFFENTLICHUNG-UNTERNEHMEN.md`. **Noch nicht ausgeführt.** Reihenfolge: PR mergen → zwei SQL-Dateien einspielen → Stichprobe → Daniels „Go“ → Wechsel.
   **Fertig, wenn:** 17.747 Unternehmen öffentlich, jede Detailseite lädt, Verzeichnis und Karte zählen gleich.
-- [?] **V1d Entscheidung 86 Fälle.** 56 Entwürfe (Bauprojekte, keine Koordinaten) und 30 versteckte (eines ist „geschlossen“). Daniel sagt „ohne Ausnahme“; ich schlage vor: erst ansehen, geschlossene nicht veröffentlichen.
+- [?] **V1d Entscheidung** zu 86 Entwürfen/Versteckten und 20 heiklen Einträgen (3 Escort-Agenturen, Sex-Shops, Casino/Wetten); Vorschlag in `docs/VEROEFFENTLICHUNG-UNTERNEHMEN.md`. Daniel sagt „ohne Ausnahme“; die Gruppen sind der einzige Punkt, den ich vor dem Wechsel von ihm bestätigt haben möchte.
 - [ ] **V2 Karte vollständig.** 298 fehlende Koordinaten per Geocode-Route nachholen; danach Karte = Verzeichnis (Zähler prüfen).
 - [ ] **V3 Concierge-Index.** Embeddings nach Veröffentlichung auffrischen (`/api/concierge/embed-directory`, braucht den bestehenden Schlüssel in Vercel).
 
