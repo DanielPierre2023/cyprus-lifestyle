@@ -74,8 +74,8 @@ Status: `[x]` fertig und geprüft · `[~]` in Arbeit · `[ ]` offen · `[?]` war
 
 ### Paket K: Verkauf und Konzept
 
-- [~] **K1 Konzept** (`docs/KONZEPT-VERKAUF-PHILOSOPHIE.md`): Analyse der 10 Angebote, Preislogik, Produkt-Leiter, Verkaufssystem, Philosophie, Schutz des Konzepts. Daniel wählt, bevor etwas gebaut wird.
-- [?] **K2 Umsetzung** nach Daniels Wahl: Checkout reparieren (Testkauf), Preisliste neu, Partner-Berichte, Agenten-Provision, Concierge-Reihenfolge.
+- [x] **K1 Konzept** geschrieben: `docs/KONZEPT-VERKAUF-PHILOSOPHIE.md` (Zahlen, Befund zu den 10 Angeboten, Philosophie „Auswahl statt Telefonbuch“, Produktleiter mit Preisvorschlägen, Verkaufssystem, Marktvergleich, Risiken, 7 Entscheidungen). Alle Preise sind **Vorschläge**.
+- [?] **K2 Umsetzung** nach Daniels Entscheidungen (Tabelle in Abschnitt 10 des Konzepts). Teilschritte: K2.1 Kasse reparieren (Testkauf) · K2.2 neue Preisliste und Preisseite · K2.3 Prüfweg „geprüft“ · K2.4 Partner-Monatsbericht · K2.5 Concierge-Übergabe mit Einwilligung · K2.6 CRM-Ansprache · K2.7 Mediakit.
 - [ ] **K3 Testkauf.** Ein echter Durchlauf mit kleinem Betrag, danach Rückerstattung (nur mit Daniels OK).
 
 ### Paket C: Concierge „allwissend und logisch“
