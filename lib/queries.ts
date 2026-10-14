@@ -350,6 +350,14 @@ export async function getListing(locale: Locale, slug: string): Promise<Listing 
   return data ? toListing(data as unknown as Record<string, unknown>, locale) : null;
 }
 
+/** Published listings by slug (a hand-written profile links its offices, group rows and projects). Unpublished slugs are simply absent. */
+export async function getListingsBySlugs(locale: Locale, slugs: string[]): Promise<Listing[]> {
+  const list = Array.from(new Set(slugs.filter(Boolean)));
+  if (!list.length) return [];
+  const { data } = await supabaseAdmin().from('directory_listings').select(LISTING_COLS(locale)).eq('status', 'published').in('slug', list);
+  return ((data || []) as unknown as Record<string, unknown>[]).map((r) => toListing(r, locale)).filter((x) => x.name);
+}
+
 // The island's finest, across categories — the Luxury tier. Curated from the
 // strongest signals we already hold: a top price band (€€€/€€€€), or an
 // exceptional rating, with featured and verified rising first.
