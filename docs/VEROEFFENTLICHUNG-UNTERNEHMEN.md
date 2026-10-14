@@ -30,50 +30,18 @@ Die Karte (`/map`) liest schon `published` **und** `listed` und braucht keine Ä
 7. Concierge-Index auffrischen: `/api/concierge/embed-directory` aufrufen (wie bisher, Admin angemeldet), bis „remaining: 0“.
 8. Koordinaten nachholen (V2): `/api/concierge/geocode-directory`.
 
-## Datenbank-Schritte (nach „Go“)
+## Datenbank-Schritte
 
-```sql
--- 1. Sicherung (Rückweg ist damit jederzeit möglich)
-create schema if not exists backup_20261013;
-create table backup_20261013.directory_status as
-  select id, slug, status, published_at from public.directory_listings where status in ('listed','draft','hidden');
+Die fertigen Skripte liegen im Repository unter `supabase/data/` und werden im Supabase SQL Editor ausgeführt, jeder „SCHRITT“ einzeln:
 
--- 2. Pro Zeile würde sonst ein Aufruf an die Website gehen (14.671 mal): kurz abschalten
-alter table public.directory_listings disable trigger zz_cl_revalidate;
+| Datei | Zweck |
+|---|---|
+| `supabase/data/20261014-01-veroeffentlichen.sql` | Sicherung → Trigger aus → Ausnahmen auf `hidden` → Wechsel in 3.000er-Paketen → Trigger an → Kontrolle |
+| `supabase/data/20261014-02-veroeffentlichen-rueckgaengig.sql` | nur bei Bedarf: stellt den alten Status aus der Sicherung wieder her |
+| `supabase/data/20261014-03-aufraeumen.sql` | entfernt zwei kleine Arbeitsreste (leere Zwischentabelle, Probe-Funktion) |
 
--- 3. Ausnahmen zuerst auf 'hidden' (nicht öffentlich, auch nicht auf der Karte): die 6 Einträge der Rubrik escort-agencies
---    und die 2 Platzhalter.
-update public.directory_listings set status = 'hidden'
- where status = 'listed'
-   and (subtype = 'escort-agencies' or slug in (<Slugs der 2 Platzhalter>));
-
--- 4. Wechsel in Paketen (jedes unter 60 Sekunden); so oft wiederholen, bis 0 Zeilen
-with todo as (
-  select id from public.directory_listings
-  where status = 'listed'
-  order by id limit 3000
-)
-update public.directory_listings l
-   set status = 'published', published_at = coalesce(l.published_at, now())
-  from todo where l.id = todo.id;
-
--- 5. Wieder einschalten
-alter table public.directory_listings enable trigger zz_cl_revalidate;
-
--- 6. Prüfung
-select status, count(*) from public.directory_listings group by status order by 2 desc;
-```
-
-**Rückweg (falls nötig):**
-
-```sql
-alter table public.directory_listings disable trigger zz_cl_revalidate;
-update public.directory_listings l
-   set status = b.status, published_at = b.published_at
-  from backup_20261013.directory_status b
- where b.id = l.id and b.status = 'listed' and l.status = 'published';
-alter table public.directory_listings enable trigger zz_cl_revalidate;
-```
+Erwartete Zahlen nach dem Wechsel: `published` 17.739 · `hidden` 38 · `draft` 56 · `listed` 0.
+Hinweis: Das Audit-Protokoll (`zz_audit_row_change`) schreibt nur bei Änderungen durch angemeldete Administratoren; im SQL Editor entsteht daher kein Audit-Eintrag pro Zeile.
 
 ## Ausnahmen (V1d, von Daniel am 13. Oktober freigegeben)
 
