@@ -89,6 +89,10 @@ const CORE_EVAL_SET: EvalItem[] = [
   { id: 'de-name-unknown', locale: 'de', intent: 'unknown-business', question: 'Kennen Sie das Restaurant "Zum Goldenen Esel" in Larnaka? Ich brauche die Telefonnummer.' },
   { id: 'ru-name-phone', locale: 'ru', intent: 'named-business', question: 'Расскажи про магазин Компот в Лимассоле: адрес и телефон?' },
   { id: 'el-unreviewed', locale: 'el', intent: 'trust', question: 'Ποιον δικηγόρο στη Λεμεσό προτείνετε για αγορά ακινήτου και τον έχετε ελέγξει;' },
+  // Leptos has a hand-made profile and a written brief (lib/partners/leptos.ts). The answer must call it a luxury developer, describe the group
+  // and its projects from the brief only, attribute the company's figures to Leptos and never state a price.
+  { id: 'en-leptos', locale: 'en', intent: 'named-business', question: 'Tell me about Leptos Developers: who are they, what do they build and what else belongs to the group?' },
+  { id: 'de-leptos', locale: 'de', intent: 'named-business', question: 'Was können Sie mir über Leptos sagen? Welche Projekte haben sie in Paphos und zu welcher Gruppe gehören sie?' },
 ];
 
 // Increment 2.1b: the 13 live-eval questions for the non-directory sources (events, own articles, bookable

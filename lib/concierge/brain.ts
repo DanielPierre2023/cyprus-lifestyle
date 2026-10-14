@@ -38,6 +38,7 @@ import { nameGrams, distinctiveTerms, contentTerms, askedNames, asksAboutBusines
 import { trustOf, trustTag, promotePaying, type Trust } from '@/lib/concierge/trust';
 import { isSensitive, asksForSensitive } from '@/lib/concierge/sensitive';
 import { factsOf, factLines, type Facts } from '@/lib/concierge/facts';
+import { LEPTOS_BRIEF_ID, LEPTOS_SLUG, leptosBrief, leptosMentioned } from '@/lib/partners/leptos';
 
 /** The model the concierge answers with (the routing table's "chat" task; override with OPENAI_MODEL_LUNA). Recorded with every live quality evaluation. */
 export const CONCIERGE_MODEL = aiRoute('chat').model;
@@ -103,6 +104,7 @@ export interface ConciergeContext {
   sources?: SourceHit[];       // events / articles / experiences / kb pages / regulation notes / webcams (2.1)
   sourceNotes?: SourceNotes;
   miss?: string[];             // names the guest wrote that match NO business in the directory (plan S4) — logged, and told to the model
+  brand?: { id: string; text: string } | null; // a written brief for a company with a hand-made profile (Leptos), when the guest asks about it
 }
 
 const LOCALES = ['en', 'el', 'ro', 'ar', 'de', 'pl', 'ru'];
@@ -737,6 +739,14 @@ export async function assembleContext(locale: string, latestUser: string): Promi
   candidates = mergeDirHits(candidates, vecGlobal, 24);
   candidates = candidates.slice(0, 16);
 
+  // COMPANY WITH A HAND-MADE PROFILE (Leptos): when the guest names the company, one of its projects or one of its group firms, the head-office
+  // page leads the picks (so the card is shown) and the concierge receives the written brief below. Pure text match plus the named-place legs.
+  const brandOn = leptosMentioned(latestUser, nameHits.slice(0, 3).map((h) => h.slug));
+  if (brandOn && !candidates.some((c) => c.slug === LEPTOS_SLUG)) {
+    const hub = await hydrateSlugs(locale, [LEPTOS_SLUG]);
+    if (hub.length) candidates = mergeDirHits(hub, candidates, 16);
+  }
+
   // Neighbourhood radius: if the guest named a street / area / postcode, resolve it
   // and LEAD with what's actually within a short distance — our clients first.
   let near: { label: string; radiusM: number } | null = null;
@@ -776,7 +786,7 @@ export async function assembleContext(locale: string, latestUser: string): Promi
   // UNKNOWN BUSINESS (plan S4): a proper name the guest wrote that no retrieved business carries. Logged for the desk and told to
   // the model, which then says so honestly instead of passing another business off as that one.
   const miss = (asksAboutBusiness(latestUser) || hasVenueWord(latestUser))
-    ? askedNames(latestUser).filter((a) => !candidates.some((c) => nameCovers(c.name, a)) && !nameHits.some((h) => nameCovers(h.name, a)))
+    ? askedNames(latestUser).filter((a) => !candidates.some((c) => nameCovers(c.name, a)) && !nameHits.some((h) => nameCovers(h.name, a)) && !(brandOn && leptosMentioned(a)))
     : [];
 
   const kb = mergeKbHits(kbKeyword, kbVecIds);
@@ -814,7 +824,7 @@ export async function assembleContext(locale: string, latestUser: string): Promi
   const sources = (bundle?.hits || []).filter((h) => !(h.kind === 'activity' && seenAct.has(h.id)));
   // An article found by meaning keeps its card (and its sponsored / editorial label); drop the plain duplicate link.
   const srcArt = new Set(sources.filter((h) => h.kind === 'article').map((h) => h.id));
-  return { candidates: flag(candidates), picks: flag(picks), guides, articles: articles.filter((a) => !srcArt.has(a.slug)), kb, canRoute, luxury, near, activities, sources, sourceNotes: bundle?.notes, miss };
+  return { candidates: flag(candidates), picks: flag(picks), guides, articles: articles.filter((a) => !srcArt.has(a.slug)), kb, canRoute, luxury, near, activities, sources, sourceNotes: bundle?.notes, miss, brand: brandOn ? { id: LEPTOS_BRIEF_ID, text: leptosBrief() } : null };
 }
 
 function toActivityPick(a: Awaited<ReturnType<typeof getActivities>>[number], locale: string): ActivityPick {
@@ -896,6 +906,7 @@ export function groundingBlock(ctx: ConciergeContext, locale: string): string {
       if (h.item.source && isOfficialAuthorityUrl(h.item.source)) parts.push(`  (official government page: for anything regulatory or financial tell the guest to confirm exact figures there: ${h.item.source})`);
     }
   }
+  if (ctx.brand) parts.push(`\n${ctx.brand.text}`);
   if (ctx.near) {
     parts.push(`\nNEIGHBOURHOOD — the guest is asking about the area near "${ctx.near.label}". The listings below are the real ones within about ${Math.round(ctx.near.radiusM / 100) / 10} km, closest first with their distance. Recommend the nearest good options and compare their ratings HONESTLY. Any marked "our featured partner" is one of our own clients — mention them first and label them as featured/partner, but never claim they are the best if a closer or clearly better-rated listing exists; be truthful. If the guest gave only a rough area, that's fine — you do NOT need a house number.`);
   }

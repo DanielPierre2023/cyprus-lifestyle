@@ -4,7 +4,7 @@ import { formatDateWith, formatNumber } from '@/lib/i18n/format';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/i18n/routing';
 import { isLocale, type Locale } from '@/lib/locales';
-import { DIRECTORY_TYPES, getListing, getNearby, getPeers, getEventsByDistrict, getCollectionBySlug, isStubText } from '@/lib/queries.cached';
+import { DIRECTORY_TYPES, getListing, getListingsBySlugs, getNearby, getPeers, getEventsByDistrict, getCollectionBySlug, isStubText } from '@/lib/queries.cached';
 import { collectionSlug, slugifyDistrict, districtLabel } from '@/lib/collections';
 import { pageMetadata, robotsForStub } from '@/lib/seo';
 import { JsonLd, localBusiness, breadcrumb } from '@/lib/seo/jsonld';
@@ -16,6 +16,9 @@ import TrackView from '@/components/TrackView';
 import TrackedCTA from '@/components/TrackedCTA';
 import EnquiryForm, { type EnquiryLabels } from '@/components/EnquiryForm';
 import { TAXI_APPS } from '@/lib/mobility';
+import LeptosProfile from '@/components/LeptosProfile';
+import LeptosMemberNote from '@/components/LeptosMemberNote';
+import { LEPTOS_ALL_SLUGS, LEPTOS_SLUG, LEPTOS_SITE, UI as LEPTOS_UI } from '@/lib/partners/leptos';
 
 // ISR 1 h: DB webhooks call /api/revalidate/tags on every edit (PERFORMANCE-SETUP.md 2b); this is only the safety net. Keep equal to TTL in lib/queries.cached.ts.
 export const revalidate = 3600;
@@ -26,7 +29,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const listing = await getListing(locale as Locale, slug);
   if (!listing) return {};
   return pageMetadata({
-    locale: locale as Locale, path: `/directory/${type}/${slug}`,
+    locale: locale as Locale, path: `/directory/${listing.type || type}/${slug}`,
     title: listing.name, description: listing.summary, cover: listing.image, kicker: 'Cyprus Lifestyle',
     // Page-level SEO gate: a hollow "stub" listing is noindex'd until it has real text
     // (complements the sitemap exclusion). Auto-clears once a real description exists.
@@ -53,11 +56,15 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
   const x = await getListing(l, slug);
   if (!x) notFound();
 
-  const [nearby, peers, events, collection] = await Promise.all([
+  // The head-office page of Leptos carries a hand-written profile (history, reasons, group, projects): it needs the group's rows, and a
+  // comparison with other developers would only repeat what the profile shows.
+  const isLeptosHub = x.slug === LEPTOS_SLUG;
+  const [nearby, peers, events, collection, leptosMembers] = await Promise.all([
     x.lat != null && x.lng != null ? getNearby(l, x.lat, x.lng, x.slug) : Promise.resolve([]),
-    getPeers(l, { type: x.type, subtype: x.subtype, category_group: x.category_group, district: x.district }, x.slug, 4),
+    isLeptosHub ? Promise.resolve([]) : getPeers(l, { type: x.type, subtype: x.subtype, category_group: x.category_group, district: x.district }, x.slug, 4),
     getEventsByDistrict(l, x.district, 3),
     x.district ? getCollectionBySlug(collectionSlug(x.type, slugifyDistrict(x.district))) : Promise.resolve(null),
+    isLeptosHub ? getListingsBySlugs(l, LEPTOS_ALL_SLUGS) : Promise.resolve([]),
   ]);
 
   const label = t(`directory.${x.type}`);
@@ -68,6 +75,14 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
     district: x.district, priceRange: x.price_band, rating: x.rating, ratingCount: x.rating_count,
     phone: x.phone,
   });
+  const lui = LEPTOS_UI[l];
+  const orgLd = isLeptosHub ? {
+    '@context': 'https://schema.org', '@type': 'Organization', name: 'Leptos Estates', alternateName: ['Leptos Group', 'Leptos Developers'],
+    url: LEPTOS_SITE, foundingDate: '1960', description: x.summary,
+    sameAs: ['https://www.facebook.com/leptosestates', 'https://www.instagram.com/leptos_estates/', 'https://www.linkedin.com/company/leptos-estates'],
+    address: { '@type': 'PostalAddress', streetAddress: '111 Apostolou Pavlou Avenue', addressLocality: 'Paphos', postalCode: '8046', addressCountry: 'CY' },
+    areaServed: ['CY', 'GR'],
+  } : null;
   const crumbLd = breadcrumb(l, [
     { name: t('brand.name'), path: '/' },
     { name: t('directory.title'), path: '/directory' },
@@ -90,6 +105,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
     <>
       <TrackView slug={x.slug} type={x.type} name={x.name} image={x.image} district={x.district} />
       <JsonLd data={listLd} />
+      {orgLd ? <JsonLd data={orgLd} /> : null}
       <JsonLd data={crumbLd} />
 
       {/* ── Hero ── */}
@@ -108,6 +124,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
               {x.price_band ? <span className="lh-badge">{x.price_band}</span> : null}
               {x.featured ? <span className="lh-badge featured">★ {t('enquiry.featured')}</span> : null}
               {x.verified ? <span className="lh-badge verified">✓ {t('directory.verified')}</span> : null}
+              {isLeptosHub ? <><span className="lh-badge lux">◆ {lui.badgeLuxury}</span><span className="lh-badge">{lui.badgeSince}</span><span className="lh-badge">{lui.badgeRegions}</span></> : null}
             </div>
           </div>
         </div>
@@ -119,6 +136,9 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
           {x.summary ? <p className="lh-desc">{x.summary}</p> : null}
           {/* Honest about what we have checked: a listing our editors have not reviewed says so (same wording rule as the concierge). */}
           {!x.verified ? <p className="lh-unrev">{t('directory.unreviewed')}</p> : null}
+          {isLeptosHub
+            ? <LeptosProfile locale={l} members={leptosMembers} mapLabels={{ typeLabels, view: t('directory.view'), places: t('directory.places'), aria: t('directory.mapAria') }} />
+            : <LeptosMemberNote locale={l} slug={x.slug} />}
 
           {nearby.length ? (
             <section className="lh-sec">
@@ -236,6 +256,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
         .lh-badge{display:inline-flex;align-items:center;gap:6px;color:#f3ecdd}
         .lh-badge.verified{color:#F1D592;border:1px solid rgba(241,213,146,.5);border-radius:999px;padding:1px 10px;font-size:12px;font-weight:600}
         .lh-badge.featured{color:#0B0E11;background:#F1D592;border-radius:999px;padding:1px 10px;font-size:12px;font-weight:700}
+        .lh-badge.lux{color:#F1D592;border:1px solid rgba(241,213,146,.5);border-radius:999px;padding:1px 10px;font-size:12px;font-weight:600}
         .lh-badge .muted{color:#c9c0ad}
         .lh-grid{display:grid;grid-template-columns:1fr 340px;gap:40px;margin-top:34px;align-items:start}
         .lh-desc{font-family:var(--body);font-size:20px;line-height:1.55;color:var(--ink-soft,#5b5346)}
