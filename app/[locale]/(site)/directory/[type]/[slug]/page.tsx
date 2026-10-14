@@ -117,6 +117,8 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
       <div className="wrap lh-grid">
         <div className="lh-main">
           {x.summary ? <p className="lh-desc">{x.summary}</p> : null}
+          {/* Honest about what we have checked: a listing our editors have not reviewed says so (same wording rule as the concierge). */}
+          {!x.verified ? <p className="lh-unrev">{t('directory.unreviewed')}</p> : null}
 
           {nearby.length ? (
             <section className="lh-sec">
@@ -237,6 +239,7 @@ export default async function ListingDetail({ params }: { params: Promise<{ loca
         .lh-badge .muted{color:#c9c0ad}
         .lh-grid{display:grid;grid-template-columns:1fr 340px;gap:40px;margin-top:34px;align-items:start}
         .lh-desc{font-family:var(--body);font-size:20px;line-height:1.55;color:var(--ink-soft,#5b5346)}
+        .lh-unrev{font-family:var(--sans);font-size:13px;line-height:1.5;color:var(--ink-soft,#5b5346);font-style:italic;margin:-4px 0 0}
         .lh-sec{margin-top:40px}
         .lh-h2{font-family:var(--disp);font-weight:600;font-size:26px;margin:0 0 4px}
         .lh-sub{font-family:var(--body);font-style:italic;color:var(--ink-soft,#5b5346);margin:0 0 18px}

@@ -1,5 +1,6 @@
 import { supabaseServer } from '@/lib/supabase/server';
 import EvalRunner from './EvalRunner';
+import { groupMisses } from '@/lib/concierge/analytics';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,9 +35,9 @@ export default async function AnalyticsTab() {
   // Concierge coverage (item 02) — the answer-coverage rate + the unanswered backlog.
   const since = new Date(Date.now() - 30 * 864e5).toISOString();
   const { data: cev } = await sb.from('concierge_events')
-    .select('coverage, question, locale, channel, created_at').gte('created_at', since)
+    .select('coverage, question, locale, channel, created_at, meta').gte('created_at', since)
     .order('created_at', { ascending: false }).limit(3000);
-  const ev = (cev as { coverage: string; question: string | null; locale: string | null; channel: string | null; created_at: string }[] | null) || [];
+  const ev = (cev as { coverage: string; question: string | null; locale: string | null; channel: string | null; created_at: string; meta: unknown }[] | null) || [];
   const cTotal = ev.length;
   const cDeferred = ev.filter((e) => e.coverage === 'deferred').length;
   const cRate = cTotal ? Math.round((1000 * (cTotal - cDeferred)) / cTotal) / 10 : 0;
@@ -48,6 +49,8 @@ export default async function AnalyticsTab() {
     if (cur) cur.n++; else backlog.set(k, { q: e.question.slice(0, 160), n: 1, locale: e.locale, last: e.created_at });
   }
   const backlogRows = Array.from(backlog.values()).sort((a, b) => b.n - a.n).slice(0, 20);
+  // Businesses guests asked for by name that are not in the directory (plan item S4).
+  const missRows = groupMisses(ev, 25);
 
   // System errors (item 03) — grouped, most frequent first.
   const { data: errGrouped } = await sb.from('error_log_grouped')
@@ -110,6 +113,26 @@ export default async function AnalyticsTab() {
             </tr>
           ))}
           {backlogRows.length === 0 ? <tr><td colSpan={5}>No gaps logged yet — every question was answered from grounded facts.</td></tr> : null}
+        </tbody>
+      </table>
+
+      {/* Businesses asked for by name that are not in the directory (plan item S4) */}
+      <h1 style={{ fontSize: 18 }}>Businesses asked for but not in the directory</h1>
+      <p className="sub">Names guests wrote that match no listing. Add the business to the directory (or invite it to claim a profile): each line is a guest who was told it is not listed yet.</p>
+      <table className="adm-t">
+        <thead><tr><th style={{ width: 40 }}>#</th><th>Name the guest wrote</th><th>Example question</th><th style={{ width: 60 }}>Lang</th><th style={{ width: 70 }}>Asked</th><th style={{ width: 120 }}>Last seen</th></tr></thead>
+        <tbody>
+          {missRows.map((r, i) => (
+            <tr key={i}>
+              <td>{i + 1}</td>
+              <td><strong>{r.name}</strong></td>
+              <td>{r.question}</td>
+              <td>{r.locale || '—'}</td>
+              <td>{r.n}×</td>
+              <td>{new Date(r.last).toLocaleDateString()}</td>
+            </tr>
+          ))}
+          {missRows.length === 0 ? <tr><td colSpan={6}>None yet — every named business was found, or no one asked for one by name.</td></tr> : null}
         </tbody>
       </table>
 

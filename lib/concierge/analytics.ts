@@ -4,6 +4,7 @@
 // best-effort: it never blocks or breaks a reply.
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { fold } from '@/lib/concierge/names';
 
 // Multilingual "I don't fully know / I'll check" phrasing — a soft signal that the
 // concierge deferred even when some data was present.
@@ -24,6 +25,8 @@ export interface TurnLog {
   cid?: string | null; locale?: string; channel?: 'web' | 'whatsapp' | 'email' | 'request';
   question: string; answer: string; picks?: number; kb?: number; near?: boolean;
   recommended?: string[]; latencyMs?: number;
+  /** Names the guest asked for that no directory business carries (plan S4) — read by the admin list "Businesses asked for but not listed". */
+  miss?: string[];
 }
 
 export async function logConciergeTurn(t: TurnLog): Promise<void> {
@@ -42,6 +45,7 @@ export async function logConciergeTurn(t: TurnLog): Promise<void> {
       reason: cov.reason,
       recommended: (t.recommended || []).slice(0, 12),
       latency_ms: t.latencyMs ?? null,
+      meta: t.miss && t.miss.length ? { miss: t.miss.slice(0, 3).map((m) => String(m).slice(0, 60)) } : null,
     });
   } catch { /* analytics must never break a reply */ }
 }
@@ -79,4 +83,26 @@ export async function topReaderDemand(limit = 18, days = 45): Promise<string[]> 
   } catch {
     return [];
   }
+}
+
+// ── Businesses asked for but not in the directory (plan item S4) ─────────────────────────────────────────────────────────────
+// The chat logs the proper names a guest wrote that matched no business (meta.miss). This groups them for the admin list, most asked
+// first, so the desk can add the business, or tell the guest it is not listed. Pure: takes the rows, returns the table.
+export interface MissEvent { created_at: string; locale?: string | null; question?: string | null; meta?: unknown }
+export interface MissRow { name: string; n: number; last: string; locale: string | null; question: string }
+export function groupMisses(events: MissEvent[], limit = 30): MissRow[] {
+  const by = new Map<string, MissRow>();
+  for (const e of events) {
+    const raw = (e.meta && typeof e.meta === 'object' ? (e.meta as { miss?: unknown }).miss : null);
+    if (!Array.isArray(raw)) continue;
+    for (const m of raw) {
+      const name = String(m || '').trim();
+      const key = fold(name).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+      if (!key) continue;
+      const cur = by.get(key);
+      if (cur) { cur.n += 1; if (e.created_at > cur.last) { cur.last = e.created_at; cur.question = String(e.question || '').slice(0, 160); cur.locale = e.locale || cur.locale; } }
+      else by.set(key, { name, n: 1, last: e.created_at, locale: e.locale || null, question: String(e.question || '').slice(0, 160) });
+    }
+  }
+  return [...by.values()].sort((x, y) => y.n - x.n || (x.last < y.last ? 1 : -1)).slice(0, limit);
 }
