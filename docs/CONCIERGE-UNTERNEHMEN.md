@@ -38,7 +38,7 @@ Reihenfolge bei vergleichbaren Firmen: Partner → geprüft → ungeprüft. Die 
 ## Datenbank: einspielen (einmalig)
 
 Dateien:
-- `supabase/migrations/20261013120000_concierge_name_search.sql` ersetzt `match_directory_name` und legt zwei kleine Hilfsfunktionen an (`cl_name_key`, `cl_name_is_generic`). Es werden **keine Daten** geändert.
+- `supabase/migrations/20261013120000_concierge_name_search.sql` legt **neben** der bestehenden `match_directory_name(q, match_count)` eine zweite Funktion mit drei Argumenten an (`…, grams`) und zwei kleine Hilfsfunktionen (`cl_name_key`, `cl_name_is_generic`). Die alte Funktion bleibt unverändert; es wird nichts gelöscht und es werden **keine Daten** geändert.
 - `supabase/migrations/20261013121000_directory_facets.sql` legt `directory_facets()` an (Zählung für die Verzeichnis-Seiten).
 - `supabase/migrations/20261013122000_directory_address_source.sql` fügt `directory_listings.address_source` hinzu (woher eine Adresse stammt).
 
@@ -47,34 +47,16 @@ Dateien:
 
 ```sql
 select * from public.match_directory_name('Do you have a phone number for A and M Solomou Signs in Kato Polemidia?', 5, array['solomou signs']);
-select * from public.match_directory_name('Zya', 3);
+select * from public.match_directory_name('Zya', 3, array['zya']);
 select * from public.match_directory_name('what is the best italian restaurant in limassol', 5, array['italian']);  -- keine Zeile: richtig
 ```
 
 **Reihenfolge:** Der Code funktioniert auch **vor** dem SQL (er fällt dann auf die alte Funktion zurück, nur `published`). Man kann also zuerst deployen und danach das SQL einspielen.
 
-**Zurück (falls nötig):**
+**Zurück (falls nötig):** Die alte Funktion ist nie angefasst worden. Es reicht, die neue zu entfernen (der Code fällt dann auf die alte zurück):
 
 ```sql
 drop function if exists public.match_directory_name(text, integer, text[]);
-create or replace function public.match_directory_name(q text, match_count integer default 12)
-returns table(slug text, score real)
-language sql stable security definer
-set search_path to 'public', 'pg_temp'
-as $$
-  with scored as (
-    select l.slug,
-      greatest(word_similarity(q, coalesce(l.name_en, '')), word_similarity(q, coalesce(l.name_el, '')), word_similarity(q, coalesce(l.name_ru, '')),
-               word_similarity(q, coalesce(l.name_ro, '')), word_similarity(q, coalesce(l.name_de, '')), word_similarity(q, coalesce(l.name_ar, '')),
-               word_similarity(q, coalesce(l.name_pl, '')))::real as sim,
-      (coalesce(l.name_en, '') ilike '%' || q || '%') as substr_hit
-    from public.directory_listings l where l.status = 'published'
-  )
-  select slug, (case when substr_hit then greatest(sim, 0.95::real) else sim end) as score
-  from scored where sim > 0.30 or substr_hit order by score desc limit greatest(1, match_count);
-$$;
-revoke all on function public.match_directory_name(text, integer) from public, anon, authenticated;
-grant execute on function public.match_directory_name(text, integer) to service_role;
 ```
 
 ## Messwerte (Lesetest gegen die echte Datenbank, 13. Oktober)

@@ -13,7 +13,9 @@
 --     existing trigram indexes (directory_name_*_trgm) instead of scanning 17.7k rows (a full scan costs ~0.6-1.4 s per turn);
 --   • names that are only a generic word ("Tavern", "Hotel", "Cyprus") never match a sentence;
 --   • legal suffixes ("Ltd", "Limited", "- Cyprus") and punctuation are ignored when names are compared.
--- Backwards compatible: the old call match_directory_name(q, match_count) still works (grams are then derived from q).
+-- Backwards compatible: this adds a THREE-argument function next to the existing two-argument one. The old call
+-- match_directory_name(q, match_count) keeps answering exactly as before (published rows only), so nothing that calls it breaks and
+-- nothing has to be dropped. The app calls the new form (with the word groups) and falls back to the old one if this file is not applied.
 -- Same permissions as before (service role only; see 20261005120000_hotfix_revoke_public_rpc_and_invoker_views.sql).
 -- Safe to re-run. No data is changed.
 -- ---------------------------------------------------------------------------------------------------------------------
@@ -49,9 +51,8 @@ as $$
   ])
 $$;
 
-drop function if exists public.match_directory_name(text, integer);
-
-create or replace function public.match_directory_name(q text, match_count integer default 12, grams text[] default null)
+-- No defaults on purpose: with a default for grams, a two-argument call would fit both functions and fail as ambiguous.
+create or replace function public.match_directory_name(q text, match_count integer, grams text[])
 returns table(slug text, score real)
 language sql
 stable
@@ -63,7 +64,7 @@ as $$
       public.cl_name_key(q) as qn,
       coalesce(array_length(regexp_split_to_array(nullif(public.cl_name_key(q), ''), '\s+'), 1), 0) as qwords
   ),
-  -- Candidate word groups. The app sends them; without them (old callers) we use the whole question and each word of 4+ letters.
+  -- Candidate word groups. The app sends them; if grams is null we use the whole question and each word of 4+ letters.
   g as (
     select distinct t, (t ~ '[^\x01-\x7F]') as nonlatin
     from (
@@ -126,5 +127,5 @@ grant execute on function public.cl_name_is_generic(text) to service_role;
 
 -- Quick checks (run by hand after applying; each should return the named business at the top):
 -- select * from public.match_directory_name('Do you have a phone number for A and M Solomou Signs in Kato Polemidia?', 5, array['solomou signs','kato polemidia']);
--- select * from public.match_directory_name('Zya', 3);                                    -- Zya Cafe
+-- select * from public.match_directory_name('Zya', 3, array['zya']);                       -- Zya Cafe
 -- select * from public.match_directory_name('what is the best italian restaurant in limassol', 5, array['italian','limassol']);  -- no rows
