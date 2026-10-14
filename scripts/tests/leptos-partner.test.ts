@@ -157,6 +157,8 @@ ok('an unrelated named place does not', !leptosMentioned('where is it?', ['some-
 ok('a category question does not', !leptosMentioned('best restaurant in Paphos'));
 ok('a generic project name alone does not', !leptosMentioned('Paphos Gardens apartments for rent'));
 ok('the Greek word for thin is not the brand', !leptosMentioned('λεπτός καφές'));
+ok('a business that only shares the surname does not switch the brief on', !leptosMentioned('Tell me about Leptos Bathroom Designs in Paphos'));
+ok('...unless the guest also names the developer', leptosMentioned('Leptos Bathroom Designs or Leptos Estates, who built Coral Seas Villas?'));
 {
   const b = leptosBrief();
   ok('brief calls it a luxury developer', /luxury property developer/.test(b));
@@ -166,6 +168,7 @@ ok('the Greek word for thin is not the brand', !leptosMentioned('λεπτός κ
   ok('brief carries the company figures as statements', /LEPTOS|stated by Leptos/i.test(b) && /350/.test(b) && /25,000/.test(b) && /75 countries/.test(b));
   ok('brief forbids prices and "best"', /Never state a price/.test(b) && /Never call it the best/.test(b));
   ok('brief keeps the trust rule (partner only when tagged)', /OUR PARTNER/.test(b));
+  ok('brief keeps other Leptos-named businesses apart', /Leptos Bathroom Designs/.test(b) && /NOT PART OF THE GROUP/.test(b));
   ok('brief has no euro amount', !/€|EUR\s?\d/.test(b));
   ok('brief is a reasonable size', b.length > 2500 && b.length < 7000);
   const ctx: ConciergeContext = { candidates: [], picks: [], guides: [], articles: [], kb: [], canRoute: false, luxury: false, brand: { id: 'leptos', text: b } };
