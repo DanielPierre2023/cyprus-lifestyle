@@ -52,9 +52,13 @@ const NAME_TOKENS: string[] = [
 // Cyrillic and Arabic spellings of the brand. The Greek spelling is the ordinary word "thin", so Greek text must carry the Latin name.
 const SCRIPT_TOKENS = ['лептос', 'ليبتوس'];
 
+/** Businesses that only share the surname (they are in the directory under their own name). Their name never switches the Leptos brief on. */
+const UNRELATED_NAMES = ['leptos bathroom designs', 'leptos bathroom'];
+
 /** True when the guest's message is about Leptos (the brand, a project or an entity), or the best named match is one of its listings. */
 export function leptosMentioned(text: string, namedSlugs: string[] = []): boolean {
-  const t = fold(String(text || ''));
+  let t = fold(String(text || ''));
+  for (const u of UNRELATED_NAMES) t = t.split(u).join(' ');
   if (NAME_TOKENS.some((n) => new RegExp(`(^|[^a-z0-9])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`).test(t))) return true;
   if (SCRIPT_TOKENS.some((n) => t.includes(n))) return true;
   return namedSlugs.some((s) => LEPTOS_ALL_SLUGS.includes(s));
@@ -85,6 +89,7 @@ export function leptosBrief(): string {
     `PROJECTS IN CYPRUS (${LEPTOS_PROJECTS.length}, each with its own page in our directory):\n${byArea.join('\n')}\n  - Limassol Del Mar is a joint development with D. Zavos Group. Kamares Village (Tala) is the flagship villa community. Neapolis Smart EcoCity is a masterplan around Neapolis University Pafos and Iasis Private Hospital.`,
     `ALSO IN GREECE: ${joinNames(LEPTOS_GREECE.map((g) => g.name))} (official pages on leptosestates.com).`,
     `HOTELS AND RESORTS OF THE GROUP (Leptos Calypso Hotels, listed on the Cyprus Stock Exchange): Coral Beach Hotel & Resort and Thalassa Boutique Hotel & Spa in Coral Bay, Paphos Gardens Holiday Resort and Basilica Holiday Resort in Paphos, Leptos Panorama Hotel in Crete.`,
+    'NOT PART OF THE GROUP: businesses that only share the surname, for example Leptos Bathroom Designs (a bathroom company). Never present them as Leptos Estates or the other way round.',
     'LINKS: our directory has a page called "Leptos Estates" for the head office, with the history, the twelve reasons Leptos gives, the group structure, a map and every project. Point the guest there; the interface shows it as a card when it is in the picks.',
   ].join('\n');
 }
